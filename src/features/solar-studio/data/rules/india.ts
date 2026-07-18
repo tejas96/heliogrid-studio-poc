@@ -1,0 +1,374 @@
+// ─── Engineering & commercial rule config — India market ────────────────────
+// Seed of the configurable rule engine (§8.10): every hardcoded market/standard
+// constant moves here so later phases can resolve rules per-project instead of
+// importing scattered literals. Values are EXACTLY the constants previously
+// inlined at their consumer sites — extraction changes no behavior.
+//
+// Consumers: lib/electrical-sizing.ts (DC protection), lib/finance.ts
+// (PM Surya Ghar subsidy), data/discoms.ts + store newProject (tariff),
+// Step2Roof (setback default), Step6Editor (plan capacity gate).
+
+export interface DcSizingRules {
+  /** overcurrent factor on module Isc (≥1.5 per IEC 62548; 1.56 = 1.25×1.25) */
+  fuseFactor: number;
+  /** standard gPV string-fuse ratings (A), ascending */
+  fuseLadder: number[];
+  /** standard DC isolator ratings (A), ascending */
+  isolatorLadder: number[];
+  /** copper PV-cable ampacity, [mm², A] ascending (free-air, conservative) */
+  cableAmpacity: [number, number][];
+}
+
+export interface AcSizingRules {
+  /** continuous-load factor on AC full-load current (IS/IEC practice) */
+  breakerFactor: number;
+  /**
+   * Standard MCB/MCCB ratings (A), ascending — the ONE ladder both the BOM
+   * and the SLD size from. Extends into MCCB frame sizes so large commercial
+   * systems are never silently rated below their load current.
+   */
+  breakerLadder: number[];
+}
+
+export interface SubsidyRules {
+  /** ₹/kW for the first N kW */
+  firstSlabPerKwInr: number;
+  firstSlabKw: number;
+  /** ₹/kW for capacity above the first slab, up to the cap */
+  secondSlabPerKwInr: number;
+  /** absolute cap (₹) — applies to ALL residential systems ≥ capKw */
+  capInr: number;
+  /** capacity beyond which the cap is the whole subsidy */
+  capKw: number;
+  /** subsidy requires DCR (domestic content requirement) modules */
+  requiresDcr: boolean;
+}
+
+export interface DefaultRules {
+  /** uniform roof setback preset when drawing a new roof (m) */
+  roofSetbackM: number;
+  /**
+   * Boundary offset for a free-field array. Larger than a roof setback: it
+   * carries the perimeter access lane and fence standoff, not a fire margin.
+   * ASSUMED — no Indian standard fixes this; engineer/site validation required.
+   */
+  groundSetbackM: number;
+  /**
+   * Default tilt for a ground array. A roof constrains tilt; open ground does
+   * not, so this sits near latitude-optimal for the Indian market instead of
+   * inheriting the 10° rooftop ballast default. ASSUMED pending validation.
+   */
+  groundTiltDeg: number;
+  /**
+   * Free-field site works. All ASSUMED: fencing type and earthing-ring sizing
+   * are client/DISCOM/soil decisions, not values this tool can derive.
+   */
+  groundFenceEnabled: boolean;
+  groundGatesPerArea: number;
+  /**
+   * Phase 15 access thresholds. ALL ASSUMED — these are workmanship/O&M
+   * conventions, not code minimums, and they are warn-not-block by design
+   * (§8.4 risk note: over-strict defaults just annoy installers).
+   * ENGINEER/O&M VALIDATION REQUIRED before they gate anything.
+   */
+  cleaningReachM: number;
+  ladderEdgeM: number;
+  inverterClearanceM: number;
+  /** residential tariff when the state is not in the DISCOM table (₹/kWh) */
+  tariffUnknownStateInrPerKwh: number;
+  /** tariff preset on a brand-new project before a state is chosen (₹/kWh) */
+  tariffNewProjectInrPerKwh: number;
+  /** freemium plan gate on total DC capacity (kW) */
+  planLimitKw: number;
+}
+
+/** Health Score v1 (§8.2): fixed, capped, code-level deductions — the fixed
+ *  table is what makes the monotonicity gate PROVABLE (fixing an issue can
+ *  only remove its deduction, never grow another). */
+export interface HealthRules {
+  /** category weights for the total (normalized over APPLICABLE categories) */
+  weights: { energy: number; electrical: number; utilization: number };
+  /** band thresholds on the 0–100 total */
+  bands: { goodMin: number; fairMin: number };
+  /** points deducted per DISTINCT validation issue code */
+  validationPenalties: Record<string, number>;
+  /** a validation code missing from the table still costs something */
+  unknownValidationPenalty: number;
+  /** points deducted per Copilot insight, by severity */
+  insightPenalties: { critical: number; warning: number; suggestion: number; info: number };
+}
+
+/** IS 875-3 basic wind speed FLAG (plan §F boundary): representative dominant
+ *  zone per state (m/s) — display/verification-nudge ONLY, never a wind-load
+ *  calculation. Site-specific values vary within states; the engineer verifies. */
+export interface WindRules {
+  basicWindSpeedMsByState: Record<string, number>;
+  /** at/above this the UI flags "high-wind zone — verification mandatory" */
+  highWindMinMs: number;
+}
+
+/**
+ * Design temperatures for string sizing — the cold extreme sets the maximum
+ * series length (Voc rises as it gets colder), the hot extreme sets the
+ * minimum (Vmp falls as it gets hotter).
+ *
+ * ENGINEER VALIDATION REQUIRED (plan §7 — "design-temperature policy"): these
+ * are ASSUMED climate defaults, not measured site data. The honest source is a
+ * PVGIS TMY min/max ambient for the actual pin (see lib/electrical/temps.ts —
+ * it prefers measured data whenever the project carries it). Latitude is a
+ * coarse proxy in India specifically: altitude dominates (Leh at 34°N freezes;
+ * Chennai at 13°N never does), so a hill site MUST be confirmed by an engineer
+ * rather than trusted from this table.
+ */
+export interface TempRules {
+  /** first band whose maxAbsLat >= |lat| wins; last entry is the catch-all */
+  latBands: Array<{
+    maxAbsLat: number;
+    label: string;
+    designMinAmbientC: number;
+    designMaxAmbientC: number;
+  }>;
+  /**
+   * Cell rise above ambient at full irradiance (NOCT-style adder). PVsyst/
+   * PVWatts use ~25–30 °C for rooftop arrays with restricted rear airflow;
+   * 30 is the conservative rooftop figure this market's installs assume.
+   */
+  cellRiseC: number;
+  /**
+   * Fallback module Pmax coefficient (%/°C) when a datasheet omits it.
+   * Hot Vmp MUST use the Pmax/Vmp coefficient — NOT the Voc coefficient,
+   * which is materially smaller and inflates the usable window.
+   */
+  fallbackPmaxCoeffPct: number;
+}
+
+/**
+ * Cable installation rules.
+ *
+ * ENGINEER VALIDATION REQUIRED (plan §7 — DC sizing rules as adopted by target
+ * DISCOMs): slack and lead-reach are INSTALLATION PRACTICE, not physics, and
+ * they vary by installer. They are here, as data, precisely so they can be
+ * argued with and changed per market rather than buried in an estimator.
+ */
+export interface CableRules {
+  /** installation slack added to every routed length (0.1 = +10%) */
+  slackPct: number;
+  /**
+   * Cable follows the building, not the crow. An installer drops to the array
+   * edge and runs along rails / the roof perimeter / a tray — nobody lays a
+   * conductor across live module glass. So a metre dragged ACROSS THE ARRAY
+   * FOOTPRINT costs this multiplier in the ROUTER's cost function (a physical
+   * near-prohibition, not a fudge); metres along aisles/edges are free. The
+   * length reported to the BOM is always the real, unweighted geometry.
+   */
+  crossFieldPenalty: number;
+  /** the perimeter corridor sits this far inside the roof edge (m) */
+  corridorInsetM: number;
+  /**
+   * Conductor size and material the DC runs are quoted at, for the
+   * voltage-drop check (matches the "DC Solar Cable 4 sq.mm" BOM line).
+   */
+  dcCableMm2: number;
+  copperResistivity: number;
+  /**
+   * ENGINEER VALIDATION REQUIRED (plan §F2 — "engineer validation for drop
+   * limits"). Industry practice is ~1–2% DC and ~2–3% AC at full load; the
+   * binding number is whatever the DISCOM/consultant adopts.
+   */
+  maxDcDropPct: number;
+  /**
+   * How far apart two modules can sit before their factory leads stop reaching
+   * and extra cable must be bought. Adjacent modules in a row cost NOTHING —
+   * the old estimator charged for every module-to-module link, which is why its
+   * numbers ran high.
+   */
+  moduleLeadReachM: number;
+  /** conservative drop from the array plane to the inverter/DCDB (m) */
+  defaultVerticalDropM: number;
+}
+
+/**
+ * Earthing / LPS conventions.
+ *
+ * ENGINEER VALIDATION REQUIRED (plan §7 + §F2). The honest position: the number
+ * of electrodes is a function of SOIL RESISTIVITY and the required earth
+ * resistance (IS 3043) — a site measurement this tool does not have and must
+ * not pretend to. Likewise LPS class (IS/IEC 62305) depends on a risk
+ * assessment. What lives here is the common Indian rooftop CONVENTION, so the
+ * BOM can offer a starting quantity that is LABELLED as assumed rather than
+ * presented as calculated.
+ */
+export interface EarthingRules {
+  /** one electrode each for the DC (array/structure) and AC (inverter) systems */
+  pitsForSystem: number;
+  /** one more when a lightning arrester is present — LPS earth is separate */
+  pitsForLps: number;
+  /** strip runs from the roof down (DC, AC, LPS) */
+  stripRunsPerPit: number;
+  /** flat allowance for pit-to-pit + equipment interconnects (m) */
+  interconnectAllowanceM: number;
+  /** horizontal run from an arrester's down conductor to its pit (m) */
+  laGroundRunM: number;
+}
+
+/** String-combiner box (SCB/AJB) sizing for central-inverter / C&I topology. */
+export interface CombinerRules {
+  /** max parallel string inputs per combiner box */
+  maxStringsPerBox: number;
+  /** continuous-duty factor on the combined output current (ΣIsc × this) */
+  outputFactor: number;
+}
+
+/** Representative financing terms (ASSUMED — a real deployment wires lender/PPA offers). */
+export interface FinancingRules {
+  /** rooftop solar loan APR (% per year) */
+  loanRatePct: number;
+  loanTenureYears: number;
+  /** minimum down payment (% of net cost) */
+  loanDownPaymentPct: number;
+  /** developer cost-of-capital used to amortise a lease (% per year) */
+  leaseRatePct: number;
+  leaseTenureYears: number;
+  /** PPA tariff discount vs the grid tariff (%) */
+  ppaDiscountPct: number;
+  ppaTenureYears: number;
+}
+
+export interface MarketRules {
+  market: 'india';
+  temps: TempRules;
+  cable: CableRules;
+  earthing: EarthingRules;
+  dcSizing: DcSizingRules;
+  acSizing: AcSizingRules;
+  subsidy: SubsidyRules;
+  health: HealthRules;
+  wind: WindRules;
+  combiner: CombinerRules;
+  financing: FinancingRules;
+  defaults: DefaultRules;
+}
+
+export const INDIA_RULES: MarketRules = {
+  market: 'india',
+  // representative Indian climate extremes — ASSUMED, engineer-confirmable
+  temps: {
+    latBands: [
+      { maxAbsLat: 15, label: 'deep south (Kerala/TN coast)', designMinAmbientC: 15, designMaxAmbientC: 40 },
+      { maxAbsLat: 20, label: 'Deccan (Pune/Hyderabad/Mumbai)', designMinAmbientC: 8, designMaxAmbientC: 42 },
+      { maxAbsLat: 26, label: 'central (Gujarat/MP/Bengal)', designMinAmbientC: 4, designMaxAmbientC: 45 },
+      { maxAbsLat: 32, label: 'north plains (Delhi/Punjab/UP)', designMinAmbientC: 0, designMaxAmbientC: 47 },
+      { maxAbsLat: 90, label: 'himalayan / high altitude', designMinAmbientC: -10, designMaxAmbientC: 38 },
+    ],
+    cellRiseC: 30,
+    fallbackPmaxCoeffPct: -0.35,
+  },
+  cable: {
+    slackPct: 0.1,
+    crossFieldPenalty: 6,
+    corridorInsetM: 0.4,
+    dcCableMm2: 4,
+    copperResistivity: 0.0175, // Ω·mm²/m at ~20 °C
+    maxDcDropPct: 2,
+    moduleLeadReachM: 1.4,
+    defaultVerticalDropM: 3,
+  },
+  earthing: {
+    pitsForSystem: 2,
+    pitsForLps: 1,
+    stripRunsPerPit: 1,
+    interconnectAllowanceM: 30,
+    laGroundRunM: 6,
+  },
+  dcSizing: {
+    fuseFactor: 1.56,
+    fuseLadder: [10, 12, 15, 20, 25, 30, 32, 40, 50, 63],
+    isolatorLadder: [16, 25, 32, 40, 63, 80, 100, 125],
+    cableAmpacity: [
+      [4, 32],
+      [6, 42],
+      [10, 57],
+    ],
+  },
+  acSizing: {
+    breakerFactor: 1.25,
+    breakerLadder: [16, 25, 32, 40, 63, 80, 100, 125, 160, 200, 250, 320, 400, 500, 630],
+  },
+  subsidy: {
+    firstSlabPerKwInr: 30000,
+    firstSlabKw: 2,
+    secondSlabPerKwInr: 18000,
+    capInr: 78000,
+    capKw: 3,
+    requiresDcr: true,
+  },
+  health: {
+    weights: { energy: 40, electrical: 40, utilization: 20 },
+    bands: { goodMin: 85, fairMin: 65 },
+    validationPenalties: {
+      panel_overlap: 30,
+      setback_breach: 12,
+      shaded: 15,
+      voc_high: 35,
+      vmp_low: 12,
+      imp_high: 10,
+      mppt_overflow: 35,
+      panel_over_obstruction: 30,
+      bridge_clearance: 25,
+      bridge_engineer: 8,
+    },
+    unknownValidationPenalty: 10,
+    insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },
+  },
+  wind: {
+    // representative dominant IS 875-3 zone per state (m/s); coastal belts
+    // and cyclone-prone states carry the higher figure of their zones
+    basicWindSpeedMsByState: {
+      'Andaman & Nicobar': 55, 'Andhra Pradesh': 50, 'Arunachal Pradesh': 50,
+      Assam: 50, Bihar: 47, Chandigarh: 47, Chhattisgarh: 39,
+      'Dadra & Nagar Haveli': 44, 'Daman & Diu': 44, Delhi: 47, Goa: 39,
+      Gujarat: 50, Haryana: 47, 'Himachal Pradesh': 39, 'Jammu & Kashmir': 39,
+      Jharkhand: 47, Karnataka: 39, Kerala: 39, Ladakh: 39, Lakshadweep: 55,
+      'Madhya Pradesh': 47, Maharashtra: 44, Manipur: 47, Meghalaya: 50,
+      Mizoram: 47, Nagaland: 47, Odisha: 50, Puducherry: 50, Punjab: 47,
+      Rajasthan: 47, Sikkim: 47, 'Tamil Nadu': 50, Telangana: 44, Tripura: 50,
+      'Uttar Pradesh': 47, Uttarakhand: 39, 'West Bengal': 50,
+    },
+    highWindMinMs: 47,
+  },
+  combiner: {
+    maxStringsPerBox: 12,
+    outputFactor: 1.25,
+  },
+  financing: {
+    loanRatePct: 9.5,
+    loanTenureYears: 5,
+    loanDownPaymentPct: 20,
+    leaseRatePct: 11,
+    leaseTenureYears: 10,
+    ppaDiscountPct: 20,
+    ppaTenureYears: 15,
+  },
+  defaults: {
+    roofSetbackM: 0.3,
+    groundSetbackM: 1.5,
+    groundTiltDeg: 20,
+    groundFenceEnabled: true,
+    groundGatesPerArea: 1,
+    cleaningReachM: 6,
+    ladderEdgeM: 2.5,
+    inverterClearanceM: 0.9,
+    tariffUnknownStateInrPerKwh: 7.5,
+    tariffNewProjectInrPerKwh: 8,
+    planLimitKw: 10,
+  },
+};
+
+/**
+ * Rule resolution point (§8.10). Today there is one market; later phases pass
+ * `project.info` and merge per-state / per-DISCOM overrides here, so consumers
+ * are already written against a resolver instead of a constant import.
+ */
+export function resolveRules(): MarketRules {
+  return INDIA_RULES;
+}

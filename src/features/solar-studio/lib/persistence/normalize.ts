@@ -1,0 +1,142 @@
+// ─── Stored-project normalization (schema resilience) ───────────────────────
+// Every project loaded from storage passes through here: fields added after
+// launch get defaults, malformed sub-entities are dropped item-by-item
+// (all-or-nothing per item, never per project), and one-time field migrations
+// run (sldParams snapshot → derived.sldOverrides diff). Pure — no storage I/O.
+import type { ArraySegment, Keepout, Project, SiteWeather } from '../../types';
+import { isValidSiteWeather } from '../pvgis';
+import { deriveSldDefaults, diffSldOverrides } from '../sld';
+import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
+
+/**
+ * Validate persisted weather before it can drive energy numbers. A corrupt /
+ * truncated / older-schema entry is DROPPED whole (all-or-nothing), so the app
+ * cleanly falls back to the estimate instead of rendering NaN bars.
+ */
+export function normalizeWeather(w: unknown): SiteWeather | undefined {
+  return isValidSiteWeather(w) ? w : undefined;
+}
+
+/** Additive migrations for arrays added after launch (all-or-nothing per item). */
+function isValidSegment(s: unknown): s is ArraySegment {
+  const o = s as ArraySegment;
+  return (
+    !!o &&
+    typeof o.id === 'string' &&
+    Array.isArray(o.polygon) &&
+    Array.isArray(o.removed) &&
+    typeof o.rows === 'number' &&
+    !!o.racking
+  );
+}
+function isValidKeepout(k: unknown): k is Keepout {
+  const o = k as Keepout;
+  return (
+    !!o && typeof o.id === 'string' && Array.isArray(o.shape) && typeof o.heightM === 'number'
+  );
+}
+
+/** Fill fields added after launch so older saved projects keep working. */
+/** A persisted health snapshot must be structurally sound or the health
+ *  sheet's delta panel would crash on it — garbage resets to "never scored". */
+function isValidHealthSnapshot(hs: unknown): hs is NonNullable<Project['derived']['healthSnapshot']> {
+  if (hs == null || typeof hs !== 'object') return false;
+  const entryOk = (e: unknown): boolean =>
+    e != null &&
+    typeof e === 'object' &&
+    typeof (e as { key?: unknown }).key === 'string' &&
+    Array.isArray((e as { categories?: unknown }).categories);
+  const h = hs as { current?: unknown; prev?: unknown };
+  return entryOk(h.current) && (h.prev == null || entryOk(h.prev));
+}
+
+export function normalizeProject(p: Project): Project {
+  return {
+    ...p,
+    // pricing was added after launch — default it (and repair NaN/out-of-range)
+    pricing: {
+      marginPct:
+        typeof p.pricing?.marginPct === 'number' && Number.isFinite(p.pricing.marginPct)
+          ? Math.min(60, Math.max(0, p.pricing.marginPct))
+          : DEFAULT_MARGIN_PCT,
+    },
+    // derived-state stamps were added with the fingerprint graph — default them.
+    // A legacy project loads with solarAccessFp=null (= "provisional"), so the
+    // recompute host re-verifies its shading on first open and stamps it fresh.
+    // A legacy sldParams snapshot migrates to the override layer as a DIFF vs
+    // freshly-derived params: fields the user never touched go back to being
+    // live-derived; only real edits survive as overrides.
+    derived: {
+      solarAccessFp: typeof p.derived?.solarAccessFp === 'string' ? p.derived.solarAccessFp : null,
+      sldOverrides:
+        p.derived?.sldOverrides ??
+        (p.sldParams ? diffSldOverrides(p.sldParams, deriveSldDefaults(p)) : null),
+      sldIntroSeen: p.derived?.sldIntroSeen ?? p.sldParams != null,
+      healthSnapshot: isValidHealthSnapshot(p.derived?.healthSnapshot)
+        ? p.derived!.healthSnapshot
+        : null,
+    },
+    sldParams: null,
+    captures: Array.isArray(p.captures)
+      ? p.captures.map((c) => ({
+          ...c,
+          imageBlobId: c.imageBlobId ?? null,
+          forLayoutFp: c.forLayoutFp ?? null,
+        }))
+      : [],
+    coverImageBlobId: p.coverImageBlobId ?? null,
+    coverForLayoutFp: p.coverForLayoutFp ?? null,
+    insightState: p.insightState ?? {},
+    calibration: {
+      scaleFactor:
+        typeof p.calibration?.scaleFactor === 'number' &&
+        Number.isFinite(p.calibration.scaleFactor) &&
+        p.calibration.scaleFactor > 0
+          ? p.calibration.scaleFactor
+          : 1,
+      northOffsetDeg:
+        typeof p.calibration?.northOffsetDeg === 'number' &&
+        Number.isFinite(p.calibration.northOffsetDeg)
+          ? p.calibration.northOffsetDeg
+          : 0,
+      reference: p.calibration?.reference ?? null,
+    },
+    segments: Array.isArray(p.segments) ? p.segments.filter(isValidSegment) : [],
+    keepouts: Array.isArray(p.keepouts) ? p.keepouts.filter(isValidKeepout) : [],
+    // every entity array must BE an array — a stored shape that passed the
+    // top-level parse but carries a non-array field would otherwise crash the
+    // recompute host (p.panels.map) on every route, bricking the whole app
+    obstructions: Array.isArray(p.obstructions) ? p.obstructions : [],
+    panels: Array.isArray(p.panels) ? p.panels : [],
+    walkways: Array.isArray(p.walkways) ? p.walkways : [],
+    rails: Array.isArray(p.rails) ? p.rails : [],
+    arresters: Array.isArray(p.arresters) ? p.arresters : [],
+    inverterPlacements: Array.isArray(p.inverterPlacements) ? p.inverterPlacements : [],
+    strings: Array.isArray(p.strings) ? p.strings : [],
+    bomOverrides: Array.isArray(p.bomOverrides) ? p.bomOverrides : [],
+    location: p.location
+      ? { ...p.location, weather: normalizeWeather(p.location.weather) }
+      : p.location,
+    roofs: (Array.isArray(p.roofs) ? p.roofs : []).map((r) => ({
+      ...r,
+      pitchDeg: r.pitchDeg ?? 0,
+      slopeAzimuthDeg: r.slopeAzimuthDeg ?? 180,
+      perEdgeSetbacksM: r.perEdgeSetbacksM ?? null,
+      parapet: {
+        enabled: r.parapet?.enabled ?? false,
+        // renderers always drew the band inward regardless of the stored
+        // direction, so force 'inward' to preserve what saved projects showed
+        direction: 'inward',
+        heightM: r.parapet?.heightM ?? 1,
+        widthM: r.parapet?.widthM ?? 0.3,
+        // perEdge is now boolean[]; coerce any earlier object form
+        perEdge: Array.isArray(r.parapet?.perEdge)
+          ? r.parapet.perEdge.map((e: unknown) =>
+              typeof e === 'boolean' ? e : (e as { enabled?: boolean })?.enabled ?? true,
+            )
+          : null,
+        suppressSharedEdges: r.parapet?.suppressSharedEdges ?? true,
+      },
+    })),
+  };
+}
