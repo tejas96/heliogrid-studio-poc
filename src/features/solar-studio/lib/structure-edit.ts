@@ -38,7 +38,22 @@ export type StructChoice =
   /** Phase 22l: what the legs stand on. Gated by surface — see foundationOptionsFor. */
   | { kind: 'foundation'; foundation: FoundationKind }
   /** Shuttering form for a CAST foundation — only meaningful for `concrete`. */
-  | { kind: 'foundationShape'; shape: FoundationShape };
+  | { kind: 'foundationShape'; shape: FoundationShape }
+  /**
+   * Customize MMS: the Phase-22g parametrics.
+   *
+   * `undefined` means "back to the default", and it is passed as undefined
+   * rather than as the default VALUE on purpose — `setSegmentStructureFields`
+   * deletes the key, so returning a control to its default leaves the segment
+   * serialising exactly as it did before anyone touched it. Writing `2` for a
+   * purlin count that defaults to 2 would re-key layoutFp and stale every
+   * capture for a change that changes nothing.
+   */
+  | {
+      kind: 'mms';
+      field: 'purlinCount' | 'rafterMultiplier' | 'endBufferM' | 'bracing';
+      value: number | boolean | undefined;
+    };
 
 export interface StructPatch {
   segments: ArraySegment[];
@@ -144,6 +159,15 @@ export function applyStructChoice(
     case 'foundationShape': {
       if (seg.racking.kind === 'flush') return null;
       const seg2 = setSegmentStructureFields(seg, { foundationShape: choice.shape });
+      return replace(project, seg2, project.panels);
+    }
+    case 'mms': {
+      // A flush segment has no table to parameterise — a monorail's rails are
+      // laid out from the sheet's purlin pitch, not from these.
+      if (seg.racking.kind === 'flush') return null;
+      const seg2 = setSegmentStructureFields(seg, {
+        [choice.field]: choice.value,
+      } as Parameters<typeof setSegmentStructureFields>[1]);
       return replace(project, seg2, project.panels);
     }
     }

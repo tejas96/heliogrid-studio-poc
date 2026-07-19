@@ -501,6 +501,91 @@ export function StructEditPanel({
                   : null,
               )}
 
+            {/* ── Customize MMS ────────────────────────────────────────────
+                The Phase-22g parametrics. Each control passes `undefined` when
+                it lands back on the default so the key is DELETED rather than
+                written — a table returned to standard serialises exactly as one
+                that was never touched, and no capture stales for a no-op. */}
+            {resolved && (
+              <div style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 10, opacity: 0.6, marginBottom: 2, letterSpacing: 0.3 }}>
+                  CUSTOMIZE MMS
+                </div>
+                {(() => {
+                  const r = seg.racking.kind !== 'flush' ? seg.racking : null;
+                  if (!r) return null;
+                  const purlins = r.purlinCount ?? 2;
+                  const mult = r.rafterMultiplier ?? 1;
+                  const buffer = r.endBufferM ?? 0;
+                  const braced = r.bracing !== false;
+                  /** default ⇒ undefined, so the key is dropped */
+                  const mms = (
+                    field: 'purlinCount' | 'rafterMultiplier' | 'endBufferM',
+                    value: number,
+                    dflt: number,
+                  ): StructChoice => ({
+                    kind: 'mms',
+                    field,
+                    value: value === dflt ? undefined : value,
+                  });
+                  return (
+                    <>
+                      {stepRow(
+                        'Purlins / row',
+                        `${purlins}`,
+                        purlins > 1 ? mms('purlinCount', purlins - 1, 2) : null,
+                        purlins < 6 ? mms('purlinCount', purlins + 1, 2) : null,
+                      )}
+                      {stepRow(
+                        'Rafter density',
+                        `${mult}×`,
+                        mult > 1 ? mms('rafterMultiplier', Math.round((mult - 0.5) * 10) / 10, 1) : null,
+                        mult < 3 ? mms('rafterMultiplier', Math.round((mult + 0.5) * 10) / 10, 1) : null,
+                      )}
+                      {stepRow(
+                        'End overhang',
+                        fmtLen ? fmtLen(buffer, 2) : `${buffer.toFixed(2)} m`,
+                        buffer > 0 ? mms('endBufferM', Math.round((buffer - 0.1) * 100) / 100, 0) : null,
+                        buffer < 1 ? mms('endBufferM', Math.round((buffer + 0.1) * 100) / 100, 0) : null,
+                      )}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginTop: 6,
+                        }}
+                      >
+                        <span style={{ color: '#9ca3af' }}>Bracing</span>
+                        <button
+                          style={{
+                            ...structBtn,
+                            borderColor: braced ? '#fbbf24' : 'rgba(255,255,255,.14)',
+                          }}
+                          aria-pressed={braced}
+                          onClick={() =>
+                            onCommit({
+                              kind: 'mms',
+                              field: 'bracing',
+                              // `true` is the default ⇒ clear the key
+                              value: braced ? false : undefined,
+                            })
+                          }
+                        >
+                          {braced ? 'Braced' : 'None'}
+                        </button>
+                      </div>
+                      {/* §F: this buys material, not capacity */}
+                      <div style={{ fontSize: 9.5, opacity: 0.55, marginTop: 4, lineHeight: 1.35 }}>
+                        Rafter density is a MATERIAL allowance, not a safety factor — no structural
+                        analysis is performed here.
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
             {/* ── Legs (2D) — Phase 22m ────────────────────────────────────
                 Commits a complete, already-validated `segments` patch rather
                 than a StructChoice: the variants above are discrete presets,

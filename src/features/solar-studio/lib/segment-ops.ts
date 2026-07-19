@@ -445,12 +445,31 @@ export function setSegmentStructureFields(
     foundation: FoundationKind;
     foundationShape: FoundationShape;
     clearanceM: number;
+    // Phase 22g parametrics, exposed by the Customize MMS controls
+    purlinCount: number;
+    rafterCount: number;
+    rafterMultiplier: number;
+    endBufferM: number;
+    bracing: boolean;
   }>,
 ): ArraySegment {
   if (seg.racking.kind === 'flush') return seg;
   const racking = { ...seg.racking, ...fields };
-  // drop explicit undefineds so the racking JSON stays canonical
-  for (const k of ['legSpacingM', 'foundation', 'foundationShape', 'clearanceM'] as const) {
+  // Drop explicit undefineds so the racking JSON stays canonical. This is the
+  // lazy-field contract, and it is what lets a control return a value to its
+  // DEFAULT and have the segment serialise byte-identically to one that never
+  // touched it — no re-keyed layoutFp, no staled capture, for a no-op edit.
+  for (const k of [
+    'legSpacingM',
+    'foundation',
+    'foundationShape',
+    'clearanceM',
+    'purlinCount',
+    'rafterCount',
+    'rafterMultiplier',
+    'endBufferM',
+    'bracing',
+  ] as const) {
     if (racking[k] === undefined) delete racking[k];
   }
   return { ...seg, racking };
