@@ -11,6 +11,8 @@ import type { Project, XY } from '../types';
 import { DxfBuilder } from './dxf';
 import { panelCornersOnRoof } from './layout';
 import { rectCorners, polygonCentroid } from './geo';
+import { projectStructures } from './structure';
+import { ruleFor } from './foundation';
 
 export const DXF_LAYERS = {
   roof: 'PV-ROOF',
@@ -24,6 +26,13 @@ export const DXF_LAYERS = {
   dcCable: 'PV-DC-CABLE',
   acCable: 'PV-AC-CABLE',
   earth: 'PV-EARTH',
+  // ── mounting structure (Phase 22o). The DXF carried modules and roof
+  // outlines but not one member, so the file a fabricator or site engineer
+  // actually sets out from showed nothing to set out.
+  structMembers: 'STRUCT-MEMBERS',
+  structLegs: 'STRUCT-LEGS',
+  structFootings: 'STRUCT-FOOTINGS',
+  dims: 'DIMS',
 } as const;
 
 /** Route kind → the layer it is drawn on. */
@@ -47,7 +56,11 @@ export function layoutToDxf(project: Project): string {
     .addLayer(DXF_LAYERS.text, 7)
     .addLayer(DXF_LAYERS.dcCable, 1) // red — DC is the dangerous one
     .addLayer(DXF_LAYERS.acCable, 2) // yellow
-    .addLayer(DXF_LAYERS.earth, 4); // cyan
+    .addLayer(DXF_LAYERS.earth, 4) // cyan
+    .addLayer(DXF_LAYERS.structMembers, 8) // grey — the frame
+    .addLayer(DXF_LAYERS.structLegs, 6) // magenta — setting-out points
+    .addLayer(DXF_LAYERS.structFootings, 30) // orange — what gets cast/placed
+    .addLayer(DXF_LAYERS.dims, 7);
 
   // ── roof faces (each pitched face is its own closed outline) ──────────────
   for (const roof of project.roofs) {
@@ -121,7 +134,76 @@ export function layoutToDxf(project: Project): string {
     d.text(a.pos, 'LA', DXF_LAYERS.text, 0.3);
   }
 
+  drawStructure(d, project);
+
   return d.toString();
+}
+
+/**
+ * The mounting structure, in PLAN (Phase 22o).
+ *
+ * Everything here comes from `projectStructures` — the same member/node graph
+ * the 3D scene draws and the BOM prices, so the drawing cannot disagree with
+ * either (§A0). Three layers because a drafter plots them separately:
+ *
+ *   STRUCT-FOOTINGS  what gets cast or placed, at its true footprint
+ *   STRUCT-LEGS      setting-out crosses — the points marked on the roof
+ *   STRUCT-MEMBERS   rafters, purlins, braces, rails in plan
+ *
+ * Members are projected to plan: this is a layout drawing, and a leg is a point
+ * from above. The elevation that shows leg heights is a separate sheet.
+ */
+function drawStructure(d: DxfBuilder, project: Project): void {
+  for (const s of projectStructures(project)) {
+    // members first, so the setting-out marks sit on top of them
+    for (const m of s.members) {
+      if (m.kind === 'front_leg' || m.kind === 'back_leg') continue; // a point in plan
+      d.line({ x: m.a.x, y: m.a.y }, { x: m.b.x, y: m.b.y }, DXF_LAYERS.structMembers);
+    }
+
+    const anchors = s.nodes.filter((n) => n.kind === 'roof_anchor');
+    const rule = ruleFor(s.foundation, s.foundationShape);
+    for (const n of anchors) {
+      const c = { x: n.position.x, y: n.position.y };
+
+      // FOOTING at true size — this is the thing someone marks out and casts,
+      // so drawing it nominally would be worse than not drawing it at all.
+      if (rule.shape === 'circular' && rule.d) {
+        d.circle(c, rule.d / 2000, DXF_LAYERS.structFootings);
+      } else if (rule.l) {
+        d.polyline(
+          rectCorners(c, rule.l / 1000, (rule.w ?? rule.l) / 1000, 0),
+          DXF_LAYERS.structFootings,
+          true,
+        );
+      }
+
+      // SETTING-OUT cross at the leg centre
+      const t = 0.15;
+      d.line({ x: c.x - t, y: c.y }, { x: c.x + t, y: c.y }, DXF_LAYERS.structLegs);
+      d.line({ x: c.x, y: c.y - t }, { x: c.x, y: c.y + t }, DXF_LAYERS.structLegs);
+    }
+
+    // ── DIMS: leg spacing, as LINE + TEXT ────────────────────────────────────
+    // Deliberately NOT real DIMENSION entities. Those need a DIMSTYLE table and
+    // block references — a large chunk of the DXF spec for no gain here, since
+    // lines and text open correctly in every reader.
+    const legs = s.members.filter((m) => m.kind === 'front_leg');
+    if (legs.length >= 2) {
+      const a = { x: legs[0].a.x, y: legs[0].a.y };
+      const b = { x: legs[1].a.x, y: legs[1].a.y };
+      const span = Math.hypot(b.x - a.x, b.y - a.y);
+      if (span > 0.05) {
+        d.line(a, b, DXF_LAYERS.dims);
+        d.text(
+          { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+          `${span.toFixed(2)} m TYP`,
+          DXF_LAYERS.dims,
+          0.3,
+        );
+      }
+    }
+  }
 }
 
 /** Suggested filename for the layout drawing. */
