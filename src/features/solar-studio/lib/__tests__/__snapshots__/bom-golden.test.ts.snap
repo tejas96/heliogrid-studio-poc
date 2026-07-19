@@ -1,0 +1,161 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`deriveBom golden output (pre-22b refactor contract) > minimal shared fixture (no segments, no site works) 1`] = `
+"Modules | Adani Solar ELAN Shine 540 | 540Wp Mono PERC · ALMM · DCR | 8 | nos | 12420 | measured | true | false | 8 enabled panels on canvas
+Inverter | GoodWe GW5000-NS | 5kW · 1φ · 2 MPPT | 1 | nos | 55000 | measured | true | false | Selected in Components step
+Electrical BOS | DC Solar Cable 4 sq.mm | 1.1kV, UV-resistant, red+black pair | 83 | m | 68 | estimated | true | false | ESTIMATE — 1 strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.
+Electrical BOS | AC Cable | 3-core 6 sq.mm Cu | 25 | m | 210 | assumed | true | false | ASSUMED 25 m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter) or edit the quantity to the surveyed length.
+Electrical BOS | MC4 Connector Pairs | 1000V 30A | 6 | pairs | 95 | derived | true | false | 1 strings × 2 + 4 spare
+Electrical BOS | DCDB | 1-in 2-out, fuses + Type-II SPD | 1 | nos | 6100 | derived | true | false | One per inverter, sized from string count
+Electrical BOS | ACDB | 32A MCB + Type-II SPD | 1 | nos | 7400 | derived | true | false | AC current 22A × 1.25 safety
+Electrical BOS | Conduit + Cable Tray | 25mm HDPE / GI tray | 67 | m | 55 | estimated | true | false | ESTIMATE — DC runs not routed yet: 42 m implied + 25 m AC allowance
+Electrical BOS | Net Meter + Generation Meter | DISCOM-approved bidirectional | 1 | set | 9700 | derived | true | false | Required for net metering
+Mechanical BOS | Mounting Structure (elevated RCC) | HDG steel, 10° tilt legs + purlins | 8 | panel-set | 950 | derived | true | false | 8 loose/unsegmented FLAT-RCC panels × structure share (pitched faces are billed flush hardware instead). Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 19 | m | 320 | derived | true | false | 8 unsegmented flat-RCC/ground/pitched-roof panels × panel length × 1.05 waste
+Mechanical BOS | Mid + End Clamps | Al with SS hardware | 24 | nos | 38 | derived | true | false | 8 panels × 2 + ends
+Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Safety | Earthing Pits | Chemical earthing, 3m electrode | 2 | nos | 2650 | assumed | true | false | 2 system (DC + AC) (no arrester ⇒ no LPS pit) — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
+Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 36 | m | 92 | assumed | true | false | 2 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
+Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
+Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 4.3 | kW | 2500 | derived | true | false | 4.3 kWp × ₹2500/kW
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+`;
+
+exports[`deriveBom golden output (pre-22b refactor contract) > rich four-roof project 1`] = `
+"Modules | Adani Solar ELAN Shine 540 | 540Wp Mono PERC · ALMM · DCR | 22 | nos | 12420 | measured | true | false | 22 enabled panels on canvas
+Inverter | GoodWe GW5000-NS | 5kW · 1φ · 2 MPPT | 2 | nos | 55000 | measured | true | false | Selected in Components step
+Electrical BOS | DC Solar Cable 4 sq.mm | 1.1kV, UV-resistant, red+black pair | 95 | m | 68 | estimated | true | false | ESTIMATE — 2 strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.
+Electrical BOS | AC Cable | 3-core 6 sq.mm Cu | 25 | m | 210 | assumed | true | false | ASSUMED 25 m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter) or edit the quantity to the surveyed length.
+Electrical BOS | MC4 Connector Pairs | 1000V 30A | 8 | pairs | 95 | derived | true | false | 2 strings × 2 + 4 spare
+Electrical BOS | DCDB | 2-in 2-out, fuses + Type-II SPD | 2 | nos | 6100 | derived | true | false | One per inverter, sized from string count
+Electrical BOS | ACDB | 63A MCB + Type-II SPD | 1 | nos | 7400 | derived | true | false | AC current 43A × 1.25 safety
+Electrical BOS | Conduit + Cable Tray | 25mm HDPE / GI tray | 73 | m | 55 | estimated | true | false | ESTIMATE — DC runs not routed yet: 48 m implied + 25 m AC allowance
+Electrical BOS | Net Meter + Generation Meter | DISCOM-approved bidirectional | 1 | set | 9700 | derived | true | false | Required for net metering
+Mechanical BOS | Structure Steel — C-Channel | HDG C-Channel (2.2 kg/m), key c_channel | 89.5 | kg | 92 | derived | true | false | Member model: A1: 12 legs 6m, 6 rafters 13.7m, 4 purlins 14m, 4 braces 7m. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Base Plates + Anchors | HDG plates, chemical/expansion anchors | 12 | plate | 196 | derived | true | false | 12 leg base plates × (plate + 2 anchors each) from the node graph. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Structure Bolts (M10 SS) | bolt + nut + washers per joint | 44 | nos | 14 | derived | true | false | Σ joint nodes × bolts (leg-rafter 2, rafter-purlin 1, brace ends 1)
+Mechanical BOS | Ground Mount Structure | HDG steel table, tilt legs + foundation | 6 | panel-set | 1450 | assumed | true | false | 6 unsegmented ground-array panels × structure share (foundation type site-dependent — assumed). Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG/SS adjustable tile roof hooks bolted to batten/rafter, flush mount | 4 | panel-set | 980 | estimated | true | false | 4 panels on Mangalore / clay tile faces × ~4 anchor points each, priced as adjustable tile roof hooks. Modules sit FLUSH on the covering — no tilt legs, no ballast. A tile hook reaches PAST the tile to the batten/rafter, so it must clear the tile profile and be height-adjustable. ESTIMATE — hooks per module (~4 assumed) are set by rafter spacing, which is not modelled; confirm at site survey. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
+Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
+Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 24 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length × 1.05 waste
+Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
+Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
+Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
+Safety | LA Down Conductor | Cu strip 25×3 | 9 | m | 140 | derived | true | false | Σ per arrester (its roof height + 6 m to pit) over 1 LA
+Safety | Earthing Pits | Chemical earthing, 3m electrode | 3 | nos | 2650 | assumed | true | false | 2 system (DC + AC) + 1 LPS — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
+Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 39 | m | 92 | assumed | true | false | 3 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
+Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
+Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | true | false | 68 m measured around 1 array boundary. Fence type/height is a CLIENT decision — ASSUMED.
+Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
+Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
+Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+`;
+
+exports[`deriveBom golden output (pre-22b refactor contract) > unstrung project 1`] = `
+"Modules | Adani Solar ELAN Shine 540 | 540Wp Mono PERC · ALMM · DCR | 22 | nos | 12420 | measured | true | false | 22 enabled panels on canvas
+Inverter | GoodWe GW5000-NS | 5kW · 1φ · 2 MPPT | 2 | nos | 55000 | measured | true | false | Selected in Components step
+Electrical BOS | DC Solar Cable 4 sq.mm | 1.1kV, UV-resistant, red+black pair | 30 | m | 68 | estimated | true | false | ESTIMATE — 0 strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.
+Electrical BOS | AC Cable | 3-core 6 sq.mm Cu | 25 | m | 210 | assumed | true | false | ASSUMED 25 m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter) or edit the quantity to the surveyed length.
+Electrical BOS | MC4 Connector Pairs | 1000V 30A | 4 | pairs | 95 | derived | true | false | 0 strings × 2 + 4 spare
+Electrical BOS | DCDB | 0-in 2-out, fuses + Type-II SPD | 2 | nos | 6100 | derived | true | false | One per inverter, sized from string count
+Electrical BOS | ACDB | 63A MCB + Type-II SPD | 1 | nos | 7400 | derived | true | false | AC current 43A × 1.25 safety
+Electrical BOS | Conduit + Cable Tray | 25mm HDPE / GI tray | 40 | m | 55 | estimated | true | false | ESTIMATE — DC runs not routed yet: 15 m implied + 25 m AC allowance
+Electrical BOS | Net Meter + Generation Meter | DISCOM-approved bidirectional | 1 | set | 9700 | derived | true | false | Required for net metering
+Mechanical BOS | Structure Steel — C-Channel | HDG C-Channel (2.2 kg/m), key c_channel | 89.5 | kg | 92 | derived | true | false | Member model: A1: 12 legs 6m, 6 rafters 13.7m, 4 purlins 14m, 4 braces 7m. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Base Plates + Anchors | HDG plates, chemical/expansion anchors | 12 | plate | 196 | derived | true | false | 12 leg base plates × (plate + 2 anchors each) from the node graph. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Structure Bolts (M10 SS) | bolt + nut + washers per joint | 44 | nos | 14 | derived | true | false | Σ joint nodes × bolts (leg-rafter 2, rafter-purlin 1, brace ends 1)
+Mechanical BOS | Ground Mount Structure | HDG steel table, tilt legs + foundation | 6 | panel-set | 1450 | assumed | true | false | 6 unsegmented ground-array panels × structure share (foundation type site-dependent — assumed). Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG/SS adjustable tile roof hooks bolted to batten/rafter, flush mount | 4 | panel-set | 980 | estimated | true | false | 4 panels on Mangalore / clay tile faces × ~4 anchor points each, priced as adjustable tile roof hooks. Modules sit FLUSH on the covering — no tilt legs, no ballast. A tile hook reaches PAST the tile to the batten/rafter, so it must clear the tile profile and be height-adjustable. ESTIMATE — hooks per module (~4 assumed) are set by rafter spacing, which is not modelled; confirm at site survey. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
+Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
+Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 24 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length × 1.05 waste
+Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
+Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
+Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
+Safety | LA Down Conductor | Cu strip 25×3 | 9 | m | 140 | derived | true | false | Σ per arrester (its roof height + 6 m to pit) over 1 LA
+Safety | Earthing Pits | Chemical earthing, 3m electrode | 3 | nos | 2650 | assumed | true | false | 2 system (DC + AC) + 1 LPS — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
+Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 39 | m | 92 | assumed | true | false | 3 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
+Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
+Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | true | false | 68 m measured around 1 array boundary. Fence type/height is a CLIENT decision — ASSUMED.
+Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
+Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
+Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+`;
+
+exports[`deriveBom golden output (pre-22b refactor contract) > with central-inverter combiner topology 1`] = `
+"Modules | Adani Solar ELAN Shine 540 | 540Wp Mono PERC · ALMM · DCR | 22 | nos | 12420 | measured | true | false | 22 enabled panels on canvas
+Inverter | GoodWe GW5000-NS | 5kW · 1φ · 2 MPPT | 2 | nos | 55000 | measured | true | false | Selected in Components step
+Electrical BOS | DC Solar Cable 4 sq.mm | 1.1kV, UV-resistant, red+black pair | 95 | m | 68 | estimated | true | false | ESTIMATE — 2 strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.
+Electrical BOS | AC Cable | 3-core 6 sq.mm Cu | 25 | m | 210 | assumed | true | false | ASSUMED 25 m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter) or edit the quantity to the surveyed length.
+Electrical BOS | MC4 Connector Pairs | 1000V 30A | 8 | pairs | 95 | derived | true | false | 2 strings × 2 + 4 spare
+Electrical BOS | DCDB | 2-in 2-out, fuses + Type-II SPD | 2 | nos | 6100 | derived | true | false | One per inverter, sized from string count
+Electrical BOS | ACDB | 63A MCB + Type-II SPD | 1 | nos | 7400 | derived | true | false | AC current 43A × 1.25 safety
+Electrical BOS | Conduit + Cable Tray | 25mm HDPE / GI tray | 73 | m | 55 | estimated | true | false | ESTIMATE — DC runs not routed yet: 48 m implied + 25 m AC allowance
+Electrical BOS | Net Meter + Generation Meter | DISCOM-approved bidirectional | 1 | set | 9700 | derived | true | false | Required for net metering
+Electrical BOS | String Combiner Box (SCB) | up to 12-in · 25A fuses + isolator + Type-II SPD | 1 | nos | 10400 | derived | true | false | 2 strings ÷ 12/box = 1 combiner (central topology)
+Electrical BOS | String Fuses (gPV) | 25A 1000V DC | 4 | nos | 120 | derived | true | false | 2 strings × 2 poles (+ and −), fused in the combiner
+Mechanical BOS | Structure Steel — C-Channel | HDG C-Channel (2.2 kg/m), key c_channel | 89.5 | kg | 92 | derived | true | false | Member model: A1: 12 legs 6m, 6 rafters 13.7m, 4 purlins 14m, 4 braces 7m. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Base Plates + Anchors | HDG plates, chemical/expansion anchors | 12 | plate | 196 | derived | true | false | 12 leg base plates × (plate + 2 anchors each) from the node graph. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Structure Bolts (M10 SS) | bolt + nut + washers per joint | 44 | nos | 14 | derived | true | false | Σ joint nodes × bolts (leg-rafter 2, rafter-purlin 1, brace ends 1)
+Mechanical BOS | Ground Mount Structure | HDG steel table, tilt legs + foundation | 6 | panel-set | 1450 | assumed | true | false | 6 unsegmented ground-array panels × structure share (foundation type site-dependent — assumed). Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG/SS adjustable tile roof hooks bolted to batten/rafter, flush mount | 4 | panel-set | 980 | estimated | true | false | 4 panels on Mangalore / clay tile faces × ~4 anchor points each, priced as adjustable tile roof hooks. Modules sit FLUSH on the covering — no tilt legs, no ballast. A tile hook reaches PAST the tile to the batten/rafter, so it must clear the tile profile and be height-adjustable. ESTIMATE — hooks per module (~4 assumed) are set by rafter spacing, which is not modelled; confirm at site survey. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
+Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
+Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 24 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length × 1.05 waste
+Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
+Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
+Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
+Safety | LA Down Conductor | Cu strip 25×3 | 9 | m | 140 | derived | true | false | Σ per arrester (its roof height + 6 m to pit) over 1 LA
+Safety | Earthing Pits | Chemical earthing, 3m electrode | 3 | nos | 2650 | assumed | true | false | 2 system (DC + AC) + 1 LPS — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
+Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 39 | m | 92 | assumed | true | false | 3 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
+Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
+Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | true | false | 68 m measured around 1 array boundary. Fence type/height is a CLIENT decision — ASSUMED.
+Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
+Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
+Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+`;
+
+exports[`deriveBom golden output (pre-22b refactor contract) > with module-level optimisers 1`] = `
+"Modules | Adani Solar ELAN Shine 540 | 540Wp Mono PERC · ALMM · DCR | 22 | nos | 12420 | measured | true | false | 22 enabled panels on canvas
+Inverter | GoodWe GW5000-NS | 5kW · 1φ · 2 MPPT | 2 | nos | 55000 | measured | true | false | Selected in Components step
+Electrical BOS | DC Solar Cable 4 sq.mm | 1.1kV, UV-resistant, red+black pair | 95 | m | 68 | estimated | true | false | ESTIMATE — 2 strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.
+Electrical BOS | AC Cable | 3-core 6 sq.mm Cu | 25 | m | 210 | assumed | true | false | ASSUMED 25 m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter) or edit the quantity to the surveyed length.
+Electrical BOS | MC4 Connector Pairs | 1000V 30A | 8 | pairs | 95 | derived | true | false | 2 strings × 2 + 4 spare
+Electrical BOS | DCDB | 2-in 2-out, fuses + Type-II SPD | 2 | nos | 6100 | derived | true | false | One per inverter, sized from string count
+Electrical BOS | ACDB | 63A MCB + Type-II SPD | 1 | nos | 7400 | derived | true | false | AC current 43A × 1.25 safety
+Electrical BOS | Conduit + Cable Tray | 25mm HDPE / GI tray | 73 | m | 55 | estimated | true | false | ESTIMATE — DC runs not routed yet: 48 m implied + 25 m AC allowance
+Electrical BOS | Net Meter + Generation Meter | DISCOM-approved bidirectional | 1 | set | 9700 | derived | true | false | Required for net metering
+Electrical BOS | DC Optimiser (per module) | Module-level MPPT + rapid shutdown | 22 | nos | 3400 | measured | true | false | One per enabled module (22) — lets mixed-orientation faces share a string
+Mechanical BOS | Structure Steel — C-Channel | HDG C-Channel (2.2 kg/m), key c_channel | 89.5 | kg | 92 | derived | true | false | Member model: A1: 12 legs 6m, 6 rafters 13.7m, 4 purlins 14m, 4 braces 7m. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Base Plates + Anchors | HDG plates, chemical/expansion anchors | 12 | plate | 196 | derived | true | false | 12 leg base plates × (plate + 2 anchors each) from the node graph. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Structure Bolts (M10 SS) | bolt + nut + washers per joint | 44 | nos | 14 | derived | true | false | Σ joint nodes × bolts (leg-rafter 2, rafter-purlin 1, brace ends 1)
+Mechanical BOS | Ground Mount Structure | HDG steel table, tilt legs + foundation | 6 | panel-set | 1450 | assumed | true | false | 6 unsegmented ground-array panels × structure share (foundation type site-dependent — assumed). Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG/SS adjustable tile roof hooks bolted to batten/rafter, flush mount | 4 | panel-set | 980 | estimated | true | false | 4 panels on Mangalore / clay tile faces × ~4 anchor points each, priced as adjustable tile roof hooks. Modules sit FLUSH on the covering — no tilt legs, no ballast. A tile hook reaches PAST the tile to the batten/rafter, so it must clear the tile profile and be height-adjustable. ESTIMATE — hooks per module (~4 assumed) are set by rafter spacing, which is not modelled; confirm at site survey. Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
+Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
+Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
+Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 24 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length × 1.05 waste
+Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
+Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
+Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
+Safety | LA Down Conductor | Cu strip 25×3 | 9 | m | 140 | derived | true | false | Σ per arrester (its roof height + 6 m to pit) over 1 LA
+Safety | Earthing Pits | Chemical earthing, 3m electrode | 3 | nos | 2650 | assumed | true | false | 2 system (DC + AC) + 1 LPS — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
+Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 39 | m | 92 | assumed | true | false | 3 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
+Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
+Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | true | false | 68 m measured around 1 array boundary. Fence type/height is a CLIENT decision — ASSUMED.
+Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
+Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
+Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+`;
