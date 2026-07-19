@@ -15,7 +15,8 @@
 //   · VIEW choices (module visibility, table isolation) call onViewChange and
 //     must NEVER touch the project — ghosting a module to look at a rafter is
 //     not a design change, and if it were persisted it would stale captures.
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { LegPlanEditor } from './LegPlanEditor';
 import { Html } from '@react-three/drei';
 import type {
   FoundationKind,
@@ -113,6 +114,8 @@ export function StructEditPanel({
   onFocusBlocker,
   view,
   onViewChange,
+  onPatch,
+  fmtLen,
 }: {
   project: Project;
   segId: string;
@@ -124,7 +127,12 @@ export function StructEditPanel({
   /** Phase 22l — inspection view. Changing it must NOT patch the project. */
   view: StructureViewState;
   onViewChange: (v: StructureViewState) => void;
+  /** Phase 22m — the leg plan commits a whole segments patch (see below). */
+  onPatch?: (patch: Partial<Project>) => void;
+  /** passed down, not hooked — this subtree is inside the R3F reconciler */
+  fmtLen?: (m: number, dp?: number) => string;
 }) {
+  const [showLegs, setShowLegs] = useState(false);
   const seg = project.segments.find((sg) => sg.id === segId);
   const roof = seg ? project.roofs.find((r) => r.id === seg.roofId) : undefined;
   const spec = project.components.panel;
@@ -492,6 +500,40 @@ export function StructEditPanel({
                   ? { kind: 'clearance', clearanceM: Math.min(3, Math.round((resolved.frontLegM + 0.3) * 10) / 10) }
                   : null,
               )}
+
+            {/* ── Legs (2D) — Phase 22m ────────────────────────────────────
+                Commits a complete, already-validated `segments` patch rather
+                than a StructChoice: the variants above are discrete presets,
+                while a leg plan is a whole point list produced by
+                lib/leg-plan-edit. §H is unchanged — the parent still applies
+                it as ONE undoable patch. */}
+            {resolved && onPatch && fmtLen && (
+              <div style={{ marginTop: 8 }}>
+                <button
+                  style={{ ...structBtn, width: '100%' }}
+                  onClick={() => setShowLegs((v) => !v)}
+                  aria-expanded={showLegs}
+                >
+                  {showLegs ? 'Hide' : 'Edit'} legs (2D)
+                </button>
+                {showLegs && (
+                  <div style={{ marginTop: 6, background: '#0b0f16', borderRadius: 8, padding: 6 }}>
+                    <LegPlanEditor
+                      project={project}
+                      roof={roof}
+                      seg={seg}
+                      spec={spec}
+                      panels={project.panels}
+                      legSpacingM={resolved.legSpacingM}
+                      onPatch={onPatch}
+                      fmtLen={fmtLen}
+                      width={300}
+                      height={190}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

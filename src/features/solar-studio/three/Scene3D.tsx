@@ -24,6 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
+import { useUnits } from '../lib/units';
 import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
 import { STRUCTURE_PROFILES } from '../lib/segment-ops';
 import { panelFootprintM } from '../lib/layout';
@@ -126,6 +127,11 @@ export function Scene3D({
   const project = projectOverride ?? storeProject!;
   const loc = project.location!;
   const patchProject = useProjectPatch();
+  // Resolved HERE, outside <Canvas>. Anything inside the Canvas lives in the
+  // react-three-fiber reconciler, which is a separate React root: store
+  // context does not cross into it and `useStore()` throws there. Hooks stay
+  // out here; values go in as props.
+  const { fmtLen } = useUnits();
 
   // §H on-object structure editing: click a table → contextual panel at the
   // object; clicking an option applies it INSTANTLY as one undoable patch.
@@ -354,6 +360,8 @@ export function Scene3D({
           captureMode={captureMode}
           onStructOpen={openStructEdit}
           onStructCommit={commitStructChoice}
+          onStructPatch={(p) => patchProject(p, true)}
+          fmtLen={fmtLen}
           onStructClose={closeStructEdit}
           onFocusBlocker={focusBlocker}
           sunAltitude={sun.altitude}
@@ -883,6 +891,8 @@ function SceneContent({
   captureMode,
   onStructOpen,
   onStructCommit,
+  onStructPatch,
+  fmtLen,
   onStructClose,
   onFocusBlocker,
   sunAltitude,
@@ -913,6 +923,10 @@ function SceneContent({
   structEdit: { segId: string; anchor: [number, number, number]; panelId?: string } | null;
   onStructOpen: (segId: string, panelId?: string) => void;
   onStructCommit: (c: StructChoice) => void;
+  /** Phase 22m — leg-plan patches, applied as ONE undoable step like the rest */
+  onStructPatch: (patch: Partial<Project>) => void;
+  /** unit formatter, resolved OUTSIDE the Canvas and passed in (see below) */
+  fmtLen: (m: number, dp?: number) => string;
   onStructClose: () => void;
   onFocusBlocker?: (kind: string, id: string) => void;
   /** Phase 22l inspection state — view only, never persisted */
@@ -1217,6 +1231,8 @@ function SceneContent({
           panelId={structEdit.panelId}
           anchor={structEdit.anchor}
           onCommit={onStructCommit}
+          onPatch={onStructPatch}
+          fmtLen={fmtLen}
           onClose={onStructClose}
           onFocusBlocker={onFocusBlocker}
           view={view}

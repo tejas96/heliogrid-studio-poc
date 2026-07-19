@@ -8,7 +8,6 @@
 // provably identical rather than two implementations that agree today.
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { RotateCcw, Plus } from 'lucide-react';
-import { useUnits } from '../lib/units';
 import { rotate } from '../lib/geo';
 import { segmentFrameAngle } from '../lib/segment-ops';
 import { panelFootprintM } from '../lib/layout';
@@ -35,6 +34,7 @@ export function LegPlanEditor({
   panels,
   legSpacingM,
   onPatch,
+  fmtLen,
   width = 560,
   height = 300,
 }: {
@@ -46,10 +46,19 @@ export function LegPlanEditor({
   legSpacingM: number;
   /** ONE undoable patch per committed action (§H) */
   onPatch: (patch: Partial<Project>) => void;
+  /**
+   * Length formatter, PASSED IN rather than taken from `useUnits()` (E19).
+   *
+   * This component renders inside drei's <Html>, which lives in the
+   * react-three-fiber reconciler — a separate React root. Store context does
+   * not cross into it and there is no bridge, so `useStore()` THROWS there.
+   * Calling the hook here unmounted the whole structure panel, which looked
+   * for all the world like the open button closing it.
+   */
+  fmtLen: (m: number, dp?: number) => string;
   width?: number;
   height?: number;
 }) {
-  const { fmtLen } = useUnits();
   const [selected, setSelected] = useState(0);
   const [announce, setAnnounce] = useState('');
   const [drag, setDrag] = useState<{ index: number; from: XY } | null>(null);
