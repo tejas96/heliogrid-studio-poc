@@ -7,7 +7,11 @@ export const PRICE_BOOK = {
   earthingStripPerM: 92,
   railPerM: 320, // mounting rail
   midClamp: 38,
-  endClamp: 42,
+  endClamp: 42, // wider casting — an end clamp grips one module, not two
+  // metal-shed fixings (Phase 22h): an L-foot through the sheet crown, and the
+  // EPDM washer that keeps the hole it made from leaking
+  sheetStandoff: 210,
+  sealingWasher: 12,
   structureLegPerPanel: 950, // fallback: elevated RCC per panel (segments WITHOUT a member model)
   // Ground array per panel: taller table + a driven/​cast foundation instead of
   // rooftop ballast. ESTIMATED — foundation type is site-dependent (20b/20c).

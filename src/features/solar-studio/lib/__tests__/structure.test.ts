@@ -384,9 +384,13 @@ describe('BOM integration — tonnage replaces flat structure lines', () => {
     expect(bom.some((l) => l.item === 'Mounting Structure (elevated RCC)')).toBe(false);
     // rails are purlins now — no separate rail line for structured panels
     expect(bom.some((l) => l.item === 'Mounting Rail')).toBe(false);
-    // clamps come from the node graph
-    const clamps = bom.find((l) => l.item === 'Mid + End Clamps')!;
-    expect(clamps.formula).toContain('node graph');
+    // clamps come from the node graph, and mid/end are separate parts at
+    // separate prices (22j) — they used to be one line priced entirely as mid
+    const mid = bom.find((l) => l.item === 'Mid Clamps')!;
+    const end = bom.find((l) => l.item === 'End Clamps')!;
+    expect(mid.formula).toContain('node graph');
+    expect(end.formula).toContain('node graph');
+    expect(end.unitPriceInr).toBeGreaterThan(mid.unitPriceInr);
   });
 
   it('loose panels keep the flat line; metal-shed rails are never double-billed', () => {

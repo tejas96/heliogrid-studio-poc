@@ -948,6 +948,9 @@ export function fastenerTotals(structures: SegmentStructure[]): {
   /** metal-shed L-feet, and one EPDM washer per penetration (22h) */
   standoffs: number;
   sealingWashers: number;
+  /** clamps split by kind (22j) — an end clamp is a different part and price */
+  clampsMid: number;
+  clampsEnd: number;
 } {
   const t = {
     anchors: 0,
@@ -959,9 +962,15 @@ export function fastenerTotals(structures: SegmentStructure[]): {
     pedestals: 0,
     standoffs: 0,
     sealingWashers: 0,
+    clampsMid: 0,
+    clampsEnd: 0,
   };
   for (const s of structures) {
     for (const n of s.nodes) {
+      // `clamps` stays the total; the split is what lets the BOM price an end
+      // clamp as an end clamp — a wider casting, and a separate line item
+      if (n.kind === 'panel_clamp_mid') t.clampsMid += n.fastenerSpec.clamps ?? 0;
+      if (n.kind === 'panel_clamp_end') t.clampsEnd += n.fastenerSpec.clamps ?? 0;
       t.anchors += n.fastenerSpec.anchors ?? 0;
       t.plates += n.fastenerSpec.plates ?? 0;
       t.bolts += n.fastenerSpec.bolts ?? 0;

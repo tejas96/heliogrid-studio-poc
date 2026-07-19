@@ -12,7 +12,8 @@ Electrical BOS | Conduit + Cable Tray | 25mm HDPE / GI tray | 67 | m | 55 | esti
 Electrical BOS | Net Meter + Generation Meter | DISCOM-approved bidirectional | 1 | set | 9700 | derived | true | false | Required for net metering
 Mechanical BOS | Mounting Structure (elevated RCC) | HDG steel, 10° tilt legs + purlins | 8 | panel-set | 950 | derived | true | false | 8 loose/unsegmented FLAT-RCC panels × structure share (pitched faces are billed flush hardware instead). Structural design subject to certified engineer verification (IS 875 wind load, roof capacity, anchoring).
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 18 | m | 320 | derived | true | false | 8 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
-Mechanical BOS | Mid + End Clamps | Al with SS hardware | 24 | nos | 38 | derived | true | false | 8 panels × 2 + ends
+Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 16 | nos | 38 | derived | true | false | 8 panels × 2
+Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 8 | nos | 42 | derived | true | false | row ends
 Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
 Safety | Earthing Pits | Chemical earthing, 3m electrode | 2 | nos | 2650 | assumed | true | false | 2 system (DC + AC) (no arrester ⇒ no LPS pit) — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
 Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 36 | m | 92 | assumed | true | false | 2 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
@@ -40,7 +41,8 @@ Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG
 Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
 Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
-Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
+Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
 Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
@@ -75,7 +77,8 @@ Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG
 Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
 Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
-Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
+Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
 Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
@@ -112,7 +115,8 @@ Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG
 Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
 Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
-Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
+Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
 Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
@@ -148,7 +152,8 @@ Mechanical BOS | Mounting Structure (pitched roof) — roof hooks / L-feet | HDG
 Mechanical BOS | Roof Penetration Flashing & Sealing | Lead/EPDM flashing plate per hook + tile lifting & breakage allowance | 4 | panel-set | 340 | estimated | true | false | 4 panels on Mangalore / clay tile faces — every anchor penetrates the covering and must be weatherproofed. Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.
 Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, flush mount (rails INCLUDED) | 6 | panel-set | 420 | derived | true | false | 6 panels on metal shed roofs × clamp share (mini-rails bundled — no separate rail line)
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
-Mechanical BOS | Mid + End Clamps | Al with SS hardware | 56 | nos | 38 | derived | true | false | 16 from structure node graph + 40 for 16 loose panels
+Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
+Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
 Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length

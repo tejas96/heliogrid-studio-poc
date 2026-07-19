@@ -44,6 +44,12 @@ export type LineKey =
   | 'mech.mms_metal_shed'
   | 'mech.rail'
   | 'mech.clamps'
+  // split from mech.clamps (22j) — different parts, different prices
+  | 'mech.clamps_mid'
+  | 'mech.clamps_end'
+  // metal-shed fixings (22h/22j)
+  | 'mech.sheet_standoff'
+  | 'mech.sealing_washer'
   | 'mech.fasteners'
   // ── Safety
   | 'safety.walkway'

@@ -1,9 +1,38 @@
-import type { BomLine } from '../../../types';
+import type { BomLine, StructureProfile } from '../../../types';
 import type { PriceBook } from '../../../data/pricebook';
-import { STRUCTURE_DISCLAIMER } from '../../structure';
+import { STRUCTURE_PROFILES } from '../../../data/profiles';
+import { STRUCTURE_DISCLAIMER, type SegmentStructure } from '../../structure';
 import type { BomContext, SlopedCovering } from '../context';
 import { line, soleSource } from '../line';
 import { foundationDeadLoadKg, foundationVolumeM3, ruleFor } from '../../foundation';
+
+/** Plural-safe member phrase, e.g. "12 legs 4.2m". Omits absent kinds. */
+function memberBreakdown(st: SegmentStructure): string {
+  const ms = st.memberSummary;
+  const m1 = (v: number) => Math.round(v * 10) / 10;
+  const parts: string[] = [];
+  const legs = ms.front_leg.count + ms.back_leg.count;
+  if (legs > 0) parts.push(`${legs} legs ${m1(ms.front_leg.totalM + ms.back_leg.totalM)}m`);
+  for (const [kind, label] of [
+    ['rafter', 'rafters'],
+    ['purlin', 'purlins'],
+    ['brace', 'braces'],
+    ['rail', 'rails'],
+  ] as const) {
+    if (ms[kind].count > 0) parts.push(`${ms[kind].count} ${label} ${m1(ms[kind].totalM)}m`);
+  }
+  return parts.length > 0 ? parts.join(', ') : 'no members';
+}
+
+/**
+ * The section a structure's members are made of, read from the members
+ * themselves. A flush/monorail segment carries no `racking.profile` — the rail
+ * section is chosen by the builder — so this is the only honest source for it.
+ */
+function profileOfMembers(st: SegmentStructure): StructureProfile | undefined {
+  const key = st.members[0]?.profileKey;
+  return key ? STRUCTURE_PROFILES.find((p) => p.key === key) : undefined;
+}
 
 /**
  * Pedestal count split by the surface it is cast on. Casting on a slab and
@@ -124,7 +153,15 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     >();
     for (const st of structures) {
       const seg = project.segments.find((sg) => sg.id === st.segmentId);
-      const profile = seg && seg.racking.kind !== 'flush' ? seg.racking.profile : null;
+      if (!seg) continue;
+      // A MONORAIL segment is flush, so it has no `racking.profile` — its
+      // section lives on the members themselves. Reading only `racking.profile`
+      // skipped these structures entirely, which meant 22h modelled rails that
+      // nothing ever billed.
+      const profile =
+        seg.racking.kind !== 'flush'
+          ? seg.racking.profile
+          : profileOfMembers(st) ?? null;
       if (!profile) continue;
       const cur =
         byProfile.get(profile.key) ??
@@ -144,10 +181,13 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
       cur.kg += st.steelKg;
       cur.segmentIds.push(st.segmentId);
       cur.roofIds.push(seg!.roofId);
-      const ms = st.memberSummary;
       cur.parts.push(
-        `${seg!.label}: ${ms.front_leg.count + ms.back_leg.count} legs ${Math.round((ms.front_leg.totalM + ms.back_leg.totalM) * 10) / 10}m, ${ms.rafter.count} rafters ${Math.round(ms.rafter.totalM * 10) / 10}m, ${ms.purlin.count} purlins ${Math.round(ms.purlin.totalM * 10) / 10}m, ${ms.brace.count} braces ${Math.round(ms.brace.totalM * 10) / 10}m` +
-          (st.warnings.length > 0 ? ' (dual-tilt approximated)' : ''),
+        // describes the members this table ACTUALLY has. The old text always
+        // listed legs/rafters/purlins/braces, which reads "0 legs, 0 rafters"
+        // on a shed monorail — a breakdown that describes a table that is not
+        // there is worse than no breakdown.
+        `${seg.label}: ${memberBreakdown(st)}` +
+          (st.warnings.some((w) => w.includes('dual-tilt')) ? ' (dual-tilt approximated)' : ''),
       );
     }
     for (const [key, agg] of [...byProfile.entries()].sort()) {
@@ -414,22 +454,82 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     );
   // panel clamps: structured segments count clamps from the node graph;
   // remaining panels keep the flat 2/panel + ends estimate
-  const structClamps = ft.clamps;
-  const looseClampQty = (n - nStructured) * 2 + (n - nStructured > 0 ? 8 : 0);
+  // Mid and end clamps are DIFFERENT PARTS at different prices — an end clamp
+  // is a wider casting because it grips one module instead of two. They used
+  // to be one line priced entirely at `midClamp`, which left `endClamp` in the
+  // price book unreferenced and quoted every end clamp 4 rupees light. The node
+  // graph has always known which is which.
+  // a loose panel's flat estimate is mid clamps; its 8 extras are the ends
+  const midQty = ft.clampsMid + (n - nStructured) * 2;
+  const endQty = ft.clampsEnd + (n - nStructured > 0 ? 8 : 0);
+  // ── Metal-shed fixings (Phase 22h/22j) ───────────────────────────────────
+  // Modelled by the monorail builder; billed here. Both figures come straight
+  // off the node graph, and both carry the survey caveat: the standoff COUNT
+  // follows an assumed purlin pitch, and whether each one lands on a crown
+  // rather than in a valley follows an assumed rib pitch.
+  if (ft.standoffs > 0) {
+    out.push(
+      line({
+        key: 'mech.sheet_standoff',
+        category: 'Mechanical BOS',
+        item: 'Sheet Standoffs (L-feet)',
+        spec: 'HDG/SS L-foot, fixed through the sheet crown into the purlin',
+        confidence: 'assumed',
+        qty: ft.standoffs,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.sheetStandoff,
+        formula: `${ft.standoffs} fixings from the structure node graph. ASSUMED purlin pitch sets the count and ASSUMED rib pitch decides whether each lands on a crown — confirm both at survey before drilling. ${STRUCTURE_DISCLAIMER}`,
+      }),
+      line({
+        key: 'mech.sealing_washer',
+        category: 'Mechanical BOS',
+        item: 'EPDM Sealing Washers',
+        spec: 'bonded EPDM washer, one per sheet penetration',
+        confidence: 'derived',
+        qty: ft.sealingWashers,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.sealingWasher,
+        // the count is not an estimate: it is one per hole, by definition
+        formula: `One per sheet penetration — ${ft.standoffs} standoffs ⇒ ${ft.sealingWashers} washers. Every fixing is a hole in the roof.`,
+      }),
+    );
+  }
+
+  if (midQty > 0)
+    out.push(
+      line({
+        key: 'mech.clamps_mid',
+        category: 'Mechanical BOS',
+        item: 'Mid Clamps',
+        spec: 'Al with SS hardware — between adjacent modules',
+        qty: midQty,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.midClamp,
+        formula:
+          ft.clampsMid > 0
+            ? `${ft.clampsMid} from the structure node graph` +
+              (n - nStructured > 0 ? ` + ${(n - nStructured) * 2} for ${n - nStructured} loose panels` : '')
+            : `${n} panels × 2`,
+      }),
+    );
+  if (endQty > 0)
+    out.push(
+      line({
+        key: 'mech.clamps_end',
+        category: 'Mechanical BOS',
+        item: 'End Clamps',
+        spec: 'Al with SS hardware — at each row end',
+        qty: endQty,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.endClamp,
+        formula:
+          ft.clampsEnd > 0
+            ? `${ft.clampsEnd} from the structure node graph` +
+              (n - nStructured > 0 ? ' + 8 for the loose-panel rows' : '')
+            : 'row ends',
+      }),
+    );
   out.push(
-    line({
-      key: 'mech.clamps',
-      category: 'Mechanical BOS',
-      item: 'Mid + End Clamps',
-      spec: 'Al with SS hardware',
-      qty: structClamps + looseClampQty,
-      unit: 'nos',
-      unitPriceInr: PRICE_BOOK.midClamp,
-      formula:
-        structClamps > 0
-          ? `${structClamps} from structure node graph + ${looseClampQty} for ${n - nStructured} loose panels`
-          : `${n} panels × 2 + ends`,
-    }),
     line({
       key: 'mech.fasteners',
       category: 'Mechanical BOS',
