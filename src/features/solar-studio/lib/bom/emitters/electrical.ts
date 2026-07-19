@@ -1,6 +1,6 @@
 import type { BomLine } from '../../../types';
 import { PRICE_BOOK } from '../../../data/pricebook';
-import { acBreakerA, acFullLoadA } from '../../electrical-sizing';
+import { acBreakerA, acFullLoadA, dcCableSizeMm2 } from '../../electrical-sizing';
 import type { BomContext } from '../context';
 import { AC_ALLOWANCE_M } from '../context';
 import { line } from '../line';
@@ -28,7 +28,13 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
       key: 'elec.dc_cable',
       category: 'Electrical BOS',
       item: 'DC Solar Cable 4 sq.mm',
-      spec: '1.1kV, UV-resistant, red+black pair',
+      // The conductor is SIZED, not assumed: smallest standard mm² whose
+      // ampacity carries the string fuse (IEC 62548), from the module's own
+      // Isc. This is the SAME dcCableSizeMm2 the SLD sheet prints, so the two
+      // documents can no longer quote different cable for one system — the BOM
+      // used to state a flat 4 sq.mm here and would have contradicted the SLD
+      // on any high-Isc module.
+      spec: `${dcCableSizeMm2(ctx.spec)} sq.mm Cu · 1.1kV, UV-resistant, red+black pair`,
       confidence: routedDc.routed ? 'derived' : 'estimated',
       qty: dcCableM,
       unit: 'm',
