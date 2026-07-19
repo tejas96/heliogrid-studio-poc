@@ -1,0 +1,557 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > 3-panel single row 1`] = `
+"steelKg=44.728
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=3 totalM=0.9
+back_leg: count=3 totalM=2.088
+rafter: count=3 totalM=6.837
+purlin: count=2 totalM=7.004
+brace: count=2 totalM=3.502
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (-0.5670,-1.1222,3.0000)->(-0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-0.5670,1.1222,3.0000)->(-0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (-0.5670,-1.1222,3.3000)->(-0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (1.1840,-1.1222,3.0000)->(1.1840,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (1.1840,1.1222,3.0000)->(1.1840,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (1.1840,-1.1222,3.3000)->(1.1840,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (2.9350,-1.1222,3.0000)->(2.9350,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (2.9350,1.1222,3.0000)->(2.9350,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/2 rafter c_channel (2.9350,-1.1222,3.3000)->(2.9350,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (-0.5670,-1.1222,3.3000)->(2.9350,-1.1222,3.3000) L=3.5020
+seg_t/m/purlin/1 purlin c_channel (-0.5670,1.1222,3.6957)->(2.9350,1.1222,3.6957) L=3.5020
+seg_t/m/brace/0 brace c_channel (-0.5670,1.1222,3.3479)->(1.1840,1.1222,3.3479) L=1.7510
+seg_t/m/brace/1 brace c_channel (1.1840,1.1222,3.3479)->(2.9350,1.1222,3.3479) L=1.7510
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (-0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (-0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (1.1840,-1.1222,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (1.1840,1.1222,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (1.1840,-1.1222,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (1.1840,1.1222,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (2.9350,-1.1222,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (2.9350,1.1222,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (2.9350,-1.1222,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (2.9350,1.1222,3.6957) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (1.1840,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (1.1840,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (2.9350,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (2.9350,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (1.1840,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (1.1840,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (2.9350,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (2.9350,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (0.5920,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (1.7760,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (2.9350,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (0.5920,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (1.7760,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > a hole splits one row into two runs 1`] = `
+"steelKg=73.828
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=6 totalM=1.8
+back_leg: count=6 totalM=4.176
+rafter: count=6 totalM=13.674
+purlin: count=4 totalM=9.272
+brace: count=4 totalM=4.636
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (-0.5670,-1.1222,3.0000)->(-0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-0.5670,1.1222,3.0000)->(-0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (-0.5670,-1.1222,3.3000)->(-0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (0.5920,-1.1222,3.0000)->(0.5920,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (0.5920,1.1222,3.0000)->(0.5920,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (0.5920,-1.1222,3.3000)->(0.5920,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (1.7510,-1.1222,3.0000)->(1.7510,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (1.7510,1.1222,3.0000)->(1.7510,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/2 rafter c_channel (1.7510,-1.1222,3.3000)->(1.7510,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (-0.5670,-1.1222,3.3000)->(1.7510,-1.1222,3.3000) L=2.3180
+seg_t/m/purlin/1 purlin c_channel (-0.5670,1.1222,3.6957)->(1.7510,1.1222,3.6957) L=2.3180
+seg_t/m/brace/0 brace c_channel (-0.5670,1.1222,3.3479)->(0.5920,1.1222,3.3479) L=1.1590
+seg_t/m/brace/1 brace c_channel (0.5920,1.1222,3.3479)->(1.7510,1.1222,3.3479) L=1.1590
+seg_t/m/front_leg/3 front_leg c_channel (2.9850,-1.1222,3.0000)->(2.9850,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/3 back_leg c_channel (2.9850,1.1222,3.0000)->(2.9850,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/3 rafter c_channel (2.9850,-1.1222,3.3000)->(2.9850,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/4 front_leg c_channel (4.1440,-1.1222,3.0000)->(4.1440,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/4 back_leg c_channel (4.1440,1.1222,3.0000)->(4.1440,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/4 rafter c_channel (4.1440,-1.1222,3.3000)->(4.1440,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/5 front_leg c_channel (5.3030,-1.1222,3.0000)->(5.3030,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/5 back_leg c_channel (5.3030,1.1222,3.0000)->(5.3030,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/5 rafter c_channel (5.3030,-1.1222,3.3000)->(5.3030,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/2 purlin c_channel (2.9850,-1.1222,3.3000)->(5.3030,-1.1222,3.3000) L=2.3180
+seg_t/m/purlin/3 purlin c_channel (2.9850,1.1222,3.6957)->(5.3030,1.1222,3.6957) L=2.3180
+seg_t/m/brace/2 brace c_channel (2.9850,1.1222,3.3479)->(4.1440,1.1222,3.3479) L=1.1590
+seg_t/m/brace/3 brace c_channel (4.1440,1.1222,3.3479)->(5.3030,1.1222,3.3479) L=1.1590
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (-0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (-0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (0.5920,-1.1222,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (0.5920,1.1222,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (0.5920,-1.1222,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (0.5920,1.1222,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (1.7510,-1.1222,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (1.7510,1.1222,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (1.7510,-1.1222,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (1.7510,1.1222,3.6957) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (0.5920,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (0.5920,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (1.7510,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (1.7510,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (0.5920,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (0.5920,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (1.7510,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (1.7510,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (0.5920,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (1.7510,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (0.5920,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/roof_anchor/6 roof_anchor (2.9850,-1.1222,3.0000) members=[seg_t/m/front_leg/3] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/7 roof_anchor (2.9850,1.1222,3.0000) members=[seg_t/m/back_leg/3] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/6 leg_rafter (2.9850,-1.1222,3.3000) members=[seg_t/m/front_leg/3,seg_t/m/rafter/3] {"bolts":2}
+seg_t/n/leg_rafter/7 leg_rafter (2.9850,1.1222,3.6957) members=[seg_t/m/back_leg/3,seg_t/m/rafter/3] {"bolts":2}
+seg_t/n/roof_anchor/8 roof_anchor (4.1440,-1.1222,3.0000) members=[seg_t/m/front_leg/4] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/9 roof_anchor (4.1440,1.1222,3.0000) members=[seg_t/m/back_leg/4] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/8 leg_rafter (4.1440,-1.1222,3.3000) members=[seg_t/m/front_leg/4,seg_t/m/rafter/4] {"bolts":2}
+seg_t/n/leg_rafter/9 leg_rafter (4.1440,1.1222,3.6957) members=[seg_t/m/back_leg/4,seg_t/m/rafter/4] {"bolts":2}
+seg_t/n/roof_anchor/10 roof_anchor (5.3030,-1.1222,3.0000) members=[seg_t/m/front_leg/5] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/11 roof_anchor (5.3030,1.1222,3.0000) members=[seg_t/m/back_leg/5] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/10 leg_rafter (5.3030,-1.1222,3.3000) members=[seg_t/m/front_leg/5,seg_t/m/rafter/5] {"bolts":2}
+seg_t/n/leg_rafter/11 leg_rafter (5.3030,1.1222,3.6957) members=[seg_t/m/back_leg/5,seg_t/m/rafter/5] {"bolts":2}
+seg_t/n/rafter_purlin/6 rafter_purlin (2.9850,-1.1222,3.3000) members=[seg_t/m/purlin/2] {"bolts":1}
+seg_t/n/rafter_purlin/7 rafter_purlin (2.9850,1.1222,3.6957) members=[seg_t/m/purlin/3] {"bolts":1}
+seg_t/n/rafter_purlin/8 rafter_purlin (4.1440,-1.1222,3.3000) members=[seg_t/m/purlin/2] {"bolts":1}
+seg_t/n/rafter_purlin/9 rafter_purlin (4.1440,1.1222,3.6957) members=[seg_t/m/purlin/3] {"bolts":1}
+seg_t/n/rafter_purlin/10 rafter_purlin (5.3030,-1.1222,3.3000) members=[seg_t/m/purlin/2] {"bolts":1}
+seg_t/n/rafter_purlin/11 rafter_purlin (5.3030,1.1222,3.6957) members=[seg_t/m/purlin/3] {"bolts":1}
+seg_t/n/brace_bolt/4 brace_bolt (2.9850,1.1222,3.3479) members=[seg_t/m/brace/2] {"bolts":1}
+seg_t/n/brace_bolt/5 brace_bolt (4.1440,1.1222,3.3479) members=[seg_t/m/brace/2] {"bolts":1}
+seg_t/n/brace_bolt/6 brace_bolt (4.1440,1.1222,3.3479) members=[seg_t/m/brace/3] {"bolts":1}
+seg_t/n/brace_bolt/7 brace_bolt (5.3030,1.1222,3.3479) members=[seg_t/m/brace/3] {"bolts":1}
+seg_t/n/panel_clamp_end/4 panel_clamp_end (2.9850,-1.1222,3.3000) members=[seg_t/m/purlin/2] {"clamps":1}
+seg_t/n/panel_clamp_end/5 panel_clamp_end (5.3030,-1.1222,3.3000) members=[seg_t/m/purlin/2] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (4.1440,-1.1222,3.3000) members=[seg_t/m/purlin/2] {"clamps":1}
+seg_t/n/panel_clamp_end/6 panel_clamp_end (2.9850,1.1222,3.6957) members=[seg_t/m/purlin/3] {"clamps":1}
+seg_t/n/panel_clamp_end/7 panel_clamp_end (5.3030,1.1222,3.6957) members=[seg_t/m/purlin/3] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (4.1440,1.1222,3.6957) members=[seg_t/m/purlin/3] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > long run — several bays 1`] = `
+"steelKg=82.579
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=5 totalM=1.5
+back_leg: count=5 totalM=3.48
+rafter: count=5 totalM=11.395
+purlin: count=2 totalM=14.108
+brace: count=4 totalM=7.053
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (-0.5670,-1.1222,3.0000)->(-0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-0.5670,1.1222,3.0000)->(-0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (-0.5670,-1.1222,3.3000)->(-0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (1.1965,-1.1222,3.0000)->(1.1965,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (1.1965,1.1222,3.0000)->(1.1965,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (1.1965,-1.1222,3.3000)->(1.1965,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (2.9600,-1.1222,3.0000)->(2.9600,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (2.9600,1.1222,3.0000)->(2.9600,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/2 rafter c_channel (2.9600,-1.1222,3.3000)->(2.9600,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/3 front_leg c_channel (4.7235,-1.1222,3.0000)->(4.7235,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/3 back_leg c_channel (4.7235,1.1222,3.0000)->(4.7235,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/3 rafter c_channel (4.7235,-1.1222,3.3000)->(4.7235,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/4 front_leg c_channel (6.4870,-1.1222,3.0000)->(6.4870,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/4 back_leg c_channel (6.4870,1.1222,3.0000)->(6.4870,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/4 rafter c_channel (6.4870,-1.1222,3.3000)->(6.4870,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (-0.5670,-1.1222,3.3000)->(6.4870,-1.1222,3.3000) L=7.0540
+seg_t/m/purlin/1 purlin c_channel (-0.5670,1.1222,3.6957)->(6.4870,1.1222,3.6957) L=7.0540
+seg_t/m/brace/0 brace c_channel (-0.5670,1.1222,3.3479)->(1.1965,1.1222,3.3479) L=1.7630
+seg_t/m/brace/1 brace c_channel (1.1965,1.1222,3.3479)->(2.9600,1.1222,3.3479) L=1.7630
+seg_t/m/brace/2 brace c_channel (2.9600,1.1222,3.3479)->(4.7235,1.1222,3.3479) L=1.7630
+seg_t/m/brace/3 brace c_channel (4.7235,1.1222,3.3479)->(6.4870,1.1222,3.3479) L=1.7640
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (-0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (-0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (1.1965,-1.1222,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (1.1965,1.1222,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (1.1965,-1.1222,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (1.1965,1.1222,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (2.9600,-1.1222,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (2.9600,1.1222,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (2.9600,-1.1222,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (2.9600,1.1222,3.6957) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/roof_anchor/6 roof_anchor (4.7235,-1.1222,3.0000) members=[seg_t/m/front_leg/3] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/7 roof_anchor (4.7235,1.1222,3.0000) members=[seg_t/m/back_leg/3] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/6 leg_rafter (4.7235,-1.1222,3.3000) members=[seg_t/m/front_leg/3,seg_t/m/rafter/3] {"bolts":2}
+seg_t/n/leg_rafter/7 leg_rafter (4.7235,1.1222,3.6957) members=[seg_t/m/back_leg/3,seg_t/m/rafter/3] {"bolts":2}
+seg_t/n/roof_anchor/8 roof_anchor (6.4870,-1.1222,3.0000) members=[seg_t/m/front_leg/4] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/9 roof_anchor (6.4870,1.1222,3.0000) members=[seg_t/m/back_leg/4] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/8 leg_rafter (6.4870,-1.1222,3.3000) members=[seg_t/m/front_leg/4,seg_t/m/rafter/4] {"bolts":2}
+seg_t/n/leg_rafter/9 leg_rafter (6.4870,1.1222,3.6957) members=[seg_t/m/back_leg/4,seg_t/m/rafter/4] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (1.1965,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (1.1965,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (2.9600,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (2.9600,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/6 rafter_purlin (4.7235,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/7 rafter_purlin (4.7235,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/8 rafter_purlin (6.4870,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/9 rafter_purlin (6.4870,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (1.1965,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (1.1965,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (2.9600,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/4 brace_bolt (2.9600,1.1222,3.3479) members=[seg_t/m/brace/2] {"bolts":1}
+seg_t/n/brace_bolt/5 brace_bolt (4.7235,1.1222,3.3479) members=[seg_t/m/brace/2] {"bolts":1}
+seg_t/n/brace_bolt/6 brace_bolt (4.7235,1.1222,3.3479) members=[seg_t/m/brace/3] {"bolts":1}
+seg_t/n/brace_bolt/7 brace_bolt (6.4870,1.1222,3.3479) members=[seg_t/m/brace/3] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (6.4870,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (0.5920,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (1.7760,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (2.9600,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (4.1440,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/4 panel_clamp_mid (5.3280,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (6.4870,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/5 panel_clamp_mid (0.5920,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/6 panel_clamp_mid (1.7760,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/7 panel_clamp_mid (2.9600,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/8 panel_clamp_mid (4.1440,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/9 panel_clamp_mid (5.3280,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > rotated table (azimuth 90) — the lattice-alignment case 1`] = `
+"steelKg=44.728
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=3 totalM=0.9
+back_leg: count=3 totalM=2.088
+rafter: count=3 totalM=6.837
+purlin: count=2 totalM=7.004
+brace: count=2 totalM=3.502
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (0.5552,0.0000,3.0000)->(0.5552,0.0000,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-1.6892,-0.0000,3.0000)->(-1.6892,-0.0000,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (0.5552,0.0000,3.3000)->(-1.6892,-0.0000,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (2.3062,0.0000,3.0000)->(2.3062,0.0000,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (0.0618,-0.0000,3.0000)->(0.0618,-0.0000,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (2.3062,0.0000,3.3000)->(0.0618,-0.0000,3.6957) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (4.0572,0.0000,3.0000)->(4.0572,0.0000,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (1.8128,-0.0000,3.0000)->(1.8128,-0.0000,3.6957) L=0.6960
+seg_t/m/rafter/2 rafter c_channel (4.0572,0.0000,3.3000)->(1.8128,-0.0000,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (0.5552,0.0000,3.3000)->(4.0572,0.0000,3.3000) L=3.5020
+seg_t/m/purlin/1 purlin c_channel (-1.6892,-0.0000,3.6957)->(1.8128,-0.0000,3.6957) L=3.5020
+seg_t/m/brace/0 brace c_channel (-1.6892,-0.0000,3.3479)->(0.0618,-0.0000,3.3479) L=1.7510
+seg_t/m/brace/1 brace c_channel (0.0618,-0.0000,3.3479)->(1.8128,-0.0000,3.3479) L=1.7510
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (0.5552,0.0000,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-1.6892,-0.0000,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (0.5552,0.0000,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-1.6892,-0.0000,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (2.3062,0.0000,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (0.0618,-0.0000,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (2.3062,0.0000,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (0.0618,-0.0000,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (4.0572,0.0000,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (1.8128,-0.0000,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (4.0572,0.0000,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (1.8128,-0.0000,3.6957) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (0.5552,0.0000,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-1.6892,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (2.3062,0.0000,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (0.0618,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (4.0572,0.0000,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (1.8128,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-1.6892,-0.0000,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (0.0618,-0.0000,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (0.0618,-0.0000,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (1.8128,-0.0000,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (0.5552,0.0000,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (4.0572,0.0000,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (1.7142,0.0000,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (2.8982,0.0000,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-1.6892,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (1.8128,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (-0.5302,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (0.6538,-0.0000,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > single panel — the degenerate run (1 bay, 2 stations) 1`] = `
+"steelKg=21.894
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=2 totalM=0.6
+back_leg: count=2 totalM=1.392
+rafter: count=2 totalM=4.558
+purlin: count=2 totalM=2.268
+brace: count=1 totalM=1.134
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (0.5670,-1.1222,3.0000)->(0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (0.5670,1.1222,3.0000)->(0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (0.5670,-1.1222,3.3000)->(0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (-0.5670,-1.1222,3.0000)->(-0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (-0.5670,1.1222,3.0000)->(-0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (-0.5670,-1.1222,3.3000)->(-0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (0.5670,-1.1222,3.3000)->(-0.5670,-1.1222,3.3000) L=1.1340
+seg_t/m/purlin/1 purlin c_channel (0.5670,1.1222,3.6957)->(-0.5670,1.1222,3.6957) L=1.1340
+seg_t/m/brace/0 brace c_channel (0.5670,1.1222,3.3479)->(-0.5670,1.1222,3.3479) L=1.1340
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (-0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (-0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (-0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (-0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (-0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > steeper tilt changes rafter geometry 1`] = `
+"steelKg=48.47
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=3 totalM=0.9
+back_leg: count=3 totalM=3.789
+rafter: count=3 totalM=6.837
+purlin: count=2 totalM=7.004
+brace: count=2 totalM=3.502
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (-0.5670,-1.0327,3.0000)->(-0.5670,-1.0327,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-0.5670,1.0327,3.0000)->(-0.5670,1.0327,4.2631) L=1.2630
+seg_t/m/rafter/0 rafter c_channel (-0.5670,-1.0327,3.3000)->(-0.5670,1.0327,4.2631) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (1.1840,-1.0327,3.0000)->(1.1840,-1.0327,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (1.1840,1.0327,3.0000)->(1.1840,1.0327,4.2631) L=1.2630
+seg_t/m/rafter/1 rafter c_channel (1.1840,-1.0327,3.3000)->(1.1840,1.0327,4.2631) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (2.9350,-1.0327,3.0000)->(2.9350,-1.0327,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (2.9350,1.0327,3.0000)->(2.9350,1.0327,4.2631) L=1.2630
+seg_t/m/rafter/2 rafter c_channel (2.9350,-1.0327,3.3000)->(2.9350,1.0327,4.2631) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (-0.5670,-1.0327,3.3000)->(2.9350,-1.0327,3.3000) L=3.5020
+seg_t/m/purlin/1 purlin c_channel (-0.5670,1.0327,4.2631)->(2.9350,1.0327,4.2631) L=3.5020
+seg_t/m/brace/0 brace c_channel (-0.5670,1.0327,3.6316)->(1.1840,1.0327,3.6316) L=1.7510
+seg_t/m/brace/1 brace c_channel (1.1840,1.0327,3.6316)->(2.9350,1.0327,3.6316) L=1.7510
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (-0.5670,-1.0327,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-0.5670,1.0327,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (-0.5670,-1.0327,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-0.5670,1.0327,4.2631) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (1.1840,-1.0327,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (1.1840,1.0327,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (1.1840,-1.0327,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (1.1840,1.0327,4.2631) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (2.9350,-1.0327,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (2.9350,1.0327,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (2.9350,-1.0327,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (2.9350,1.0327,4.2631) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (-0.5670,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-0.5670,1.0327,4.2631) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (1.1840,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (1.1840,1.0327,4.2631) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (2.9350,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (2.9350,1.0327,4.2631) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-0.5670,1.0327,3.6316) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (1.1840,1.0327,3.6316) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (1.1840,1.0327,3.6316) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (2.9350,1.0327,3.6316) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (-0.5670,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (2.9350,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (0.5920,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (1.7760,-1.0327,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-0.5670,1.0327,4.2631) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (2.9350,1.0327,4.2631) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (0.5920,1.0327,4.2631) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (1.7760,1.0327,4.2631) members=[seg_t/m/purlin/1] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > two rows 1`] = `
+"steelKg=81.642
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=6 totalM=1.8
+back_leg: count=6 totalM=4.176
+rafter: count=6 totalM=13.674
+purlin: count=4 totalM=11.64
+brace: count=4 totalM=5.82
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (-0.5670,-1.1222,3.0000)->(-0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-0.5670,1.1222,3.0000)->(-0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (-0.5670,-1.1222,3.3000)->(-0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (1.1840,-1.1222,3.0000)->(1.1840,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (1.1840,1.1222,3.0000)->(1.1840,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (1.1840,-1.1222,3.3000)->(1.1840,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (2.9350,-1.1222,3.0000)->(2.9350,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (2.9350,1.1222,3.0000)->(2.9350,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/2 rafter c_channel (2.9350,-1.1222,3.3000)->(2.9350,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (-0.5670,-1.1222,3.3000)->(2.9350,-1.1222,3.3000) L=3.5020
+seg_t/m/purlin/1 purlin c_channel (-0.5670,1.1222,3.6957)->(2.9350,1.1222,3.6957) L=3.5020
+seg_t/m/brace/0 brace c_channel (-0.5670,1.1222,3.3479)->(1.1840,1.1222,3.3479) L=1.7510
+seg_t/m/brace/1 brace c_channel (1.1840,1.1222,3.3479)->(2.9350,1.1222,3.3479) L=1.7510
+seg_t/m/front_leg/3 front_leg c_channel (-0.5670,-4.1222,3.0000)->(-0.5670,-4.1222,3.3000) L=0.3000
+seg_t/m/back_leg/3 back_leg c_channel (-0.5670,-1.8778,3.0000)->(-0.5670,-1.8778,3.6957) L=0.6960
+seg_t/m/rafter/3 rafter c_channel (-0.5670,-4.1222,3.3000)->(-0.5670,-1.8778,3.6957) L=2.2790
+seg_t/m/front_leg/4 front_leg c_channel (0.5920,-4.1222,3.0000)->(0.5920,-4.1222,3.3000) L=0.3000
+seg_t/m/back_leg/4 back_leg c_channel (0.5920,-1.8778,3.0000)->(0.5920,-1.8778,3.6957) L=0.6960
+seg_t/m/rafter/4 rafter c_channel (0.5920,-4.1222,3.3000)->(0.5920,-1.8778,3.6957) L=2.2790
+seg_t/m/front_leg/5 front_leg c_channel (1.7510,-4.1222,3.0000)->(1.7510,-4.1222,3.3000) L=0.3000
+seg_t/m/back_leg/5 back_leg c_channel (1.7510,-1.8778,3.0000)->(1.7510,-1.8778,3.6957) L=0.6960
+seg_t/m/rafter/5 rafter c_channel (1.7510,-4.1222,3.3000)->(1.7510,-1.8778,3.6957) L=2.2790
+seg_t/m/purlin/2 purlin c_channel (-0.5670,-4.1222,3.3000)->(1.7510,-4.1222,3.3000) L=2.3180
+seg_t/m/purlin/3 purlin c_channel (-0.5670,-1.8778,3.6957)->(1.7510,-1.8778,3.6957) L=2.3180
+seg_t/m/brace/2 brace c_channel (-0.5670,-1.8778,3.3479)->(0.5920,-1.8778,3.3479) L=1.1590
+seg_t/m/brace/3 brace c_channel (0.5920,-1.8778,3.3479)->(1.7510,-1.8778,3.3479) L=1.1590
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (-0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (-0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (1.1840,-1.1222,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (1.1840,1.1222,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (1.1840,-1.1222,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (1.1840,1.1222,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (2.9350,-1.1222,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (2.9350,1.1222,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (2.9350,-1.1222,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (2.9350,1.1222,3.6957) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (1.1840,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (1.1840,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (2.9350,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (2.9350,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (1.1840,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (1.1840,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (2.9350,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (2.9350,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (0.5920,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (1.7760,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (2.9350,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (0.5920,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (1.7760,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/roof_anchor/6 roof_anchor (-0.5670,-4.1222,3.0000) members=[seg_t/m/front_leg/3] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/7 roof_anchor (-0.5670,-1.8778,3.0000) members=[seg_t/m/back_leg/3] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/6 leg_rafter (-0.5670,-4.1222,3.3000) members=[seg_t/m/front_leg/3,seg_t/m/rafter/3] {"bolts":2}
+seg_t/n/leg_rafter/7 leg_rafter (-0.5670,-1.8778,3.6957) members=[seg_t/m/back_leg/3,seg_t/m/rafter/3] {"bolts":2}
+seg_t/n/roof_anchor/8 roof_anchor (0.5920,-4.1222,3.0000) members=[seg_t/m/front_leg/4] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/9 roof_anchor (0.5920,-1.8778,3.0000) members=[seg_t/m/back_leg/4] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/8 leg_rafter (0.5920,-4.1222,3.3000) members=[seg_t/m/front_leg/4,seg_t/m/rafter/4] {"bolts":2}
+seg_t/n/leg_rafter/9 leg_rafter (0.5920,-1.8778,3.6957) members=[seg_t/m/back_leg/4,seg_t/m/rafter/4] {"bolts":2}
+seg_t/n/roof_anchor/10 roof_anchor (1.7510,-4.1222,3.0000) members=[seg_t/m/front_leg/5] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/11 roof_anchor (1.7510,-1.8778,3.0000) members=[seg_t/m/back_leg/5] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/10 leg_rafter (1.7510,-4.1222,3.3000) members=[seg_t/m/front_leg/5,seg_t/m/rafter/5] {"bolts":2}
+seg_t/n/leg_rafter/11 leg_rafter (1.7510,-1.8778,3.6957) members=[seg_t/m/back_leg/5,seg_t/m/rafter/5] {"bolts":2}
+seg_t/n/rafter_purlin/6 rafter_purlin (-0.5670,-4.1222,3.3000) members=[seg_t/m/purlin/2] {"bolts":1}
+seg_t/n/rafter_purlin/7 rafter_purlin (-0.5670,-1.8778,3.6957) members=[seg_t/m/purlin/3] {"bolts":1}
+seg_t/n/rafter_purlin/8 rafter_purlin (0.5920,-4.1222,3.3000) members=[seg_t/m/purlin/2] {"bolts":1}
+seg_t/n/rafter_purlin/9 rafter_purlin (0.5920,-1.8778,3.6957) members=[seg_t/m/purlin/3] {"bolts":1}
+seg_t/n/rafter_purlin/10 rafter_purlin (1.7510,-4.1222,3.3000) members=[seg_t/m/purlin/2] {"bolts":1}
+seg_t/n/rafter_purlin/11 rafter_purlin (1.7510,-1.8778,3.6957) members=[seg_t/m/purlin/3] {"bolts":1}
+seg_t/n/brace_bolt/4 brace_bolt (-0.5670,-1.8778,3.3479) members=[seg_t/m/brace/2] {"bolts":1}
+seg_t/n/brace_bolt/5 brace_bolt (0.5920,-1.8778,3.3479) members=[seg_t/m/brace/2] {"bolts":1}
+seg_t/n/brace_bolt/6 brace_bolt (0.5920,-1.8778,3.3479) members=[seg_t/m/brace/3] {"bolts":1}
+seg_t/n/brace_bolt/7 brace_bolt (1.7510,-1.8778,3.3479) members=[seg_t/m/brace/3] {"bolts":1}
+seg_t/n/panel_clamp_end/4 panel_clamp_end (-0.5670,-4.1222,3.3000) members=[seg_t/m/purlin/2] {"clamps":1}
+seg_t/n/panel_clamp_end/5 panel_clamp_end (1.7510,-4.1222,3.3000) members=[seg_t/m/purlin/2] {"clamps":1}
+seg_t/n/panel_clamp_mid/4 panel_clamp_mid (0.5920,-4.1222,3.3000) members=[seg_t/m/purlin/2] {"clamps":1}
+seg_t/n/panel_clamp_end/6 panel_clamp_end (-0.5670,-1.8778,3.6957) members=[seg_t/m/purlin/3] {"clamps":1}
+seg_t/n/panel_clamp_end/7 panel_clamp_end (1.7510,-1.8778,3.6957) members=[seg_t/m/purlin/3] {"clamps":1}
+seg_t/n/panel_clamp_mid/5 panel_clamp_mid (0.5920,-1.8778,3.6957) members=[seg_t/m/purlin/3] {"clamps":1}"
+`;
+
+exports[`buildStructure golden graph (the 22g byte-identity contract) > wider leg spacing yields fewer stations 1`] = `
+"steelKg=68.171
+foundation=anchor/square
+warnings=[]
+--- memberSummary ---
+front_leg: count=3 totalM=0.9
+back_leg: count=3 totalM=2.088
+rafter: count=3 totalM=6.837
+purlin: count=2 totalM=14.108
+brace: count=2 totalM=7.054
+--- members ---
+seg_t/m/front_leg/0 front_leg c_channel (-0.5670,-1.1222,3.0000)->(-0.5670,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/0 back_leg c_channel (-0.5670,1.1222,3.0000)->(-0.5670,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/0 rafter c_channel (-0.5670,-1.1222,3.3000)->(-0.5670,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/1 front_leg c_channel (2.9600,-1.1222,3.0000)->(2.9600,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/1 back_leg c_channel (2.9600,1.1222,3.0000)->(2.9600,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/1 rafter c_channel (2.9600,-1.1222,3.3000)->(2.9600,1.1222,3.6957) L=2.2790
+seg_t/m/front_leg/2 front_leg c_channel (6.4870,-1.1222,3.0000)->(6.4870,-1.1222,3.3000) L=0.3000
+seg_t/m/back_leg/2 back_leg c_channel (6.4870,1.1222,3.0000)->(6.4870,1.1222,3.6957) L=0.6960
+seg_t/m/rafter/2 rafter c_channel (6.4870,-1.1222,3.3000)->(6.4870,1.1222,3.6957) L=2.2790
+seg_t/m/purlin/0 purlin c_channel (-0.5670,-1.1222,3.3000)->(6.4870,-1.1222,3.3000) L=7.0540
+seg_t/m/purlin/1 purlin c_channel (-0.5670,1.1222,3.6957)->(6.4870,1.1222,3.6957) L=7.0540
+seg_t/m/brace/0 brace c_channel (-0.5670,1.1222,3.3479)->(2.9600,1.1222,3.3479) L=3.5270
+seg_t/m/brace/1 brace c_channel (2.9600,1.1222,3.3479)->(6.4870,1.1222,3.3479) L=3.5270
+--- nodes ---
+seg_t/n/roof_anchor/0 roof_anchor (-0.5670,-1.1222,3.0000) members=[seg_t/m/front_leg/0] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/1 roof_anchor (-0.5670,1.1222,3.0000) members=[seg_t/m/back_leg/0] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/0 leg_rafter (-0.5670,-1.1222,3.3000) members=[seg_t/m/front_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/leg_rafter/1 leg_rafter (-0.5670,1.1222,3.6957) members=[seg_t/m/back_leg/0,seg_t/m/rafter/0] {"bolts":2}
+seg_t/n/roof_anchor/2 roof_anchor (2.9600,-1.1222,3.0000) members=[seg_t/m/front_leg/1] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/3 roof_anchor (2.9600,1.1222,3.0000) members=[seg_t/m/back_leg/1] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/2 leg_rafter (2.9600,-1.1222,3.3000) members=[seg_t/m/front_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/leg_rafter/3 leg_rafter (2.9600,1.1222,3.6957) members=[seg_t/m/back_leg/1,seg_t/m/rafter/1] {"bolts":2}
+seg_t/n/roof_anchor/4 roof_anchor (6.4870,-1.1222,3.0000) members=[seg_t/m/front_leg/2] {"anchors":2,"plates":1}
+seg_t/n/roof_anchor/5 roof_anchor (6.4870,1.1222,3.0000) members=[seg_t/m/back_leg/2] {"anchors":2,"plates":1}
+seg_t/n/leg_rafter/4 leg_rafter (6.4870,-1.1222,3.3000) members=[seg_t/m/front_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/leg_rafter/5 leg_rafter (6.4870,1.1222,3.6957) members=[seg_t/m/back_leg/2,seg_t/m/rafter/2] {"bolts":2}
+seg_t/n/rafter_purlin/0 rafter_purlin (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/1 rafter_purlin (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/2 rafter_purlin (2.9600,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/3 rafter_purlin (2.9600,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/rafter_purlin/4 rafter_purlin (6.4870,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"bolts":1}
+seg_t/n/rafter_purlin/5 rafter_purlin (6.4870,1.1222,3.6957) members=[seg_t/m/purlin/1] {"bolts":1}
+seg_t/n/brace_bolt/0 brace_bolt (-0.5670,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/1 brace_bolt (2.9600,1.1222,3.3479) members=[seg_t/m/brace/0] {"bolts":1}
+seg_t/n/brace_bolt/2 brace_bolt (2.9600,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/brace_bolt/3 brace_bolt (6.4870,1.1222,3.3479) members=[seg_t/m/brace/1] {"bolts":1}
+seg_t/n/panel_clamp_end/0 panel_clamp_end (-0.5670,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/1 panel_clamp_end (6.4870,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/0 panel_clamp_mid (0.5920,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/1 panel_clamp_mid (1.7760,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/2 panel_clamp_mid (2.9600,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/3 panel_clamp_mid (4.1440,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_mid/4 panel_clamp_mid (5.3280,-1.1222,3.3000) members=[seg_t/m/purlin/0] {"clamps":1}
+seg_t/n/panel_clamp_end/2 panel_clamp_end (-0.5670,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_end/3 panel_clamp_end (6.4870,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/5 panel_clamp_mid (0.5920,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/6 panel_clamp_mid (1.7760,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/7 panel_clamp_mid (2.9600,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/8 panel_clamp_mid (4.1440,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}
+seg_t/n/panel_clamp_mid/9 panel_clamp_mid (5.3280,1.1222,3.6957) members=[seg_t/m/purlin/1] {"clamps":1}"
+`;

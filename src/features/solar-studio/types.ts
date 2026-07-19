@@ -419,6 +419,41 @@ export type RackingSpec =
       foundationShape?: FoundationShape;
       /** walk-under etc: raises the effective front-leg height */
       clearanceM?: number;
+
+      // ── Parametric structure (Phase 22g) ──────────────────────────────────
+      // All LAZY, all defaulting to exactly today's hardcoded behaviour, so a
+      // segment that sets none of them builds a byte-identical graph. That is
+      // the gate: `layoutFp` JSON.stringify's this whole object, so any field
+      // that appeared with a value — even its own default — would re-key every
+      // existing project and stale its captures.
+      /**
+       * Per-member-class sections. One table can legitimately mix them: a
+       * heavier leg carrying load to the deck, a lighter purlin spanning
+       * module-to-module. Absent classes fall back to `profile`.
+       */
+      profiles?: {
+        legs?: StructureProfile;
+        rafters?: StructureProfile;
+        purlins?: StructureProfile;
+      };
+      /** explicit rafter count per run; absent ⇒ one per leg station */
+      rafterCount?: number;
+      /**
+       * Rafter DENSITY as a multiple of leg stations. Deliberately NOT called a
+       * safety factor: this tool performs no structural analysis (§F), so it
+       * buys material, not capacity. The competitor control this mirrors is
+       * labelled "set 1.5 to add 50% safety margin", which invites a user to
+       * invent an engineering margin in a tool that cannot compute one.
+       */
+      rafterMultiplier?: number;
+      /** purlins spanning each run; absent ⇒ 2 (front and back module edges) */
+      purlinCount?: number;
+      /** overhang past the end legs for rafters/purlins; absent ⇒ 0 */
+      endBufferM?: number;
+      /** false removes longitudinal braces and their bolts; absent ⇒ braced */
+      bracing?: boolean;
+      /** cutting allowance on structural steel, % — priced, not modelled */
+      structureWastePct?: number;
     };
 
 /** Structure defaults, resolved structureDefaults → roof.structureOverride →

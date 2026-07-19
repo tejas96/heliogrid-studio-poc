@@ -104,6 +104,19 @@ export interface ResolvedRacking {
   foundation: FoundationKind;
   /** shuttering form for a cast foundation — see FoundationShape */
   foundationShape: FoundationShape;
+
+  // ── Parametric structure (Phase 22g), all pre-resolved ───────────────────
+  /** section for one member class; falls back to `profile` per class */
+  profileFor: (kind: MemberKind) => StructureProfile;
+  /** explicit rafters per run; undefined ⇒ derive from stations × multiplier */
+  rafterCount?: number;
+  /** rafter density multiplier — MATERIAL allowance, never a safety factor */
+  rafterMultiplier: number;
+  purlinCount: number;
+  endBufferM: number;
+  /** false ⇒ emit no braces and no brace bolts */
+  bracing: boolean;
+  structureWastePct?: number;
 }
 
 /**
@@ -148,6 +161,48 @@ export function resolveRacking(
       roofO?.foundationShape ??
       projD?.foundationShape ??
       ruleFor(foundation).shape,
+
+    // ── Phase 22g parametrics ────────────────────────────────────────────────
+    // Every default below reproduces the hardcode it replaced, so a segment
+    // that sets none of them yields the graph the golden snapshot pins.
+    profileFor: (kind: MemberKind) => {
+      const p = r.profiles;
+      if (!p) return r.profile;
+      if (kind === 'front_leg' || kind === 'back_leg') return p.legs ?? r.profile;
+      if (kind === 'rafter') return p.rafters ?? r.profile;
+      if (kind === 'purlin') return p.purlins ?? r.profile;
+      return r.profile; // a brace follows the table's base section
+    },
+    rafterCount: r.rafterCount,
+    rafterMultiplier: r.rafterMultiplier ?? 1,
+    purlinCount: r.purlinCount ?? 2,
+    endBufferM: r.endBufferM ?? 0,
+    bracing: r.bracing !== false,
+    structureWastePct: r.structureWastePct,
+  };
+}
+
+/**
+ * The parametric half of a ResolvedRacking at its defaults (22g).
+ *
+ * Exported so the handful of places that construct a racking by hand — preview
+ * thumbnails, tests — get the same defaults `resolveRacking` applies instead of
+ * each pasting its own copy. A second copy is a second thing to forget to
+ * update, and these defaults are load-bearing: they are what makes an untouched
+ * segment build a byte-identical graph.
+ */
+export function defaultStructureParams(
+  profile: StructureProfile,
+): Pick<
+  ResolvedRacking,
+  'profileFor' | 'rafterMultiplier' | 'purlinCount' | 'endBufferM' | 'bracing'
+> {
+  return {
+    profileFor: () => profile,
+    rafterMultiplier: 1,
+    purlinCount: 2,
+    endBufferM: 0,
+    bracing: true,
   };
 }
 
@@ -265,7 +320,9 @@ export function buildStructure(
     const m: Member = {
       id: `${seg.id}/m/${kind}/${idx - 1}`,
       kind,
-      profileKey: racking.profile.key,
+      // per-CLASS section (22g). With no `profiles` set this returns the
+      // table's single profile, which is what every existing project gets.
+      profileKey: racking.profileFor(kind).key,
       a,
       b,
       lengthM,
@@ -315,6 +372,21 @@ export function buildStructure(
       const bays = Math.max(1, Math.ceil(runLen / racking.legSpacingM));
       const stations = bays + 1;
       const half = runLen / 2;
+      // Rafters and purlins may overhang the end legs (22g). Legs are NOT
+      // extended — they stand where they stand; only the spanning members grow.
+      const spanHalf = half + racking.endBufferM;
+      // How many rafters this run gets. Default is one per leg station, which
+      // is the historical hardcode; `rafterCount` overrides outright, otherwise
+      // the density multiplier scales the station count.
+      const rafters = Math.max(
+        1,
+        racking.rafterCount ?? Math.round(stations * racking.rafterMultiplier),
+      );
+      // The default (one rafter per leg station) is emitted INSIDE the station
+      // loop so member and node ordering — and therefore every generated id —
+      // is unchanged from before 22g. Any other count cannot sit on the leg
+      // stations, so it emits separately afterwards.
+      const rafterPerStation = rafters === stations;
       for (let s = 0; s < stations; s++) {
         const t = stations === 1 ? 0 : (s / (stations - 1)) * runLen - half;
         const fx = frontMid.x + along.x * t;
@@ -347,7 +419,7 @@ export function buildStructure(
           { x: bx, y: by, z: dz + foundH },
           { x: bx, y: by, z: dz + racking.backLegM },
         );
-        const rafter = addMember('rafter', frontLeg.b, backLeg.b);
+        const rafter = rafterPerStation ? addMember('rafter', frontLeg.b, backLeg.b) : null;
         // A roof_anchor node sits on the ROOF SURFACE, not on the leg base.
         //
         // The two stopped being the same point when the D15 chain above put a
@@ -361,38 +433,80 @@ export function buildStructure(
         const deck = (p: XYZ): XYZ => ({ x: p.x, y: p.y, z: dz });
         addNode('roof_anchor', deck(frontLeg.a), [frontLeg.id], anchorSpec(racking));
         addNode('roof_anchor', deck(backLeg.a), [backLeg.id], anchorSpec(racking));
-        addNode('leg_rafter', frontLeg.b, [frontLeg.id, rafter.id], { bolts: 2 });
-        addNode('leg_rafter', backLeg.b, [backLeg.id, rafter.id], { bolts: 2 });
+        addNode(
+          'leg_rafter',
+          frontLeg.b,
+          rafter ? [frontLeg.id, rafter.id] : [frontLeg.id],
+          { bolts: 2 },
+        );
+        addNode('leg_rafter', backLeg.b, rafter ? [backLeg.id, rafter.id] : [backLeg.id], {
+          bolts: 2,
+        });
       }
 
-      // two purlins spanning the run (front + back module edges)
-      const purlinEnds = (edgeMid: { x: number; y: number }, z: number) => [
-        { x: edgeMid.x - along.x * half, y: edgeMid.y - along.y * half, z },
-        { x: edgeMid.x + along.x * half, y: edgeMid.y + along.y * half, z },
-      ];
-      const [fa, fb] = purlinEnds(frontMid, dz + racking.frontLegM);
-      const [ba, bb] = purlinEnds(backMid, dz + racking.backLegM);
-      const frontPurlin = addMember('purlin', fa, fb);
-      const backPurlin = addMember('purlin', ba, bb);
-      // purlin rests on every rafter at its station
+      // Custom rafter density: interpolate along the run independently of the
+      // leg stations. Each rafter carries its own joint nodes so
+      // validateStructure's "every rafter is supported" rule still holds.
+      if (!rafterPerStation) {
+        for (let i = 0; i < rafters; i++) {
+          const t = rafters === 1 ? 0 : (i / (rafters - 1)) * runLen - half;
+          const a = {
+            x: frontMid.x + along.x * t,
+            y: frontMid.y + along.y * t,
+            z: dz + racking.frontLegM,
+          };
+          const b = {
+            x: backMid.x + along.x * t,
+            y: backMid.y + along.y * t,
+            z: dz + racking.backLegM,
+          };
+          const extra = addMember('rafter', a, b);
+          addNode('leg_rafter', a, [extra.id], { bolts: 2 });
+          addNode('leg_rafter', b, [extra.id], { bolts: 2 });
+        }
+      }
+
+      // Purlins spanning the run. Two — front and back module edge — is the
+      // default and the historical behaviour; `purlinCount` interpolates the
+      // extras BETWEEN them, in XY *and* in Z, so an intermediate purlin lands
+      // on the tilted rafter rather than floating above or cutting through it.
+      // `spanHalf` carries the end buffer; at the default 0 it equals `half`.
+      const purlinAt = (u: number) => {
+        const cx = frontMid.x + (backMid.x - frontMid.x) * u;
+        const cy = frontMid.y + (backMid.y - frontMid.y) * u;
+        const z = dz + racking.frontLegM + (racking.backLegM - racking.frontLegM) * u;
+        return {
+          mid: { x: cx, y: cy },
+          z,
+          a: { x: cx - along.x * spanHalf, y: cy - along.y * spanHalf, z },
+          b: { x: cx + along.x * spanHalf, y: cy + along.y * spanHalf, z },
+        };
+      };
+      const nPurlins = Math.max(1, racking.purlinCount);
+      const purlinLines = Array.from({ length: nPurlins }, (_, i) =>
+        purlinAt(nPurlins === 1 ? 0 : i / (nPurlins - 1)),
+      );
+      const purlins = purlinLines.map((p) => addMember('purlin', p.a, p.b));
+
+      // every purlin rests on a rafter at each leg station
       for (let s = 0; s < stations; s++) {
         const t = stations === 1 ? 0 : (s / (stations - 1)) * runLen - half;
-        addNode(
-          'rafter_purlin',
-          { x: frontMid.x + along.x * t, y: frontMid.y + along.y * t, z: dz + racking.frontLegM },
-          [frontPurlin.id],
-          { bolts: 1 },
-        );
-        addNode(
-          'rafter_purlin',
-          { x: backMid.x + along.x * t, y: backMid.y + along.y * t, z: dz + racking.backLegM },
-          [backPurlin.id],
-          { bolts: 1 },
-        );
+        for (let i = 0; i < purlins.length; i++) {
+          const line = purlinLines[i];
+          addNode(
+            'rafter_purlin',
+            { x: line.mid.x + along.x * t, y: line.mid.y + along.y * t, z: line.z },
+            [purlins[i].id],
+            { bolts: 1 },
+          );
+        }
       }
 
-      // longitudinal braces between adjacent back legs
-      for (let s = 0; s < stations - 1; s++) {
+      // longitudinal braces between adjacent back legs — omitted entirely when
+      // bracing is turned off, along with their bolts (a brace bolt with no
+      // brace would fail validateStructure, and would price hardware for a
+      // member that is not there)
+      for (let s = 0; racking.bracing && s < stations - 1; s++) {
         const t0 = (s / (stations - 1)) * runLen - half;
         const t1 = ((s + 1) / (stations - 1)) * runLen - half;
         const brace = addMember(
@@ -405,7 +519,7 @@ export function buildStructure(
       }
 
       // panel clamps along both purlins: 2 ends + shared mids per purlin
-      for (const purlin of [frontPurlin, backPurlin]) {
+      for (const purlin of purlins) {
         addNode('panel_clamp_end', purlin.a, [purlin.id], { clamps: 1 });
         addNode('panel_clamp_end', purlin.b, [purlin.id], { clamps: 1 });
         for (let k = 1; k < n; k++) {
@@ -433,7 +547,12 @@ export function buildStructure(
       totalM: rnd(of.reduce((s, m) => s + m.lengthM, 0)),
     };
   }
-  const steelKg = rnd(members.reduce((s, m) => s + m.lengthM * racking.profile.kgPerM, 0));
+  // Σ PER MEMBER against its own section (22g) — a table mixing a heavy leg
+  // with a light purlin cannot be priced off one kgPerM. Identical to the old
+  // single-profile sum whenever `profiles` is unset.
+  const steelKg = rnd(
+    members.reduce((s, m) => s + m.lengthM * racking.profileFor(m.kind).kgPerM, 0),
+  );
 
   return {
     segmentId: seg.id,

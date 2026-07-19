@@ -25,7 +25,7 @@ import type {
   SectionDims,
 } from '../types';
 import { STRUCTURE_PROFILES } from '../lib/segment-ops';
-import { projectStructures, resolveRacking } from '../lib/structure';
+import { defaultStructureParams, projectStructures, resolveRacking } from '../lib/structure';
 import { panelFootprintM } from '../lib/layout';
 import { computePanelShadeDetail } from '../lib/shading';
 import { panelEnergyShares } from '../lib/solar';
@@ -165,6 +165,7 @@ export function StructEditPanel({
           legSpacingM: 2,
           foundation: 'anchor' as const,
           foundationShape: 'square' as const,
+          ...defaultStructureParams(STRUCTURE_PROFILES[0]),
         };
   const opt = (c: StructChoice) => ({ onClick: () => onCommit(c) });
   const stepRow = (
