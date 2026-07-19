@@ -424,9 +424,14 @@ function ProceduralTurbineVent({
   );
 }
 
-// Measured bbox extent of tree.glb (origin recentered to base via gltf-transform,
-// not resized through Meshy — natural authored scale, so height ref isn't 1).
-const TREE_REF = { x: 1.2623, y: 1.89677, z: 1.21922 };
+// Measured bbox of tree.glb. Unlike the Meshy-normalised models this one keeps
+// its natural authored scale (so the height ref isn't 1) AND its origin sits at
+// the bbox CENTRE, not the base — despite the comment that used to claim
+// otherwise. Uncompensated, that buried every tree to half its height: a 17 m
+// tree rendered 8.5 m into the ground, showing as a crown sitting on the soil.
+// `minY` is what the renderer lifts by. Verified against the asset by
+// obstruction-assets.test.ts so a re-export cannot silently reintroduce it.
+const TREE_REF = { x: 1.2623, y: 1.89677, z: 1.21922, minY: -0.9508 };
 
 function TreeAsset({
   o,
@@ -452,7 +457,9 @@ function TreeAsset({
   const scaleZ = Math.max(0.05, footprintM / TREE_REF.z);
   const scaleY = Math.max(0.05, o.heightM / TREE_REF.y);
   return gltf.scene ? (
-    <group ref={swayRef}>
+    // lift by the scaled distance from the model's origin to its underside, so
+    // the trunk meets the surface instead of starting halfway through it
+    <group ref={swayRef} position={[0, -TREE_REF.minY * scaleY, 0]}>
       <Clone
         object={gltf.scene}
         scale={[scaleX, scaleY, scaleZ]}

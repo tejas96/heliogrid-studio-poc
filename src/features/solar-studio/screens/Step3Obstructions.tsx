@@ -37,7 +37,7 @@ import { OBSTRUCTION_PRESETS, makeObstruction } from '../lib/roof-factory';
 import { EdgeLabels } from '../components/EdgeLabels';
 import { Sheet, SliderRow, ToggleRow, OptionCard, UnitToggle } from '../components/ui';
 import { M_TO_FT, useUnits } from '../lib/units';
-import { pickRoofAt } from '../lib/roof-topology';
+import { resolveAnchorRoofId } from '../lib/ground';
 import { Scene3D } from '../three/Scene3D';
 import { resolveCapabilities, requiredBridgeClearanceM } from '../lib/capabilities';
 import { reconcileBridgedPanels } from '../lib/structure-edit';
@@ -127,7 +127,18 @@ export function Step3Obstructions() {
   const typeOf = (o: Obstruction) => OBSTRUCTION_TYPES.find((t) => t.type === o.type);
 
   function update(id: string, p: Partial<Obstruction>, undoable = true) {
-    const obstructions = project.obstructions.map((o) => (o.id === id ? { ...o, ...p } : o));
+    const obstructions = project.obstructions.map((o) => {
+      if (o.id !== id) return o;
+      const next = { ...o, ...p };
+      // MOVING re-resolves what the object stands on, by the same rule `place`
+      // uses. The anchor used to be captured once at placement and never
+      // updated, so dragging or arrow-nudging left it pointing at the roof the
+      // object was first dropped on — and because `surfaceHeightAt`
+      // extrapolates its plane without bound, the 3D view then read a height
+      // for a surface that is not underneath it. Every move path funnels
+      // through here, so none of them can forget.
+      return p.center ? { ...next, roofId: resolveAnchorRoofId(next.center, project.roofs) } : next;
+    });
     // height/size/position/capability edits can invalidate (or restore)
     // panels bridging this obstruction — adjust in the same patch
     const panels = reconcileBridgedPanels(project, { obstructions });
@@ -152,7 +163,7 @@ export function Step3Obstructions() {
       type: placing.type,
       center: m,
       existing: project.obstructions,
-      roofId: pickRoofAt(m, project.roofs)?.id ?? null,
+      roofId: resolveAnchorRoofId(m, project.roofs),
     });
     patch({ obstructions: [...project.obstructions, ob] }, true);
     setPlacing(null);
@@ -161,11 +172,16 @@ export function Step3Obstructions() {
 
   function duplicateSelected() {
     if (!selected) return;
+    // the copy is offset by 2 m, which can land it on a different roof — or off
+    // the building entirely — so it re-resolves its own anchor rather than
+    // inheriting the original's
+    const center = { x: selected.center.x + 2, y: selected.center.y + 2 };
     const copy: Obstruction = {
       ...selected,
       id: genId('ob'),
       label: `${selected.label}c`,
-      center: { x: selected.center.x + 2, y: selected.center.y + 2 },
+      center,
+      roofId: resolveAnchorRoofId(center, project.roofs),
     };
     patch({ obstructions: [...project.obstructions, copy] }, true);
     setSelectedId(copy.id);

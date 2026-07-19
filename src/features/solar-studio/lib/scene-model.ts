@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import type { Project, Roof, XY } from '../types';
 import { computeEaveRefs, isSloped, surfaceHeightAt } from './roof-plane';
+import { obstructionBaseY } from './ground';
 import {
   differencePolygons,
   insetPolygonRobust,
@@ -242,8 +243,11 @@ export function buildShadowCasters(
     // its default). The scene reads the SAME predicate, so what you see cast
     // a shadow is what the numbers priced.
     if (!castsAnalyticalShadow(o)) continue;
-    const roof = project.roofs.find((r) => r.id === o.roofId);
-    const baseY = roof ? surfaceHeightAt(roof, o.center, eaveRefs.get(roof.id)) : 0;
+    // SAME grounding the visual mesh uses (§A0). A stale anchor here is not
+    // cosmetic: it moves the shadow CASTER, so a mis-grounded obstruction
+    // shades panels it does not really reach — or fails to shade ones it does —
+    // and that reaches the energy figure.
+    const baseY = obstructionBaseY(o, project.roofs, eaveRefs);
     let geom: THREE.BufferGeometry;
     if (o.shape === 'circle') {
       geom = new THREE.CylinderGeometry(o.diameterM / 2, o.diameterM / 2, o.heightM, 14);

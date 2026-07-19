@@ -52,6 +52,7 @@ import {
   roofTopRing,
 } from '../lib/scene-model';
 import { computeEaveRefs, isSloped, surfaceHeightAt } from '../lib/roof-plane';
+import { obstructionBaseY } from '../lib/ground';
 import { lightenHex, roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
@@ -1186,16 +1187,16 @@ function SceneContent({
       ))}
 
       {/* obstructions */}
-      {project.obstructions.filter((o) => inScope(o.roofId)).map((o) => {
-        const roof = project.roofs.find((x) => x.id === o.roofId);
-        return (
-          <ObstructionMesh
-            key={o.id}
-            o={o}
-            baseY={roof ? surfAt(o.roofId, o.center) : 0}
-          />
-        );
-      })}
+      {project.obstructions.filter((o) => inScope(o.roofId)).map((o) => (
+        // Resolved from the obstruction's POSITION, not from `o.roofId` alone.
+        // A stored anchor can be stale — it used to be captured at placement
+        // and left behind by every drag — and `surfaceHeightAt` extrapolates
+        // its plane without bound, so a stale anchor silently returned the old
+        // roof's plane at the new spot instead of failing. That is what left
+        // turbine vents hanging over a pitched roof. `obstructionBaseY` still
+        // honours an explicit `roofId: null` as "stands on grade".
+        <ObstructionMesh key={o.id} o={o} baseY={obstructionBaseY(o, project.roofs, eaveRefs)} />
+      ))}
 
       {/* panels — instanced: draw calls no longer scale with system size */}
       {spec && (
