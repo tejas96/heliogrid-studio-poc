@@ -29,6 +29,30 @@ function isValidSegment(s: unknown): s is ArraySegment {
     !!o.racking
   );
 }
+/**
+ * A malformed leg plan drops to AUTO — it does not take the whole table with
+ * it. `isValidSegment` is a filter, so validating the plan there would delete
+ * every panel on the segment over a bad coordinate.
+ *
+ * The key is REMOVED rather than set to undefined: `legPlan` is a lazy field,
+ * and `layoutFp` appends only when it is present, so a segment that never had
+ * a usable plan must serialise exactly as it did before the field existed.
+ * An empty point list is treated as no plan for the same reason — it would
+ * otherwise mean "a plan that supports nothing", which is not a design anyone
+ * intends.
+ */
+function sanitizeLegPlan(s: ArraySegment): ArraySegment {
+  const pts = s.legPlan?.points;
+  if (pts === undefined) return s;
+  const usable =
+    Array.isArray(pts) &&
+    pts.length > 0 &&
+    pts.every((p) => !!p && Number.isFinite(p.x) && Number.isFinite(p.y));
+  if (usable) return s;
+  const { legPlan: _dropped, ...rest } = s;
+  return rest as ArraySegment;
+}
+
 function isValidKeepout(k: unknown): k is Keepout {
   const o = k as Keepout;
   return (
@@ -101,7 +125,9 @@ export function normalizeProject(p: Project): Project {
           : 0,
       reference: p.calibration?.reference ?? null,
     },
-    segments: Array.isArray(p.segments) ? p.segments.filter(isValidSegment) : [],
+    segments: Array.isArray(p.segments)
+      ? p.segments.filter(isValidSegment).map(sanitizeLegPlan)
+      : [],
     keepouts: Array.isArray(p.keepouts) ? p.keepouts.filter(isValidKeepout) : [],
     // every entity array must BE an array — a stored shape that passed the
     // top-level parse but carries a non-array field would otherwise crash the

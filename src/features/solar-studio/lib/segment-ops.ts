@@ -80,7 +80,7 @@ interface Grid {
  * after the fill), falling back to the segment's declared azimuth + racking
  * tilt when it has no panels to read.
  */
-function segmentPose(
+export function segmentPose(
   seg: ArraySegment,
   panels: PlacedPanel[],
 ): { tiltDeg: number; azimuthDeg: number } {
@@ -100,6 +100,26 @@ function segmentPose(
     azimuthDeg: seg.azimuthDeg,
     tiltDeg: seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 0,
   };
+}
+
+/**
+ * THE segment's local frame angle — the one its panels are actually laid out
+ * in, whatever the user has since rotated.
+ *
+ * Exported because Phase 22i stores a hand-placed leg plan in this frame, and
+ * the leg plan must not derive its own. An independent derivation is exactly
+ * the azimuth-lattice bug class: it agrees on a due-south table and silently
+ * diverges the moment one is rotated, putting the legs at an angle to the
+ * panels they carry. One derivation, two readers.
+ *
+ * World → local is `rotate(p, -angle)`; local → world is `rotate(p, angle)`.
+ */
+export function segmentFrameAngle(
+  roof: Roof,
+  seg: ArraySegment,
+  panels: PlacedPanel[],
+): number {
+  return gridAngleFor(roof, segmentPose(seg, panels));
 }
 
 function segmentGrid(

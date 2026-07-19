@@ -101,7 +101,14 @@ export function layoutFp(p: Project): string {
       p.segments.map((s) => [s.id, s.polygon, s.racking, s.orientation, s.azimuthDeg, s.moduleGapM, s.removed]),
       p.keepouts.map((k) => [k.id, k.shape, k.heightM, k.kind, k.roofId]),
       p.walkways.map((w) => [w.id, w.a, w.b, w.widthMm, w.roofId]),
-    ])
+    ]) +
+    // Leg plan (Phase 22i) — CONDITIONAL suffix, appended per segment only
+    // when one exists. The segment tuple above is an EXPLICIT field list
+    // (unlike `racking`, which is stringified whole), so a new field there
+    // would not be picked up at all; appending here keeps untouched projects
+    // byte-identical while still re-keying a design whose legs have moved —
+    // and moving a leg moves steel, which moves the quote.
+    p.segments.map((s) => (s.legPlan ? `|lp:${s.id}:${JSON.stringify(s.legPlan.points)}` : '')).join('')
   );
 }
 

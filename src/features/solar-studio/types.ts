@@ -482,6 +482,17 @@ export interface ArraySegment {
   racking: RackingSpec;
   moduleGapM: number;
   removed: number[]; // fill-cell ids toggled OFF → holes. JSON-safe (not a Set)
+  /**
+   * Hand-placed leg stations (Phase 22i). LAZY: absent means AUTO — legs fall
+   * at `legSpacingM` intervals, exactly as before this field existed, so an
+   * untouched segment fingerprints byte-identically.
+   *
+   * Points are in the segment's LOCAL frame — `segmentFrameAngle`, the same
+   * derivation the panel lattice uses. Storing world coordinates would break
+   * the moment the table is rotated; deriving a second frame here would put
+   * the legs at an angle to the panels they carry.
+   */
+  legPlan?: { points: XY[] };
 }
 
 /** ONE primitive for exclusion AND shade — carries a height (verified). */

@@ -20,10 +20,13 @@ import type {
   Project,
   Roof,
   StructureProfile,
+  XY,
 } from '../types';
 import { COL_STRIDE, panelFootprintM } from './layout';
 import { resolveRules } from '../data/rules/india';
 import { ruleFor } from './foundation';
+import { rotate } from './geo';
+import { segmentFrameAngle } from './segment-ops';
 
 /**
  * Vertical offset from the member AXIS plane (leg tops = rafter/purlin
@@ -266,6 +269,45 @@ export interface SegmentStructure {
 
 const rnd = (v: number) => Math.round(v * 1000) / 1000;
 
+/** How far past a run's end a planned leg may sit and still count as its own. */
+const LEG_PLAN_TOL_M = 0.05;
+
+/**
+ * Leg offsets for ONE run, taken from the segment's saved plan (22i).
+ *
+ * Returns `null` when there is no plan at all (⇒ automatic spacing), and an
+ * empty array when there IS a plan but none of its legs fall on this run —
+ * which is a real situation worth reporting rather than silently drawing a
+ * table with no supports under one of its rows.
+ *
+ * Points are stored in the segment's LOCAL frame and rotated into world here
+ * using `segmentFrameAngle`, the SAME derivation the panel lattice uses. That
+ * shared derivation is the whole point: a second one agrees on a due-south
+ * table and diverges as soon as it is rotated.
+ */
+function planStationsFor(
+  seg: ArraySegment,
+  frameAngle: number,
+  frontMid: XY,
+  along: XY,
+  half: number,
+): number[] | null {
+  const pts = seg.legPlan?.points;
+  if (!pts) return null;
+  const ts: number[] = [];
+  for (const local of pts) {
+    const w = rotate(local, frameAngle);
+    // `along` is a unit vector, so the dot product IS the distance along the
+    // run. `along ⊥ down`, so measuring from frontMid or from the run centre
+    // gives the same number.
+    const t = (w.x - frontMid.x) * along.x + (w.y - frontMid.y) * along.y;
+    if (Math.abs(t) <= half + LEG_PLAN_TOL_M) ts.push(t);
+  }
+  // sorted so member ids run end-to-end along the table regardless of the
+  // order the user happened to place them in — ids stay deterministic
+  return ts.sort((a, b) => a - b);
+}
+
 /**
  * Build the member/node graph for ONE elevated segment from its materialised
  * panels. Contiguous panel runs per grid row get: front+back legs at
@@ -304,6 +346,13 @@ export function buildStructure(
   // below). `anchor`, the historical default, is 0, so this is a no-op until a
   // project selects a pedestal or ballast block.
   const foundH = ruleFor(racking.foundation).heightMm / 1000;
+
+  // The frame a saved leg plan is stored in — the segment's own, shared with
+  // the panel lattice (22i/E3). Computed once; harmless when there is no plan.
+  const panelFrameAngle = segmentFrameAngle(roof, seg, mine);
+  let runIndex = 0;
+  let plannedRunsUsed = 0;
+  let plannedRunsMissing = 0;
 
   // group by grid row, then split each row into contiguous runs (hole-gated)
   const byRow = new Map<number, PlacedPanel[]>();
@@ -354,6 +403,7 @@ export function buildStructure(
     }
 
     for (const run of runs) {
+      runIndex++;
       const n = run.length;
       const runLen = n * w + (n - 1) * seg.moduleGapM;
       const first = run[0].center;
@@ -368,10 +418,31 @@ export function buildStructure(
       const frontMid = { x: mid.x + (down.x * plan) / 2, y: mid.y + (down.y * plan) / 2 };
       const backMid = { x: mid.x - (down.x * plan) / 2, y: mid.y - (down.y * plan) / 2 };
 
-      // leg stations along the run
-      const bays = Math.max(1, Math.ceil(runLen / racking.legSpacingM));
-      const stations = bays + 1;
+      // ── Leg stations along the run (22i) ─────────────────────────────────
+      // AUTO by default: evenly spaced at `legSpacingM`. A persisted leg plan
+      // replaces those positions with hand-placed ones — but only for the runs
+      // it actually covers. A run the plan does not reach keeps AUTO and says
+      // so, rather than silently losing its legs (E6/E7).
+      const autoBays = Math.max(1, Math.ceil(runLen / racking.legSpacingM));
       const half = runLen / 2;
+      const planTs = planStationsFor(seg, panelFrameAngle, frontMid, along, half);
+      const custom = planTs !== null;
+      if (planTs !== null && planTs.length === 0) {
+        warnings.push(
+          `${seg.label}: run ${runIndex} has no leg in the saved plan — using automatic spacing for it`,
+        );
+      }
+      const usePlan = planTs !== null && planTs.length > 0;
+      if (custom && !usePlan) plannedRunsMissing++;
+      if (usePlan) plannedRunsUsed++;
+      const stations = usePlan ? planTs!.length : autoBays + 1;
+      /** offset of station `s` along the run axis, measured from the midpoint */
+      const stationT = (s: number) =>
+        usePlan
+          ? planTs![s]
+          : stations === 1
+            ? 0
+            : (s / (stations - 1)) * runLen - half;
       // Rafters and purlins may overhang the end legs (22g). Legs are NOT
       // extended — they stand where they stand; only the spanning members grow.
       const spanHalf = half + racking.endBufferM;
@@ -388,7 +459,7 @@ export function buildStructure(
       // stations, so it emits separately afterwards.
       const rafterPerStation = rafters === stations;
       for (let s = 0; s < stations; s++) {
-        const t = stations === 1 ? 0 : (s / (stations - 1)) * runLen - half;
+        const t = stationT(s);
         const fx = frontMid.x + along.x * t;
         const fy = frontMid.y + along.y * t;
         const bx = backMid.x + along.x * t;
@@ -490,7 +561,7 @@ export function buildStructure(
 
       // every purlin rests on a rafter at each leg station
       for (let s = 0; s < stations; s++) {
-        const t = stations === 1 ? 0 : (s / (stations - 1)) * runLen - half;
+        const t = stationT(s);
         for (let i = 0; i < purlins.length; i++) {
           const line = purlinLines[i];
           addNode(
@@ -507,8 +578,8 @@ export function buildStructure(
       // brace would fail validateStructure, and would price hardware for a
       // member that is not there)
       for (let s = 0; racking.bracing && s < stations - 1; s++) {
-        const t0 = (s / (stations - 1)) * runLen - half;
-        const t1 = ((s + 1) / (stations - 1)) * runLen - half;
+        const t0 = stationT(s);
+        const t1 = stationT(s + 1);
         const brace = addMember(
           'brace',
           { x: backMid.x + along.x * t0, y: backMid.y + along.y * t0, z: dz + racking.backLegM * 0.5 },
@@ -537,6 +608,16 @@ export function buildStructure(
         }
       }
     }
+  }
+
+  // E6: a table where SOME runs follow the saved plan and others fell back to
+  // automatic spacing is a legitimate state — the user added panels after
+  // planning the legs — but it must not look deliberate. Per-run notices are
+  // already pushed above; this is the summary the UI can lead with.
+  if (plannedRunsUsed > 0 && plannedRunsMissing > 0) {
+    warnings.push(
+      `${seg.label}: ${plannedRunsUsed} of ${plannedRunsUsed + plannedRunsMissing} runs use your leg plan — the rest are automatic. Open Legs (2D) to place the missing ones.`,
+    );
   }
 
   const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
