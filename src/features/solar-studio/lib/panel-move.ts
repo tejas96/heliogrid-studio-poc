@@ -90,6 +90,9 @@ export function movePanels(
         p.center,
         p.orientation,
         p.segmentId ? bridgeClearanceFor(project, p.roofId) : undefined,
+        // validate the panel's OWN pose — the exact footprint DRC will judge
+        // (panelFitsAt is the only frame derivation in a move; no second one)
+        { tiltDeg: p.tiltDeg, azimuthDeg: p.azimuthDeg },
       )
     )
       return { ok: false, reason: "That move doesn't fit — setback, obstruction or another array is in the way" };

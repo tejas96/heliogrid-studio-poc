@@ -1,5 +1,5 @@
 // ─── 3D Studio v2: photoreal scene, sun sim, solar access, pro HUD ──────────
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Line, Html, Sky } from '@react-three/drei';
 import * as THREE from 'three';
@@ -55,7 +55,18 @@ import { computeEaveRefs, isSloped, surfaceHeightAt } from '../lib/roof-plane';
 import { lightenHex, roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
+import { StructureNodesInstanced } from './StructureNodesInstanced';
 import { projectStructures, resolveRacking, type ResolvedRacking } from '../lib/structure';
+import { layoutFp } from '../lib/fingerprints';
+import {
+  DEFAULT_STRUCTURE_VIEW,
+  effectiveView,
+  foundationOptionsFor,
+  partitionPanels,
+  visibleStructureIds,
+  type StructureViewState,
+} from '../lib/structure-view';
+import { StructEditPanel } from './StructEditPanel';
 import { panelPose } from '../lib/panel-pose';
 import { ObstructionMesh, useWarmObstructionAssets } from './ObstructionMesh';
 
@@ -122,6 +133,9 @@ export function Scene3D({
   // travel kept mutating the model. Select-only is calmer and honest: the
   // model updates the moment you choose, and undo reverts it.)
   const structInteractive = !readOnly && !captureMode && !projectOverride;
+  // Phase 22l inspection state. VIEW ONLY — deliberately not in the project, so
+  // it cannot reach a fingerprint and stale a capture.
+  const [structView, setStructView] = useState<StructureViewState>(DEFAULT_STRUCTURE_VIEW);
   const [structEdit, setStructEdit] = useState<{
     segId: string;
     anchor: [number, number, number];
@@ -334,6 +348,9 @@ export function Scene3D({
         <SceneContent
           project={project}
           structEdit={structInteractive ? structEdit : null}
+          structView={structView}
+          onViewChange={setStructView}
+          captureMode={captureMode}
           onStructOpen={openStructEdit}
           onStructCommit={commitStructChoice}
           onStructClose={closeStructEdit}
@@ -860,6 +877,9 @@ const MONTH_NAMES = [
 function SceneContent({
   project,
   structEdit,
+  structView,
+  onViewChange,
+  captureMode,
   onStructOpen,
   onStructCommit,
   onStructClose,
@@ -894,22 +914,50 @@ function SceneContent({
   onStructCommit: (c: StructChoice) => void;
   onStructClose: () => void;
   onFocusBlocker?: (kind: string, id: string) => void;
+  /** Phase 22l inspection state — view only, never persisted */
+  structView: StructureViewState;
+  onViewChange: (v: StructureViewState) => void;
+  captureMode?: boolean;
 }) {
   const loc = project.location!;
   const spec = project.components.panel;
   const R = 70;
 
   // parametric structures (Phase 7): the member graph is the owner — the
-  // scene renders it and couples panel heights to the SAME resolved racking
-  const structures = useMemo(
+  // scene renders it and couples panel heights to the SAME resolved racking.
+  // Keyed on layoutFp rather than the project object: the graph depends only on
+  // geometry + racking, so re-deriving every structure on an unrelated patch
+  // (a price edit, a note) was pure waste on a large roof.
+  const layoutKey = useMemo(() => (spec ? layoutFp(project) : ''), [project, spec]);
+  const allStructures = useMemo(
     () => (spec ? projectStructures(project) : []),
-    [project, spec],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layoutKey, spec],
   );
+
+  // ── Phase 22l: structure-inspection view state ────────────────────────────
+  // NEVER persisted and never fingerprinted — ghosting a module to look at a
+  // rafter is not a design change, and if it keyed layoutFp it would stale
+  // every stored capture.
+  const selectedSegId = structEdit?.segId ?? null;
+  const view = effectiveView(structView, { captureMode });
+
+  // isolate drops every table but the selected one
+  const structures = useMemo(() => {
+    const keep = visibleStructureIds(
+      allStructures.map((s) => s.segmentId),
+      selectedSegId,
+      view,
+    );
+    return allStructures.filter((s) => keep.has(s.segmentId));
+  }, [allStructures, selectedSegId, view]);
   // (plain record — the lucide `Map` icon import shadows the Map constructor)
   const rackingBySeg = useMemo(() => {
     const m: Record<string, ResolvedRacking> = {};
     if (!spec) return m;
-    const structured = new Set(structures.map((st) => st.segmentId));
+    // ALL structures, not the isolate-filtered set: this drives panel POSE, and
+    // isolating one table must not change how any other table's modules sit.
+    const structured = new Set(allStructures.map((st) => st.segmentId));
     for (const seg of project.segments) {
       if (!structured.has(seg.id)) continue;
       const roof = project.roofs.find((r) => r.id === seg.roofId);
@@ -918,7 +966,18 @@ function SceneContent({
       if (rr) m[seg.id] = rr;
     }
     return m;
-  }, [project, spec, structures]);
+  }, [project, spec, allStructures]);
+
+  // ANY segmented panel opens the editor — a flush table has no structure to
+  // click, and must stay re-elevatable from 3D
+  const onPanelClickToEdit = useCallback(
+    (panelId: string) => {
+      const pp = project.panels.find((x) => x.id === panelId);
+      if (pp?.segmentId) onStructOpen(pp.segmentId, pp.id);
+    },
+    [project.panels, onStructOpen],
+  );
+
 
   // stream only the GLB models this project's obstruction types actually use
   useWarmObstructionAssets(project.obstructions.map((o) => o.type));
@@ -937,6 +996,37 @@ function SceneContent({
     const roof = project.roofs.find((r) => r.id === roofId);
     return roof ? surfaceHeightAt(roof, p, eaveRefs.get(roof.id)) : 3;
   };
+
+  /**
+   * Modules split into how each must be drawn (Phase 22l). One pose source
+   * feeds all three buckets, so ghosting can never move a module.
+   */
+  const panelParts = spec
+    ? partitionPanels(
+        project.panels
+          .filter((p) => p.enabled && inScope(p.roofId))
+          .map((p) => {
+            const roof = project.roofs.find((r) => r.id === p.roofId);
+            // ONE pose source for the mesh, the analytical shadow slab and the
+            // shading engine's rays (§A0) — they cannot drift apart
+            const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center));
+            return {
+              id: p.id,
+              segmentId: p.segmentId,
+              position: pose.position,
+              yawRad: pose.yawRad,
+              tiltRad: pose.tiltRad,
+              w: pose.w,
+              d: pose.d,
+              flush: pose.flush,
+              legs: pose.structured ? false : undefined, // structure draws real legs
+              access: p.solarAccess ?? 1,
+            };
+          }),
+        selectedSegId,
+        view,
+      )
+    : { normal: [], ghost: [], hidden: [] };
   // shift so the shown building(s)' collective center sits at the world origin
   const meshCenter =
     meshMode && shownRoofs.length > 0
@@ -1109,10 +1199,15 @@ function SceneContent({
 
       {/* panels — instanced: draw calls no longer scale with system size */}
       {spec && (
-        <StructureInstanced
-          structures={structures}
-          onMemberClick={(segId) => onStructOpen(segId)}
-        />
+        <>
+          <StructureInstanced
+            structures={structures}
+            onMemberClick={(segId) => onStructOpen(segId)}
+          />
+          {/* what every leg actually stands on — pedestal / ballast / pile.
+              Nothing drew these before, so a table appeared to float. */}
+          <StructureNodesInstanced structures={structures} />
+        </>
       )}
       {structEdit && spec && (
         <StructEditPanel
@@ -1123,37 +1218,32 @@ function SceneContent({
           onCommit={onStructCommit}
           onClose={onStructClose}
           onFocusBlocker={onFocusBlocker}
+          view={view}
+          onViewChange={onViewChange}
         />
       )}
       {spec && (
-        <PanelsInstanced
-          accessView={solarAccessView}
-          onPanelClick={(panelId: string) => {
-            // ANY segmented panel opens the editor — a flush table has no
-            // structure to click, and must stay re-elevatable from 3D
-            const pp = project.panels.find((x) => x.id === panelId);
-            if (pp?.segmentId) onStructOpen(pp.segmentId, pp.id);
-          }}
-          items={project.panels
-            .filter((p) => p.enabled && inScope(p.roofId))
-            .map((p) => {
-              const roof = project.roofs.find((r) => r.id === p.roofId);
-              // ONE pose source for the mesh, the analytical shadow slab and
-              // the shading engine's rays (§A0) — they cannot drift apart
-              const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center));
-              return {
-                id: p.id,
-                position: pose.position,
-                yawRad: pose.yawRad,
-                tiltRad: pose.tiltRad,
-                w: pose.w,
-                d: pose.d,
-                flush: pose.flush,
-                legs: pose.structured ? false : undefined, // structure draws real legs
-                access: p.solarAccess ?? 1,
-              };
-            })}
-        />
+        <>
+          {/* Phase 22l: the SELECTED table's modules can be shown, ghosted or
+              hidden so its structure reads. Per-instance alpha is unavailable
+              (one material per mesh), so the panel set is partitioned and this
+              component renders twice. `hidden` is simply never drawn.
+              partitionPanels owns the split; capture mode forces everything
+              visible so a proposal hero shot is never a bare frame. */}
+          <PanelsInstanced
+            accessView={solarAccessView}
+            onPanelClick={onPanelClickToEdit}
+            items={panelParts.normal}
+          />
+          {panelParts.ghost.length > 0 && (
+            <PanelsInstanced
+              ghost
+              accessView={false}
+              onPanelClick={onPanelClickToEdit}
+              items={panelParts.ghost}
+            />
+          )}
+        </>
       )}
 
       {/* walkways */}
@@ -1455,266 +1545,5 @@ function SunPath({
         </Html>
       ))}
     </group>
-  );
-}
-
-
-// ─── §H on-object structure editor ───────────────────────────────────────────
-// Compact contextual panel anchored AT the table. Hovering any option calls
-// onHover(choice) — the parent renders the choice on the REAL model without
-// touching the store; leaving the panel reverts; clicking commits ONE
-// undoable patch. Values shown are the CURRENT (real) project's.
-const structBtn: React.CSSProperties = {
-  background: 'rgba(255,255,255,.06)',
-  border: '1px solid rgba(255,255,255,.14)',
-  borderRadius: 7,
-  color: '#e5e7eb',
-  cursor: 'pointer',
-  fontSize: 10.5,
-  padding: '4px 8px',
-};
-
-function StructEditPanel({
-  project,
-  segId,
-  panelId,
-  anchor,
-  onCommit,
-  onClose,
-  onFocusBlocker,
-}: {
-  project: Project;
-  segId: string;
-  panelId?: string;
-  anchor: [number, number, number];
-  onCommit: (c: StructChoice) => void;
-  onClose: () => void;
-  onFocusBlocker?: (kind: string, id: string) => void;
-}) {
-  const seg = project.segments.find((sg) => sg.id === segId);
-  const roof = seg ? project.roofs.find((r) => r.id === seg.roofId) : undefined;
-  const spec = project.components.panel;
-  // Per-panel sun + energy, computed WHEN THE CARD OPENS: ~250 rays for one
-  // module is cheap, so this needs no persistence, no fingerprint and no
-  // staleness badge — it is always current with whatever it is describing.
-  const panelInfo = useMemo(() => {
-    if (!panelId) return null;
-    const detail = computePanelShadeDetail(project, panelId);
-    if (!detail) return null;
-    return {
-      detail,
-      kwh: panelEnergyShares(project).get(panelId) ?? null,
-      // same thresholds as the access tint on the modules themselves
-      tint: detail.access > 0.95 ? '#22c55e' : detail.access > 0.85 ? '#eab308' : '#ef4444',
-    };
-  }, [project, panelId]);
-  if (!seg || !roof || !spec) return null;
-  const resolved = resolveRacking(project, roof, seg, spec);
-  const isFlush = seg.racking.kind === 'flush';
-  const tilt = seg.racking.kind === 'flush' ? 0 : seg.racking.tiltDeg;
-  const rise10 = panelFootprintM(spec, seg.orientation).h * Math.sin((10 * Math.PI) / 180);
-  const previewRacking = (frontLegM: number) =>
-    resolved
-      ? { ...resolved, tiltDeg: 10, frontLegM, backLegM: frontLegM + rise10 }
-      : {
-          kind: 'fixed_tilt' as const,
-          tiltDeg: 10,
-          frontLegM,
-          backLegM: frontLegM + rise10,
-          profile: STRUCTURE_PROFILES[0],
-          legSpacingM: 2,
-          foundation: 'anchor' as const,
-        };
-  const opt = (c: StructChoice) => ({ onClick: () => onCommit(c) });
-  const stepRow = (
-    label: string,
-    value: string,
-    minus: StructChoice | null,
-    plus: StructChoice | null,
-  ) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-      <span style={{ color: '#9ca3af' }}>{label}</span>
-      <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
-        <button
-          style={{ ...structBtn, opacity: minus ? 1 : 0.35, cursor: minus ? 'pointer' : 'default' }}
-          {...(minus ? opt(minus) : {})}
-          disabled={!minus}
-          aria-label={`${label} minus`}
-        >
-          −
-        </button>
-        <span style={{ minWidth: 44, textAlign: 'center', fontWeight: 700 }}>{value}</span>
-        <button
-          style={{ ...structBtn, opacity: plus ? 1 : 0.35, cursor: plus ? 'pointer' : 'default' }}
-          {...(plus ? opt(plus) : {})}
-          disabled={!plus}
-          aria-label={`${label} plus`}
-        >
-          +
-        </button>
-      </span>
-    </div>
-  );
-  return (
-    <Html position={anchor} center zIndexRange={[40, 10]}>
-      <div
-        role="dialog"
-        data-struct-edit-card=""
-        aria-label={`Structure options for ${seg.label}`}
-        style={{
-          // sit BESIDE the table, never on top of it — the model IS the preview
-          transform: 'translate(64%, -10%)',
-          width: 252,
-          background: 'rgba(13,16,21,.95)',
-          border: '1px solid rgba(255,255,255,.16)',
-          borderRadius: 12,
-          padding: 12,
-          color: '#e5e7eb',
-          fontSize: 11,
-          boxShadow: '0 10px 32px rgba(0,0,0,.5)',
-          backdropFilter: 'blur(6px)',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 800, fontSize: 12 }}>
-            {seg.label} ·{' '}
-            {seg.racking.kind === 'flush'
-              ? 'Flush mount'
-              : `${seg.racking.tiltDeg}° · ${seg.racking.profile.label}`}
-          </span>
-          <button style={{ ...structBtn, padding: '2px 7px' }} onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-        {panelInfo && (
-          <div
-            style={{
-              margin: '8px 0',
-              padding: 8,
-              borderRadius: 8,
-              background: 'rgba(255,255,255,.04)',
-              border: '1px solid rgba(255,255,255,.08)',
-            }}
-          >
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: '#6b7280' }}>
-              THIS PANEL
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: panelInfo.tint }}>
-                {Math.round(panelInfo.detail.access * 100)}%
-              </span>
-              <span style={{ color: '#9ca3af' }}>sun</span>
-              {panelInfo.kwh !== null && (
-                <span style={{ marginLeft: 'auto', fontWeight: 700 }}>
-                  ≈{Math.round(panelInfo.kwh)} kWh/yr
-                </span>
-              )}
-            </div>
-            {panelInfo.detail.blockers.length > 0 ? (
-              <div style={{ marginTop: 5 }}>
-                <div style={{ color: '#6b7280', fontSize: 10, marginBottom: 3 }}>
-                  Sun lost to — click to look
-                </div>
-                {panelInfo.detail.blockers.slice(0, 3).map((b) => (
-                  <button
-                    key={`${b.kind}:${b.id}`}
-                    onClick={() => onFocusBlocker?.(b.kind, b.id)}
-                    style={{
-                      ...structBtn,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      width: '100%',
-                      marginTop: 3,
-                      textAlign: 'left',
-                    }}
-                    aria-label={`Focus ${b.label}`}
-                  >
-                    <span>{b.label}</span>
-                    <span style={{ color: '#9ca3af' }}>−{(b.lossFrac * 100).toFixed(1)}%</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div style={{ color: '#6b7280', fontSize: 10, marginTop: 4 }}>
-                Nothing blocks this module
-              </div>
-            )}
-            <div style={{ color: '#4b5563', fontSize: 9, marginTop: 5 }}>
-              Estimated share of the system total
-            </div>
-          </div>
-        )}
-        <div style={{ color: '#6b7280', margin: '4px 0 8px', fontSize: 10 }}>
-          {panelInfo ? 'TABLE — ' : ''}Click an option — it applies instantly (undo reverts)
-        </div>
-
-        <div style={{ display: 'flex', gap: 6 }}>
-          {(
-            [
-              ['flush', 'Flush', null, isFlush],
-              ['standard', 'Std 10°', previewRacking(0.3), !isFlush && tilt === 10 && (resolved?.frontLegM ?? 0) < 1],
-              ['walkunder', 'Walk 2.2m', previewRacking(2.2), !isFlush && (resolved?.frontLegM ?? 0) >= 2.2],
-            ] as const
-          ).map(([preset, label, racking, active]) => (
-            <button
-              key={preset}
-              style={{
-                ...structBtn,
-                flex: 1,
-                padding: 4,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 2,
-                borderColor: active ? '#fbbf24' : 'rgba(255,255,255,.14)',
-              }}
-              {...opt({ kind: 'preset', preset })}
-            >
-              <StructurePreview racking={racking} spec={spec} flush={!racking} width={64} height={38} />
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {!isFlush && (
-          <>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-              {STRUCTURE_PROFILES.map((pr) => (
-                <button
-                  key={pr.key}
-                  style={{
-                    ...structBtn,
-                    borderColor:
-                      seg.racking.kind !== 'flush' && seg.racking.profile.key === pr.key
-                        ? '#fbbf24'
-                        : 'rgba(255,255,255,.14)',
-                  }}
-                  {...opt({ kind: 'profile', key: pr.key })}
-                >
-                  {pr.label}
-                </button>
-              ))}
-            </div>
-            {stepRow(
-              'Tilt',
-              `${tilt}°`,
-              tilt > 0 ? { kind: 'tilt', tiltDeg: Math.max(0, tilt - 5) } : null,
-              tilt < 35 ? { kind: 'tilt', tiltDeg: Math.min(35, tilt + 5) } : null,
-            )}
-            {resolved &&
-              stepRow(
-                'Clearance',
-                `${(Math.round(resolved.frontLegM * 10) / 10).toFixed(1)} m`,
-                resolved.frontLegM > 0.05
-                  ? { kind: 'clearance', clearanceM: Math.max(0, Math.round((resolved.frontLegM - 0.3) * 10) / 10) }
-                  : null,
-                resolved.frontLegM < 3
-                  ? { kind: 'clearance', clearanceM: Math.min(3, Math.round((resolved.frontLegM + 0.3) * 10) / 10) }
-                  : null,
-              )}
-          </>
-        )}
-      </div>
-    </Html>
   );
 }

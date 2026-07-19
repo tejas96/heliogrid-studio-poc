@@ -106,6 +106,10 @@ export function buildCandidateProject(
     if (remaining <= 0) break;
     const filled = fillRoofAsSegment(project, roof, panel, {
       ...DEFAULT_FILL,
+      // this constructor REPLACES the layout in the candidate it returns — the
+      // live project's panels must not block the hypothetical fill (the fill's
+      // default now avoids project.panels)
+      avoidPanels: [],
       maxPanels: Number.isFinite(remaining) ? remaining : undefined,
     });
     if (!filled) continue;

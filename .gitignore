@@ -27,3 +27,7 @@ out
 *.njsproj
 *.sln
 *.sw?
+
+# TypeScript incremental build cache — a build artifact, not source
+tsconfig.tsbuildinfo
+*.tsbuildinfo

@@ -110,7 +110,10 @@ describe('frame unification: placement === DRC === corners (pitched-roof parity)
       const xs = c.map((p) => p.x * Math.cos(rad) - p.y * Math.sin(rad));
       return Math.max(...xs) - Math.min(...xs);
     };
-    const flatCorners = panelCornersOnRoof(panel, spec, flat);
+    // the FLAT reference must be UNtilted: a tilted flat-roof panel is now
+    // itself plan-foreshortened (h·cos tilt, yawed to its azimuth) to match
+    // the 3D plate — the raw-extent baseline is the tilt-0 grid cell
+    const flatCorners = panelCornersOnRoof({ ...panel, tiltDeg: 0 }, spec, flat);
     const pitchedCorners = panelCornersOnRoof(panel, spec, pitched);
     const flatAxis = roofGridAngle(flat);
     const pitchAxis = roofGridAngle(pitched);
@@ -233,6 +236,49 @@ describe('frame unification: placement === DRC === corners (pitched-roof parity)
       expect(c.ns).toBeCloseTo(orientation === 'portrait' ? L : W, 6);
     }
   });
+
+  // FLAT-roof rotate/tilt parity (user bug: rotating or tilting a panel moved
+  // the 3D plate but the 2D plate never changed). The 2D footprint is now the
+  // plan projection of the tilted plate at the panel's OWN azimuth — verified
+  // against the ACTUAL caster mesh, same method as the pitched gates above.
+  for (const { azimuthDeg, tiltDeg } of [
+    { azimuthDeg: 135, tiltDeg: 15 },
+    { azimuthDeg: 180, tiltDeg: 10 }, // the default flat-fill pose
+    { azimuthDeg: 250, tiltDeg: 25 },
+  ]) {
+    it(`2D corners === plan-projected 3D plate on a FLAT roof (az ${azimuthDeg}°, tilt ${tiltDeg}°)`, () => {
+      const flat = fixtureRoof(); // pitch 0
+      const base = projectWith(flat);
+      const panel: PlacedPanel = {
+        id: 'pv_flat_parity',
+        roofId: flat.id,
+        center: { x: 1.5, y: -2 },
+        orientation: 'portrait',
+        azimuthDeg,
+        tiltDeg,
+        solarAccess: 1,
+        enabled: true,
+      };
+      const project: Project = {
+        ...base,
+        panels: [panel],
+        components: { ...base.components, panel: spec },
+      };
+      const twoD = bbox(panelCornersOnRoof(panel, spec, flat));
+      const threeD = bbox(platePlanCorners(project, panel.id));
+      expect(threeD.ew).toBeCloseTo(twoD.ew, 6);
+      expect(threeD.ns).toBeCloseTo(twoD.ns, 6);
+      expect(threeD.cx).toBeCloseTo(twoD.cx, 6);
+      expect(threeD.cy).toBeCloseTo(twoD.cy, 6);
+      // independent derivation: w × h·cos(tilt), rotated to -azimuth in plan
+      // (three yaw = -az·π/180 ≡ plan rotation by -azimuthDeg)
+      const w = spec.widthMm / 1000; // portrait ⇒ width across
+      const hProj = (spec.lengthMm / 1000) * Math.cos((tiltDeg * Math.PI) / 180);
+      const az = (azimuthDeg * Math.PI) / 180;
+      expect(twoD.ew).toBeCloseTo(w * Math.abs(Math.cos(az)) + hProj * Math.abs(Math.sin(az)), 6);
+      expect(twoD.ns).toBeCloseTo(w * Math.abs(Math.sin(az)) + hProj * Math.abs(Math.cos(az)), 6);
+    });
+  }
 
   it('panelFitsAt agrees with the fill: refilling every filled center reports a collision', () => {
     const roof = pitchedRoof();

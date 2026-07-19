@@ -54,11 +54,21 @@ export function PanelsInstanced({
   items,
   accessView,
   onPanelClick,
+  ghost = false,
 }: {
   items: PanelInstance[];
   accessView: boolean;
   /** §H on-object editing: reports the clicked panel (ignored while orbiting) */
   onPanelClick?: (panelId: string) => void;
+  /**
+   * Draw these modules translucent so the structure beneath reads (Phase 22l).
+   *
+   * Per-instance alpha is not available — one material serves the whole mesh —
+   * so the CALLER partitions its panels and renders this component twice, once
+   * plain and once ghosted. `partitionPanels` in lib/structure-view.ts owns
+   * that split; here we only need to know which half we are.
+   */
+  ghost?: boolean;
 }) {
   const mats = getPanelMaterials();
 
@@ -69,13 +79,28 @@ export function PanelsInstanced({
     () => new THREE.MeshBasicMaterial({ toneMapped: false }),
     [],
   );
+  // Own material, not a mutated clone of the shared glass — mutating that would
+  // turn every panel in the scene translucent.
+  const ghostMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        color: 0x8fb8e8,
+        transparent: true,
+        opacity: 0.22,
+        depthWrite: false, // so structure behind it is not z-clipped away
+        metalness: 0,
+        roughness: 1,
+      }),
+    [],
+  );
   useEffect(
     () => () => {
       boxGeom.dispose();
       legGeom.dispose();
       accessMat.dispose();
+      ghostMat.dispose();
     },
-    [boxGeom, legGeom, accessMat],
+    [boxGeom, legGeom, accessMat, ghostMat],
   );
 
   const legs = useMemo(
@@ -89,9 +114,10 @@ export function PanelsInstanced({
     // module surface: photoreal glass, or flat access tint per instance
     const glassMesh = new THREE.InstancedMesh(
       boxGeom,
-      accessView ? accessMat : mats.glass,
+      ghost ? ghostMat : accessView ? accessMat : mats.glass,
       items.length,
     );
+    glassMesh.renderOrder = ghost ? 2 : 0; // ghosts blend over the structure
     items.forEach((p, i) => {
       glassMesh.setMatrixAt(
         i,
@@ -100,10 +126,11 @@ export function PanelsInstanced({
       if (accessView) glassMesh.setColorAt(i, accessColor(p.access));
     });
 
-    // aluminum frame — hidden in access view so gray doesn't wash the tint
-    const frameMesh = accessView
-      ? null
-      : new THREE.InstancedMesh(boxGeom, mats.frame, items.length);
+    // aluminum frame — hidden in access view so gray doesn't wash the tint, and
+    // hidden when ghosting because a solid frame outlines the very modules we
+    // are trying to see past
+    const frameMesh =
+      accessView || ghost ? null : new THREE.InstancedMesh(boxGeom, mats.frame, items.length);
     if (frameMesh) {
       items.forEach((p, i) => {
         frameMesh.setMatrixAt(
@@ -114,8 +141,12 @@ export function PanelsInstanced({
     }
 
     // stand legs under the raised edge (elevated mounts only, 2 per panel)
+    // heuristic legs are suppressed while ghosting: they belong to the modules
+    // we are seeing past, and would clutter the real structure underneath
     const legMesh =
-      legs.length > 0 ? new THREE.InstancedMesh(legGeom, mats.leg, legs.length * 2) : null;
+      legs.length > 0 && !ghost
+        ? new THREE.InstancedMesh(legGeom, mats.leg, legs.length * 2)
+        : null;
     if (legMesh) {
       legs.forEach((p, i) => {
         const legLen = 0.18 + Math.sin(p.tiltRad) * (p.d / 2);
@@ -142,7 +173,7 @@ export function PanelsInstanced({
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
     return { glassMesh, frameMesh, legMesh };
-  }, [items, legs, accessView, boxGeom, legGeom, accessMat, mats]);
+  }, [items, legs, accessView, ghost, boxGeom, legGeom, accessMat, ghostMat, mats]);
 
   // InstancedMesh allocates per-instance GPU buffers — always dispose the
   // mesh objects when a rebuild (or unmount) replaces them

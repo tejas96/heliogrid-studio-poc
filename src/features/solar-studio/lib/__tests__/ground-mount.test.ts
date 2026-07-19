@@ -150,10 +150,14 @@ describe('ground foundations', () => {
     expect(r.foundation).toBe('pile');
   });
 
-  it('a rooftop table still anchors — the default is per surface, not global', () => {
+  it('a rooftop table founds on a PEDESTAL, not a pile — the default is per surface', () => {
+    // D12: the rooftop default moved anchor → concrete. A pedestal avoids
+    // penetrating the waterproofing membrane and lifts the base plate clear of
+    // monsoon ponding. What matters here is that it is NOT the ground default.
     const roofTop: Roof = { ...makeGroundSurface({ polygon: rect(0, 0, 40, 30), existing: [] }), roofType: 'rcc_flat', heightM: 3 };
     const r = resolveRacking(proj(roofTop), roofTop, seg(roofTop.id), SPEC)!;
-    expect(r.foundation).toBe('anchor');
+    expect(r.foundation).toBe('concrete');
+    expect(r.foundation).not.toBe('pile');
   });
 
   it('an explicit choice still wins over the surface default', () => {

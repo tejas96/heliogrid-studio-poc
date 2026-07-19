@@ -708,6 +708,101 @@ kbd.dark {
   margin: 0 3px;
 }
 
+/* labelled variant (Step 6 selection bar): grouped, wrapping, 28px rhythm */
+.context-bar.labelled {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 4px;
+  column-gap: 4px;
+  padding: 6px 8px;
+  max-width: 660px;
+}
+.context-bar.labelled .sep {
+  height: 18px;
+  margin: 0 2px;
+}
+.ctx-count {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--editor-ink);
+  padding: 0 4px;
+  white-space: nowrap;
+}
+.ctx-label {
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--editor-ink-2);
+  padding: 0 2px;
+  white-space: nowrap;
+  user-select: none;
+}
+.ctx-btn {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--editor-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), opacity var(--t-fast);
+}
+.ctx-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+  flex: none;
+}
+.ctx-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+.ctx-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.ctx-btn.danger {
+  color: #f87171;
+}
+.ctx-btn.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.14);
+}
+.ctx-val {
+  min-width: 32px;
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--editor-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ctx-flash {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #fbbf24;
+  padding: 0 6px;
+  white-space: nowrap;
+  animation: ctx-flash-in var(--t-fast, 0.12s) ease-out;
+}
+@keyframes ctx-flash-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* status pill */
 .status-pill {
   background: rgba(20, 24, 30, 0.92);

@@ -3,8 +3,11 @@ import type { Keepout, PanelSpec, PlacedPanel, Project, Roof, XY } from '../../t
 import {
   COL_STRIDE,
   autoFillRoof,
+  defaultPanelPose,
+  estimateMaxCapacityKwp,
   fillRoofAsSegment,
   nextSegmentLabel,
+  panelCornersOnRoof,
   panelFitsAt,
   placedPanelCorners,
   snapPanelCenter,
@@ -135,14 +138,94 @@ describe('collision-aware fill (no overlap with existing panels)', () => {
     }
   });
 
-  it('without avoidPanels the fill overlaps (proves the guard is what prevents it)', () => {
+  it('a project with NO panels refills the identical grid (the blockers are the panels)', () => {
     const r = roof('a', rect(0, 0, 12, 8));
     const first = autoFillRoof(project([r]), r, SPEC);
-    const again = autoFillRoof(project([r]), r, SPEC); // no avoidPanels → same grid
-    // identical grid → every panel overlaps its twin
+    // the fixture project has panels: [] — so even the DEFAULT (avoid
+    // project.panels) has nothing to avoid and reproduces the same grid
+    const again = autoFillRoof(project([r]), r, SPEC);
     const fc = placedPanelCorners(first[0], SPEC, 0);
     const overlaps = again.some((p) => rectsOverlap(placedPanelCorners(p, SPEC, 0), fc));
     expect(overlaps).toBe(true);
+  });
+
+  /** DRC shrink idiom: pull corners ~10% toward centre so edge-adjacency ≠ overlap. */
+  const shrink = (c: { x: number; y: number }[]) => {
+    const cx = (c[0].x + c[2].x) / 2;
+    const cy = (c[0].y + c[2].y) / 2;
+    return c.map((p) => ({ x: cx + (p.x - cx) * 0.9, y: cy + (p.y - cy) * 0.9 }));
+  };
+
+  it('the DEFAULT fill avoids the project\'s own panels — never an overlapping pair', () => {
+    const r = roof('a', rect(0, 0, 12, 8));
+    const empty = project([r]);
+    const first = autoFillRoof(empty, r, SPEC);
+    expect(first.length).toBeGreaterThan(4);
+    const withPanels = { ...empty, panels: first } as Project;
+    // NO avoidPanels passed — the old default ([]) ignored every existing
+    // panel and re-filled straight on top of them (user-reported field bug)
+    const second = autoFillRoof(withPanels, r, SPEC);
+    const firstCorners = first.map((p) => shrink(panelCornersOnRoof(p, SPEC, r)));
+    for (const p of second) {
+      const c = shrink(panelCornersOnRoof(p, SPEC, r));
+      for (const fc of firstCorners) expect(rectsOverlap(c, fc)).toBe(false);
+    }
+  });
+
+  it('estimateMaxCapacityKwp measures RAW capacity — existing panels do not shrink it', () => {
+    const r = roof('a', rect(0, 0, 12, 8));
+    const empty = project([r]);
+    const rawMax = estimateMaxCapacityKwp(empty, SPEC);
+    expect(rawMax.panels).toBeGreaterThan(4);
+    const withPanels = { ...empty, panels: autoFillRoof(empty, r, SPEC) } as Project;
+    expect(estimateMaxCapacityKwp(withPanels, SPEC)).toEqual(rawMax);
+  });
+});
+
+describe('area-limited fill (drag-box) — lattice anchored to the ROOF, not the box', () => {
+  const key = (p: PlacedPanel) => `${p.center.x.toFixed(6)},${p.center.y.toFixed(6)}`;
+  const opts = { orientation: 'portrait' as const, gapM: 0.05, grouped: true };
+
+  it('is MONOTONIC: enlarging the drag box only ADDS panels, never moves one', () => {
+    const r = roof('a', rect(0, 0, 12, 8));
+    const p = project([r]);
+    const small = autoFillRoof(p, r, SPEC, opts, rect(-0.5, -0.5, 5, 4.5));
+    const large = autoFillRoof(p, r, SPEC, opts, rect(-0.5, -0.5, 9, 6.5)); // ⊃ small
+    expect(small.length).toBeGreaterThan(0);
+    expect(large.length).toBeGreaterThan(small.length);
+    const largeKeys = new Set(large.map(key));
+    for (const pan of small) expect(largeKeys.has(key(pan))).toBe(true);
+  });
+
+  it('area-filled panels land on the SAME lattice as the full-roof fill', () => {
+    const r = roof('a', rect(0, 0, 12, 8));
+    const p = project([r]);
+    const full = new Set(autoFillRoof(p, r, SPEC, opts).map(key));
+    const area = autoFillRoof(p, r, SPEC, opts, rect(1, 1, 6, 5));
+    expect(area.length).toBeGreaterThan(0);
+    for (const pan of area) expect(full.has(key(pan))).toBe(true);
+  });
+
+  it('cellIndex of an area fill decodes to unique grid cells (reindex/snap-safe)', () => {
+    const r = roof('a', rect(0, 0, 12, 8));
+    const area = autoFillRoof(project([r]), r, SPEC, opts, rect(0, 0, 8, 6));
+    const idx = area.map((x) => x.cellIndex!);
+    expect(new Set(idx).size).toBe(idx.length);
+    for (const i of idx) expect(i % COL_STRIDE).toBeLessThan(COL_STRIDE);
+  });
+});
+
+describe('flat TILE deck mounts FLUSH (no ballasted tilt legs on tile)', () => {
+  it('defaultPanelPose treats flat tile like metal shed: tilt 0, south', () => {
+    const tile = { ...roof('t', rect(0, 0, 12, 8)), roofType: 'tile' as const };
+    expect(defaultPanelPose(tile)).toEqual({ tiltDeg: 0, azimuthDeg: 180 });
+  });
+
+  it('fillRoofAsSegment picks flush racking on a flat tile roof', () => {
+    const tile = { ...roof('t', rect(0, 0, 12, 8)), roofType: 'tile' as const };
+    const f = fillRoofAsSegment(project([tile]), tile, SPEC)!;
+    expect(f.segment.racking.kind).toBe('flush');
+    for (const pan of f.panels) expect(pan.tiltDeg).toBe(0);
   });
 });
 

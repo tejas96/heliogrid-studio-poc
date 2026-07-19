@@ -9,10 +9,10 @@ import type {
   Project,
   RackingSpec,
   Roof,
-  StructureProfile,
   Walkway,
   XY,
 } from '../types';
+import { DEFAULT_PROFILE } from '../data/profiles';
 import {
   dominantEdgeAngle,
   genId,
@@ -70,6 +70,9 @@ export function defaultPanelPose(roof: Roof): {
 } {
   if (isSloped(roof)) return slopePanelPose(roof);
   if (roof.roofType === 'metal_shed') return { tiltDeg: 0, azimuthDeg: 180 };
+  // a FLAT tile deck cannot take ballasted tilt legs — tile is a covering you
+  // hook through, not a slab you stand a structure on. Flush, like metal shed.
+  if (roof.roofType === 'tile') return { tiltDeg: 0, azimuthDeg: 180 };
   // open ground has no roof to constrain tilt, so it does NOT inherit the 10°
   // rooftop ballast compromise — it starts near latitude-optimal
   if (roof.roofType === 'ground')
@@ -93,12 +96,14 @@ export const COL_STRIDE = 1000;
 /** Grid-origin nudge that keeps flush candidates off the region boundary. */
 const GRID_EPS_M = 1e-6;
 
-/** Default mounting profile until the racking picker (Phase 2) sets one. */
-export const DEFAULT_PROFILE: StructureProfile = {
-  key: 'c_channel',
-  label: 'C-Channel',
-  kgPerM: 2.2,
-};
+/**
+ * Default mounting profile until the racking picker sets one.
+ *
+ * This used to be a SECOND hand-written literal that duplicated
+ * `STRUCTURE_PROFILES[0]` and had already drifted from it by label. Both now
+ * come from `data/profiles.ts`; re-exported so existing importers are unchanged.
+ */
+export { DEFAULT_PROFILE };
 
 interface Blocker {
   corners: XY[];
@@ -180,6 +185,42 @@ export function roofGridAngle(roof: Roof): number {
     const sv = slopeVector(roof);
     return (Math.atan2(sv.dy, sv.dx) * 180) / Math.PI;
   }
+  return dominantEdgeAngle(roof.polygon);
+}
+
+/**
+ * THE lattice angle for panels of a given pose on this roof — the one frame
+ * fill, snap, fits, and segment ops all derive their grid from.
+ *
+ *  - sloped roof: local x runs straight down the slope (as before);
+ *  - flat + tilted pose: the lattice comes from the pose's AZIMUTH, not the
+ *    roof outline. `panelCornersOnRoof` gives a tilted flat-roof module the
+ *    footprint rectCorners(center, w, h·cos tilt, −azimuthDeg): its `w` axis
+ *    lies across the facing, its foreshortened `h` axis along it. The fill
+ *    steps local x by w+gap and local y by the row pitch, so the lattice
+ *    rotation must put those extents on those axes: angle ≡ −azimuthDeg
+ *    (mod 180). We use 180 − azimuthDeg — the same line (a rectangle is
+ *    invariant under a 180° turn about its centre), chosen so the default
+ *    south-facing pose (az 180) yields angle 0 and axis-aligned roofs keep
+ *    their historical lattice. Rows then run PERPENDICULAR to the facing and
+ *    the row axis advances along the facing's horizontal direction — the
+ *    geometry `fillRowPitchM`/`shadowFreePitchM` already assume. Before this,
+ *    the lattice followed dominantEdgeAngle: on a roof whose long edge runs
+ *    N-S, panels were spaced w+gap along the very axis their tilted plates
+ *    occupy h·cos(tilt) — every consecutive pair overlapped (shingled 3D,
+ *    field bug 2026-07-18);
+ *  - flat + flush (tilt 0): dominant edge, as before — footprint alignment is
+ *    aesthetic, there is no facing to violate.
+ */
+export function gridAngleFor(
+  roof: Roof,
+  pose: { tiltDeg: number; azimuthDeg: number },
+): number {
+  if (isSloped(roof)) {
+    const sv = slopeVector(roof);
+    return (Math.atan2(sv.dy, sv.dx) * 180) / Math.PI;
+  }
+  if (pose.tiltDeg > 0) return 180 - pose.azimuthDeg;
   return dominantEdgeAngle(roof.polygon);
 }
 
@@ -272,26 +313,37 @@ export function autoFillRoof(
   if (insetRegions.length === 0) return [];
   const insideInset = (corners: XY[]) =>
     insetRegions.some((reg) => corners.every((c) => pointInPolygon(c, reg)));
-  const regions = areaLimit ? [areaLimit] : insetRegions;
+  // The lattice is ALWAYS anchored to the roof's own inset regions — never to
+  // `areaLimit`. Anchoring at the drag-box's bbox min made the grid phase a
+  // function of the box, so the drag-fill preview reflowed every candidate on
+  // every pointer move ("fluctuating" panels) and the committed panels landed
+  // on a lattice offset from the roof's own fill. areaLimit is purely an extra
+  // FILTER below: a candidate must sit fully inside it. Consequences: the
+  // preview is monotonic (growing the box only ADDS panels) and area-filled
+  // panels coincide exactly with full-roof-fill positions.
+  const regions = insetRegions;
 
-  // on a slope, align the grid so local x runs straight down the slope; the
-  // module's along-slope dimension (h) goes on that axis and is foreshortened
-  // by cos(pitch) — the panel's on-slope length projects shorter in plan, so
-  // plan spacing must shrink to keep 3D panels from overlapping. See planCellM.
-  const sv = slopeVector(roof);
-  const angle = isSloped(roof)
-    ? (Math.atan2(sv.dy, sv.dx) * 180) / Math.PI
-    : dominantEdgeAngle(roof.polygon);
+  const pose = defaultPanelPose(roof);
+  // on a slope, local x runs straight down the slope (module h on that axis,
+  // foreshortened by cos(pitch) — see planCellM). On a FLAT roof with a tilted
+  // pose the lattice is derived from the pose's azimuth, so rows run
+  // perpendicular to the facing and the row pitch applies along it (the
+  // geometry shadowFreePitchM solves for). See gridAngleFor.
+  const angle = gridAngleFor(roof, pose);
   // w/h below are the PLAN CELL extents along local x / local y (not the raw
   // module w/h): on a pitched roof they are swapped and foreshortened.
   const { ax: w, ay: h } = planCellM(spec, opts.orientation, roof);
   const gap = opts.gapM;
   // obstructions + walkways + already-placed panels are all occupied space —
   // a new fill must never overlap any of them (collision-aware placement).
+  // The DEFAULT is to avoid the project's OWN panels (§A0: never place into
+  // occupied space) — the old default of [] silently ignored every existing
+  // panel. Callers that measure raw capacity or replace the whole layout pass
+  // an explicit `avoidPanels: []`.
   const allBlockers: Blocker[] = [
     ...obstructionBlockers(roof, project.obstructions, opts.bridgeClearanceM),
     ...walkwayBlockersFor(roof, project.walkways),
-    ...panelBlockersFor(roof, spec, opts.avoidPanels ?? []),
+    ...panelBlockersFor(roof, spec, opts.avoidPanels ?? project.panels ?? []),
   ];
   // footprints of roofs stacked ABOVE this one (mumty, upper terrace) — panels
   // must never be placed underneath them
@@ -299,7 +351,6 @@ export function autoFillRoof(
   // drawn keepouts block placement too (arbitrary polygons → polygon test)
   const koPolys = keepoutPolys(roof, project.keepouts ?? []);
 
-  const pose = defaultPanelPose(roof);
   const rowGap = opts.grouped ? gap : gap + 0.4;
   // tilted rows on a flat roof advance by the shadow-free pitch (or the
   // expert override, which may deliberately be tighter); flush mounts keep
@@ -344,6 +395,10 @@ export function autoFillRoof(
         // fully inside this region AND inside the setback inset
         if (!worldCorners.every((c) => pointInPolygon(c, region))) continue;
         if (!insideInset(worldCorners)) continue;
+        // area-limited fill (drag-box): candidate filter ONLY — the lattice
+        // itself stays anchored to the roof frame above
+        if (areaLimit && !worldCorners.every((c) => pointInPolygon(c, areaLimit)))
+          continue;
         if (allBlockers.some((b) => rectsOverlap(worldCorners, b.corners)))
           continue;
         if (covered.some((poly) => rectIntersectsPolygon(worldCorners, poly)))
@@ -391,8 +446,10 @@ export function fillRoofAsSegment(
   areaLimit?: XY[],
 ): FilledSegment | null {
   // the fill's OWN under-structure clearance (defaults chain) drives §26c
-  // bridging: a walk-under default lets the fill span bridgeable obstructions
-  const elevatedPose = !isSloped(roof) && roof.roofType !== 'metal_shed';
+  // bridging: a walk-under default lets the fill span bridgeable obstructions.
+  // Tile is flush like metal shed (defaultPanelPose) — no elevated structure.
+  const elevatedPose =
+    !isSloped(roof) && roof.roofType !== 'metal_shed' && roof.roofType !== 'tile';
   const fillOpts: FillOptions =
     opts.bridgeClearanceM !== undefined || !elevatedPose
       ? opts
@@ -407,7 +464,10 @@ export function fillRoofAsSegment(
   if (panels.length === 0) return null;
   const segId = genId('seg');
   const pose = defaultPanelPose(roof);
-  const flush = isSloped(roof) || roof.roofType === 'metal_shed';
+  // flush ⇔ the pose has no structure under it — must stay in lockstep with
+  // defaultPanelPose (a flat TILE deck is flush too: hooks, not tilt legs)
+  const flush =
+    isSloped(roof) || roof.roofType === 'metal_shed' || roof.roofType === 'tile';
   const racking: RackingSpec = flush
     ? { kind: 'flush' }
     : {
@@ -489,6 +549,22 @@ export function panelCornersOnRoof(
   roof: Roof | undefined,
 ): XY[] {
   if (!roof) return placedPanelCorners(panel, spec, 0);
+  // FLAT roof + TILTED module: the footprint is the plan projection of the
+  // tilted plate, facing the panel's OWN azimuth — exactly what panel-pose.ts
+  // renders (yaw = -azimuthDeg·π/180 about three's +Y, then rotateX(-tilt)
+  // about the plate's local x). Three yaw a maps to a plan rotation of a
+  // (z = -planY), so plan rotation = -azimuthDeg; the tilt is about the
+  // plate's local x (its `w` axis), so only the `h` extent foreshortens to
+  // h·cos(tilt). Before this branch, rotating or tilting a flat-roof panel
+  // changed the 3D plate but NOT the 2D footprint — the S1 class of defect.
+  // tiltDeg == 0 keeps the grid-aligned w × h (footprint alignment governs,
+  // matching pose's yaw = roofGridAngle for untilted flat panels). Sloped
+  // roofs are flush — pose comes from the roof — and are untouched below.
+  if (!isSloped(roof) && panel.tiltDeg > 0) {
+    const { w, h } = panelFootprintM(spec, panel.orientation);
+    const cosT = Math.cos((panel.tiltDeg * Math.PI) / 180);
+    return rectCorners(panel.center, w, h * cosT, -panel.azimuthDeg);
+  }
   const angle = roofGridAngle(roof);
   const { ax, ay } = planCellM(spec, panel.orientation, roof);
   const local = [
@@ -512,13 +588,21 @@ export function snapPanelCenter(
   center: XY,
   orientation: PanelOrientation,
 ): XY {
-  const angle = roofGridAngle(roof);
+  const existingOnRoof = project.panels.filter((p) => p.roofId === roof.id);
+  // the grid frame follows the pose the snapped panel will get: the current
+  // layout's pose when panels exist (align to them), else the roof default —
+  // the same frame autoFillRoof lays its lattice in (gridAngleFor)
+  const poseSrc = existingOnRoof[0] ?? defaultPanelPose(roof);
+  const angle = gridAngleFor(roof, {
+    tiltDeg: poseSrc.tiltDeg,
+    azimuthDeg: poseSrc.azimuthDeg,
+  });
   // same plan cell the fill stepped by, so hand-placed panels land on its grid
   const { ax, ay } = planCellM(spec, orientation, roof);
   const pitchX = ax + DEFAULT_FILL.gapM;
   const pitchY = ay + DEFAULT_FILL.gapM;
 
-  const existing = project.panels.filter((p) => p.roofId === roof.id);
+  const existing = existingOnRoof;
   let anchor: XY;
   if (existing.length > 0) {
     anchor = rotate(existing[0].center, -angle); // align to the current layout
@@ -551,19 +635,26 @@ export function panelFitsAt(
   center: XY,
   orientation: PanelOrientation,
   bridgeClearanceM?: number,
+  pose?: { tiltDeg: number; azimuthDeg: number },
 ): boolean {
   const insetRegions = insetPolygonRobust(
     roof.polygon,
     roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM),
   );
   if (insetRegions.length === 0) return false;
+  // the candidate carries the pose the placement will ACTUALLY assign (caller
+  // override for segment ops / moves; roof default for hand placement), so
+  // fits, fill and DRC all judge the same panelCornersOnRoof footprint. The
+  // old cand hardcoded azimuth 0 / tilt 0 — a grid-aligned cell that was not
+  // the plate DRC would later measure.
+  const candPose = pose ?? defaultPanelPose(roof);
   const cand: PlacedPanel = {
     id: '',
     roofId: roof.id,
     center,
     orientation,
-    azimuthDeg: 0,
-    tiltDeg: 0,
+    azimuthDeg: candPose.azimuthDeg,
+    tiltDeg: candPose.tiltDeg,
     solarAccess: 1,
     enabled: true,
   };
@@ -594,7 +685,11 @@ export function estimateMaxCapacityKwp(
     // walk-under array that legitimately spans a tank fitted MORE panels than
     // this "maximum" allowed — the UI then read "141.5 / 139.7 kWp", an
     // installed system larger than the roof's stated capacity.
-    count += fillRoofAsSegment(project, roof, spec)?.panels.length ?? 0;
+    // avoidPanels: [] — this measures the roof's RAW capacity; panels already
+    // placed must not subtract from the theoretical maximum.
+    count +=
+      fillRoofAsSegment(project, roof, spec, { ...DEFAULT_FILL, avoidPanels: [] })
+        ?.panels.length ?? 0;
   }
   // round UP to 0.1 kWp: guarantees floor(kwp·1000/watt) === count, so the
   // budgets in auto-design/comparison reproduce this measured max exactly

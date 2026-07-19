@@ -2,7 +2,16 @@
 // ONE pure function powers BOTH the hover ghost and the commit: the preview
 // renders `applyStructChoice(project, …)` without patching; clicking patches
 // the identical result. Preview === commit by construction — the §H gate.
-import type { PanelSpec, PlacedPanel, Project, ArraySegment, Roof, XY } from '../types';
+import type {
+  ArraySegment,
+  FoundationKind,
+  FoundationShape,
+  PanelSpec,
+  PlacedPanel,
+  Project,
+  Roof,
+  XY,
+} from '../types';
 import {
   setSegmentRacking,
   setSegmentStructureFields,
@@ -25,7 +34,11 @@ export type StructChoice =
   | { kind: 'preset'; preset: 'flush' | 'standard' | 'walkunder' | 'ground_pile' | 'ground_ballast' }
   | { kind: 'profile'; key: string }
   | { kind: 'tilt'; tiltDeg: number }
-  | { kind: 'clearance'; clearanceM: number };
+  | { kind: 'clearance'; clearanceM: number }
+  /** Phase 22l: what the legs stand on. Gated by surface — see foundationOptionsFor. */
+  | { kind: 'foundation'; foundation: FoundationKind }
+  /** Shuttering form for a CAST foundation — only meaningful for `concrete`. */
+  | { kind: 'foundationShape'; shape: FoundationShape };
 
 export interface StructPatch {
   segments: ArraySegment[];
@@ -118,6 +131,19 @@ export function applyStructChoice(
       const seg2 = setSegmentStructureFields(seg, {
         clearanceM: choice.clearanceM > 0 ? choice.clearanceM : undefined,
       });
+      return replace(project, seg2, project.panels);
+    }
+    case 'foundation': {
+      // A flush table has no legs, so nothing to found. The UI already hides
+      // the card in that case (foundationOptionsFor returns []); this is the
+      // model refusing independently rather than trusting the caller.
+      if (seg.racking.kind === 'flush') return null;
+      const seg2 = setSegmentStructureFields(seg, { foundation: choice.foundation });
+      return replace(project, seg2, project.panels);
+    }
+    case 'foundationShape': {
+      if (seg.racking.kind === 'flush') return null;
+      const seg2 = setSegmentStructureFields(seg, { foundationShape: choice.shape });
       return replace(project, seg2, project.panels);
     }
     }

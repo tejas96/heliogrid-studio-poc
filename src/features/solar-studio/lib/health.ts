@@ -22,7 +22,7 @@
 import { resolveDesignTemps } from './electrical/temps';
 import type { HealthSnapshotEntry, Project, ValidationIssue } from '../types';
 import { resolveRules } from '../data/rules/india';
-import { layoutIssues } from './drc';
+import { layoutIssues, structureIssues } from './drc';
 import { validateSystem } from './stringing';
 import { listAnalyzers, memoizedInsights } from './insights/registry';
 import { registerAllAnalyzers } from './insights/analyzers';
@@ -60,7 +60,17 @@ export interface HealthResult {
   context: string[];
 }
 
-/** validation code → category. dc_ac_* deliberately absent (see header). */
+/**
+ * Validation code → category.
+ *
+ * ⚠️ A code that appears in NEITHER this map nor EXCLUDED_VALIDATION scores
+ * ZERO — the loop below skips it before `unknownValidationPenalty` can apply.
+ * That silent gap left twelve codes unscored, including two hard errors
+ * (`unstrung_panels`, `panel_in_keepout`), which is how a design could show
+ * "Good 100" with errors open. `health-coverage.test.ts` now asserts every
+ * emitted code is listed in one place or the other, so the omission cannot
+ * recur quietly — adding a DRC code forces a deliberate decision here.
+ */
 export const VALIDATION_CATEGORY: Record<string, HealthCategoryKey> = {
   panel_overlap: 'utilization',
   setback_breach: 'utilization',
@@ -72,8 +82,37 @@ export const VALIDATION_CATEGORY: Record<string, HealthCategoryKey> = {
   panel_over_obstruction: 'utilization',
   bridge_clearance: 'utilization',
   bridge_engineer: 'utilization',
+  // ── were silently unscored until Phase 22 ────────────────────────────────
+  unstrung_panels: 'electrical',
+  panel_in_keepout: 'utilization',
+  isc_high: 'electrical',
+  mppt_capacity: 'electrical',
+  string_window_empty: 'electrical',
+  dc_voltage_drop: 'electrical',
+  group_too_small: 'electrical',
+  shade_mismatch: 'energy',
+  foundation_clash: 'utilization',
+  foundation_too_tall: 'utilization',
 };
-export const EXCLUDED_VALIDATION = new Set(['dc_ac_high', 'dc_ac_low']);
+
+/**
+ * Codes that must NOT move the score, each for a stated reason. Silence here is
+ * a decision, not an oversight.
+ *
+ *  · dc_ac_high / dc_ac_low — DC:AC ratio is a design CHOICE with a legitimate
+ *    range, not a fault (see header).
+ *  · temp_coeff_estimated — a data-provenance note about the panel datasheet,
+ *    not something wrong with the design.
+ *  · foundation_dead_load — we report the added mass but we do NOT check roof
+ *    capacity (§F). Deducting for it would assert a structural verdict we have
+ *    no basis for; the warning itself is the honest output.
+ */
+export const EXCLUDED_VALIDATION = new Set([
+  'dc_ac_high',
+  'dc_ac_low',
+  'temp_coeff_estimated',
+  'foundation_dead_load',
+]);
 
 /** Short human labels for deduction codes — the "What changed" panel persists
  *  only codes, so this map is the reader-facing name for every scored code. */
@@ -88,6 +127,17 @@ const CODE_LABEL: Record<string, string> = {
   panel_over_obstruction: 'Panels over a non-bridgeable obstruction',
   bridge_clearance: 'Bridging without enough clearance',
   bridge_engineer: 'Bridge flagged for engineer confirmation',
+  // ── newly scored in Phase 22 (previously silent) ──────────────────────────
+  unstrung_panels: 'Panels not wired into any string',
+  panel_in_keepout: 'Panels inside a no-build zone',
+  isc_high: 'String current above MPPT limit',
+  mppt_capacity: 'Not enough MPPT capacity',
+  string_window_empty: 'No legal string length for this array',
+  dc_voltage_drop: 'DC voltage drop above limit',
+  group_too_small: 'Panel group too small to string',
+  shade_mismatch: 'Mismatched shading within a string',
+  foundation_clash: 'Foundations land where they cannot be built',
+  foundation_too_tall: 'Foundation taller than its clearance',
 };
 const ANALYZER_LABEL: Record<string, string> = {
   'dc-ac-ratio': 'DC/AC ratio out of the 0.90–1.35 band',
@@ -143,6 +193,7 @@ export function computeHealth(project: Project): HealthResult {
   const issues: ValidationIssue[] = spec
     ? [
         ...layoutIssues(project, spec),
+        ...structureIssues(project, spec),
         ...validateSystem(
           project.strings,
           spec,
@@ -150,6 +201,11 @@ export function computeHealth(project: Project): HealthResult {
           project.components.inverterCount,
           enabled.length,
           resolveDesignTemps(project),
+          // WITHOUT this the unstrung-panels check never runs, so the score was
+          // structurally blind to an error the Step-6 banner was showing at the
+          // same moment — the chip could read "Good 100" beside a hard ERROR.
+          // Step6Editor has always passed it; health.ts silently did not.
+          enabled.map((p) => p.id),
         ),
       ]
     : [];

@@ -210,6 +210,23 @@ describe('autoDesign', () => {
     expect(silent.decisions.some((d) => d.id === 'sanctioned-load')).toBe(false);
   });
 
+  it('existing panels neither shrink the ranking nor block the replacement layout', () => {
+    // autoDesign's result REPLACES project.panels (Step6Editor patches
+    // panels: result.panels), so a re-run over an already-designed project
+    // must measure/produce exactly what a clean project would.
+    const p = twoRoofProject();
+    const spec = p.components.panel!;
+    const clean = autoDesign(p, 'max_roof');
+    expect(clean.panels.length).toBeGreaterThan(0);
+    const designed: Project = { ...p, panels: clean.panels, segments: clean.segments };
+    const cap = (r: ReturnType<typeof rankRoofs>) =>
+      r.map((x) => ({ roofId: x.roofId, capacityPanels: x.capacityPanels }));
+    expect(cap(rankRoofs(designed, spec))).toEqual(cap(rankRoofs(p, spec)));
+    const redesign = autoDesign(designed, 'max_roof');
+    expect(redesign.panels.length).toBe(clean.panels.length);
+    expect(redesign.achievedKwp).toBe(clean.achievedKwp);
+  });
+
   it('degrades gracefully without a panel selection', () => {
     const p = twoRoofProject();
     p.components = { ...p.components, panel: null };

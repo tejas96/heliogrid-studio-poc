@@ -75,7 +75,7 @@ import {
   panelFitsAt,
   snapPanelCenter,
 } from '../lib/layout';
-import { layoutIssues } from '../lib/drc';
+import { layoutIssues, structureIssues } from '../lib/drc';
 import {
   computeHeatmap,
   heatColor,
@@ -125,6 +125,7 @@ import { memoizedInsights } from '../lib/insights/registry';
 registerAllAnalyzers();
 import { movePanels, nudgeDelta } from '../lib/panel-move';
 import { Scene3D } from '../three/Scene3D';
+import { findEraseTargetAt } from './step6-erase';
 
 type Tool =
   | 'select'
@@ -150,7 +151,8 @@ const MUTATING_TOOLS: Tool[] = [
 
 const TOOL_HINTS: Record<Exclude<Tool, 'select' | 'walkway'>, string> = {
   panels: 'Click to add one panel · drag to fill an area (obstacles auto-avoided)',
-  erase: 'Click a panel to remove it',
+  erase:
+    'Click to erase a panel, walkway, safety rail, arrester, inverter or meter · hover highlights the target in red',
   rail: 'Drag along a roof edge to add a safety rail',
   arrester: 'Click to place a lightning arrester (2.0 m)',
   inverter: 'Click near a roof edge to mount the inverter',
@@ -321,6 +323,7 @@ export function Step6Editor() {
     () =>
       [
         ...layoutIssues(project, spec),
+        ...structureIssues(project, spec),
         ...routeIssues(project, spec),
         ...validateSystem(
           project.strings,
@@ -552,21 +555,24 @@ export function Step6Editor() {
     setSelectedIds(res.panels.map((p) => p.id));
   }
 
-  function growSelection(axis: GrowAxis, side: GrowSide, count: number) {
+  /**
+   * Grow the selected table. Returns false ONLY when there was no room to add
+   * panels — the context bar surfaces that as an inline flash next to the
+   * button that was pressed (lock/no-segment paths report through their own
+   * channels and return true so the bar stays quiet about them).
+   */
+  function growSelection(axis: GrowAxis, side: GrowSide, count: number): boolean {
     if (locked) {
       flashLock();
-      return;
+      return true;
     }
     const seg = growShape.segmentId
       ? project.segments.find((s) => s.id === growShape.segmentId)
       : undefined;
     const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
-    if (!seg || !roof) return;
+    if (!seg || !roof) return true;
     const res = growSegment(project, roof, spec, seg, axis, side, count);
-    if (res.added === 0) {
-      flash('info', 'No room to add there');
-      return;
-    }
+    if (res.added === 0) return false;
     const others = project.panels.filter((p) => p.segmentId !== seg.id);
     patch(
       {
@@ -577,6 +583,7 @@ export function Step6Editor() {
       true,
     );
     setSelectedIds(res.panels.map((p) => p.id));
+    return true;
   }
 
   // Live ghost for the grow popover: the exact panels a grow would add, so the
@@ -699,8 +706,48 @@ export function Step6Editor() {
     if (measure.handleClick(m)) return;
     switch (tool) {
       case 'erase': {
-        const hit = findPanelAt(m);
-        if (hit) patch(cascadeDeletePanels(project, [hit.id]), true);
+        // Hit-tests EVERYTHING the editor can place (panel first, then the
+        // point markers, then the strip annotations) — before this, walkways,
+        // rails, arresters, the inverter and the meter had NO deletion path.
+        // A miss does nothing on purpose (no toast spam); the hover highlight
+        // and the hint bar set the expectation. Each branch is ONE undoable
+        // patch.
+        const hit = findEraseTargetAt(project, m);
+        if (!hit) return;
+        switch (hit.kind) {
+          case 'panel':
+            // cascade: reindexes/drops affected tables and prunes strings
+            patch(cascadeDeletePanels(project, [hit.id]), true);
+            return;
+          case 'arrester':
+            patch(
+              { arresters: project.arresters.filter((a) => a.id !== hit.id) },
+              true,
+            );
+            return;
+          case 'inverter':
+            patch(
+              {
+                inverterPlacements: project.inverterPlacements.filter(
+                  (ip) => ip.id !== hit.id,
+                ),
+              },
+              true,
+            );
+            return;
+          case 'meter':
+            patch({ gridConnection: null }, true);
+            return;
+          case 'walkway':
+            patch(
+              { walkways: project.walkways.filter((w) => w.id !== hit.id) },
+              true,
+            );
+            return;
+          case 'rail':
+            patch({ rails: project.rails.filter((r) => r.id !== hit.id) }, true);
+            return;
+        }
         return;
       }
       case 'arrester': {
@@ -1416,8 +1463,8 @@ export function Step6Editor() {
         />
         <RailBtn
           icon={<Eraser />}
-          label="Erase panel"
-          tip={'Erase panel\nE'}
+          label="Erase"
+          tip={'Erase — panels, walkways, rails, arresters, inverter, meter\nE'}
           active={tool === 'erase'}
           pressed={tool === 'erase'}
           danger
@@ -2438,7 +2485,8 @@ function SelectionContextBar({
   panels: PlacedPanel[];
   locked: boolean;
   growShape: SelectionShape;
-  onGrow: (axis: GrowAxis, side: GrowSide, count: number) => void;
+  /** returns false when there was no room — surfaced as an inline flash */
+  onGrow: (axis: GrowAxis, side: GrowSide, count: number) => boolean;
   onGrowPreview: (axis: GrowAxis, side: GrowSide, count: number) => XY[][];
   onTableSettings: () => void;
   canGroup: boolean;
@@ -2454,19 +2502,68 @@ function SelectionContextBar({
   const [axis, setAxis] = useState<GrowAxis>('row');
   const [side, setSide] = useState<GrowSide>('bottom');
   const [count, setCount] = useState(1);
-  const canGrow = growShape.kind !== 'other' && !locked;
+  // brief inline failure flash next to the grow controls ("No room…")
+  const [growMsg, setGrowMsg] = useState<string | null>(null);
+  const growMsgTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(growMsgTimer.current), []);
+  const hasSegment = growShape.kind !== 'other';
+  const canGrow = hasSegment && !locked;
+  // Which side (if any) still has room, per axis — drives the disabled state
+  // so "+ Row" / "+ Col" never invite a click that can only fail.
+  const growRoom = useMemo<{ row: GrowSide | null; col: GrowSide | null }>(() => {
+    if (!canGrow) return { row: null, col: null };
+    const row: GrowSide | null =
+      onGrowPreview('row', 'bottom', 1).length > 0
+        ? 'bottom'
+        : onGrowPreview('row', 'top', 1).length > 0
+          ? 'top'
+          : null;
+    const col: GrowSide | null =
+      onGrowPreview('column', 'right', 1).length > 0
+        ? 'right'
+        : onGrowPreview('column', 'left', 1).length > 0
+          ? 'left'
+          : null;
+    return { row, col };
+  }, [canGrow, onGrowPreview]);
   const growGhost = useMemo(
     () => (growOpen && canGrow ? onGrowPreview(axis, side, count) : []),
     [growOpen, canGrow, axis, side, count, onGrowPreview],
   );
   if (panels.length === 0) return null;
+
+  function flashGrow(msg: string) {
+    window.clearTimeout(growMsgTimer.current);
+    setGrowMsg(msg);
+    growMsgTimer.current = window.setTimeout(() => setGrowMsg(null), 2000);
+  }
+  /** One-click grow: adds a single row/column on the side that has room. */
+  function quickGrow(growAxis: GrowAxis, growSide: GrowSide | null) {
+    const ok = onGrow(
+      growAxis,
+      growSide ?? (growAxis === 'row' ? 'bottom' : 'right'),
+      1,
+    );
+    if (!ok)
+      flashGrow(growAxis === 'row' ? 'No room for a row' : 'No room for a column');
+  }
+  const growDisabledReason = locked
+    ? 'Layout is locked'
+    : !hasSegment
+      ? 'Select a table (grouped panels) to grow'
+      : null;
+
+  const allEnabled = panels.every((p) => p.enabled);
+  const azSet = [...new Set(panels.map((p) => p.azimuthDeg))];
+  const azLabel = azSet.length === 1 ? `${azSet[0]}°` : 'mixed';
+  const dim = locked ? { opacity: 0.4 } : undefined;
   const c = frame.toPx({
     x: panels.reduce((s, p) => s + p.center.x, 0) / panels.length,
     y: panels.reduce((s, p) => s + p.center.y, 0) / panels.length,
   });
   const stop = (e: { stopPropagation(): void }) => e.stopPropagation();
-  const W = 340;
-  const H = 104;
+  const W = 700;
+  const H = 130;
   return (
     <>
       {/* live grow ghost — where the new rows/columns will land, before Apply */}
@@ -2500,137 +2597,184 @@ function SelectionContextBar({
           }}
         >
           <div
-            className="context-bar"
+            className="context-bar labelled"
             style={{ position: 'static' }}
             role="toolbar"
             aria-label="Panel selection actions"
           >
-            <span
-              style={{
-                fontSize: 11,
-                fontWeight: 800,
-                color: 'var(--editor-ink-2)',
-                padding: '0 7px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {panels.length}
+            <span className="ctx-count">
+              {panels.length} panel{panels.length === 1 ? '' : 's'}
             </span>
             {canGroup && (
-              <button
-                className="tool-btn"
-                data-tip="Group into a table"
-                aria-label="Group selected panels into a table"
-                onClick={onGroup}
-              >
-                <Grid3x3 />
-              </button>
+              <>
+                <span className="sep" />
+                <button
+                  className="ctx-btn"
+                  title="Combine the loose panels into one parametric table"
+                  aria-label="Group selected panels into a table"
+                  onClick={onGroup}
+                >
+                  <Grid3x3 />
+                  Group
+                </button>
+              </>
             )}
-            {canGrow && (
-              <button
-                className="tool-btn"
-                data-tip="Add rows / columns"
-                aria-label="Add rows or columns"
-                style={growOpen ? { color: 'var(--accent, #22c55e)' } : undefined}
-                onClick={() => {
-                  setAxis(growShape.kind === 'column' ? 'column' : 'row');
-                  setSide(growShape.kind === 'column' ? 'right' : 'bottom');
-                  setCount(1);
-                  setGrowOpen((o) => !o);
-                }}
-              >
-                <Plus />
-              </button>
-            )}
-            {canGrow && (
-              <button
-                className="tool-btn"
-                data-tip="Table settings (racking, tilt, azimuth)"
-                aria-label="Table settings"
-                onClick={onTableSettings}
-              >
-                <Settings2 />
-              </button>
-            )}
+            <span className="sep" />
+            <span className="ctx-label" aria-hidden>
+              Grow
+            </span>
             <button
-              className="tool-btn"
-              data-tip="Enable / disable"
-              aria-label="Enable or disable panels"
-              aria-disabled={locked || undefined}
-              style={locked ? { opacity: 0.4 } : undefined}
-              onClick={onToggleEnable}
+              className="ctx-btn"
+              disabled={!canGrow || !growRoom.row}
+              title={
+                growDisabledReason ??
+                (growRoom.row
+                  ? `Add one row of panels (${growRoom.row})`
+                  : 'No room for another row on this roof')
+              }
+              aria-label="Add one row to the table"
+              onClick={() => quickGrow('row', growRoom.row)}
             >
-              <Power />
+              <Plus />
+              Row
             </button>
             <button
-              className="tool-btn"
-              data-tip="Rotate azimuth −15°"
-              aria-label="Rotate azimuth minus 15 degrees"
+              className="ctx-btn"
+              disabled={!canGrow || !growRoom.col}
+              title={
+                growDisabledReason ??
+                (growRoom.col
+                  ? `Add one column of panels (${growRoom.col})`
+                  : 'No room for another column on this roof')
+              }
+              aria-label="Add one column to the table"
+              onClick={() => quickGrow('column', growRoom.col)}
+            >
+              <Plus />
+              Col
+            </button>
+            <button
+              className="ctx-btn"
+              disabled={!canGrow}
+              title={
+                growDisabledReason ??
+                'More grow options — pick side and count, with a live preview'
+              }
+              aria-label="More grow options: side and count"
+              aria-expanded={growOpen}
+              style={growOpen ? { color: 'var(--accent, #22c55e)' } : undefined}
+              onClick={() => {
+                setAxis(growShape.kind === 'column' ? 'column' : 'row');
+                setSide(growShape.kind === 'column' ? 'right' : 'bottom');
+                setCount(1);
+                setGrowOpen((o) => !o);
+              }}
+            >
+              …
+            </button>
+            {growMsg && (
+              <span className="ctx-flash" role="status" aria-live="polite">
+                {growMsg}
+              </span>
+            )}
+            <span className="sep" />
+            <span className="ctx-label" aria-hidden>
+              Rotate
+            </span>
+            <button
+              className="ctx-btn"
+              title="Rotate azimuth 90° counter-clockwise"
+              aria-label="Rotate azimuth 90 degrees counter-clockwise"
               aria-disabled={locked || undefined}
-              style={locked ? { opacity: 0.4 } : undefined}
-              onClick={() => onRotate(-15)}
+              style={dim}
+              onClick={() => onRotate(-90)}
             >
               <RotateCcw />
             </button>
+            <span className="ctx-val" title="Azimuth — the direction the panels face">
+              {azLabel}
+            </span>
             <button
-              className="tool-btn"
-              data-tip="Rotate azimuth +15°"
-              aria-label="Rotate azimuth plus 15 degrees"
+              className="ctx-btn"
+              title="Rotate azimuth 90° clockwise"
+              aria-label="Rotate azimuth 90 degrees clockwise"
               aria-disabled={locked || undefined}
-              style={locked ? { opacity: 0.4 } : undefined}
-              onClick={() => onRotate(15)}
+              style={dim}
+              onClick={() => onRotate(90)}
             >
               <RotateCw />
             </button>
             <span className="sep" />
+            <span className="ctx-label" aria-hidden>
+              Tilt
+            </span>
             <button
-              className="tool-btn"
-              data-tip="Tilt −5° (affects yield)"
+              className="ctx-btn"
+              title="Tilt −5° (affects yield)"
               aria-label="Decrease tilt by 5 degrees"
               aria-disabled={locked || undefined}
-              style={locked ? { opacity: 0.4 } : undefined}
+              style={dim}
               onClick={() => onTilt(-5)}
             >
               <ChevronsDown />
             </button>
-            <span
-              style={{
-                fontSize: 10.5,
-                fontWeight: 800,
-                color: 'var(--editor-ink-2)',
-                padding: '0 2px',
-                whiteSpace: 'nowrap',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-              title="Panel tilt (min of selection)"
-            >
+            <span className="ctx-val" title="Panel tilt (min of selection)">
               {Math.min(...panels.map((p) => p.tiltDeg))}°
             </span>
             <button
-              className="tool-btn"
-              data-tip="Tilt +5° (affects yield)"
+              className="ctx-btn"
+              title="Tilt +5° (affects yield)"
               aria-label="Increase tilt by 5 degrees"
               aria-disabled={locked || undefined}
-              style={locked ? { opacity: 0.4 } : undefined}
+              style={dim}
               onClick={() => onTilt(5)}
             >
               <ChevronsUp />
             </button>
             <span className="sep" />
+            {hasSegment && (
+              <button
+                className="ctx-btn"
+                title="Table settings — racking, tilt, azimuth, structure"
+                aria-label="Table settings"
+                onClick={onTableSettings}
+              >
+                <Settings2 />
+                Table…
+              </button>
+            )}
             <button
-              className="tool-btn"
-              data-tip={'Delete panels\nDel'}
+              className="ctx-btn"
+              title={
+                allEnabled
+                  ? 'Disable — panels stay placed but produce nothing'
+                  : 'Enable the selected panels'
+              }
+              aria-label={
+                allEnabled ? 'Disable selected panels' : 'Enable selected panels'
+              }
+              aria-disabled={locked || undefined}
+              style={dim}
+              onClick={onToggleEnable}
+            >
+              <Power />
+              {allEnabled ? 'Disable' : 'Enable'}
+            </button>
+            <button
+              className="ctx-btn danger"
+              title="Delete selected panels (Del)"
               aria-label="Delete selected panels"
               aria-disabled={locked || undefined}
-              style={locked ? { opacity: 0.4 } : undefined}
+              style={dim}
               onClick={onDelete}
             >
               <Trash2 />
+              Delete
             </button>
             <span className="sep" />
             <button
-              className="tool-btn"
-              data-tip={'Clear selection\nEsc'}
+              className="ctx-btn"
+              title="Clear selection (Esc)"
               aria-label="Clear selection"
               onClick={onClear}
             >
@@ -2706,8 +2850,10 @@ function SelectionContextBar({
                 className="btn btn-primary"
                 style={{ minHeight: 30, fontSize: 12, fontWeight: 700 }}
                 onClick={() => {
-                  onGrow(axis, side, count);
-                  setGrowOpen(false);
+                  // the ghost already shows what will land; a failed add still
+                  // says so inline instead of closing silently
+                  if (onGrow(axis, side, count)) setGrowOpen(false);
+                  else flashGrow(`No room to add a ${axis} there`);
                 }}
               >
                 Add {count} {axis}
@@ -2812,16 +2958,13 @@ function EditorLayers({
     };
   }, [tool, hoverPoint, dragLine, project, spec]);
 
-  // Erase preview: outline the panel the cursor is about to remove.
-  const eraseGhost = useMemo(() => {
+  // Erase preview: highlight WHATEVER the eraser is over — the SAME resolver
+  // the click uses, so what lights up red is exactly what a click removes
+  // (panel, walkway, rail, arrester, inverter or meter).
+  const eraseTarget = useMemo(() => {
     if (tool !== 'erase' || !hoverPoint) return null;
-    const hit = project.panels.find(
-      (p) => Math.hypot(hoverPoint.x - p.center.x, hoverPoint.y - p.center.y) < 1.3,
-    );
-    if (!hit) return null;
-    const roof = project.roofs.find((r) => r.id === hit.roofId);
-    return panelCornersOnRoof(hit, spec, roof);
-  }, [tool, hoverPoint, project, spec]);
+    return findEraseTargetAt(project, hoverPoint);
+  }, [tool, hoverPoint, project]);
 
   // Inverter preview: snap a ghost marker to the nearest wall edge (< 4 m).
   const inverterGhost = useMemo(() => {
@@ -3226,15 +3369,74 @@ function EditorLayers({
           );
         })()}
 
-      {/* erase preview — outline the panel about to be removed */}
-      {eraseGhost && (
-        <path
-          d={polyPath(frame, eraseGhost)}
-          fill="rgba(239,68,68,0.35)"
-          stroke="#ef4444"
-          strokeWidth={1.6}
-        />
-      )}
+      {/* erase preview — red highlight on whatever a click would remove */}
+      {eraseTarget &&
+        (() => {
+          const RED = '#ef4444';
+          switch (eraseTarget.kind) {
+            case 'panel': {
+              const p = byId.get(eraseTarget.id);
+              if (!p) return null;
+              const roof = project.roofs.find((r) => r.id === p.roofId);
+              return (
+                <path
+                  d={polyPath(frame, panelCornersOnRoof(p, spec, roof))}
+                  fill="rgba(239,68,68,0.35)"
+                  stroke={RED}
+                  strokeWidth={1.6}
+                />
+              );
+            }
+            case 'walkway': {
+              const w = project.walkways.find((x) => x.id === eraseTarget.id);
+              if (!w) return null;
+              return (
+                <line
+                  x1={frame.toPx(w.a).x}
+                  y1={frame.toPx(w.a).y}
+                  x2={frame.toPx(w.b).x}
+                  y2={frame.toPx(w.b).y}
+                  stroke={RED}
+                  strokeWidth={(w.widthMm / 1000) * pxPerM}
+                  strokeLinecap="round"
+                  opacity={0.6}
+                />
+              );
+            }
+            case 'rail': {
+              const r = project.rails.find((x) => x.id === eraseTarget.id);
+              if (!r) return null;
+              return (
+                <line
+                  x1={frame.toPx(r.a).x}
+                  y1={frame.toPx(r.a).y}
+                  x2={frame.toPx(r.b).x}
+                  y2={frame.toPx(r.b).y}
+                  stroke={RED}
+                  strokeWidth={5}
+                  strokeLinecap="round"
+                  opacity={0.7}
+                />
+              );
+            }
+            case 'arrester':
+            case 'inverter':
+            case 'meter': {
+              // ring around the point marker, constant screen size across zoom
+              const q = frame.toPx(eraseTarget.pos);
+              return (
+                <g transform={`translate(${q.x}, ${q.y}) scale(${1 / frame.zoom})`}>
+                  <circle
+                    r={15}
+                    fill="rgba(239,68,68,0.28)"
+                    stroke={RED}
+                    strokeWidth={2}
+                  />
+                </g>
+              );
+            }
+          }
+        })()}
 
       {/* arrester / inverter placement ghosts (constant screen size) */}
       {arresterGhost && (

@@ -1,3 +1,5 @@
+import type { FoundationShape } from '../../types';
+
 // ─── Engineering & commercial rule config — India market ────────────────────
 // Seed of the configurable rule engine (§8.10): every hardcoded market/standard
 // constant moves here so later phases can resolve rules per-project instead of
@@ -234,6 +236,45 @@ export interface FinancingRules {
   ppaTenureYears: number;
 }
 
+/**
+ * Nominal foundation geometry, per `FoundationKind` (Phase 22a).
+ *
+ * ⚠️ EVERY DIMENSION HERE IS **ASSUMED**, and must stay labelled that way in
+ * any output. A pedestal's real size depends on wind uplift and overturning,
+ * which this app explicitly does not calculate (§F structural-safety boundary).
+ * These are conventional Indian rooftop values that give a buildable, sane
+ * model — they are NOT a design.
+ *
+ * They matter numerically because concrete volume and the added dead-load
+ * warning both derive from them, and the volume rule differs by shape:
+ *   square    V = l × w × h
+ *   circular  V = π (d/2)² h
+ */
+export interface FoundationGeometryRule {
+  shape: FoundationShape;
+  /** plan size, mm — `l`/`w` for square, `d` (diameter) for circular */
+  l?: number;
+  w?: number;
+  d?: number;
+  /** height above the deck, mm. Consumes part of frontLegM (plan D15). */
+  heightMm: number;
+  /** base plate, mm */
+  plateMm: number;
+  plateThkMm: number;
+  /** embedment below grade, mm — piles only */
+  embedMm?: number;
+}
+
+export interface FoundationRules {
+  concreteDensityKgM3: number;
+  /** shortest steel leg we will allow above a foundation, m (plan D15) */
+  minLegAboveFoundationM: number;
+  pedestal: FoundationGeometryRule;
+  anchor: FoundationGeometryRule;
+  ballast: FoundationGeometryRule;
+  pile: FoundationGeometryRule;
+}
+
 export interface MarketRules {
   market: 'india';
   temps: TempRules;
@@ -246,6 +287,7 @@ export interface MarketRules {
   wind: WindRules;
   combiner: CombinerRules;
   financing: FinancingRules;
+  foundations: FoundationRules;
   defaults: DefaultRules;
 }
 
@@ -316,6 +358,20 @@ export const INDIA_RULES: MarketRules = {
       panel_over_obstruction: 30,
       bridge_clearance: 25,
       bridge_engineer: 8,
+      // ── previously unscored (Phase 22) ─────────────────────────────────
+      // Panels that exist but generate nothing, and panels placed where they
+      // may not be, are as serious as an overlap — they were costing 0.
+      unstrung_panels: 30,
+      panel_in_keepout: 30,
+      isc_high: 35,
+      mppt_capacity: 30,
+      string_window_empty: 25,
+      dc_voltage_drop: 12,
+      group_too_small: 8,
+      shade_mismatch: 12,
+      // a footing in a walkway / obstruction is a build blocker
+      foundation_clash: 25,
+      foundation_too_tall: 20,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },
@@ -348,6 +404,20 @@ export const INDIA_RULES: MarketRules = {
     leaseTenureYears: 10,
     ppaDiscountPct: 20,
     ppaTenureYears: 15,
+  },
+  // ALL ASSUMED — see FoundationRules. Sizes are conventional, not calculated.
+  foundations: {
+    concreteDensityKgM3: 2400,
+    minLegAboveFoundationM: 0.05,
+    // cast PCC pedestal: the rooftop default. 300 × 300 × 150 ≈ 32 kg each,
+    // which is why 30 legs is ~1 tonne and needs the dead-load warning.
+    pedestal: { shape: 'square', l: 300, w: 300, heightMm: 150, plateMm: 160, plateThkMm: 10 },
+    // chemical anchor: plate straight onto the slab, nothing cast
+    anchor: { shape: 'square', l: 160, w: 160, heightMm: 0, plateMm: 160, plateThkMm: 8 },
+    // precast ballast block — no roof penetration. Count only, never a mass.
+    ballast: { shape: 'square', l: 400, w: 300, heightMm: 110, plateMm: 160, plateThkMm: 10 },
+    // driven/rammed galvanised post — ground arrays
+    pile: { shape: 'circular', d: 90, heightMm: 150, plateMm: 140, plateThkMm: 10, embedMm: 1200 },
   },
   defaults: {
     roofSetbackM: 0.3,

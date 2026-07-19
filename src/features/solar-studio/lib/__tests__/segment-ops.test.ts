@@ -46,10 +46,13 @@ function projectWith(panels: PlacedPanel[], segments: unknown[] = []): Project {
   return { roofs: [R], obstructions: [], walkways: [], keepouts: [], panels, segments } as unknown as Project;
 }
 
-/** Fill a small sub-area so there's headroom to grow. */
+/** Fill a small sub-area so there's headroom to grow.
+ *  The area-limit box CLIPS the roof-anchored lattice (it no longer gets its
+ *  own box-anchored grid), so the box must span ≥2 lattice rows and columns —
+ *  5×8 m at this position yields a 3×4 table on the 24×20 fixture roof. */
 function seed() {
   const base = projectWith([]);
-  const filled = fillRoofAsSegment(base, R, SPEC, { orientation: 'portrait', gapM: 0.05, grouped: true }, rect(-6, -4, 5, 5))!;
+  const filled = fillRoofAsSegment(base, R, SPEC, { orientation: 'portrait', gapM: 0.05, grouped: true }, rect(-6, -4, 5, 8))!;
   return { segment: filled.segment, panels: filled.panels, project: projectWith(filled.panels, [filled.segment]) };
 }
 
@@ -153,7 +156,9 @@ describe('groupIntoTable', () => {
 });
 
 describe('per-table properties', () => {
-  const table = () => groupIntoTable(R, SPEC, autoFillRoof(projectWith([]), R, SPEC, { orientation: 'portrait', gapM: 0.05, grouped: true }, rect(-6, -4, 5, 5)), 'A1');
+  // 5×8 m box ⇒ 3×4 table on the roof-anchored lattice (a drag box now CLIPS
+  // the roof's own grid instead of getting a box-anchored one)
+  const table = () => groupIntoTable(R, SPEC, autoFillRoof(projectWith([]), R, SPEC, { orientation: 'portrait', gapM: 0.05, grouped: true }, rect(-6, -4, 5, 8)), 'A1');
 
   it('setSegmentRacking flush lays panels flat; elevated tilts them', () => {
     const { segment, panels } = table();
@@ -203,7 +208,9 @@ describe('per-table properties', () => {
 });
 
 describe('reindexAll (delete + prune)', () => {
-  const table = () => groupIntoTable(R, SPEC, autoFillRoof(projectWith([]), R, SPEC, { orientation: 'portrait', gapM: 0.05, grouped: true }, rect(-6, -4, 5, 5)), 'A1');
+  // 5×8 m box ⇒ 3×4 table on the roof-anchored lattice (a drag box now CLIPS
+  // the roof's own grid instead of getting a box-anchored one)
+  const table = () => groupIntoTable(R, SPEC, autoFillRoof(projectWith([]), R, SPEC, { orientation: 'portrait', gapM: 0.05, grouped: true }, rect(-6, -4, 5, 8)), 'A1');
 
   it('shrinks the grid when an edge row is deleted', () => {
     const { segment, panels } = table();

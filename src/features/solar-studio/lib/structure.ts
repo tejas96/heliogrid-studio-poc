@@ -13,6 +13,7 @@
 // uplift calculation exists or is claimed. See STRUCTURE_DISCLAIMER.
 import type {
   FoundationKind,
+  FoundationShape,
   ArraySegment,
   PanelSpec,
   PlacedPanel,
@@ -22,6 +23,7 @@ import type {
 } from '../types';
 import { COL_STRIDE, panelFootprintM } from './layout';
 import { resolveRules } from '../data/rules/india';
+import { ruleFor } from './foundation';
 
 /**
  * Vertical offset from the member AXIS plane (leg tops = rafter/purlin
@@ -73,7 +75,20 @@ const DEFAULT_LEG_SPACING_M = 2.0;
 // is no slab — so it founds into the earth on a driven pile by default. This
 // is a DEFAULT only: `foundation` stays a lazy field, so nothing is written to
 // existing projects and no fingerprint (or capture) changes.
-const DEFAULT_FOUNDATION = 'anchor' as const;
+// D12: a rooftop table founds on a CAST PCC PEDESTAL by default, not a bare
+// plate chemically anchored through the slab. Three reasons, in order of how
+// often they decide it on a real job:
+//   · waterproofing — anchoring penetrates the membrane, and many building
+//     owners (and almost every leased roof) simply refuse that;
+//   · ponding — a pedestal lifts the plate and its bolts clear of standing
+//     water through monsoon;
+//   · cost — cheaper per leg at scale than cartridges + bolts.
+// It is also what the reference tools model, and it is why the base looked
+// empty before: `anchor` has nothing to draw.
+//
+// ⚠️ This ADDS DEAD LOAD to the slab (~32 kg per leg) and we do NOT check roof
+// capacity (§F). buildStructure reports the total so the DRC can warn.
+const DEFAULT_FOUNDATION = 'concrete' as const;
 const DEFAULT_GROUND_FOUNDATION = 'pile' as const;
 
 export interface ResolvedRacking {
@@ -87,6 +102,8 @@ export interface ResolvedRacking {
   profile: StructureProfile;
   legSpacingM: number;
   foundation: FoundationKind;
+  /** shuttering form for a cast foundation — see FoundationShape */
+  foundationShape: FoundationShape;
 }
 
 /**
@@ -111,6 +128,11 @@ export function resolveRacking(
   const frontLegM = Math.max(r.frontLegM, clearance);
   const { h } = panelFootprintM(spec, seg.orientation);
   const rise = h * Math.sin((r.tiltDeg * Math.PI) / 180);
+  const foundation =
+    r.foundation ??
+    roofO?.foundation ??
+    projD?.foundation ??
+    (roof.roofType === 'ground' ? DEFAULT_GROUND_FOUNDATION : DEFAULT_FOUNDATION);
   return {
     kind: r.kind,
     tiltDeg: r.tiltDeg,
@@ -118,11 +140,14 @@ export function resolveRacking(
     backLegM: frontLegM + rise,
     profile: r.profile,
     legSpacingM: r.legSpacingM ?? roofO?.legSpacingM ?? projD?.legSpacingM ?? DEFAULT_LEG_SPACING_M,
-    foundation:
-      r.foundation ??
-      roofO?.foundation ??
-      projD?.foundation ??
-      (roof.roofType === 'ground' ? DEFAULT_GROUND_FOUNDATION : DEFAULT_FOUNDATION),
+    foundation,
+    // same lazy chain; absent falls through to whatever the rule config says
+    // this kind is normally formed as, so untouched projects are unchanged
+    foundationShape:
+      r.foundationShape ??
+      roofO?.foundationShape ??
+      projD?.foundationShape ??
+      ruleFor(foundation).shape,
   };
 }
 
@@ -173,6 +198,11 @@ export interface SegmentStructure {
   segmentId: string;
   members: Member[];
   nodes: StructureNode[];
+  /** the resolved foundation this table stands on — stamped here so the
+   *  renderer, the DRC and the BOM all read ONE answer (§A0) rather than each
+   *  re-deriving it from fastenerSpec and drifting */
+  foundation: FoundationKind;
+  foundationShape: FoundationShape;
   steelKg: number;
   /** total member metres per kind — the BOM formula breakdown */
   memberSummary: Record<MemberKind, { count: number; totalM: number }>;
@@ -215,6 +245,10 @@ export function buildStructure(
   // north = +y in the local EN frame, so azimuth 0=N ⇒ (0,1), 180=S ⇒ (0,-1)
   const down = { x: Math.sin(azRad), y: Math.cos(azRad) };
   const dz = roof.heightM;
+  // height the foundation occupies above the deck (D15 — see the leg emission
+  // below). `anchor`, the historical default, is 0, so this is a no-op until a
+  // project selects a pedestal or ballast block.
+  const foundH = ruleFor(racking.foundation).heightMm / 1000;
 
   // group by grid row, then split each row into contiguous runs (hole-gated)
   const byRow = new Map<number, PlacedPanel[]>();
@@ -287,14 +321,30 @@ export function buildStructure(
         const fy = frontMid.y + along.y * t;
         const bx = backMid.x + along.x * t;
         const by = backMid.y + along.y * t;
+        // ── D15: the foundation CONSUMES clearance, it does not add to it ────
+        // `frontLegM` measures roof surface → module underside. A pedestal
+        // occupies the bottom of that dimension, so the steel leg starts on top
+        // of it and is correspondingly shorter:
+        //
+        //   module underside ── frontLegM ──┐
+        //                                   │  steel leg = frontLegM − foundH
+        //   foundation top   ───────────────┤
+        //                                   │  foundation = foundH
+        //   roof surface     ───────────────┘
+        //
+        // Chosen so switching foundation kind NEVER moves the module plane —
+        // the alternative silently changes shading, energy and every stored
+        // capture — and so "Walk-under 2.2 m" keeps meaning 2.2 m of clearance.
+        // `anchor` (height 0) is a no-op, which is why this is invisible until
+        // a project actually selects a pedestal or ballast block.
         const frontLeg = addMember(
           'front_leg',
-          { x: fx, y: fy, z: dz },
+          { x: fx, y: fy, z: dz + foundH },
           { x: fx, y: fy, z: dz + racking.frontLegM },
         );
         const backLeg = addMember(
           'back_leg',
-          { x: bx, y: by, z: dz },
+          { x: bx, y: by, z: dz + foundH },
           { x: bx, y: by, z: dz + racking.backLegM },
         );
         const rafter = addMember('rafter', frontLeg.b, backLeg.b);
@@ -374,7 +424,16 @@ export function buildStructure(
   }
   const steelKg = rnd(members.reduce((s, m) => s + m.lengthM * racking.profile.kgPerM, 0));
 
-  return { segmentId: seg.id, members, nodes, steelKg, memberSummary, warnings };
+  return {
+    segmentId: seg.id,
+    members,
+    nodes,
+    foundation: racking.foundation,
+    foundationShape: racking.foundationShape,
+    steelKg,
+    memberSummary,
+    warnings,
+  };
 }
 
 function anchorSpec(r: ResolvedRacking): StructureNode['fastenerSpec'] {

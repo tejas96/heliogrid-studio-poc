@@ -3,6 +3,28 @@ import { PRICE_BOOK } from '../../../data/pricebook';
 import { STRUCTURE_DISCLAIMER } from '../../structure';
 import type { BomContext, SlopedCovering } from '../context';
 import { line, soleSource } from '../line';
+import { foundationDeadLoadKg, foundationVolumeM3, ruleFor } from '../../foundation';
+
+/**
+ * Pedestal count split by the surface it is cast on. Casting on a slab and
+ * casting in the ground are different scopes of work, so they cannot share a
+ * line — see the call site.
+ */
+function pedestalsBySurface(ctx: BomContext): [('roof' | 'ground'), number][] {
+  const groundRoofIds = new Set(ctx.groundRoofIdList);
+  let roof = 0;
+  let ground = 0;
+  for (const st of ctx.structures) {
+    const seg = ctx.project.segments.find((s) => s.id === st.segmentId);
+    const pedestals = st.nodes.reduce((n, nd) => n + (nd.fastenerSpec.pedestals ?? 0), 0);
+    if (seg && groundRoofIds.has(seg.roofId)) ground += pedestals;
+    else roof += pedestals;
+  }
+  return [
+    ['roof', roof],
+    ['ground', ground],
+  ];
+}
 
 /**
  * Flush-mount hardware per covering. This table is the whole point of making
@@ -187,20 +209,52 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         }),
       );
     if (ft.pedestals > 0)
-      out.push(
-        line({
-          key: 'mech.pedestal',
-          category: 'Mechanical BOS',
-          item: 'Ground Foundation — Concrete Pedestal',
-          spec: 'cast-in-situ, incl. excavation + backfill',
-          qty: ft.pedestals,
-          unit: 'nos',
-          unitPriceInr: PRICE_BOOK.concretePedestal,
-          formula: `1 pedestal per leg base from the node graph. Volume and reinforcement are SOIL- and wind-dependent — engineer design required. ${STRUCTURE_DISCLAIMER}`,
-          confidence: 'assumed',
-          ...fastenerSource,
-        }),
-      );
+      // A pedestal on a SLAB and a pedestal in the GROUND are different work:
+      // one is cast on the deck with shuttering, the other needs excavation and
+      // backfill. This line used to say "Ground Foundation … incl. excavation"
+      // unconditionally, which was harmless only while `concrete` was a
+      // ground-only option. Making it the rooftop default (D12) exposed it —
+      // a rooftop quote was describing excavating a roof slab.
+      for (const [surface, count] of pedestalsBySurface(ctx)) {
+        if (count <= 0) continue;
+        const onGround = surface === 'ground';
+        // the shape the tables actually resolved to — square and circular
+        // differ by π/4, so quoting the wrong one under-buys concrete
+        const shape = ctx.structures.find((st) => st.foundation === 'concrete')?.foundationShape;
+        const r = ruleFor('concrete', shape);
+        const each = foundationVolumeM3(r);
+        const size =
+          r.shape === 'circular' ? `Ø${r.d} × ${r.heightMm} mm` : `${r.l} × ${r.w} × ${r.heightMm} mm`;
+        out.push(
+          line({
+            key: 'mech.pedestal',
+            instance: surface,
+            category: 'Mechanical BOS',
+            item: onGround
+              ? 'Ground Foundation — Concrete Pedestal'
+              : 'PCC Pedestal (rooftop MMS)',
+            spec: onGround
+              ? `cast-in-situ ${size}, incl. excavation + backfill`
+              : `PCC ${size} cast on slab, incl. shuttering + curing`,
+            qty: count,
+            unit: 'nos',
+            unitPriceInr: PRICE_BOOK.concretePedestal,
+            // The size is ASSUMED — it follows from uplift and overturning,
+            // which we do not calculate (§F) — so the volume it implies is too.
+            formula:
+              `1 pedestal per leg base from the node graph. ` +
+              `Nominal ${size} ⇒ ${(each * count).toFixed(2)} m³ concrete total (ASSUMED size — ` +
+              `uplift and overturning are not calculated). ` +
+              (onGround
+                ? 'Volume and reinforcement are SOIL- and wind-dependent — engineer design required. '
+                : `Adds ~${Math.round(foundationDeadLoadKg('concrete', shape) * count)} kg dead load to the roof — ` +
+                  `roof capacity is NOT checked. `) +
+              STRUCTURE_DISCLAIMER,
+            confidence: 'assumed',
+            ...fastenerSource,
+          }),
+        );
+      }
     if (ft.bolts > 0)
       out.push(
         line({

@@ -12,7 +12,13 @@ import {
 } from './geo';
 import { panelCornersOnRoof } from './layout';
 import { requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
-import { resolveRacking } from './structure';
+import { projectStructures, resolveRacking } from './structure';
+import {
+  foundationDeadLoadKg,
+  foundationKindOfSpec,
+  foundationTooTall,
+  ruleFor,
+} from './foundation';
 
 /** Panels below this solar-access fraction are flagged as meaningfully shaded. */
 export const SHADE_ACCESS_MIN = 0.7;
@@ -186,5 +192,149 @@ export function layoutIssues(
       }
     }
   }
+  return issues;
+}
+
+// ─── Structure / foundation design-rule checks (Phase 22k) ──────────────────
+// Separate from layoutIssues because these are about what the table STANDS ON,
+// not where the modules sit. Spread alongside layoutIssues at both call sites
+// (Step6Editor's live banner and health.ts) so the findings reach the same
+// places every other issue does.
+
+/** Plan-view corner quad of an obstruction, WITHOUT any bridging exemption. */
+function obstructionQuad(o: Project['obstructions'][number]): XY[] {
+  if (o.shape === 'circle') {
+    const r = o.diameterM / 2;
+    return rectCorners(o.center, r * 2, r * 2, 0);
+  }
+  return rectCorners(o.center, o.lengthM, o.widthM, o.rotationDeg);
+}
+
+/** Plan-view corridor a walkway occupies. */
+function walkwayQuad(w: Project['walkways'][number]): XY[] {
+  const dx = w.b.x - w.a.x;
+  const dy = w.b.y - w.a.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-6) return [];
+  const mid = { x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 };
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return rectCorners(mid, len, w.widthMm / 1000, angle);
+}
+
+/**
+ * Foundation-level checks the panel DRC cannot make:
+ *
+ *  1. added DEAD LOAD — a cast pedestal is ~32 kg, so a 30-leg roof puts a
+ *     tonne of concrete on a slab whose capacity we do not check (§F). Adding
+ *     that silently is not acceptable, so it always warns when present.
+ *  2. a foundation landing in a KEEPOUT, WALKWAY or OBSTRUCTION. Note this
+ *     deliberately ignores the §26c bridging exemption: a panel may legally
+ *     span above a water tank, but a pedestal may not be cast inside one.
+ *  3. a foundation TALLER than the clearance it sits in, which leaves no
+ *     buildable steel leg. Flagged, never silently clamped.
+ */
+export function structureIssues(project: Project, spec: PanelSpec | null): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  if (!spec) return issues;
+
+  const structures = projectStructures(project);
+  if (structures.length === 0) return issues;
+
+  const segById = new Map(project.segments.map((s) => [s.id, s]));
+  const roofById = new Map(project.roofs.map((r) => [r.id, r]));
+
+  // ── 1. added dead load, per roof ──────────────────────────────────────────
+  const loadByRoof = new Map<string, number>();
+  for (const st of structures) {
+    const seg = segById.get(st.segmentId);
+    const roof = seg && roofById.get(seg.roofId);
+    if (!roof || roof.roofType === 'ground') continue; // no slab to overload
+    let kg = 0;
+    for (const n of st.nodes) {
+      if (n.kind !== 'roof_anchor') continue;
+      // shape matters: a circular pedestal is ~21% less concrete than a square
+      // one of the same nominal size, so the reported load must follow it
+      kg += foundationDeadLoadKg(foundationKindOfSpec(n.fastenerSpec), st.foundationShape);
+    }
+    if (kg > 0) loadByRoof.set(roof.id, (loadByRoof.get(roof.id) ?? 0) + kg);
+  }
+  for (const [roofId, kg] of loadByRoof) {
+    const roof = roofById.get(roofId);
+    issues.push({
+      level: 'warn',
+      code: 'foundation_dead_load',
+      message:
+        `Foundations add ~${Math.round(kg)} kg to ${roof?.name ?? 'the roof'} ` +
+        `(${(kg / 1000).toFixed(2)} t) — roof capacity is NOT checked. ` +
+        `Have a structural engineer confirm the slab can carry it.`,
+    });
+  }
+
+  // ── 2. foundations landing somewhere they cannot be built ─────────────────
+  const clashes: string[] = [];
+  for (const st of structures) {
+    const seg = segById.get(st.segmentId);
+    const roof = seg && roofById.get(seg.roofId);
+    if (!roof) continue;
+    const zones: [string, XY[]][] = [
+      ...project.keepouts
+        .filter((k) => k.roofId === roof.id && k.kind !== 'shade')
+        .map((k) => ['a no-build zone', k.shape] as [string, XY[]]),
+      ...project.walkways
+        .filter((w) => w.roofId === roof.id)
+        .map((w) => ['a walkway', walkwayQuad(w)] as [string, XY[]]),
+      ...project.obstructions
+        .filter((o) => o.roofId === roof.id)
+        .map((o) => [o.label || 'an obstruction', obstructionQuad(o)] as [string, XY[]]),
+    ].filter(([, poly]) => poly.length >= 3);
+    if (zones.length === 0) continue;
+
+    for (const n of st.nodes) {
+      if (n.kind !== 'roof_anchor') continue;
+      const kind = foundationKindOfSpec(n.fastenerSpec);
+      const r = ruleFor(kind);
+      // footprint of the foundation itself, not a point — a 300 mm pedestal
+      // clipping the edge of a walkway still blocks the walkway
+      const size = r.shape === 'circular' ? (r.d ?? 0) / 1000 : (r.l ?? 0) / 1000;
+      const quad = rectCorners({ x: n.position.x, y: n.position.y }, size, size, 0);
+      for (const [what, poly] of zones) {
+        if (rectIntersectsPolygon(quad, poly)) {
+          clashes.push(`${seg?.label ?? st.segmentId} → ${what}`);
+          break;
+        }
+      }
+    }
+  }
+  if (clashes.length > 0) {
+    const unique = [...new Set(clashes)];
+    issues.push({
+      level: 'error',
+      code: 'foundation_clash',
+      message:
+        `${clashes.length} foundation${clashes.length > 1 ? 's' : ''} land in ` +
+        `${unique.join(', ')} — move the legs or the obstruction. ` +
+        `(A panel may span above an obstruction; a footing cannot be cast in one.)`,
+    });
+  }
+
+  // ── 3. foundation taller than the clearance it sits in ────────────────────
+  for (const seg of project.segments) {
+    const roof = roofById.get(seg.roofId);
+    if (!roof) continue;
+    const racking = resolveRacking(project, roof, seg, spec);
+    if (!racking) continue;
+    if (foundationTooTall(racking.frontLegM, racking.foundation)) {
+      const foundH = ruleFor(racking.foundation).heightMm / 1000;
+      issues.push({
+        level: 'error',
+        code: 'foundation_too_tall',
+        message:
+          `${seg.label || 'A table'}: a ${(foundH * 1000).toFixed(0)} mm foundation leaves no ` +
+          `buildable steel leg inside ${(racking.frontLegM * 1000).toFixed(0)} mm of clearance. ` +
+          `Raise the clearance or choose a shallower foundation.`,
+      });
+    }
+  }
+
   return issues;
 }

@@ -3,6 +3,7 @@
 // estimates, flat ₹/panel structures). These are the rewrite contract.
 import { describe, expect, it } from 'vitest';
 import { bomConfidence, bomSubtotal, bomToCsv, bomTotal, deriveBom, mergedBom } from '../bom';
+import { PRICE_BOOK } from '../../data/pricebook';
 import { fixtureProject, fixtureRoof, fixturePanels } from './fixtures/project';
 import type { BomLine, Project } from '../../types';
 
@@ -167,13 +168,15 @@ describe('mechanical buckets: pitched roofs get flush hardware, not tilt legs', 
   });
 
   it('the four per-panel buckets stay DISJOINT and sum to the enabled count', () => {
-    // one roof of each kind, 4 panels each ⇒ every bucket non-empty at once
+    // one roof of each kind — plus a FLAT TILE deck, which now takes tile-hook
+    // hardware, not tilt legs — 4 panels each ⇒ every bucket non-empty at once
     const base = fixtureProject(4);
     const roofs = [
       fixtureRoof({ id: 'r_flat', pitchDeg: 0 }),
       fixtureRoof({ id: 'r_pitch', pitchDeg: 25 }),
       fixtureRoof({ id: 'r_metal', roofType: 'metal_shed' }),
       fixtureRoof({ id: 'r_ground', roofType: 'ground' }),
+      fixtureRoof({ id: 'r_tile', roofType: 'tile', pitchDeg: 0 }),
     ];
     const panels = roofs.flatMap((r) =>
       fixturePanels(4, r.id).map((p) => ({ ...p, id: `${r.id}_${p.id}` })),
@@ -183,21 +186,45 @@ describe('mechanical buckets: pitched roofs get flush hardware, not tilt legs', 
     const mixed: Project = { ...base, roofs, panels, strings: [] };
 
     const n = mixed.panels.filter((p) => p.enabled).length;
-    expect(n).toBe(15);
+    expect(n).toBe(19);
 
     const bom = deriveBom(mixed);
     const qty = (item: string) => bom.find((l) => l.item === item)?.qty ?? 0;
+    // HOOKS/FLASHING appear once per COVERING (sloped RCC + tile here) — the
+    // bucket is the SUM of those lines
+    const qtyAll = (item: string) =>
+      bom.filter((l) => l.item === item).reduce((s, l) => s + l.qty, 0);
     const buckets = {
       flatRcc: qty(ELEVATED_RCC),
-      pitched: qty(HOOKS),
+      covering: qtyAll(HOOKS), // pitched RCC (4) + flat tile deck (4)
       metal: qty('Mounting Structure (metal shed)'),
       ground: qty('Ground Mount Structure'),
     };
-    expect(buckets).toEqual({ flatRcc: 3, pitched: 4, metal: 4, ground: 4 });
+    expect(buckets).toEqual({ flatRcc: 3, covering: 8, metal: 4, ground: 4 });
     const sum = Object.values(buckets).reduce((a, b) => a + b, 0);
     expect(sum).toBe(n); // disjoint AND complete — no panel billed twice or lost
-    // flashing tracks the pitched bucket exactly (one set per penetrating panel)
-    expect(qty(FLASHING)).toBe(buckets.pitched);
+    // flashing tracks the covering bucket exactly (one set per penetrating panel)
+    expect(qtyAll(FLASHING)).toBe(buckets.covering);
+  });
+
+  // A FLAT roof with 'tile' covering is physically incompatible with ballasted
+  // tilt legs (you hook through tile; you don't stand an elevated RCC structure
+  // on it), yet the UI can produce one — it used to land in the elevated-RCC
+  // bucket and price legs + rails it can never receive.
+  it('a FLAT tile deck bills tile hooks + flashing — never ballasted tilt legs', () => {
+    const bom = deriveBom(onRoof({ roofType: 'tile', pitchDeg: 0 }));
+    expect(bom.find((l) => l.item === ELEVATED_RCC)).toBeUndefined();
+    const hooks = bom.find((l) => l.item === HOOKS)!;
+    expect(hooks.qty).toBe(8);
+    expect(hooks.unitPriceInr).toBe(PRICE_BOOK.tileHookSetPerPanel);
+    expect(hooks.formula).toMatch(/tile/i);
+    const flash = bom.find((l) => l.item === FLASHING)!;
+    expect(flash.qty).toBe(8);
+    expect(flash.unitPriceInr).toBe(PRICE_BOOK.tileFlashingPerPanel);
+    // the spec a customer reads must not promise tilt legs anywhere
+    for (const l of bom.filter((x) => x.category === 'Mechanical BOS')) {
+      expect(l.spec).not.toMatch(/tilt legs/i);
+    }
   });
 
   // WAS "…and say the roof covering is unknown". The covering is no longer

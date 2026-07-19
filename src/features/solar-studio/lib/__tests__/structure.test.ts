@@ -78,7 +78,7 @@ describe('resolveRacking — lazy chain + legacy repair', () => {
     const { seg } = rowSegment([0]);
     const base = resolveRacking(p, p.roofs[0], seg, p.components.panel!)!;
     expect(base.legSpacingM).toBe(2.0); // built-in
-    expect(base.foundation).toBe('anchor');
+    expect(base.foundation).toBe('concrete'); // D12: rooftop default is a PCC pedestal
 
     p.structureDefaults = { legSpacingM: 1.5, foundation: 'ballast' };
     const proj = resolveRacking(p, p.roofs[0], seg, p.components.panel!)!;
@@ -124,9 +124,16 @@ describe('buildStructure — hand-computed units', () => {
   it('emits the expected member set for a 3-panel row (2 m leg spacing)', () => {
     const s = built();
     // runLen 3.502 m ⇒ 2 bays ⇒ 3 stations
-    expect(s.memberSummary.front_leg).toEqual({ count: 3, totalM: expect.closeTo(0.9, 1) });
+    // D15: the default PCC pedestal is 150 mm tall and CONSUMES clearance, so
+    // the steel leg spans (frontLegM − 0.15) and the module plane is unmoved.
+    // Steel below 150 mm has been replaced by concrete, not added to.
+    const FOUND_H = 0.15;
+    expect(s.memberSummary.front_leg).toEqual({
+      count: 3,
+      totalM: expect.closeTo(3 * (0.3 - FOUND_H), 2),
+    });
     expect(s.memberSummary.back_leg.count).toBe(3);
-    expect(s.memberSummary.back_leg.totalM).toBeCloseTo(3 * (0.3 + RISE), 2);
+    expect(s.memberSummary.back_leg.totalM).toBeCloseTo(3 * (0.3 + RISE - FOUND_H), 2);
     expect(s.memberSummary.rafter.count).toBe(3);
     // rafter spans front-top → back-top: exactly the module's along-tilt dim
     expect(s.memberSummary.rafter.totalM).toBeCloseTo(3 * 2.279, 2);
@@ -135,9 +142,15 @@ describe('buildStructure — hand-computed units', () => {
       totalM: expect.closeTo(2 * 3.502, 2),
     });
     expect(s.memberSummary.brace.count).toBe(2);
-    // steel = Σ length × kgPerM, hand-summed
+    // steel = Σ length × kgPerM, hand-summed. Both leg runs start ON the
+    // pedestal (D15), so 6 × 0.15 m of steel is concrete instead — the module
+    // plane is identical either way.
     const totalM =
-      0.9 + 3 * (0.3 + RISE) + 3 * 2.279 + 2 * 3.502 + s.memberSummary.brace.totalM;
+      3 * (0.3 - FOUND_H) +
+      3 * (0.3 + RISE - FOUND_H) +
+      3 * 2.279 +
+      2 * 3.502 +
+      s.memberSummary.brace.totalM;
     expect(s.steelKg).toBeCloseTo(totalM * 2.2, 1);
   });
 

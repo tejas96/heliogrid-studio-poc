@@ -4,6 +4,7 @@
 // segment's rows/cols/cellIndex/removed self-consistent with the panels.
 import type {
   FoundationKind,
+  FoundationShape,
   ArraySegment,
   PanelOrientation,
   PanelSpec,
@@ -20,10 +21,10 @@ import {
   DEFAULT_FILL,
   DEFAULT_PROFILE,
   defaultPanelPose,
+  gridAngleFor,
   panelFitsAt,
   panelFootprintM,
   planCellM,
-  roofGridAngle,
 } from './layout';
 
 /** Racking a segment gets by default from its roof (flush on pitched/metal). */
@@ -73,8 +74,46 @@ interface Grid {
   pitchY: number;
 }
 
-function segmentGrid(roof: Roof, spec: PanelSpec, seg: ArraySegment): Grid {
-  const angle = roofGridAngle(roof);
+/**
+ * The pose a segment's grid frame follows: the pose its own panels ACTUALLY
+ * carry (majority azimuth+tilt — the user may have rotated/tilted the table
+ * after the fill), falling back to the segment's declared azimuth + racking
+ * tilt when it has no panels to read.
+ */
+function segmentPose(
+  seg: ArraySegment,
+  panels: PlacedPanel[],
+): { tiltDeg: number; azimuthDeg: number } {
+  if (panels.length > 0) {
+    const counts = new Map<string, { n: number; tiltDeg: number; azimuthDeg: number }>();
+    for (const p of panels) {
+      const k = `${p.azimuthDeg}/${p.tiltDeg}`;
+      const e = counts.get(k);
+      if (e) e.n++;
+      else counts.set(k, { n: 1, tiltDeg: p.tiltDeg, azimuthDeg: p.azimuthDeg });
+    }
+    let best: { n: number; tiltDeg: number; azimuthDeg: number } | undefined;
+    for (const e of counts.values()) if (!best || e.n > best.n) best = e;
+    return { tiltDeg: best!.tiltDeg, azimuthDeg: best!.azimuthDeg };
+  }
+  return {
+    azimuthDeg: seg.azimuthDeg,
+    tiltDeg: seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 0,
+  };
+}
+
+function segmentGrid(
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  panels: PlacedPanel[],
+): Grid {
+  // the frame the segment's panels actually use: on a flat roof a TILTED
+  // table's lattice follows its panels' azimuth (rows perpendicular to the
+  // facing — the frame autoFillRoof placed them in and gridAngleFor defines),
+  // so grow/respace/duplicate/reindex keep operating in the panels' own frame
+  // even after the user rotates the table.
+  const angle = gridAngleFor(roof, segmentPose(seg, panels));
   // The plan cell comes from layout.ts — the SAME definition the fill places
   // panels with. This used to re-derive it as `w·cos(pitch)` × `h`, which is
   // the pre-S1 axis assignment: on a pitched roof it put the module's SHORT
@@ -107,7 +146,7 @@ export function reindexSegment(
 ): { segment: ArraySegment; panels: PlacedPanel[] } {
   const mine = panels.filter((p) => p.segmentId === seg.id);
   if (mine.length === 0) return { segment: { ...seg, rows: 0, cols: 0, removed: [] }, panels: [] };
-  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg);
+  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
   const minX = Math.min(...locals.map((l) => l.x));
   const minY = Math.min(...locals.map((l) => l.y));
@@ -156,7 +195,7 @@ export function growCandidates(
 ): PlacedPanel[] {
   const mine = project.panels.filter((p) => p.segmentId === seg.id);
   if (mine.length === 0 || count < 1) return [];
-  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg);
+  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
   const minX = Math.min(...locals.map((l) => l.x));
   const maxX = Math.max(...locals.map((l) => l.x));
@@ -171,7 +210,15 @@ export function growCandidates(
 
   const make = (localX: number, localY: number): PlacedPanel | null => {
     const world = rotate({ x: localX, y: localY }, angle);
-    if (!panelFitsAt(project, roof, spec, world, seg.orientation)) return null;
+    // the candidate carries the pose the grown panel will get, so the fit
+    // check judges the same footprint DRC will (azimuth-lattice tables too)
+    if (
+      !panelFitsAt(project, roof, spec, world, seg.orientation, undefined, {
+        tiltDeg,
+        azimuthDeg: seg.azimuthDeg,
+      })
+    )
+      return null;
     return {
       id: genId('pv'),
       roofId: roof.id,
@@ -255,15 +302,12 @@ export function classifySelection(panels: PlacedPanel[]): SelectionShape {
 
 // ─── Per-table properties (Phase 2 array side-panel) ────────────────────────
 
-/** Steel mounting sections; kgPerM feeds the structural BOM. */
-export const STRUCTURE_PROFILES: StructureProfile[] = [
-  { key: 'c_channel', label: 'C-Channel', kgPerM: 2.2 },
-  { key: 'u_channel', label: 'U-Channel', kgPerM: 2.4 },
-  { key: 'l_angle', label: 'L-Angle', kgPerM: 1.8 },
-  { key: 'z_purlin', label: 'Z-Purlin', kgPerM: 2.6 },
-  { key: 'rhs', label: 'RHS / Box', kgPerM: 3.4 },
-  { key: 'chs', label: 'CHS / Round tube', kgPerM: 3.0 },
-];
+/**
+ * Steel mounting sections now live in `data/profiles.ts` (Phase 22a), where the
+ * catalog also carries the machine-readable `dims` that drive the 3D geometry.
+ * Re-exported here so the existing import sites keep working unchanged.
+ */
+export { STRUCTURE_PROFILES } from '../data/profiles';
 
 export type ElevatedKind = 'fixed_tilt' | 'dual_tilt';
 
@@ -272,6 +316,13 @@ function moduleRise(spec: PanelSpec, seg: ArraySegment, tiltDeg: number): number
   const { h } = panelFootprintM(spec, seg.orientation);
   return h * Math.sin((tiltDeg * Math.PI) / 180);
 }
+
+/**
+ * Shallowest tilt an elevated table may be set to. Rationale at setSegmentTilt:
+ * it is both the practical drainage/self-cleaning minimum and the guard that
+ * keeps a table off the tilt-0 frame boundary.
+ */
+export const MIN_ELEVATED_TILT_DEG = 5;
 
 /** Build an elevated racking spec, carrying prior fields where possible. */
 function elevatedRacking(
@@ -328,7 +379,18 @@ export function setSegmentTilt(
   tiltDeg: number,
 ): { segment: ArraySegment; panels: PlacedPanel[] } {
   if (seg.racking.kind === 'flush') return { segment: seg, panels };
-  const t = Math.max(0, Math.min(35, tiltDeg));
+  // An ELEVATED table cannot go to 0°, for two independent reasons.
+  //
+  // Engineering: below ~5° a module neither drains nor self-cleans, so no
+  // ballasted table in Indian rooftop practice is built flatter than that.
+  //
+  // Geometric: the plan footprint of a flat-roof module snaps to the roof grid
+  // at exactly tilt 0 (panelCornersOnRoof) while a tilted one follows its own
+  // azimuth. Nudging tilt to 0 therefore rotated every module in the table ~90°
+  // in place, landing two of them on one cellIndex and overlapping the rows.
+  // Going genuinely flush is a RACKING-KIND change (setSegmentRacking), which
+  // re-lays the table in the flush frame instead of re-posing it underneath.
+  const t = Math.max(MIN_ELEVATED_TILT_DEG, Math.min(35, tiltDeg));
   return {
     segment: { ...seg, racking: elevatedRacking(spec, seg, seg.racking.kind, t) },
     panels: syncTilt(panels, seg.id, t),
@@ -358,12 +420,17 @@ export function setSegmentProfile(seg: ArraySegment, profile: StructureProfile):
  *  Pass undefined to clear a field back to the lazy default chain. */
 export function setSegmentStructureFields(
   seg: ArraySegment,
-  fields: Partial<{ legSpacingM: number; foundation: FoundationKind; clearanceM: number }>,
+  fields: Partial<{
+    legSpacingM: number;
+    foundation: FoundationKind;
+    foundationShape: FoundationShape;
+    clearanceM: number;
+  }>,
 ): ArraySegment {
   if (seg.racking.kind === 'flush') return seg;
   const racking = { ...seg.racking, ...fields };
   // drop explicit undefineds so the racking JSON stays canonical
-  for (const k of ['legSpacingM', 'foundation', 'clearanceM'] as const) {
+  for (const k of ['legSpacingM', 'foundation', 'foundationShape', 'clearanceM'] as const) {
     if (racking[k] === undefined) delete racking[k];
   }
   return { ...seg, racking };
@@ -413,7 +480,7 @@ export function duplicateSegment(
 ): { segment: ArraySegment; panels: PlacedPanel[] } | null {
   const mine = project.panels.filter((p) => p.segmentId === seg.id);
   if (mine.length === 0) return null;
-  const { angle, pitchX } = segmentGrid(roof, spec, seg);
+  const { angle, pitchX } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
   const minX = Math.min(...locals.map((l) => l.x));
   const maxX = Math.max(...locals.map((l) => l.x));
@@ -423,7 +490,14 @@ export function duplicateSegment(
   for (const p of mine) {
     const loc = rotate(p.center, -angle);
     const world = rotate({ x: loc.x + shift, y: loc.y }, angle);
-    if (!panelFitsAt(project, roof, spec, world, seg.orientation)) continue;
+    // each clone keeps its source panel's pose — validate that exact footprint
+    if (
+      !panelFitsAt(project, roof, spec, world, seg.orientation, undefined, {
+        tiltDeg: p.tiltDeg,
+        azimuthDeg: p.azimuthDeg,
+      })
+    )
+      continue;
     out.push({ ...p, id: genId('pv'), center: world, segmentId: newId });
   }
   if (out.length === 0) return null;
@@ -445,7 +519,12 @@ export function respaceSegment(
 ): { segment: ArraySegment; panels: PlacedPanel[] } | null {
   const mine = project.panels.filter((p) => p.segmentId === seg.id);
   if (mine.length === 0 || rowPitchM <= 0) return null;
-  const { angle, pitchX } = segmentGrid(roof, spec, seg);
+  // A row pitch below the module's own length puts steel through steel. The
+  // fill has always floored it (fillRowPitchM); respace did not, so dragging
+  // the spacing slider down produced physically overlapping rows that only DRC
+  // caught after the fact. Same floor, one rule: the module footprint + 1 cm.
+  const pitch = Math.max(rowPitchM, panelFootprintM(spec, seg.orientation).h + 0.01);
+  const { angle, pitchX } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
   const minX = Math.min(...locals.map((l) => l.x));
   const maxX = Math.max(...locals.map((l) => l.x));
@@ -456,10 +535,18 @@ export function respaceSegment(
   const without: Project = { ...project, panels: project.panels.filter((p) => p.segmentId !== seg.id) };
 
   const out: PlacedPanel[] = [];
-  for (let y = minY; y <= maxY + 0.01; y += rowPitchM) {
+  // local y IS the facing axis on an azimuth-lattice table (gridAngleFor), so
+  // the pitch applies along the direction the rows shade each other in
+  for (let y = minY; y <= maxY + 0.01; y += pitch) {
     for (let x = minX; x <= maxX + 0.01; x += pitchX) {
       const world = rotate({ x, y }, angle);
-      if (!panelFitsAt(without, roof, spec, world, seg.orientation)) continue;
+      if (
+        !panelFitsAt(without, roof, spec, world, seg.orientation, undefined, {
+          tiltDeg,
+          azimuthDeg: seg.azimuthDeg,
+        })
+      )
+        continue;
       out.push({
         id: genId('pv'),
         roofId: roof.id,

@@ -68,7 +68,13 @@ export function rankRoofs(project: Project, spec: PanelSpec): RoofRank[] {
   const ll = project.location?.latLng;
   const ranks: RoofRank[] = [];
   for (const roof of project.roofs) {
-    const candidates = autoFillRoof(project, roof, spec, DEFAULT_FILL);
+    // avoidPanels: [] — ranking measures each roof's RAW capacity; the layout
+    // autoDesign produces REPLACES project.panels, so existing panels must not
+    // shrink the measurement (the fill's default now avoids them).
+    const candidates = autoFillRoof(project, roof, spec, {
+      ...DEFAULT_FILL,
+      avoidPanels: [],
+    });
     if (candidates.length === 0) {
       ranks.push({
         roofId: roof.id,
@@ -170,8 +176,12 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
   for (const rank of ranking) {
     if (remaining <= 0 || rank.capacityPanels === 0) continue;
     const roof = project.roofs.find((r) => r.id === rank.roofId)!;
+    // avoidPanels: [] — VERIFIED: Step6Editor.runAutoPlace applies this result
+    // as patch({ panels: result.panels, segments: result.segments }), a full
+    // REPLACE of the layout, so the panels being replaced must not block it.
     const filled = fillRoofAsSegment(project, roof, spec, {
       ...DEFAULT_FILL,
+      avoidPanels: [],
       maxPanels: Number.isFinite(remaining) ? remaining : undefined,
     });
     if (!filled) continue;

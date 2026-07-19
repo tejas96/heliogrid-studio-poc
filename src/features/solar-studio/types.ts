@@ -336,11 +336,45 @@ export type PanelOrientation = 'portrait' | 'landscape';
 
 // ─── Parametric arrays + keepouts (research-validated: HelioScope/Aurora/OpenSolar) ──
 
+/** Cross-section family. Drives both the extruded 3D geometry and the glyph. */
+export type SectionShape = 'c' | 'u' | 'l' | 'z' | 'hat' | 'rhs' | 'chs';
+
+/**
+ * Machine-readable section dimensions in MILLIMETRES.
+ *
+ * This is the single source the geometry, the glyph and the spec string all read,
+ * so a section can never *look* like one thing and be *quoted* as another.
+ *
+ *   h    overall depth (web height); for `chs` this is the outside diameter
+ *   b    flange width (unused for `chs`)
+ *   t    wall / material thickness
+ *   lip  return lip on `c`, brim on `hat`
+ *
+ * These must stay consistent with `kgPerM`: a profile test asserts that the
+ * extruded cross-sectional area × 7850 kg/m³ lands within 3% of the declared
+ * mass. Change one without the other and the 3D model stops describing the
+ * steel we price.
+ */
+export interface SectionDims {
+  h: number;
+  b?: number;
+  t: number;
+  lip?: number;
+  shape: SectionShape;
+}
+
 /** Structural steel section for the mounting structure; kgPerM → BOM tonnage. */
 export interface StructureProfile {
   key: string; // 'c_channel' | 'z_purlin' | 'rhs' | …
   label: string; // 'C-Channel (Lip)'
   kgPerM: number;
+  /** LAZY (Phase 22a): absent on profiles authored before the catalog gained
+   *  geometry. Consumers fall back to a plain box, exactly as before. */
+  dims?: SectionDims;
+  /** human-readable section, e.g. '80 × 40 × 15 × 2.5' — derived from `dims` */
+  sectionMm?: string;
+  isGrade?: string; // 'IS 2062'
+  coating?: string; // 'HDG ≥ 80 µm'
 }
 
 /** How an array is mounted; tilt behaviour follows the kind (verified). */
@@ -353,6 +387,16 @@ export interface StructureProfile {
  *   concrete  cast-in-situ pedestal, for rock or poor bearing soil
  */
 export type FoundationKind = 'anchor' | 'ballast' | 'pile' | 'concrete';
+
+/**
+ * How a cast foundation is formed. Both are ordinary Indian practice and the
+ * choice is NOT cosmetic: volume differs by π/4 (a circular pedestal is ~21%
+ * less concrete than a square one of the same nominal size), and that figure
+ * feeds both the concrete BOM line and the added-dead-load warning.
+ *   square    plank shuttering — the common rooftop PCC pedestal
+ *   circular  sono-tube / pipe shuttering — also the usual ground pier
+ */
+export type FoundationShape = 'square' | 'circular';
 
 export type RackingSpec =
   | { kind: 'flush' } // pitched roof: coplanar, no self-shade, hotter
@@ -368,6 +412,11 @@ export type RackingSpec =
        *  existing projects' fingerprints (and captures) stay untouched. */
       legSpacingM?: number;
       foundation?: FoundationKind;
+      /** Shuttering form for a CAST foundation. Lazy like its siblings: absent
+       *  resolves from rule config, so untouched projects fingerprint
+       *  byte-identically. Only meaningful for `concrete` — ballast is precast
+       *  rectangular, a pile is driven round. */
+      foundationShape?: FoundationShape;
       /** walk-under etc: raises the effective front-leg height */
       clearanceM?: number;
     };
@@ -378,6 +427,7 @@ export interface StructureDefaults {
   profileKey?: string;
   legSpacingM?: number;
   foundation?: FoundationKind;
+  foundationShape?: FoundationShape;
   clearanceM?: number;
 }
 
