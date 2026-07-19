@@ -30,6 +30,8 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
     dcCableM,
     acRunM,
     conduitM,
+    dcSource,
+    acSource,
     pricebook: PRICE_BOOK,
   } = ctx;
   const out: BomLine[] = [];
@@ -51,37 +53,53 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
       // used to state a flat 4 sq.mm here and would have contradicted the SLD
       // on any high-Isc module.
       spec: `${dcCableSizeMm2(ctx.spec)} sq.mm Cu · 1.1kV, UV-resistant, red+black pair`,
-      confidence: routedDc.routed ? 'derived' : 'estimated',
+      // A surveyed run the user typed in is THEIR measurement of the real site,
+      // so it outranks our estimator — but it is still not the routed geometry,
+      // which is why the three sources get three different labels rather than
+      // collapsing to routed/not-routed.
+      confidence:
+        dcSource === 'routed' ? 'derived' : dcSource === 'input' ? 'measured' : 'estimated',
       qty: dcCableM,
       unit: 'm',
       unitPriceInr: PRICE_BOOK.dcCablePerM,
       // The old text claimed "(+15% slack incl.)" on a figure that had no slack
       // in it — the traceability line is the one thing a reviewer trusts, so it
       // now states exactly what was summed.
-      formula: routedDc.routed
-        ? `Routed home runs ${routedDc.homeRunM} m` +
-          (routedDc.intraM > 0 ? ` + ${routedDc.intraM} m inter-row hops` : '') +
-          ` (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop/run)`
-        : `ESTIMATE — ${project.strings.length} strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). ` +
-          (project.inverterPlacements.length === 0
-            ? 'Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.'
-            : 'Run Auto string to route the real runs.'),
+      formula:
+        dcSource === 'routed'
+          ? `Routed home runs ${routedDc.homeRunM} m` +
+            (routedDc.intraM > 0 ? ` + ${routedDc.intraM} m inter-row hops` : '') +
+            ` (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop/run)`
+          : dcSource === 'input'
+            ? `YOUR SURVEYED RUN — ${project.bom!.inputs!.avgDcRunM} m average × ${Math.max(1, project.strings.length)} string(s) × 2 conductors, +${Math.round(rules.cable.slackPct * 100)}% slack. Routing the runs in Step 6 would replace this with measured geometry.`
+            : `ESTIMATE — ${project.strings.length} strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). ` +
+              (project.inverterPlacements.length === 0
+                ? 'Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.'
+                : 'Run Auto string to route the real runs.'),
     }),
     line({
       key: 'elec.ac_cable',
       category: 'Electrical BOS',
       item: 'AC Cable',
       spec: inv.phases === 3 ? '4-core 10 sq.mm Cu' : '3-core 6 sq.mm Cu',
-      confidence: routedAc.routed ? 'derived' : 'assumed',
-      qty: routedAc.routed ? routedAc.meters : AC_ALLOWANCE_M,
+      confidence:
+        acSource === 'routed' ? 'derived' : acSource === 'input' ? 'measured' : 'assumed',
+      // `acRunM`, not a second copy of the same ternary. This line used to
+      // recompute its own quantity from `routedAc`, which meant the context's
+      // figure and the printed figure were two expressions that merely happened
+      // to agree — a third source would have moved one and not the other.
+      qty: acRunM,
       unit: 'm',
       unitPriceInr: PRICE_BOOK.acCablePerM,
       // Measured only when the service entry has actually been placed. Until
       // then the length is genuinely unknown, so it is an ALLOWANCE and says
       // so — never an assumption dressed as a calculation.
-      formula: routedAc.routed
-        ? `Routed inverter → meter ${routedAc.meters} m (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop)`
-        : `ASSUMED ${AC_ALLOWANCE_M} m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter) or edit the quantity to the surveyed length.`,
+      formula:
+        acSource === 'routed'
+          ? `Routed inverter → meter ${routedAc.meters} m (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop)`
+          : acSource === 'input'
+            ? `YOUR SURVEYED RUN — ${project.bom!.inputs!.avgAcRunM} m inverter → LT panel, +${Math.round(rules.cable.slackPct * 100)}% slack. Placing the meter in Step 6 would replace this with measured geometry.`
+            : `ASSUMED ${AC_ALLOWANCE_M} m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter), enter your surveyed run above, or edit the quantity.`,
     }),
     line({
       key: 'elec.mc4',

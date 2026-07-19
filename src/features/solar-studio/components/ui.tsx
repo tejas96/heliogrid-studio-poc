@@ -1,6 +1,7 @@
 // ─── Shared UI primitives: sheets, dialogs, sliders, toggles, chips ─────────
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { X, Check } from 'lucide-react';
+import { commitNumber } from '../lib/bom/view';
 
 function useEscape(onClose?: () => void) {
   useEffect(() => {
@@ -331,6 +332,159 @@ export function UnitToggle({
     </div>
   );
 }
+
+/**
+ * A number input that commits ONCE, on blur or Enter.
+ *
+ * The BOM inputs it replaces called `patchProject` on every keystroke, so
+ * typing "1250" wrote four separate project revisions — four re-derivations of
+ * the whole BOM, and four entries in the undo stack, three of which represent
+ * numbers the user never meant (1, 12, 125). Undo became unusable exactly where
+ * it matters most, on the screen that decides money.
+ *
+ * While focused the field owns its own text, so a half-typed value is never
+ * parsed and never round-trips through the store. `Escape` abandons the edit.
+ */
+export function NumberField({
+  value,
+  onCommit,
+  min,
+  max,
+  step,
+  suffix,
+  placeholder,
+  ariaLabel,
+  style,
+  disabled,
+}: {
+  value: number | undefined;
+  onCommit: (v: number | undefined) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+  placeholder?: string;
+  ariaLabel: string;
+  style?: CSSProperties;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (value === undefined ? '' : String(value));
+
+  const commit = () => {
+    // the rule lives in lib/bom/view so it is testable without a DOM
+    const d = commitNumber(draft, value, { min, max });
+    if (d.action === 'clear') onCommit(undefined);
+    else if (d.action === 'commit') onCommit(d.value);
+    setDraft(null);
+  };
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <input
+        type="number"
+        inputMode="decimal"
+        value={shown}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur(); // blur commits; doing both would double-write
+          } else if (e.key === 'Escape') {
+            setDraft(null);
+          }
+        }}
+        style={{
+          width: 68,
+          padding: '4px 6px',
+          border: '1px solid var(--line)',
+          borderRadius: 6,
+          background: 'var(--paper)',
+          fontSize: 12.5,
+          ...style,
+        }}
+      />
+      {suffix && <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{suffix}</span>}
+    </span>
+  );
+}
+
+/**
+ * A table that is accessible by construction, so callers cannot forget.
+ *
+ * Every data table needs a caption naming it and a scope on each header, or a
+ * screen reader reads a wall of numbers with nothing to attach them to. Making
+ * `caption` a required prop is the point of the wrapper — the old BOM table had
+ * neither, and adding them to one hand-rolled `<table>` would not stop the next.
+ * `captionVisible` is false by default: sighted users get the section heading
+ * already, so repeating it would be visual noise, but AT still needs it.
+ */
+export function DataTable({
+  caption,
+  captionVisible = false,
+  columns,
+  children,
+  style,
+}: {
+  caption: string;
+  captionVisible?: boolean;
+  columns: { key: string; label: ReactNode; width?: number; align?: 'left' | 'right' | 'center' }[];
+  children: ReactNode;
+  style?: CSSProperties;
+}) {
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, ...style }}>
+      <caption
+        style={
+          captionVisible
+            ? { textAlign: 'left', padding: '8px 10px', fontWeight: 700, fontSize: 12 }
+            : SR_ONLY
+        }
+      >
+        {caption}
+      </caption>
+      <thead>
+        <tr style={{ background: 'var(--paper-2)', fontSize: 11 }}>
+          {columns.map((c) => (
+            <th
+              key={c.key}
+              scope="col"
+              style={{
+                textAlign: c.align ?? 'left',
+                padding: '8px 10px',
+                fontWeight: 700,
+                ...(c.width ? { width: c.width } : {}),
+              }}
+            >
+              {c.label}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>{children}</tbody>
+    </table>
+  );
+}
+
+/** Visually hidden but reachable by assistive tech — never `display: none`. */
+export const SR_ONLY: CSSProperties = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: 'hidden',
+  clip: 'rect(0, 0, 0, 0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+};
 
 export function EmptyState({ icon, text }: { icon: ReactNode; text: string }) {
   return (

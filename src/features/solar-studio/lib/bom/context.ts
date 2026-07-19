@@ -19,6 +19,9 @@ import { isSloped } from '../roof-plane';
 /** Inverter → meter run we cannot measure: the service entry is not modelled. */
 export const AC_ALLOWANCE_M = 25;
 
+/** Provenance of a cable length — see `BomContext.dcSource`. */
+export type CableSource = 'routed' | 'input' | 'fallback';
+
 /**
  * The coverings a flush-hardware, unstructured, non-ground, non-metal-shed
  * face can have: a PITCHED face (RCC slab or tile), or a FLAT tile deck —
@@ -56,6 +59,20 @@ export interface BomContext {
   conduitM: number;
   /** null unless central topology AND strings exist */
   combiner: CombinerPlan | null;
+  /**
+   * Where each cable length CAME FROM (Phase 22e). Three sources, and the
+   * quote must say which one it used, because they are not equally trustworthy:
+   *
+   *   'routed' — measured off placed geometry. Always wins; a surveyed average
+   *              cannot beat the actual route the user drew.
+   *   'input'  — the user's own surveyed figure, entered in the BOM section.
+   *   'fallback' — the built-in estimator (DC) or flat allowance (AC).
+   *
+   * Without this the emitters would print a routed-sounding formula over a
+   * number that came from a text box.
+   */
+  dcSource: CableSource;
+  acSource: CableSource;
 
   // ── Mechanical
   structures: SegmentStructure[];
@@ -95,12 +112,46 @@ export function buildContext(project: Project): BomContext | null {
   // real slack. The legacy estimator is the labelled fallback for designs that
   // predate routing — it double-counts module links and floors at 30 m, so it
   // reads HIGH; never present it as a routed quantity.
+  //
+  // Phase 22e adds a THIRD source between those two: a run length the user
+  // surveyed and typed in. It beats the estimator (it is a real measurement of
+  // the real site) but never beats routing (that is geometry they actually
+  // drew). Each length carries where it came from so the emitted formula
+  // cannot describe one source while quoting another.
+  const inputs = project.bom?.inputs;
   const routedDc = dcCableFromRoutes(project);
-  const dcCableM = routedDc.routed
-    ? routedDc.meters
-    : Math.max(30, estimateDcCableM(project.strings, project.panels));
+  const dcSource: CableSource = routedDc.routed
+    ? 'routed'
+    : inputs?.avgDcRunM != null && inputs.avgDcRunM > 0
+      ? 'input'
+      : 'fallback';
+  const dcCableM =
+    dcSource === 'routed'
+      ? routedDc.meters
+      : dcSource === 'input'
+        ? // one send + one return per string, plus the same slack the router
+          // applies — otherwise switching to a surveyed figure would silently
+          // drop the allowance the routed number includes
+          Math.round(
+            inputs!.avgDcRunM! *
+              Math.max(1, project.strings.length) *
+              2 *
+              (1 + rules.cable.slackPct),
+          )
+        : Math.max(30, estimateDcCableM(project.strings, project.panels));
+
   const routedAc = acCableFromRoutes(project);
-  const acRunM = routedAc.routed ? routedAc.meters : AC_ALLOWANCE_M;
+  const acSource: CableSource = routedAc.routed
+    ? 'routed'
+    : inputs?.avgAcRunM != null && inputs.avgAcRunM > 0
+      ? 'input'
+      : 'fallback';
+  const acRunM =
+    acSource === 'routed'
+      ? routedAc.meters
+      : acSource === 'input'
+        ? Math.round(inputs!.avgAcRunM! * (1 + rules.cable.slackPct))
+        : AC_ALLOWANCE_M;
   const conduitM = Math.round((routedDc.routed ? routedDc.ductM : dcCableM / 2) + acRunM);
 
   // ── DC collection: central/C&I topology adds fused string-combiner boxes
@@ -209,6 +260,8 @@ export function buildContext(project: Project): BomContext | null {
     acRunM,
     conduitM,
     combiner: plan,
+    dcSource,
+    acSource,
     structures,
     fasteners: fastenerTotals(structures),
     structuredPanelIds,

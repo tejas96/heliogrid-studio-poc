@@ -115,6 +115,9 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         parts: string[];
         kgPerM: number;
         label: string;
+        sectionMm?: string;
+        isGrade?: string;
+        coating?: string;
         segmentIds: string[];
         roofIds: (string | undefined)[];
       }
@@ -131,6 +134,9 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
             parts: [],
             kgPerM: profile.kgPerM,
             label: profile.label,
+            sectionMm: profile.sectionMm,
+            isGrade: profile.isGrade,
+            coating: profile.coating,
             segmentIds: [],
             roofIds: [],
           })
@@ -153,7 +159,21 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
           instance: key,
           category: 'Mechanical BOS',
           item: `Structure Steel — ${agg.label}`,
-          spec: `HDG ${agg.label} (${agg.kgPerM} kg/m), key ${key}`,
+          // The internal profile key used to be appended here ("…, key
+          // c_channel_80"). `instance` already makes the line unique, so the
+          // key was doing nothing but printing a database identifier on a
+          // customer's quote. Replaced with what a fabricator actually needs:
+          // section, mass, steel grade and coating, each omitted when the
+          // profile does not declare it rather than printed as "undefined".
+          spec: [
+            `HDG ${agg.label}`,
+            agg.sectionMm,
+            `${agg.kgPerM} kg/m`,
+            agg.isGrade,
+            agg.coating,
+          ]
+            .filter(Boolean)
+            .join(' · '),
           qty: Math.round(agg.kg * 10) / 10,
           unit: 'kg',
           unitPriceInr: PRICE_BOOK.steelPerKg,
