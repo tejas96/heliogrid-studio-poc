@@ -348,8 +348,19 @@ export function buildStructure(
           { x: bx, y: by, z: dz + racking.backLegM },
         );
         const rafter = addMember('rafter', frontLeg.b, backLeg.b);
-        addNode('roof_anchor', frontLeg.a, [frontLeg.id], anchorSpec(racking));
-        addNode('roof_anchor', backLeg.a, [backLeg.id], anchorSpec(racking));
+        // A roof_anchor node sits on the ROOF SURFACE, not on the leg base.
+        //
+        // The two stopped being the same point when the D15 chain above put a
+        // foundation under the leg: `frontLeg.a` is now the TOP of the
+        // foundation, foundH above the deck. `foundationAssembly` documents its
+        // part offsets as "relative to the roof surface at the leg centre" and
+        // builds the pedestal spanning 0 → h upward from there, so anchoring it
+        // to the leg base drew every pedestal floating exactly one foundation
+        // height above the roof. Invisible while the default was `anchor`
+        // (foundH = 0); visible the moment the default became a 150 mm pedestal.
+        const deck = (p: XYZ): XYZ => ({ x: p.x, y: p.y, z: dz });
+        addNode('roof_anchor', deck(frontLeg.a), [frontLeg.id], anchorSpec(racking));
+        addNode('roof_anchor', deck(backLeg.a), [backLeg.id], anchorSpec(racking));
         addNode('leg_rafter', frontLeg.b, [frontLeg.id, rafter.id], { bolts: 2 });
         addNode('leg_rafter', backLeg.b, [backLeg.id, rafter.id], { bolts: 2 });
       }
