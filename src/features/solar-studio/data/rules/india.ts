@@ -275,6 +275,25 @@ export interface FoundationRules {
   pile: FoundationGeometryRule;
 }
 
+/**
+ * Metal-shed fixing geometry. BOTH figures are ASSUMED and neither is
+ * measurable from anything the model holds, which is why they are named here
+ * rather than buried in a formula (plan E15):
+ *
+ * `purlinPitchM` sets how many standoffs a rail needs — get it wrong and the
+ * count is wrong. `ribPitchM` decides whether a fixing lands on a CROWN or in
+ * a valley — get that wrong and the fixing does not land on steel at all, and
+ * the roof leaks. Both must be confirmed at survey.
+ */
+export interface SheetRules {
+  /** purlin centres under the sheeting, m — sets standoff spacing */
+  purlinPitchM: number;
+  /** sheet rib/crown pitch, m — a standoff must sit on a crown, never a valley */
+  ribPitchM: number;
+  /** fewest standoffs per rail, whatever the pitch arithmetic says */
+  minStandoffsPerRail: number;
+}
+
 export interface MarketRules {
   market: 'india';
   temps: TempRules;
@@ -288,6 +307,7 @@ export interface MarketRules {
   combiner: CombinerRules;
   financing: FinancingRules;
   foundations: FoundationRules;
+  sheet: SheetRules;
   defaults: DefaultRules;
 }
 
@@ -419,6 +439,10 @@ export const INDIA_RULES: MarketRules = {
     // driven/rammed galvanised post — ground arrays
     pile: { shape: 'circular', d: 90, heightMm: 150, plateMm: 140, plateThkMm: 10, embedMm: 1200 },
   },
+  // ALL ASSUMED — see SheetRules. 1.4 m purlin centres and a 200 mm trapezoidal
+  // rib are ordinary Indian industrial sheeting, but "ordinary" is not
+  // "measured": both must be confirmed on site before anything is drilled.
+  sheet: { purlinPitchM: 1.4, ribPitchM: 0.2, minStandoffsPerRail: 2 },
   defaults: {
     roofSetbackM: 0.3,
     groundSetbackM: 1.5,

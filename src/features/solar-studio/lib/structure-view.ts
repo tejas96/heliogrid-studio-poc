@@ -10,7 +10,12 @@
 // it keyed a fingerprint it would stale every stored capture.
 import type { ArraySegment, FoundationKind, PanelSpec, Project, Roof } from '../types';
 import { isSloped } from './roof-plane';
-import { resolveRacking, type ResolvedRacking } from './structure';
+import {
+  resolveRacking,
+  topologyOf,
+  type ResolvedRacking,
+  type StructureTopology,
+} from './structure';
 
 /** How the SELECTED table's modules are drawn while inspecting its structure. */
 export type PanelVisibility = 'show' | 'ghost' | 'hide';
@@ -87,20 +92,11 @@ export function visibleStructureIds(
   return new Set(segmentIds.filter((id) => id === selectedSegId));
 }
 
-/**
- * Which mounting topology a segment resolves to. The foundation question only
- * makes sense for a table that STANDS on something.
- */
-export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'none';
-
-export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
-  if (seg.racking.kind === 'flush') {
-    // a shed carries rails on standoffs through the sheet — no legs, no footing
-    return roof.roofType === 'metal_shed' ? 'sheet_monorail' : 'flush';
-  }
-  // the elevated member model assumes a flat deck
-  return isSloped(roof) ? 'none' : 'elevated_table';
-}
+// `topologyOf` moved into lib/structure (Phase 22h): the builder has to
+// dispatch on it, and importing it back from here would close a cycle. It is
+// re-exported so existing view-side imports keep working, and so there is
+// still exactly one definition.
+export { topologyOf, type StructureTopology } from './structure';
 
 /**
  * Foundations this surface may actually use (plan E1).
@@ -112,9 +108,13 @@ export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
 export function foundationOptionsFor(roof: Roof, seg: ArraySegment): FoundationKind[] {
   switch (topologyOf(roof, seg)) {
     case 'elevated_table':
-      return roof.roofType === 'ground'
-        ? ['pile', 'concrete']
-        : ['concrete', 'anchor', 'ballast'];
+      if (roof.roofType === 'ground') return ['pile', 'concrete'];
+      // A tilted table on a METAL SHED fixes through the sheet into the purlin
+      // below. Casting a pedestal on corrugated steel is not a thing, and
+      // ballast puts dead weight on a roof designed to carry its own sheet —
+      // so neither is offered, rather than offered and quietly wrong (E1).
+      if (roof.roofType === 'metal_shed') return ['anchor'];
+      return ['concrete', 'anchor', 'ballast'];
     default:
       return [];
   }

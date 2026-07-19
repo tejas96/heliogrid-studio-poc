@@ -27,6 +27,8 @@ import { resolveRules } from '../data/rules/india';
 import { ruleFor } from './foundation';
 import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
+import { isSloped } from './roof-plane';
+import { STRUCTURE_PROFILES } from '../data/profiles';
 
 /**
  * Vertical offset from the member AXIS plane (leg tops = rafter/purlin
@@ -93,6 +95,16 @@ const DEFAULT_LEG_SPACING_M = 2.0;
 // capacity (§F). buildStructure reports the total so the DRC can warn.
 const DEFAULT_FOUNDATION = 'concrete' as const;
 const DEFAULT_GROUND_FOUNDATION = 'pile' as const;
+/**
+ * A tilted table on a METAL SHED founds on the sheet, not on a footing.
+ *
+ * You cannot cast a pedestal on corrugated steel and you do not ballast a shed
+ * roof — the load goes through the purlins, not a slab. Before this, a shed
+ * inherited the rooftop default (a 150 mm PCC pedestal as of 22a) and rendered
+ * concrete blocks sitting on trapezoidal sheeting, with the concrete volume and
+ * dead-load warning to match. E1.
+ */
+const DEFAULT_SHEET_FOUNDATION = 'anchor' as const;
 
 export interface ResolvedRacking {
   kind: 'fixed_tilt' | 'dual_tilt';
@@ -148,7 +160,11 @@ export function resolveRacking(
     r.foundation ??
     roofO?.foundation ??
     projD?.foundation ??
-    (roof.roofType === 'ground' ? DEFAULT_GROUND_FOUNDATION : DEFAULT_FOUNDATION);
+    (roof.roofType === 'ground'
+      ? DEFAULT_GROUND_FOUNDATION
+      : roof.roofType === 'metal_shed'
+        ? DEFAULT_SHEET_FOUNDATION
+        : DEFAULT_FOUNDATION);
   return {
     kind: r.kind,
     tiltDeg: r.tiltDeg,
@@ -215,14 +231,23 @@ export interface XYZ {
   z: number;
 }
 
-export type MemberKind = 'front_leg' | 'back_leg' | 'rafter' | 'purlin' | 'brace';
+export type MemberKind =
+  | 'front_leg'
+  | 'back_leg'
+  | 'rafter'
+  | 'purlin'
+  | 'brace'
+  /** metal-shed monorail: a rail running along a module row, on standoffs */
+  | 'rail';
 export type NodeKind =
   | 'roof_anchor' // leg base: base plate + anchors (or ballast block)
   | 'leg_rafter' // leg top → rafter bolt joint
   | 'rafter_purlin' // purlin resting on a rafter
   | 'panel_clamp_end'
   | 'panel_clamp_mid'
-  | 'brace_bolt';
+  | 'brace_bolt'
+  /** L-foot through the sheet crown into the purlin, with a sealing washer */
+  | 'sheet_standoff';
 
 export interface Member {
   id: string; // `${seg.id}/m/<kind>/<idx>` — structural, deterministic
@@ -249,6 +274,10 @@ export interface StructureNode {
     piles?: number;
     /** cast-in-situ concrete pedestal (ground) */
     pedestals?: number;
+    /** metal shed: L-foot fixed through the sheet into the purlin below */
+    standoffs?: number;
+    /** EPDM washer under every sheet penetration — the waterproofing */
+    sealingWashers?: number;
   };
 }
 
@@ -268,6 +297,16 @@ export interface SegmentStructure {
 }
 
 const rnd = (v: number) => Math.round(v * 1000) / 1000;
+
+/** Every member kind, so `memberSummary` is complete whatever the topology. */
+const MEMBER_KINDS = [
+  'front_leg',
+  'back_leg',
+  'rafter',
+  'purlin',
+  'brace',
+  'rail',
+] as const satisfies readonly MemberKind[];
 
 /** How far past a run's end a planned leg may sit and still count as its own. */
 const LEG_PLAN_TOL_M = 0.05;
@@ -621,7 +660,7 @@ export function buildStructure(
   }
 
   const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
-  for (const kind of ['front_leg', 'back_leg', 'rafter', 'purlin', 'brace'] as const) {
+  for (const kind of MEMBER_KINDS) {
     const of = members.filter((m) => m.kind === kind);
     memberSummary[kind] = {
       count: of.length,
@@ -668,6 +707,209 @@ function norm(v: { x: number; y: number }): { x: number; y: number } {
 }
 
 /** All elevated-segment structures of a project (the BOM/3D entry point). */
+/**
+ * Which mounting topology a segment resolves to. The foundation question only
+ * makes sense for a table that STANDS on something.
+ *
+ * Lives here rather than in structure-view because the BUILDER dispatches on
+ * it — what the UI offers and what the model builds must come from one answer.
+ */
+export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'none';
+
+export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
+  if (seg.racking.kind === 'flush') {
+    // a shed carries rails on standoffs through the sheet — no legs, no footing
+    return roof.roofType === 'metal_shed' ? 'sheet_monorail' : 'flush';
+  }
+  // the elevated member model assumes a flat deck
+  return isSloped(roof) ? 'none' : 'elevated_table';
+}
+
+/** An L-foot lifts the rail this far clear of the sheet crown. ASSUMED. */
+const STANDOFF_HEIGHT_M = 0.1;
+
+/**
+ * Build the member/node graph for a FLUSH segment on a METAL SHED (Phase 22h).
+ *
+ * A shed carries no table. Modules lie flush on rails, and the rails sit on
+ * L-foot standoffs fixed through the sheet CROWN into the purlin below, each
+ * with an EPDM washer because every fixing is a hole in someone's roof. So:
+ * rails and standoffs, and none of the legs, rafters, purlins or braces an
+ * elevated table needs.
+ *
+ * Two numbers here are ASSUMED and neither is measurable from the model:
+ * `purlinPitchM` (inside the building) sets the standoff COUNT, and the sheet's
+ * rib pitch decides whether a fixing lands on steel at all. Both carry a
+ * warning rather than being presented as derived — getting the second one wrong
+ * does not make the quote inaccurate, it makes the roof leak.
+ */
+function buildMonorail(
+  seg: ArraySegment,
+  spec: PanelSpec,
+  roof: Roof,
+  project: Project,
+  panels: PlacedPanel[],
+): SegmentStructure {
+  const mine = panels.filter((p) => p.enabled && p.segmentId === seg.id && p.cellIndex != null);
+  const members: Member[] = [];
+  const nodes: StructureNode[] = [];
+  const warnings: string[] = [];
+  if (mine.length === 0) {
+    return emptyStructure(seg, 'anchor', 'square');
+  }
+
+  const rules = resolveRules();
+  const purlinPitchM =
+    roof.structureOverride?.purlinPitchM ??
+    project.structureDefaults?.purlinPitchM ??
+    rules.sheet.purlinPitchM;
+  const railProfile =
+    STRUCTURE_PROFILES.find((p) => p.key === 'top_hat') ?? STRUCTURE_PROFILES[0];
+
+  const { w, h } = panelFootprintM(spec, seg.orientation);
+  const azRad = (seg.azimuthDeg * Math.PI) / 180;
+  const down = { x: Math.sin(azRad), y: Math.cos(azRad) };
+  // flush on a shed: the module plane is the sheet, so there is no tilt rise
+  const railZ = roof.heightM + STANDOFF_HEIGHT_M;
+
+  let mi: Record<string, number> = {};
+  let ni: Record<string, number> = {};
+  const addMember = (kind: MemberKind, a: XYZ, b: XYZ): Member => {
+    const idx = (mi[kind] = (mi[kind] ?? 0) + 1);
+    const m: Member = {
+      id: `${seg.id}/m/${kind}/${idx - 1}`,
+      kind,
+      profileKey: railProfile.key,
+      a,
+      b,
+      lengthM: rnd(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z)),
+    };
+    members.push(m);
+    return m;
+  };
+  const addNode = (
+    kind: NodeKind,
+    position: XYZ,
+    memberIds: string[],
+    fastenerSpec: StructureNode['fastenerSpec'],
+  ) => {
+    const idx = (ni[kind] = (ni[kind] ?? 0) + 1);
+    nodes.push({ id: `${seg.id}/n/${kind}/${idx - 1}`, kind, position, memberIds, fastenerSpec });
+  };
+
+  // same row/run decomposition the table model uses — holes split runs here too
+  const byRow = new Map<number, PlacedPanel[]>();
+  for (const p of mine) {
+    const row = Math.floor(p.cellIndex! / COL_STRIDE);
+    (byRow.get(row) ?? byRow.set(row, []).get(row)!).push(p);
+  }
+
+  for (const [, rowPanels] of [...byRow.entries()].sort((a, b) => a[0] - b[0])) {
+    const sorted = rowPanels.sort(
+      (a, b) => (a.cellIndex! % COL_STRIDE) - (b.cellIndex! % COL_STRIDE),
+    );
+    const runs: PlacedPanel[][] = [];
+    for (const p of sorted) {
+      const last = runs[runs.length - 1];
+      const col = p.cellIndex! % COL_STRIDE;
+      if (last && col === (last[last.length - 1].cellIndex! % COL_STRIDE) + 1) last.push(p);
+      else runs.push([p]);
+    }
+
+    for (const run of runs) {
+      const n = run.length;
+      const runLen = n * w + (n - 1) * seg.moduleGapM;
+      const first = run[0].center;
+      const last = run[n - 1].center;
+      const along =
+        n > 1 ? norm({ x: last.x - first.x, y: last.y - first.y }) : { x: down.y, y: -down.x };
+      const mid = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
+      const half = runLen / 2;
+
+      // one rail under each module edge — the pair a flush module clamps to
+      for (const side of [1, -1]) {
+        const cx = mid.x + (down.x * h * side) / 2;
+        const cy = mid.y + (down.y * h * side) / 2;
+        const a = { x: cx - along.x * half, y: cy - along.y * half, z: railZ };
+        const b = { x: cx + along.x * half, y: cy + along.y * half, z: railZ };
+        const rail = addMember('rail', a, b);
+
+        // Standoffs land on purlin centres. NEVER fewer than the rule's floor:
+        // a rail on one foot is a lever, and the arithmetic can ask for that on
+        // a short run (E15).
+        const spans = Math.max(1, Math.ceil(runLen / purlinPitchM));
+        const count = Math.max(rules.sheet.minStandoffsPerRail, spans + 1);
+        for (let i = 0; i < count; i++) {
+          const t = count === 1 ? 0 : (i / (count - 1)) * runLen - half;
+          addNode(
+            'sheet_standoff',
+            { x: cx + along.x * t, y: cy + along.y * t, z: roof.heightM },
+            [rail.id],
+            { standoffs: 1, sealingWashers: 1, bolts: 2 },
+          );
+        }
+
+        // module clamps, exactly as on a purlin
+        addNode('panel_clamp_end', a, [rail.id], { clamps: 1 });
+        addNode('panel_clamp_end', b, [rail.id], { clamps: 1 });
+        for (let k = 1; k < n; k++) {
+          const t = -half + k * (w + seg.moduleGapM) - seg.moduleGapM / 2;
+          addNode(
+            'panel_clamp_mid',
+            { x: cx + along.x * t, y: cy + along.y * t, z: railZ },
+            [rail.id],
+            { clamps: 1 },
+          );
+        }
+      }
+    }
+  }
+
+  const standoffs = nodes.filter((nd) => nd.kind === 'sheet_standoff').length;
+  warnings.push(
+    `${seg.label}: ${standoffs} sheet fixings assume ${purlinPitchM} m purlin centres and a ${rules.sheet.ribPitchM} m rib pitch — ASSUMED, not measured. Confirm both at survey: the pitch sets the count, and the rib pitch decides whether each fixing lands on a crown or in a valley.`,
+  );
+
+  const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
+  for (const kind of MEMBER_KINDS) {
+    const of = members.filter((m) => m.kind === kind);
+    memberSummary[kind] = { count: of.length, totalM: rnd(of.reduce((s, m) => s + m.lengthM, 0)) };
+  }
+
+  return {
+    segmentId: seg.id,
+    members,
+    nodes,
+    // a fixing, not a footing — the foundation CARD is hidden for this
+    // topology (foundationOptionsFor returns []), but the field must say
+    // something and 'anchor' is the nearest truth
+    foundation: 'anchor',
+    foundationShape: 'square',
+    steelKg: rnd(members.reduce((s, m) => s + m.lengthM * railProfile.kgPerM, 0)),
+    memberSummary,
+    warnings,
+  };
+}
+
+function emptyStructure(
+  seg: ArraySegment,
+  foundation: FoundationKind,
+  foundationShape: FoundationShape,
+): SegmentStructure {
+  const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
+  for (const kind of MEMBER_KINDS) memberSummary[kind] = { count: 0, totalM: 0 };
+  return {
+    segmentId: seg.id,
+    members: [],
+    nodes: [],
+    foundation,
+    foundationShape,
+    steelKg: 0,
+    memberSummary,
+    warnings: [],
+  };
+}
+
 export function projectStructures(project: Project): SegmentStructure[] {
   const spec = project.components.panel;
   if (!spec) return [];
@@ -675,6 +917,17 @@ export function projectStructures(project: Project): SegmentStructure[] {
   for (const seg of project.segments) {
     const roof = project.roofs.find((r) => r.id === seg.roofId);
     if (!roof) continue;
+    // Dispatch on TOPOLOGY (22h). A flush segment on a metal shed gets the
+    // monorail model; a flush segment anywhere else, and any pitched roof,
+    // still gets no member model at all and keeps its honest per-panel BOM
+    // line. `topologyOf` is the same predicate the structure UI gates on, so
+    // what is offered and what is built cannot disagree.
+    const topo = topologyOf(roof, seg);
+    if (topo === 'sheet_monorail') {
+      const s = buildMonorail(seg, spec, roof, project, project.panels);
+      if (s.members.length > 0) out.push(s);
+      continue;
+    }
     const racking = resolveRacking(project, roof, seg, spec);
     if (!racking) continue;
     const s = buildStructure(seg, spec, roof, racking, project.panels);
@@ -692,8 +945,21 @@ export function fastenerTotals(structures: SegmentStructure[]): {
   ballast: number;
   piles: number;
   pedestals: number;
+  /** metal-shed L-feet, and one EPDM washer per penetration (22h) */
+  standoffs: number;
+  sealingWashers: number;
 } {
-  const t = { anchors: 0, plates: 0, bolts: 0, clamps: 0, ballast: 0, piles: 0, pedestals: 0 };
+  const t = {
+    anchors: 0,
+    plates: 0,
+    bolts: 0,
+    clamps: 0,
+    ballast: 0,
+    piles: 0,
+    pedestals: 0,
+    standoffs: 0,
+    sealingWashers: 0,
+  };
   for (const s of structures) {
     for (const n of s.nodes) {
       t.anchors += n.fastenerSpec.anchors ?? 0;
@@ -703,6 +969,8 @@ export function fastenerTotals(structures: SegmentStructure[]): {
       t.ballast += n.fastenerSpec.ballast ?? 0;
       t.piles += n.fastenerSpec.piles ?? 0;
       t.pedestals += n.fastenerSpec.pedestals ?? 0;
+      t.standoffs += n.fastenerSpec.standoffs ?? 0;
+      t.sealingWashers += n.fastenerSpec.sealingWashers ?? 0;
     }
   }
   return t;
@@ -726,6 +994,9 @@ export function validateStructure(s: SegmentStructure): string[] {
     rafter: ['leg_rafter'],
     purlin: ['rafter_purlin', 'panel_clamp_end'],
     brace: ['brace_bolt'],
+    // a rail with no standoff is a rail resting on nothing. Listed here or the
+    // monorail model would validate silently however it was built.
+    rail: ['sheet_standoff', 'panel_clamp_end'],
   };
   for (const m of s.members) {
     const kinds = new Set((nodesByMember.get(m.id) ?? []).map((n) => n.kind));

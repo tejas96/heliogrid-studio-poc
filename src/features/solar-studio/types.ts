@@ -464,6 +464,13 @@ export interface StructureDefaults {
   foundation?: FoundationKind;
   foundationShape?: FoundationShape;
   clearanceM?: number;
+  /**
+   * Purlin centres under a METAL SHED's sheeting, m (Phase 22h). Lazy like its
+   * siblings; absent resolves from rule config. We cannot measure this — it is
+   * inside the building — so it is ASSUMED until a surveyor confirms it, and
+   * it sets how many standoffs each rail needs.
+   */
+  purlinPitchM?: number;
 }
 
 /**
