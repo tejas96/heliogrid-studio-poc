@@ -11,7 +11,17 @@
 // actually contains.
 import { Clone, useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
-import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import {
+  Component,
+  Suspense,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import * as THREE from 'three';
 import type { Group, Object3D } from 'three';
 import type { Obstruction, ObstructionType } from '../types';
 import { castsAnalyticalShadow } from '../lib/capabilities';
@@ -68,6 +78,58 @@ export function useWarmObstructionAssets(types: ObstructionType[]): void {
       if (url) useGLTF.preload(url);
     }
   }, [key]);
+}
+
+/**
+ * A GLB placed so its LOWEST POINT rests on the parent origin, whatever the
+ * asset's own origin happens to be.
+ *
+ * Every model here is documented as "1 m tall, origin at base". `tree.glb` was
+ * not: its geometry sits half a height above its origin, so scaling it to a
+ * 17 m tree lifted the trunk 8.5 m into the air. Measured in the running
+ * scene — treeBottomY was 8.4988 with the group correctly at 0 — after a
+ * static read of the file's accessors said otherwise and sent me the wrong way.
+ *
+ * So this measures the real bounding box after scaling instead of trusting the
+ * authoring convention. Any asset that is re-exported, swapped, or added later
+ * is grounded by construction rather than by a promise in a comment.
+ */
+function GroundedClone({
+  object,
+  scale,
+  caster,
+}: {
+  object: Object3D;
+  scale: [number, number, number];
+  caster: { shadowCaster: boolean };
+}) {
+  const inner = useRef<Group>(null);
+  const [dy, setDy] = useState(0);
+  const scaleKey = scale.join(',');
+
+  useLayoutEffect(() => {
+    const g = inner.current;
+    if (!g) return;
+    g.updateWorldMatrix(true, true);
+    const box = new THREE.Box3().setFromObject(g);
+    // the inner group carries no offset of its own, so its min.y IS the
+    // asset's base relative to where we are about to place it
+    if (Number.isFinite(box.min.y)) setDy(-box.min.y);
+  }, [object, scaleKey]);
+
+  return (
+    <group position={[0, dy, 0]}>
+      <group ref={inner}>
+        <Clone
+          object={object}
+          scale={scale}
+          castShadow={caster.shadowCaster}
+          receiveShadow
+          userData={caster}
+        />
+      </group>
+    </group>
+  );
 }
 
 const BUILDING_TINTS = ['#8d8579', '#9a9287', '#7f7a70'];
@@ -431,7 +493,12 @@ function ProceduralTurbineVent({
 // tree rendered 8.5 m into the ground, showing as a crown sitting on the soil.
 // `minY` is what the renderer lifts by. Verified against the asset by
 // obstruction-assets.test.ts so a re-export cannot silently reintroduce it.
-const TREE_REF = { x: 1.2623, y: 1.89677, z: 1.21922, minY: -0.9508 };
+// x/z/y are the model's measured extents, used to hit a target footprint and
+// height. There is deliberately NO hand-entered origin offset here: grounding
+// is measured from the real bounding box at runtime by GroundedClone, because
+// a constant read statically out of the GLB got the sign wrong once already and
+// lifted every tree by half its height.
+const TREE_REF = { x: 1.2623, y: 1.89677, z: 1.21922 };
 
 function TreeAsset({
   o,
@@ -457,15 +524,12 @@ function TreeAsset({
   const scaleZ = Math.max(0.05, footprintM / TREE_REF.z);
   const scaleY = Math.max(0.05, o.heightM / TREE_REF.y);
   return gltf.scene ? (
-    // lift by the scaled distance from the model's origin to its underside, so
-    // the trunk meets the surface instead of starting halfway through it
-    <group ref={swayRef} position={[0, -TREE_REF.minY * scaleY, 0]}>
-      <Clone
+    // sway rotates about the BASE, which is where GroundedClone puts the model
+    <group ref={swayRef}>
+      <GroundedClone
         object={gltf.scene}
         scale={[scaleX, scaleY, scaleZ]}
-        castShadow={caster.shadowCaster}
-        receiveShadow
-        userData={caster}
+        caster={caster}
       />
     </group>
   ) : (
