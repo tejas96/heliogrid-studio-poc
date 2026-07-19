@@ -417,6 +417,59 @@ export function NumberField({
 }
 
 /**
+ * The text counterpart of NumberField: commits once, on blur or Enter.
+ *
+ * Same reason. A plain `onChange={e => patch(e.target.value)}` on a line name
+ * writes one project revision — and one undo entry — per character, so undoing
+ * a rename means pressing undo once for every letter typed.
+ */
+export function TextField({
+  value,
+  onCommit,
+  ariaLabel,
+  placeholder,
+  style,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  ariaLabel: string;
+  placeholder?: string;
+  style?: CSSProperties;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft !== null && draft !== value) onCommit(draft);
+    setDraft(null);
+  };
+  return (
+    <input
+      value={draft ?? value}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur(); // blur commits; doing both would double-write
+        } else if (e.key === 'Escape') {
+          setDraft(null);
+        }
+      }}
+      style={{
+        width: '100%',
+        padding: '3px 5px',
+        border: '1px solid var(--line)',
+        borderRadius: 6,
+        background: 'var(--paper)',
+        fontSize: 12.5,
+        ...style,
+      }}
+    />
+  );
+}
+
+/**
  * A table that is accessible by construction, so callers cannot forget.
  *
  * Every data table needs a caption naming it and a scope on each header, or a

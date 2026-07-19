@@ -138,26 +138,71 @@ export function bomTotal(lines: BomLine[], project: Project): number {
   return bomMoney(lines, project).total;
 }
 
-export function bomToCsv(lines: BomLine[]): string {
-  const head = 'Category,Item,Spec,Qty,Unit,Unit Price (INR),Amount (INR),Confidence,Derivation';
-  const rows = lines.map((l) =>
-    [
+/**
+ * The BOM as CSV — the file someone actually raises a purchase order from.
+ *
+ * It therefore has to carry ORDER QTY, not just the design quantity. Exporting
+ * `qty` alone (as this did) hands procurement a number that is short by the
+ * waste allowance on every cable and steel line, and an Amount that ignores
+ * both the allowance and whether the line is even included. The columns now
+ * match the Step-9 table, and the money comes from the same `lineMoney` the
+ * screen and the proposal read.
+ *
+ * `project` supplies the margin. It is optional so the older call sites keep
+ * compiling; without it the taxable/total columns are computed at zero margin
+ * and the header says so, rather than quietly printing cost as if it were price.
+ */
+export function bomToCsv(lines: BomLine[], project?: Project): string {
+  const p = project ?? ({ pricing: { marginPct: 0 } } as Project);
+  const marginPct = p.pricing?.marginPct ?? 0;
+  const COLS = [
+    'Category',
+    'Item',
+    'Spec',
+    'Included',
+    'Qty',
+    'Waste %',
+    'Order Qty',
+    'Unit',
+    'Unit Price (INR)',
+    'Amount (INR)',
+    `Taxable @ ${marginPct}% margin (INR)`,
+    'GST %',
+    'GST (INR)',
+    'Total (INR)',
+    'Confidence',
+    'Derivation',
+  ];
+  // quoted like every data row — a header that quotes differently is the kind
+  // of inconsistency that trips naive parsers on the receiving end
+  const head = COLS.map((c) => `"${c}"`).join(',');
+  const rows = lines.map((l) => {
+    const m = lineMoney(l, marginPct);
+    return [
       l.category,
       l.item,
       l.spec,
+      (l.included ?? true) ? 'yes' : 'NO — supplied by others',
       l.qty,
+      l.wastePct ?? 0,
+      m.orderQty,
       l.unit,
       l.unitPriceInr,
-      Math.round(l.qty * l.unitPriceInr),
+      Math.round(m.base),
+      Math.round(m.taxable),
+      l.gstPct ?? 0,
+      Math.round(m.gst),
+      Math.round(m.total),
       l.overridden ? 'measured' : l.confidence,
       l.formula,
     ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(','),
-  );
+      .join(',');
+  });
   const out = [head, ...rows];
-  // notes travel WITH the exported quote (plan §F/§F3 gates). 9 columns now.
-  const note = (t: string) => `"NOTE","${t}","","","","","","",""`;
+  // notes travel WITH the exported quote (plan §F/§F3 gates). The padding is
+  // derived from COLS so adding a column cannot silently misalign them.
+  const note = (t: string) => `"NOTE","${t}"${',""'.repeat(COLS.length - 2)}`;
   if (lines.some((l) => l.formula.includes(STRUCTURE_DISCLAIMER))) {
     out.push(note(STRUCTURE_DISCLAIMER));
   }

@@ -6,7 +6,7 @@
 // (waste sits between them) and a quote that shows only one of them either
 // hides the allowance or misstates the design.
 import { Info, RotateCcw } from 'lucide-react';
-import { NumberField } from '../../components/ui';
+import { NumberField, TextField } from '../../components/ui';
 import { rowState } from '../../lib/bom/view';
 import type { OverridableField } from '../../lib/bom/merge';
 import type { BomLine } from '../../types';
@@ -102,7 +102,21 @@ export function BomRow({
             {cell(
               'item',
               <>
-                <b style={{ fontWeight: 650 }}>{line.item}</b>
+                {/* A DERIVED line's name comes from the design and is not typed
+                    over; a CUSTOM line has no derivation, so its name is the
+                    only thing identifying it and must stay editable. The
+                    rebuild rendered both as static text, which silently removed
+                    the ability to rename a line you added yourself. */}
+                {line.auto ? (
+                  <b style={{ fontWeight: 650 }}>{line.item}</b>
+                ) : (
+                  <TextField
+                    value={line.item}
+                    ariaLabel={`Name of ${line.item}`}
+                    onCommit={(v) => onEdit('item', v)}
+                    style={{ fontWeight: 650 }}
+                  />
+                )}
                 {/* the dot above is decorative; THIS is what a screen reader gets */}
                 <span style={SR}>{`. ${conf.label}.`}</span>
                 {!included && <span style={SR}> Excluded from the quote.</span>}

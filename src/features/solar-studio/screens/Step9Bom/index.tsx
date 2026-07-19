@@ -38,6 +38,7 @@ import {
   adoptOrphanAsCustom,
   discardOrphan,
   editBomField,
+  editCustomBomLine,
   refreshBomLines,
   removeCustomBomLine,
   resetBomField,
@@ -73,8 +74,17 @@ export function Step9Bom() {
   // price edit undoable as a single step rather than silently merging.
   const apply = (p: Partial<typeof project>) => patch(p, true);
 
-  const onEdit = (lineKey: string, field: OverridableField, value: unknown) =>
-    apply(editBomField(project, lineKey, field, value));
+  // A hand-entered line is edited in place; a derived one gets a field
+  // override. Routing both through `editBomField` would turn every edit to a
+  // custom line into an orphan that changes nothing — see editCustomBomLine.
+  const onEdit = (lineKey: string, field: OverridableField, value: unknown) => {
+    const line = lines.find((l) => l.id === lineKey);
+    apply(
+      line && !line.auto
+        ? editCustomBomLine(project, lineKey, field, value)
+        : editBomField(project, lineKey, field, value),
+    );
+  };
   const onReset = (lineKey: string, field: string) =>
     apply(resetBomField(project, lineKey, field));
   const onRefreshSection = (lineKeys: string[]) => apply(refreshBomLines(project, lineKeys));
@@ -127,7 +137,7 @@ export function Step9Bom() {
 
   function exportCsv() {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([bomToCsv(lines)], { type: 'text/csv' }));
+    a.href = URL.createObjectURL(new Blob([bomToCsv(lines, project)], { type: 'text/csv' }));
     a.download = `BOM-${project.info.name}.csv`;
     a.click();
   }

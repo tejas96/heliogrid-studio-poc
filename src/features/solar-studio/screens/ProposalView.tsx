@@ -6,7 +6,7 @@ import { navigate } from '../router';
 import { computeEnergyReport } from '../lib/solar';
 import { computeFinancials } from '../lib/finance';
 import { computeFinancing } from '../lib/financing';
-import { mergedBom, bomSubtotal } from '../lib/bom';
+import { mergedBom, bomMoney } from '../lib/bom';
 import { effectiveSld } from '../lib/sld';
 import { proposalNarrative } from '../lib/proposal-narrative';
 import {
@@ -48,6 +48,8 @@ export function ProposalView() {
   const r = computeEnergyReport(project);
   const fin = computeFinancials(project, r);
   const bom = mergedBom(project);
+  // the same money path Step 9 reads — the two documents cannot disagree
+  const money = bomMoney(bom, project);
   // Four ways to buy the SAME system — derived from the one quote total, using
   // the SAME annual saving the report shows, so PPA savings reconcile exactly.
   const financing =
@@ -441,10 +443,18 @@ export function ProposalView() {
           </table>
           <div style={{ textAlign: 'right', fontSize: 12.5, fontWeight: 800, marginTop: 8 }}>
             {audience === 'engineering' ? (
+              // The FULL chain, because the short version was arithmetically
+              // false. It printed "subtotal + margin = systemCost" — true until
+              // Phase 22d made GST per-line, after which the stated sum was
+              // short by exactly the tax (₹15,690 on the 8-panel fixture). An
+              // engineering document that prints an equation which does not
+              // hold is worse than one that prints no breakdown at all.
               <>
-                Subtotal ₹{bomSubtotal(bom).toLocaleString('en-IN')} +{' '}
-                {project.pricing?.marginPct ?? DEFAULT_MARGIN_PCT}% margin ={' '}
-                ₹{fin.systemCostInr.toLocaleString('en-IN')}
+                Cost ₹{money.subtotal.toLocaleString('en-IN')} +{' '}
+                {project.pricing?.marginPct ?? DEFAULT_MARGIN_PCT}% margin = taxable ₹
+                {money.taxable.toLocaleString('en-IN')} + GST ₹
+                {money.gst.toLocaleString('en-IN')} = ₹
+                {fin.systemCostInr.toLocaleString('en-IN')}
               </>
             ) : (
               // customer: the ONE final price, margin baked in — never the breakdown

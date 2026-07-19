@@ -66,6 +66,30 @@ export function addCustomBomLine(project: Project, line: BomLine): BomPatch {
   return patch({ ...s, custom: [...s.custom, { ...line, auto: false, overridden: false }] });
 }
 
+/**
+ * Edit a field of a HAND-ENTERED line.
+ *
+ * Custom lines are not derived, so they have nothing to override: `mergeBom`
+ * builds its override index from the derived set and appends `custom` after it.
+ * Sending a custom line through `editBomField` therefore writes an override
+ * whose key matches no derived line — it lands as an ORPHAN, changes nothing,
+ * and raises a banner telling the user their edit no longer matches a design
+ * that never produced the line in the first place. The value is edited in
+ * place instead.
+ */
+export function editCustomBomLine(
+  project: Project,
+  id: string,
+  field: string,
+  value: unknown,
+): BomPatch {
+  const s = ensureState(project);
+  return patch({
+    ...s,
+    custom: s.custom.map((c) => (c.id === id ? { ...c, [field]: value } : c)),
+  });
+}
+
 export function removeCustomBomLine(project: Project, id: string): BomPatch {
   const s = ensureState(project);
   return patch({ ...s, custom: s.custom.filter((c) => c.id !== id) });
