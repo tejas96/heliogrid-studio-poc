@@ -21,6 +21,7 @@ import {
   foundationKindOfSpec,
   type FoundationPart,
 } from '../lib/foundation';
+import { nodeHardware } from '../lib/hardware';
 import { getPanelMaterials } from './textures';
 
 interface Placement {
@@ -71,14 +72,17 @@ export function StructureNodesInstanced({
     const map = new Map<string, Placement[]>();
     for (const s of structures) {
       for (const node of s.nodes) {
-        if (node.kind !== 'roof_anchor') continue;
-        // kind comes from the node's own hardware; SHAPE from the structure's
-        // resolved racking — one answer each, neither re-derived here
-        const asm = foundationAssembly(
-          foundationKindOfSpec(node.fastenerSpec),
-          s.foundationShape,
-        );
-        for (const part of asm.parts) {
+        // A foundation for a leg base; plain hardware for every other joint.
+        // Both yield the same part shape, so one loop places them all — and
+        // `nodeHardware` returns [] for roof_anchor, so nothing is drawn twice.
+        const parts =
+          node.kind === 'roof_anchor'
+            ? // kind comes from the node's own hardware; SHAPE from the
+              // structure's resolved racking — one answer each, neither
+              // re-derived here
+              foundationAssembly(foundationKindOfSpec(node.fastenerSpec), s.foundationShape).parts
+            : nodeHardware(node.kind);
+        for (const part of parts) {
           const list = map.get(part.bucket) ?? [];
           list.push({ part, at: node.position, nodeId: node.id });
           map.set(part.bucket, list);

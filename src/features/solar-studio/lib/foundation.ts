@@ -30,7 +30,9 @@ const MM = 0.001;
 
 export interface FoundationPart {
   /** which instanced bucket this belongs to */
-  bucket: 'pedestal' | 'ballast' | 'pile' | 'plate' | 'bolt' | 'grout';
+  // `clamp` and `standoff` are node HARDWARE rather than foundation parts (see
+  // lib/hardware) — they share this shape so the renderer keeps one loop.
+  bucket: 'pedestal' | 'ballast' | 'pile' | 'plate' | 'bolt' | 'grout' | 'clamp' | 'standoff';
   geometry: 'box' | 'cylinder';
   /** metres, relative to the leg base (roof surface at the leg centre) */
   size: { x: number; y: number; z: number };
