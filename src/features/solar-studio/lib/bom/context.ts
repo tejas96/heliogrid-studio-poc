@@ -12,6 +12,8 @@ import { estimateDcCableM } from '../stringing';
 import { acCableFromRoutes, dcCableFromRoutes } from '../routing';
 import { resolveRules } from '../../data/rules/india';
 import type { MarketRules } from '../../data/rules/india';
+import { resolveCatalog } from '../../data/catalog';
+import type { CatalogEnvelope } from '../../data/catalog';
 import { isSloped } from '../roof-plane';
 
 /** Inverter → meter run we cannot measure: the service entry is not modelled. */
@@ -35,6 +37,16 @@ export interface BomContext {
   inv: InverterSpec;
   invCount: number;
   rules: MarketRules;
+  /**
+   * Prices, resolved through the CATALOG rather than imported from
+   * `data/pricebook` directly. The distinction matters: a direct import binds
+   * at module-load and would keep quoting the bundled book after the Phase-10
+   * management UI swaps in an imported one. Resolving here means every emitter
+   * prices against whatever catalog was active when the BOM was derived — and
+   * `catalogVersion` rides in `designFp`, so a price change re-keys the quote
+   * instead of leaving a stale one looking fresh.
+   */
+  pricebook: CatalogEnvelope['pricebook'];
 
   // ── Electrical
   routedDc: ReturnType<typeof dcCableFromRoutes>;
@@ -190,6 +202,7 @@ export function buildContext(project: Project): BomContext | null {
     inv,
     invCount,
     rules,
+    pricebook: resolveCatalog().pricebook,
     routedDc,
     routedAc,
     dcCableM,

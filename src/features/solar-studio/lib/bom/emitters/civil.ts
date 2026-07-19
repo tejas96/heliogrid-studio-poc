@@ -1,11 +1,10 @@
 import type { BomLine } from '../../../types';
-import { PRICE_BOOK } from '../../../data/pricebook';
 import type { BomContext } from '../context';
 import { line } from '../line';
 
 /** Both project-wide: labour and freight are priced for the SITE, not a roof. */
 export function emitCivil(ctx: BomContext): BomLine[] {
-  const { kwp } = ctx;
+  const { kwp, pricebook: PRICE_BOOK } = ctx;
   return [
     line({
       key: 'civil.installation',

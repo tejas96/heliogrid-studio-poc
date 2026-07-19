@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeFinancials, subsidyInr } from '../finance';
 import { computeEnergyReport } from '../solar';
-import { bomSubtotal, bomTotal, mergedBom } from '../bom';
+import { bomMoney, bomSubtotal, bomTotal, mergedBom, orderQtyOf } from '../bom';
 import { fixtureProject } from './fixtures/project';
 import type { BomLine } from '../../types';
 
@@ -26,16 +26,16 @@ describe('subsidyInr — PM Surya Ghar slabs, DCR-gated, capped not zeroed', () 
 });
 
 describe('single money path — financials === BOM table', () => {
-  it('systemCost equals mergedBom subtotal × persisted margin (the Step 9 total)', () => {
+  // The invariant is unchanged — the financials and the Step-9 table must be
+  // the same number from the same lines. Phase 22d only changed HOW that
+  // number is built (line-wise, with per-line GST).
+  it('systemCost is exactly the Step 9 quote total', () => {
     const project = fixtureProject(8);
     const report = computeEnergyReport(project);
     const fin = computeFinancials(project, report);
     const lines = mergedBom(project);
-    const step9Total = Math.round(
-      bomSubtotal(lines) * (1 + project.pricing.marginPct / 100),
-    );
-    expect(fin.systemCostInr).toBe(step9Total);
     expect(fin.systemCostInr).toBe(bomTotal(lines, project));
+    expect(fin.systemCostInr).toBe(bomMoney(lines, project).total);
   });
 
   it('a price override flows into the financials', () => {
@@ -52,8 +52,11 @@ describe('single money path — financials === BOM table', () => {
     const report = computeEnergyReport(project);
     const before = computeFinancials(base, report).systemCostInr;
     const after = computeFinancials(project, report).systemCostInr;
+    // the extra ₹1000/module is marked up, THEN taxed at the module rate
     const marginFactor = 1 + project.pricing.marginPct / 100;
-    expect(after - before).toBe(Math.round(modules.qty * 1000 * marginFactor));
+    const gstFactor = 1 + (modules.gstPct ?? 0) / 100;
+    const orderQty = orderQtyOf(modules);
+    expect(after - before).toBeCloseTo(orderQty * 1000 * marginFactor * gstFactor, 0);
   });
 
   it('a custom line flows into the financials', () => {
@@ -91,8 +94,11 @@ describe('single money path — financials === BOM table', () => {
       { ...base, pricing: { marginPct: 20 } },
       report,
     ).systemCostInr;
-    const sub = bomSubtotal(mergedBom(base));
-    expect(at12).toBe(Math.round(sub * 1.12));
-    expect(at20).toBe(Math.round(sub * 1.2));
+    expect(at12).toBe(bomTotal(mergedBom(base), { ...base, pricing: { marginPct: 12 } }));
+    expect(at20).toBe(bomTotal(mergedBom(base), { ...base, pricing: { marginPct: 20 } }));
+    expect(at20).toBeGreaterThan(at12);
+    // margin sits BELOW GST, so raising it raises the tax too — the ratio is
+    // the margin ratio, not the margin difference
+    expect(at20 / at12).toBeCloseTo(1.2 / 1.12, 3);
   });
 });

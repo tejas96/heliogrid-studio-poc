@@ -1,5 +1,5 @@
 import type { BomLine } from '../../../types';
-import { PRICE_BOOK } from '../../../data/pricebook';
+import type { PriceBook } from '../../../data/pricebook';
 import { STRUCTURE_DISCLAIMER } from '../../structure';
 import type { BomContext, SlopedCovering } from '../context';
 import { line, soleSource } from '../line';
@@ -33,6 +33,10 @@ function pedestalsBySurface(ctx: BomContext): [('roof' | 'ground'), number][] {
  * three possible products at once ("hooks (tile) or L-feet (sloped RCC/sheet)")
  * — an estimate of an unknown thing. Now the product is known and only the
  * anchor COUNT (rafter spacing) is estimated.
+ *
+ * Prices are held as price-book KEYS, not values. This table is module-level,
+ * so reading `PRICE_BOOK.x` here would bind at import and freeze the rate for
+ * the process lifetime — the catalog must be resolved per derivation.
  */
 const SLOPED_HARDWARE: Record<
   SlopedCovering,
@@ -40,10 +44,10 @@ const SLOPED_HARDWARE: Record<
     covering: string;
     anchorItem: string;
     anchorSpec: string;
-    anchorPrice: number;
+    anchorPriceKey: keyof PriceBook;
     anchorNote: string;
     sealSpec: string;
-    sealPrice: number;
+    sealPriceKey: keyof PriceBook;
     sealNote: string;
   }
 > = {
@@ -51,12 +55,12 @@ const SLOPED_HARDWARE: Record<
     covering: 'sloped RCC slab',
     anchorItem: 'L-feet on chemical anchors',
     anchorSpec: 'HDG/SS L-feet + chemical anchors into the slab, flush mount',
-    anchorPrice: PRICE_BOOK.slopedLFootSetPerPanel,
+    anchorPriceKey: 'slopedLFootSetPerPanel',
     anchorNote:
       'There is no rafter to reach on a slab, so the foot anchors directly into concrete. ' +
       'ESTIMATE — anchors per module (~4 assumed) depend on module size and the structural engineer’s pull-out check.',
     sealSpec: 'EPDM washers + PU sealant at every anchor',
-    sealPrice: PRICE_BOOK.slopedSealRccPerPanel,
+    sealPriceKey: 'slopedSealRccPerPanel',
     sealNote:
       'Each anchor breaks the waterproofing layer and is sealed with an EPDM washer and a PU bead. No tile allowance — there are no tiles to lift.',
   },
@@ -64,12 +68,12 @@ const SLOPED_HARDWARE: Record<
     covering: 'Mangalore / clay tile',
     anchorItem: 'adjustable tile roof hooks',
     anchorSpec: 'HDG/SS adjustable tile roof hooks bolted to batten/rafter, flush mount',
-    anchorPrice: PRICE_BOOK.tileHookSetPerPanel,
+    anchorPriceKey: 'tileHookSetPerPanel',
     anchorNote:
       'A tile hook reaches PAST the tile to the batten/rafter, so it must clear the tile profile and be height-adjustable. ' +
       'ESTIMATE — hooks per module (~4 assumed) are set by rafter spacing, which is not modelled; confirm at site survey.',
     sealSpec: 'Lead/EPDM flashing plate per hook + tile lifting & breakage allowance',
-    sealPrice: PRICE_BOOK.tileFlashingPerPanel,
+    sealPriceKey: 'tileFlashingPerPanel',
     sealNote:
       'Every hook lifts a tile, which is flashed and re-bedded. Tile breakage during install is an ALLOWANCE, not a count — tiles crack on lift and the rate is site- and age-dependent.',
   },
@@ -92,6 +96,7 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     flatRccRoofIds,
     metalRoofIdList,
     groundRoofIdList,
+    pricebook: PRICE_BOOK,
   } = ctx;
   const out: BomLine[] = [];
 
@@ -323,7 +328,7 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         spec: hw.anchorSpec,
         qty: nCov,
         unit: 'panel-set',
-        unitPriceInr: hw.anchorPrice,
+        unitPriceInr: PRICE_BOOK[hw.anchorPriceKey],
         confidence: 'estimated',
         // The covering is now KNOWN, so name the hardware and say why. What is
         // still unknown is the anchor COUNT — name that, and nothing else.
@@ -340,7 +345,7 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         spec: hw.sealSpec,
         qty: nCov,
         unit: 'panel-set',
-        unitPriceInr: hw.sealPrice,
+        unitPriceInr: PRICE_BOOK[hw.sealPriceKey],
         confidence: 'estimated',
         formula:
           `${nCov} panels on ${hw.covering} faces — every anchor penetrates the covering and must be weatherproofed. ` +
@@ -368,7 +373,12 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
   // all-panels rail line double-billed both)
   // module rails are needed on ground tables exactly as on RCC — and on a
   // pitched face too: the hooks/L-feet carry a rail, the modules clamp to it
-  const railM = Math.round((nFlatRcc + nGround + nSloped) * (spec.lengthMm / 1000) * 1.05);
+  // Phase 22d: the 5% cutting allowance that used to be multiplied into this
+  // quantity now lives in ONE place — wastePct on the line, applied by
+  // orderQtyOf like every other line. `qty` is the length actually required;
+  // ORDER QTY is what you buy. Baking waste into qty made the two indist-
+  // inguishable and hid the allowance from the user.
+  const railM = Math.round((nFlatRcc + nGround + nSloped) * (spec.lengthMm / 1000));
   if (railM > 0)
     out.push(
       line({
@@ -379,7 +389,7 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         qty: railM,
         unit: 'm',
         unitPriceInr: PRICE_BOOK.railPerM,
-        formula: `${nFlatRcc + nGround + nSloped} unsegmented flat-RCC/ground/pitched-roof panels × panel length × 1.05 waste`,
+        formula: `${nFlatRcc + nGround + nSloped} unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.`,
       }),
     );
   // panel clamps: structured segments count clamps from the node graph;

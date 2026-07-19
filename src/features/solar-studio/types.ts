@@ -688,6 +688,18 @@ export interface BomLine {
   /** design objects this line came from — for BOM↔3D focus (Phase 10 §F3) */
   sourceRoofId?: string;
   sourceSegmentId?: string;
+  /**
+   * PROCUREMENT fields (Phase 22d). Optional on the type so hand-written lines
+   * still construct, but always populated by `line()`; readers default them.
+   */
+  /** false = shown but supplied by others — contributes nothing to any total */
+  included?: boolean;
+  /** cutting/pulling allowance, % of qty. A counted item is 0, not padded. */
+  wastePct?: number;
+  gstPct?: number;
+  brand?: string;
+  /** HSN/SAC code, when the org tracks one */
+  hsn?: string;
   /** auto lines re-sync when design changes; custom lines don't */
   auto: boolean;
   overridden: boolean;

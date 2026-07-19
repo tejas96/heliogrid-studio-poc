@@ -16,6 +16,7 @@
 // because they do not move the sampled point.
 import type { Project, ShadowCapture } from '../types';
 import { panelSampleHeightM } from './panel-pose';
+import { resolveCatalog } from '../data/catalog';
 
 const r = (v: number, f: number) => Math.round(v * f);
 
@@ -179,7 +180,20 @@ export function designFp(p: Project): string {
       : '') +
     p.roofs
       .map((r) => (r.structureOverride ? `|so:${r.id}:${JSON.stringify(r.structureOverride)}` : ''))
-      .join('')
+      .join('') +
+    // CATALOG VERSION (Phase 22d) — the one deliberate UNCONDITIONAL suffix in
+    // this file. Every other addition appends nothing when absent so existing
+    // projects survive byte-identical; this one cannot, because the catalog is
+    // never absent. Its inclusion is the point: prices and specs live OUTSIDE
+    // the project, so without it a price-book revision leaves every stored
+    // quote and proposal looking fresh while quoting last quarter's money.
+    // `catalog.ts` has said "joins designFp in Phase 10" since it was written.
+    //
+    // Consequence, accepted knowingly: bumping catalogVersion re-keys every
+    // project's design fingerprint and stales their captures. That is correct —
+    // the money genuinely changed — and it is exactly what the bump means.
+    '|cat:' +
+    resolveCatalog().catalogVersion
   );
 }
 

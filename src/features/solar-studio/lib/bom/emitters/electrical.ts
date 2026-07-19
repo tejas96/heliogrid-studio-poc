@@ -1,5 +1,4 @@
 import type { BomLine } from '../../../types';
-import { PRICE_BOOK } from '../../../data/pricebook';
 import { acBreakerA, acFullLoadA, dcCableSizeMm2 } from '../../electrical-sizing';
 import type { BomContext } from '../context';
 import { AC_ALLOWANCE_M } from '../context';
@@ -20,14 +19,31 @@ function mcbFor(acKw: number, phases: 1 | 3): number {
  * a source roof/segment — attributing them to one roof would be a lie.
  */
 export function emitElectrical(ctx: BomContext): BomLine[] {
-  const { project, inv, invCount, n, rules, routedDc, routedAc, dcCableM, acRunM, conduitM } = ctx;
+  const {
+    project,
+    inv,
+    invCount,
+    n,
+    rules,
+    routedDc,
+    routedAc,
+    dcCableM,
+    acRunM,
+    conduitM,
+    pricebook: PRICE_BOOK,
+  } = ctx;
   const out: BomLine[] = [];
 
   out.push(
     line({
       key: 'elec.dc_cable',
       category: 'Electrical BOS',
-      item: 'DC Solar Cable 4 sq.mm',
+      // The size lives in `spec`, where it is DERIVED. It used to be baked into
+      // this item name as a flat "4 sq.mm" that contradicted the derived spec
+      // beside it on any high-Isc module. Safe to change now: since 22c the
+      // override key is the LineKey, not the item text, so renaming an item no
+      // longer orphans a user's saved edit.
+      item: 'DC Solar Cable',
       // The conductor is SIZED, not assumed: smallest standard mm² whose
       // ampacity carries the string fuse (IEC 62548), from the module's own
       // Isc. This is the SAME dcCableSizeMm2 the SLD sheet prints, so the two

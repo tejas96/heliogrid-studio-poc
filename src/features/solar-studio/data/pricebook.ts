@@ -68,4 +68,11 @@ export const PRICE_BOOK = {
   transportLumpsum: 6000,
 };
 
+/**
+ * The shape of a price book. Consumers should take prices from
+ * `resolveCatalog().pricebook` (or `BomContext.pricebook`) and use this type for
+ * their signatures, so an imported book substitutes cleanly for the bundled one.
+ */
+export type PriceBook = typeof PRICE_BOOK;
+
 export const DEFAULT_MARGIN_PCT = 12;

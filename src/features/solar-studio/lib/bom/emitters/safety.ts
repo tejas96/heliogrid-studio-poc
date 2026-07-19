@@ -1,11 +1,10 @@
 import type { BomLine } from '../../../types';
-import { PRICE_BOOK } from '../../../data/pricebook';
 import { dist, polygonPerimeter } from '../../geo';
 import type { BomContext } from '../context';
 import { line, soleSource } from '../line';
 
 export function emitSafety(ctx: BomContext): BomLine[] {
-  const { project, rules } = ctx;
+  const { project, rules, pricebook: PRICE_BOOK } = ctx;
   const out: BomLine[] = [];
 
   const walkwayM2 = project.walkways.reduce((s, w) => s + dist(w.a, w.b) * (w.widthMm / 1000), 0);

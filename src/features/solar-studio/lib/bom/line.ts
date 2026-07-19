@@ -1,6 +1,7 @@
 // ─── The one constructor every emitter builds its lines with ────────────────
 import type { BomLine } from '../../types';
-import type { LineKey } from './registry';
+import { wastePctFor, type LineKey } from './registry';
+import { gstPctFor } from '../../data/gst';
 
 /** Everything an emitter supplies; the rest is filled in here. */
 export type LineInput = Omit<BomLine, 'id' | 'auto' | 'overridden' | 'confidence'> &
@@ -16,10 +17,16 @@ export function line(l: LineInput & { key: LineKey; instance?: string }): BomLin
   // 'derived' is the honest default: a quantity computed from the design. Lines
   // that are a direct COUNT (stronger) or depend on unmodelled facts (weaker)
   // pass their own confidence.
+  const id = instance === undefined ? key : `${key}:${instance}`;
   return {
     confidence: 'derived',
+    // Procurement defaults resolve from the registry by LineKey (Phase 22d).
+    // An emitter may still pass its own — an explicit value always wins.
+    included: true,
+    wastePct: wastePctFor(id),
+    gstPct: gstPctFor(rest.category, id),
     ...rest,
-    id: instance === undefined ? key : `${key}:${instance}`,
+    id,
     auto: true,
     overridden: false,
   };

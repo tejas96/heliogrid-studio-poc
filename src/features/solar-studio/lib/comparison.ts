@@ -417,12 +417,13 @@ let memoKey: string | null = null;
 let memoValue: ComparisonResult | null = null;
 
 /**
- * compareShortlist with last-value memoization keyed on designFp + catalog
- * version. Candidate rows never read measured solarAccess (the constructor
- * synthesizes unshaded layouts), so no shading stamp belongs in the key.
+ * compareShortlist with last-value memoization keyed on designFp, which carries
+ * the catalog version itself as of Phase 22d (it used to be appended here).
+ * Candidate rows never read measured solarAccess (the constructor synthesizes
+ * unshaded layouts), so no shading stamp belongs in the key.
  */
 export function memoizedComparison(project: Project): ComparisonResult {
-  const key = designFp(project) + '§' + resolveCatalog().catalogVersion;
+  const key = designFp(project);
   if (key !== memoKey || memoValue === null) {
     memoKey = key;
     memoValue = compareShortlist(project);

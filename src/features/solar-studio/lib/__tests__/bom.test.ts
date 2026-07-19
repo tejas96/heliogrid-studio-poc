@@ -2,7 +2,16 @@
 // Pins current behavior — including known Phase-10 targets (fixed cable
 // estimates, flat ₹/panel structures). These are the rewrite contract.
 import { describe, expect, it } from 'vitest';
-import { bomConfidence, bomSubtotal, bomToCsv, bomTotal, deriveBom, mergedBom } from '../bom';
+import {
+  bomConfidence,
+  bomMoney,
+  bomSubtotal,
+  bomToCsv,
+  bomTotal,
+  deriveBom,
+  lineMoney,
+  mergedBom,
+} from '../bom';
 import { PRICE_BOOK } from '../../data/pricebook';
 import { fixtureProject, fixtureRoof, fixturePanels } from './fixtures/project';
 import type { BomLine, Project } from '../../types';
@@ -51,13 +60,30 @@ describe('deriveBom (traceability contract)', () => {
     expect(merged.filter((l) => l.id === target.id)).toHaveLength(1);
   });
 
-  it('bomTotal = subtotal + persisted margin (single money path, Phase 1)', () => {
-    const subtotal = bomSubtotal(mergedBom(project));
-    const total = bomTotal(mergedBom(project), project);
-    expect(total).toBeCloseTo(
-      Math.round(subtotal * (1 + project.pricing.marginPct / 100)),
+  // Phase 22d changed the arithmetic, not the invariant: the total is still
+  // derived from the same lines the table shows, but line-wise and with GST,
+  // because rates differ per line.
+  it('bomTotal = Σ per-line (sale value + that line’s GST)', () => {
+    const lines = mergedBom(project);
+    const m = bomMoney(lines, project);
+    const perLine = lines.reduce(
+      (s, l) => s + lineMoney(l, project.pricing.marginPct).total,
       0,
     );
+    expect(bomTotal(lines, project)).toBe(m.total);
+    // Aggregate rounding and per-line rounding differ by sub-rupee amounts per
+    // line. The total rounds the AGGREGATE (so the printed taxable + printed
+    // GST sum exactly), which can sit a rupee or two off the sum of separately
+    // rounded lines. Assert the relationship, not bit-identity.
+    expect(Math.abs(m.total - perLine)).toBeLessThanOrEqual(2);
+  });
+
+  it('subtotal is pre-margin, pre-tax, and strictly below the total', () => {
+    const lines = mergedBom(project);
+    const m = bomMoney(lines, project);
+    expect(m.subtotal).toBeLessThan(m.taxable); // margin sits above cost
+    expect(m.taxable).toBeLessThan(m.total); // GST sits above the sale value
+    expect(m.total).toBe(m.taxable + m.gst);
   });
 
   it('KNOWN LIMIT (Phase 10 target): zero-string project still quotes DC cable + MC4', () => {

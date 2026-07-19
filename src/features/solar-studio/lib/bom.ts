@@ -17,6 +17,10 @@ import { emitSafety } from './bom/emitters/safety';
 import { emitCivil } from './bom/emitters/civil';
 
 import { _setDeriver, mergeBom, type MergedBomResult } from './bom/merge';
+import { bomMoney, lineMoney, orderQtyOf } from './bom/money';
+
+export { bomMoney, lineMoney, orderQtyOf, type BomMoney, type LineMoney } from './bom/money';
+export { isDiscreteUnit, wastePctFor } from './bom/registry';
 
 export { CATEGORY_ORDER } from './bom/registry';
 export {
@@ -111,15 +115,27 @@ export function bomConfidence(lines: BomLine[]): {
   };
 }
 
-export function bomSubtotal(lines: BomLine[]): number {
-  return Math.round(lines.reduce((s, l) => s + l.qty * l.unitPriceInr, 0));
+/**
+ * Buy cost before margin and tax — Σ (ORDER qty × price) over INCLUDED lines.
+ * Order quantity, not calculated quantity: you pay for what you buy, waste and
+ * all.
+ */
+export function bomSubtotal(lines: BomLine[], project?: Project): number {
+  // `project` is optional so the existing call sites keep compiling; margin
+  // does not enter the subtotal, so a zero-margin stub is safe.
+  return bomMoney(lines, project ?? ({ pricing: { marginPct: 0 } } as Project)).subtotal;
 }
 
-/** Grand total incl. the project's persisted margin — the ONE quote total. */
+/**
+ * The ONE quote total: Σ per-line (sale value + that line's own GST).
+ *
+ * Computed line-wise because rates differ per line — 5% on a module, 18% on the
+ * concrete beside it — so one subtotal times one rate would be wrong on every
+ * quote that carries civil work. See lib/bom/money.ts for why margin sits below
+ * the tax.
+ */
 export function bomTotal(lines: BomLine[], project: Project): number {
-  const marginPct = project.pricing?.marginPct ?? DEFAULT_MARGIN_PCT;
-  const sub = bomSubtotal(lines);
-  return Math.round(sub * (1 + marginPct / 100));
+  return bomMoney(lines, project).total;
 }
 
 export function bomToCsv(lines: BomLine[]): string {
