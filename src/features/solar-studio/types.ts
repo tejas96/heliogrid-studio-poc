@@ -621,6 +621,49 @@ export type BomCategory =
   | 'Safety'
   | 'Civil & Misc';
 
+/**
+ * ONE edited field of a derived BOM line.
+ *
+ * `autoAtEdit` records what the engine was saying at the moment the user
+ * overrode it. That single field does three jobs:
+ *   · staleness detection is a comparison, not a separate subsystem — if the
+ *     engine now says something different, the override is stale;
+ *   · "refresh from design" is just deleting the entry;
+ *   · the user can be shown what they overrode, not merely that they did.
+ */
+export interface BomFieldOverride {
+  value: unknown;
+  autoAtEdit: unknown;
+}
+
+/**
+ * Edits attached to a derived line, keyed by its STABLE line key (Phase 22b).
+ *
+ * The old model replaced the whole line, so editing `qty` also froze `spec`,
+ * `unitPriceInr` and — worst — `formula`, leaving a line whose stated
+ * derivation no longer produced the number beside it. Per-field edits leave
+ * everything untouched live.
+ */
+export interface BomOverride {
+  lineKey: string;
+  fields: Record<string, BomFieldOverride>;
+}
+
+/** Derivation inputs the user can set for a whole BOM section (Phase 22e). */
+export interface BomInputs {
+  /** average array → inverter DC run, m */
+  avgDcRunM?: number;
+  /** average inverter → LT panel AC run, m */
+  avgAcRunM?: number;
+}
+
+export interface BomState {
+  overrides: BomOverride[];
+  /** lines the user added by hand; these are not derived from anything */
+  custom: BomLine[];
+  inputs?: BomInputs;
+}
+
 export interface BomLine {
   id: string;
   category: BomCategory;
@@ -648,6 +691,10 @@ export interface BomLine {
   /** auto lines re-sync when design changes; custom lines don't */
   auto: boolean;
   overridden: boolean;
+  /** field names carrying a user override — drives the per-field reset icon */
+  overriddenFields?: string[];
+  /** overridden fields whose derived value has since MOVED (Phase 22e) */
+  staleFields?: string[];
 }
 
 // ─── Pricing ────────────────────────────────────────────────────────────────
@@ -811,7 +858,14 @@ export interface Project {
    * kept only so old saved payloads still parse. Always null after load.
    */
   sldParams: SldParams | null;
-  bomOverrides: BomLine[]; // custom + overridden lines
+  /**
+   * LEGACY whole-line overrides. Superseded by `bom` (Phase 22c) and migrated
+   * on load; kept on the type so a project saved before the migration still
+   * parses. New code must not write here.
+   */
+  bomOverrides: BomLine[];
+  /** Per-field BOM edits, custom lines and section inputs (Phase 22c). */
+  bom?: BomState;
   pricing: PricingSettings;
   derived: DerivedState;
   calibration: Calibration;

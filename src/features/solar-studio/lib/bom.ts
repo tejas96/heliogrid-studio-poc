@@ -16,7 +16,19 @@ import { emitMechanical } from './bom/emitters/mechanical';
 import { emitSafety } from './bom/emitters/safety';
 import { emitCivil } from './bom/emitters/civil';
 
+import { _setDeriver, mergeBom, type MergedBomResult } from './bom/merge';
+
 export { CATEGORY_ORDER } from './bom/registry';
+export {
+  clearFieldOverride,
+  clearOverrides,
+  migrateLegacyOverrides,
+  OVERRIDABLE_FIELDS,
+  setFieldOverride,
+  type BomOrphan,
+  type MergedBomResult,
+  type OverridableField,
+} from './bom/merge';
 export type { LineKey } from './bom/registry';
 export type { BomContext } from './bom/context';
 
@@ -34,6 +46,10 @@ const EMITTERS = [
   emitCivil,
 ];
 
+// merge.ts needs to re-derive once during migration but must not import this
+// module at load time (that would be a cycle) — hand it the deriver instead.
+_setDeriver((p) => deriveBom(p));
+
 export function deriveBom(project: Project): BomLine[] {
   const ctx = buildContext(project);
   // No panel spec, no inverter, or nothing placed ⇒ nothing to bill.
@@ -43,15 +59,24 @@ export function deriveBom(project: Project): BomLine[] {
 
 /** Merge auto lines with user overrides/custom lines. */
 export function mergedBom(project: Project): BomLine[] {
+  return mergedBomResult(project).lines;
+}
+
+/**
+ * Merged lines PLUS any saved edits that no longer match the design.
+ *
+ * `mergedBom` stays the thin wrapper so the six existing call sites are
+ * untouched; the BOM screen uses this form to surface orphans instead of
+ * dropping them on the floor, which is what the old whole-line model did.
+ */
+export function mergedBomResult(project: Project): MergedBomResult {
   const auto = deriveBom(project);
-  const overrides = new Map(project.bomOverrides.filter((o) => !o.auto).map((o) => [o.id, o]));
-  const byKey = new Map(
-    project.bomOverrides
-      .filter((o) => o.auto && o.overridden)
-      .map((o) => [o.category + '|' + o.item, o]),
-  );
-  const merged = auto.map((l) => byKey.get(l.category + '|' + l.item) ?? l);
-  return [...merged, ...overrides.values()];
+  const legacyCustom = (project.bomOverrides ?? []).filter((o) => !o.auto);
+  const r = mergeBom(auto, project);
+  // legacy custom lines survive until the project migrates (normalize.ts)
+  return project.bom
+    ? r
+    : { lines: [...r.lines, ...legacyCustom], orphans: r.orphans };
 }
 
 /**

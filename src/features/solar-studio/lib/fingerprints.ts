@@ -130,6 +130,22 @@ export function designFp(p: Project): string {
     '|' +
     JSON.stringify([
       p.bomOverrides.map((b) => [b.id, b.qty, b.unitPriceInr, b.item, b.spec, b.auto, b.overridden]),
+      // Phase 22c per-field overrides — CONDITIONAL: a project that has never
+      // edited its BOM serialises `undefined` here, exactly as it did before
+      // the field existed, so no stored capture or quote goes stale on upgrade.
+      // Once present it MUST re-key: these edits move money.
+      p.bom
+        ? [
+            p.bom.overrides.map((o) => [
+              o.lineKey,
+              Object.entries(o.fields)
+                .sort(([a], [b]) => (a < b ? -1 : 1)) // key order must not matter
+                .map(([f, v]) => [f, v.value]),
+            ]),
+            p.bom.custom.map((c) => [c.id, c.category, c.item, c.qty, c.unit, c.unitPriceInr]),
+            p.bom.inputs ?? null,
+          ]
+        : undefined,
       p.pricing.marginPct,
       p.derived.sldOverrides,
       [

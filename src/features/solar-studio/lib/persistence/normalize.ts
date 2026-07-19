@@ -114,6 +114,7 @@ export function normalizeProject(p: Project): Project {
     inverterPlacements: Array.isArray(p.inverterPlacements) ? p.inverterPlacements : [],
     strings: Array.isArray(p.strings) ? p.strings : [],
     bomOverrides: Array.isArray(p.bomOverrides) ? p.bomOverrides : [],
+    bom: normalizeBomState(p.bom),
     location: p.location
       ? { ...p.location, weather: normalizeWeather(p.location.weather) }
       : p.location,
@@ -139,4 +140,41 @@ export function normalizeProject(p: Project): Project {
       },
     })),
   };
+}
+
+/**
+ * Validate a persisted `bom` block (Phase 22c).
+ *
+ * Deliberately does NOT migrate legacy `bomOverrides` here. Migration re-derives
+ * the whole BOM to resolve the old `category|item` key, which normalize must
+ * stay clear of — it runs on every load, for every project, before the store
+ * exists. The store migrates lazily on the first BOM edit instead, and until
+ * then `mergedBomResult` keeps honouring the legacy array unchanged.
+ */
+function normalizeBomState(b: unknown): Project['bom'] {
+  if (!b || typeof b !== 'object') return undefined;
+  const raw = b as Record<string, unknown>;
+  const overrides = Array.isArray(raw.overrides)
+    ? raw.overrides.filter(
+        (o): o is { lineKey: string; fields: Record<string, { value: unknown; autoAtEdit: unknown }> } =>
+          !!o &&
+          typeof o === 'object' &&
+          typeof (o as Record<string, unknown>).lineKey === 'string' &&
+          !!(o as Record<string, unknown>).fields &&
+          typeof (o as Record<string, unknown>).fields === 'object',
+      )
+    : [];
+  const custom = Array.isArray(raw.custom) ? (raw.custom as Project['bomOverrides']) : [];
+  const inputsRaw = raw.inputs as Record<string, unknown> | undefined;
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined);
+  const inputs =
+    inputsRaw && typeof inputsRaw === 'object'
+      ? { avgDcRunM: num(inputsRaw.avgDcRunM), avgAcRunM: num(inputsRaw.avgAcRunM) }
+      : undefined;
+  // an empty block is indistinguishable from absent — keep it absent so the
+  // fingerprint stays byte-identical for a project that never edited its BOM
+  if (overrides.length === 0 && custom.length === 0 && !inputs?.avgDcRunM && !inputs?.avgAcRunM) {
+    return undefined;
+  }
+  return { overrides, custom, ...(inputs ? { inputs } : {}) };
 }
