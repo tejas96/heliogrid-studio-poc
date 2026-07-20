@@ -47,6 +47,7 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
+| D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. Solved for speed with saved **component kits**, not by making it optional. | 2026-07-21 |
 
 ---
 
@@ -513,10 +514,15 @@ Tranche rows (label + % + ✕) · ＋ Add tranche
 Progress bar + validation: **"Total allocation must = 100%"**
 
 #### 8 · Components
+**Required — all categories must be selected before Generate (D22).**
+
 Sections: **Panel · Inverter · Cable · Electrical · Structure** (＋ **Battery** when added).
 Each shows Selected / Empty status, ＋ add, brand rows (✎ edit / ✕ remove), and count
 fields for Panel and Inverter.
-Footer: **"Components Selected X/5 ✓"**
+Footer: **"Components Selected X/5 ✓"** — this is the gate, not a status.
+
+**Apply a kit** sits at the top of this step: one tap fills all five categories from a
+saved combination (see recommendation 1b). Path A fills them from the BOM automatically.
 
 → **Component Edit sheet** (bottom sheet, per type): Brand Name (locked), plus:
 | Type | Fields |
@@ -550,9 +556,23 @@ then **Add Bank Details** · ⤓ **Generate Proposal**
 ### Product recommendations on this flow
 
 **1. Eleven steps is a lot for Path B.** A rep in a customer's living room needs a number
-in minutes. Recommendation: a **Quick mode** that asks only steps 1, 3, 10 (company,
-system, client), AI-fills 4 and 5, and uses defaults for 6, 7, 9, 11 — with a "review the
-rest" link. Full mode stays for C&I. *Same builder, one toggle.*
+in minutes. Recommendation: a **Quick mode** asking only steps **1, 3, 8, 10** (company,
+system, **components**, client), AI-filling 4 and 5, and using defaults for 6, 7, 9, 11 —
+with a "review the rest" link. Full mode stays for C&I. *Same builder, one toggle.*
+
+**1b. Component kits — the answer to mandatory components (D22).** Components are required
+on every proposal, which is right for credibility but slow if a rep must pick five items
+from a catalog every time. An EPC actually sells the same three or four combinations over
+and over.
+
+So: **saved kits.** "5 kW Residential — Standard" fills all five categories in one tap.
+- Owner creates kits in settings; reps select, then adjust if needed
+- The first kit is created automatically from the first proposal they complete
+- On a design-backed proposal (Path A) the BOM fills components directly and no kit is needed
+- Kits are the reason mandatory components cost seconds instead of minutes
+
+Without this, D22 makes Quick mode pointless — the rep would abandon the app and send a
+WhatsApp message with a number in it, which is exactly what we are replacing.
 
 **2. The chip rail and the gating fight each other.** Free jumping plus per-step required
 fields means a user can land on step 8 with step 3 incomplete. Recommendation: allow the
@@ -576,8 +596,10 @@ commits on blur; a draft always exists and is resumable from the lead.
 - **Discount makes payable ≤ ₹0** → warned at step 3 (already in the spec) and blocked at
   Generate
 - **Payment tranches ≠ 100%** → blocked with the remainder shown ("12% unallocated")
-- **No components selected** → allowed for Path B (a lump-sum quote is legitimate) but the
-  proposal then omits the component table rather than printing an empty one
+- **No components selected** → **hard block at Generate** (D22). The footer counter
+  "Components Selected 3/5" is the gate; tapping Generate with gaps jumps to step 8 and
+  highlights exactly which categories are missing. Offer "Apply a kit" right there rather
+  than making them start picking.
 - **Logo too large / wrong format** → validated on upload with the actual limits stated
 - **OFFGRID chosen, no battery** → hard block; the system cannot work
 - **Design changed after the proposal was generated** → the proposal is stale and must say
