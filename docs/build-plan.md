@@ -39,24 +39,83 @@ design system"* — you'll get an honest list of what fails, including where it'
 
 ---
 
-## PHASE 1 · Pattern foundation  ▸ 4 screens
+## ONE-TIME SETUP — do this before Phase 1
 
-**Goal: establish the four patterns every other screen reuses.** Get these right and 40
-screens follow. Get them wrong and you fix 40 screens later.
+Three things, once. After this, every prompt is just the screen.
 
-| # | Screen | Pattern it sets | Journey ref |
-|---|---|---|---|
-| 1.1 | **My Day** (rep home) | app shell · bottom nav · grouped list | Stage 7 |
-| 1.2 | **Leads list** | list + search + filter · card↔table | Stage 2/3 |
-| 1.3 | **Lead detail** | detail header · timeline · action bar | Stage 3 |
-| 1.4 | **Quick add lead** | form · validation · duplicate warning | Stage 2 |
+| # | What | Where |
+|---|---|---|
+| S1 | **Design system** — brand, tokens, components | Already set up in Claude Design ✅ |
+| S2 | **Arc nav component** — paste the block at the end of `product-journey.md` | Into that same design system, once |
+| S3 | **Product context** — the blurb below | Project context on "Solar EPC Mobile Application", or the top of your first prompt |
 
-**Review focus:** Is the shell right? Does the list survive 40 rows? Does the detail screen
-have room for everything a lead accumulates? Is the form fast enough for 30 seconds?
+**S3 — paste this as project context:**
+
+```
+HelioGrid is a mobile-first SaaS for solar EPC companies in India — the
+businesses that sell, design and install rooftop and commercial solar.
+
+It covers the sales cycle: capturing leads, assigning them to reps,
+surveying the site, designing the array, building an itemised quote, and
+sending the proposal to the customer over WhatsApp. An AI voice agent
+follows up with customers who go quiet.
+
+Users are sales reps, surveyors, designers, engineers and owners. Most
+work on mid-range Android phones, often on a roof with poor signal.
+Mobile (375px) and desktop (1440px) are both first-class.
+
+Users quote jobs worth ₹5–50 lakh, so the interface must feel exact and
+trustworthy. Content is Indian: ₹4,52,471 formatting, Indian names and
+cities, kWp system sizes, GST, DISCOM utilities.
+```
+
+**Then every prompt describes only the screen** — never colours, never tokens. The design
+system is selected in the dropdown and handles all of that.
 
 ---
 
-## PHASE 2 · The money path  ▸ 5 screens
+## PHASE 1 · Entry & onboarding  ▸ 6 screens
+
+**Goal: the first five minutes of the product — and a low-risk warm-up that proves the
+pipeline works** before you hit anything dense.
+
+⚠️ These screens set **no reusable patterns** (no nav, no lists, no tables). Do not linger
+here. Go straight into Phase 2 after.
+
+| # | Screen | Journey ref |
+|---|---|---|
+| 1.1 | **Login** — phone entry, then OTP | Stage 1 |
+| 1.2 | **Sign up** — company + your name | Stage 0 |
+| 1.3 | **What do you sell** — residential / C&I / both | Stage 0 |
+| 1.4 | **You're ready** — two doors: first lead, or demo project | Stage 0 |
+| 1.5 | **Invite landing** — an employee joining an existing company | Stage 1 |
+| 1.6 | **Your role, explained** — first-run, role-specific | Stage 1 |
+
+**Review focus:** Can someone sign up in under a minute? Is the OTP screen forgiving when
+the code does not arrive? Does "You're ready" give a genuine next action rather than an
+empty dashboard?
+
+---
+
+## PHASE 2 · Pattern foundation  ▸ 4 screens
+
+**Goal: establish the four patterns every other screen reuses.** Get these right and 40
+screens follow. Get them wrong and you fix 40 screens later. **This is the most important
+phase in the plan.**
+
+| # | Screen | Pattern it sets | Journey ref |
+|---|---|---|---|
+| 2.1 | **My Day** (rep home) | app shell · **arc nav** · grouped list | Stage 7 |
+| 2.2 | **Leads list** | list + search + filter · card↔table | Stage 2/3 |
+| 2.3 | **Lead detail** | detail header · timeline · action bar | Stage 3 |
+| 2.4 | **Quick add lead** | form · validation · duplicate warning | Stage 2 |
+
+**Review focus:** Is the shell right? Does the arc nav work in practice? Does the list
+survive 40 rows? Does the detail screen have room for everything a lead accumulates?
+
+---
+
+## PHASE 3 · The money path  ▸ 5 screens
 
 **Goal: the proposal builder.** Highest-traffic surface in the product.
 
@@ -208,3 +267,206 @@ connect the codebase and improve one at a time. Do not reinvent.
 `product-journey.md`. Build it, then the desktop version, then 1.2.
 
 **Stop after 1.4 and bring all four back for review.** Do not start Phase 2 first.
+
+---
+
+# PHASE 1 — THE PROMPT SEQUENCE
+
+Run these in order. After each mobile screen, immediately ask for the desktop version
+before moving on — while the context is fresh.
+
+**Reminder: never put colours, hex values or token names in a prompt.** The design system
+is selected in the dropdown. Prompts describe content, actions and states only.
+
+---
+
+### 1.1 · Login
+
+```
+Design the Login screen for mobile, 375px.
+
+WHO: a solar sales rep or company owner in India, signing in on an
+Android phone
+GOAL: get in with a phone number, no password
+
+SHOWS — state 1, phone entry:
+- App logo mark and name
+- "Welcome back" heading, one line of supporting text
+- Country prefix +91 (fixed) and a 10-digit phone field
+- Continue button, disabled until 10 digits are entered
+- A small line: "New company? Create an account"
+
+SHOWS — state 2, OTP:
+- "Enter the code sent to +91 98765 43210" with a change-number link
+- 6 separate digit boxes, auto-advancing
+- "Resend code" — disabled with a 30 second countdown, then active
+- After two failed resends, offer "Call me with the code instead"
+
+STATES: show both states side by side. Also show the error state for a
+wrong OTP — the entered digits stay visible so the user can correct
+rather than retype.
+
+No password anywhere. Phone number is the identity.
+```
+
+Then:
+```
+Now the desktop version, 1440px. Same two states.
+Centred card on a calm background, max 420px wide. Do not stretch the
+form across the screen.
+```
+
+---
+
+### 1.2 · Sign up
+
+```
+Design the Sign up screen for mobile, 375px.
+
+WHO: a solar EPC company owner creating an account for the first time
+GOAL: get to a working account in under a minute
+
+SHOWS:
+- "Create your account"
+- Your name
+- Company name
+- City
+- Phone number (+91, 10 digits) — this becomes the login
+- Continue
+
+That is the entire form. Five fields. We ask for GSTIN, logo, address
+and team later, only when they are actually needed.
+
+Below the form, one reassuring line: "Free to try. No card needed."
+
+STATES: empty, filled, and the error when a phone number already has an
+account — which should offer "Sign in instead" rather than just showing
+an error.
+```
+
+Then:
+```
+Now desktop, 1440px. Centred card, max 480px. Same five fields.
+```
+
+---
+
+### 1.3 · What do you sell
+
+```
+Design the "What do you sell?" onboarding step for mobile, 375px.
+
+WHO: the owner, immediately after signing up
+GOAL: one question that lets us set sensible defaults, so their first
+quote is close to right
+
+SHOWS:
+- Step indicator: step 1 of 2
+- Heading: "What do you install?"
+- Three large selectable cards, single choice:
+  · Residential rooftop — homes, 1 to 15 kW
+  · Commercial & industrial — factories and warehouses, 20 kW and above
+  · Both
+- Below that, one optional field: "Typical system size" with a sensible
+  default based on the choice
+- Continue button
+- A "Skip for now" text link
+
+STATES: nothing selected (Continue disabled), one selected.
+
+Cards should feel tappable and substantial — this is the only question
+we ask, so it should not look like a form field.
+```
+
+Then:
+```
+Now desktop, 1440px. Three cards in a row instead of stacked.
+```
+
+---
+
+### 1.4 · You're ready
+
+```
+Design the "You're ready" screen for mobile, 375px.
+
+WHO: the owner, having just finished a 60-second signup
+GOAL: give them a real next action, not an empty dashboard
+
+SHOWS:
+- A brief, warm confirmation — "You're set up, Rajesh"
+- Two clear doors, as cards:
+  1. "Add your first lead" — primary. Start selling immediately.
+  2. "Explore a demo project" — secondary. A finished 8.2 kWp Pune
+     rooftop they can open and poke at without fear of breaking
+     anything.
+- Below, a quiet collapsed list: "Finish setting up later — company
+  logo, GST details, invite your team" with a chevron. Not a nag, not a
+  progress bar.
+
+This screen must NOT be a checklist of incomplete tasks. It is a
+doorway, and the demo project is how people actually learn this
+product.
+```
+
+Then:
+```
+Now desktop, 1440px. Two doors side by side.
+```
+
+---
+
+### 1.5 · Invite landing
+
+```
+Design the invite landing screen for mobile, 375px.
+
+WHO: a sales rep or surveyor who was just invited by their company owner
+and tapped a WhatsApp link
+GOAL: join and be useful in two minutes
+
+SHOWS:
+- "Rajesh Patil invited you to join Suryodaya Solar"
+- The company name and city
+- Their phone number, pre-filled and not editable — the invite was sent
+  to it
+- "Continue" → goes to OTP (reuse the pattern from 1.1)
+- Then a single screen asking only for their name, with an optional
+  photo
+
+STATES: normal, plus the expired-invite state — "This invite has
+expired" with a one-tap "Ask Rajesh to invite me again".
+```
+
+---
+
+### 1.6 · Your role, explained
+
+```
+Design the first-run role explainer for mobile, 375px.
+
+WHO: an employee who just joined, before they see the app
+GOAL: they understand what they can and cannot do, in one screen
+
+SHOWS:
+- "You're a Sales Rep"
+- Three short lines of what that means:
+  · You'll see the leads assigned to you
+  · You can create designs, quotes and send proposals
+  · Your owner approves discounts
+- A single "Got it" button
+
+If the person holds several roles — for example Sales Rep and Surveyor —
+show both, and say they can do both jobs.
+
+Keep this to ONE screen. Never a swipeable carousel.
+
+STATES: single role, and the multi-role version.
+```
+
+---
+
+## After Phase 1 — STOP
+
+Bring all six screens back and run the nine-point review gate. Do not start Phase 2 until
+Phase 1 is reviewed and fixed.
