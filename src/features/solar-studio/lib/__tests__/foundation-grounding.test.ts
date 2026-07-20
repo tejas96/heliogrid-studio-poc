@@ -61,13 +61,19 @@ function rowSegment(cols: number[]) {
 /** Build the structure with a given foundation kind. */
 function build(kind: FoundationKind) {
   const base = fixtureProject(0);
+  // A pile is DRIVEN — it belongs on ground, not on a slab, and `resolveRacking`
+  // now clamps an impossible pairing instead of honouring it. Building every
+  // kind on a rooftop was only ever a shortcut for exercising the geometry.
+  const roof =
+    kind === 'pile'
+      ? { ...fixtureRoof(), roofType: 'ground' as const }
+      : fixtureRoof();
   const project: Project = {
     ...base,
-    roofs: [fixtureRoof()],
+    roofs: [roof],
     structureDefaults: { ...base.structureDefaults, foundation: kind },
   };
   const { seg, panels } = rowSegment([0, 1, 2]);
-  const roof = project.roofs[0];
   const spec = project.components.panel!;
   const racking = resolveRacking(project, roof, seg, spec);
   if (!racking) return null;

@@ -90,8 +90,13 @@ export function StructurePreview({
     const s = sectionStructure(racking, spec);
     // depth axis: facing south ⇒ front edge at −y; draw front on the left
     const pts = s.members.flatMap((m) => [m.a, m.b]);
-    const minD = Math.min(...pts.map((p) => -p.y));
-    const maxD = Math.max(...pts.map((p) => -p.y));
+    // Depth is +y, so the LOW (south, down-tilt) edge lands on the left — the
+    // ordinary drafting convention, and what the printed section sheet uses.
+    // This was `-y`, which mirrored it: the comment below has always said
+    // "draw front on the left" while the arithmetic put it on the right. The
+    // thumbnail and the sheet now agree about which way the array faces.
+    const minD = Math.min(...pts.map((p) => p.y));
+    const maxD = Math.max(...pts.map((p) => p.y));
     const maxZ = Math.max(...pts.map((p) => p.z));
     const pad = 10;
     const sx = (width - pad * 2) / Math.max(0.5, maxD - minD);
@@ -127,9 +132,9 @@ export function StructurePreview({
       {legs.map((m) => (
         <line
           key={m.id}
-          x1={X(-m.a.y)}
+          x1={X(m.a.y)}
           y1={Y(m.a.z)}
-          x2={X(-m.b.y)}
+          x2={X(m.b.y)}
           y2={Y(m.b.z)}
           stroke="var(--ink-2, #555)"
           strokeWidth={2.5}
@@ -138,9 +143,9 @@ export function StructurePreview({
       {rafters.map((m) => (
         <line
           key={m.id}
-          x1={X(-m.a.y)}
+          x1={X(m.a.y)}
           y1={Y(m.a.z)}
-          x2={X(-m.b.y)}
+          x2={X(m.b.y)}
           y2={Y(m.b.z)}
           stroke="var(--info, #1d4ed8)"
           strokeWidth={4}
@@ -148,7 +153,7 @@ export function StructurePreview({
         />
       ))}
       {purlins.map((m) => (
-        <circle key={m.id} cx={X(-m.a.y)} cy={Y(m.a.z)} r={3} fill="var(--ink-2, #555)" />
+        <circle key={m.id} cx={X(m.a.y)} cy={Y(m.a.z)} r={3} fill="var(--ink-2, #555)" />
       ))}
       {/* clearance callout */}
       <text x={6} y={Y(racking.frontLegM / 2)} fontSize={9} fill="var(--ink-3, #999)">

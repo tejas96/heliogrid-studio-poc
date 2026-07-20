@@ -11,6 +11,7 @@
 import type { ArraySegment, FoundationKind, PanelSpec, Project, Roof } from '../types';
 import { isSloped } from './roof-plane';
 import {
+  allowedFoundations,
   resolveRacking,
   topologyOf,
   type ResolvedRacking,
@@ -105,19 +106,18 @@ export { topologyOf, type StructureTopology } from './structure';
  * on a metal shed would render blocks floating on corrugated steel, and on a
  * pitched roof you cannot cast a level pedestal in the first place.
  */
+/**
+ * What the PICKER offers. A subset of what the surface can physically carry:
+ * ground can take ballast, but pile and pedestal are what you lead with there.
+ *
+ * It must never offer something `allowedFoundations` would reject, or the UI
+ * would present a choice that gets silently corrected on the next read. The
+ * gate asserts that containment rather than trusting these to stay in step.
+ */
 export function foundationOptionsFor(roof: Roof, seg: ArraySegment): FoundationKind[] {
-  switch (topologyOf(roof, seg)) {
-    case 'elevated_table':
-      if (roof.roofType === 'ground') return ['pile', 'concrete'];
-      // A tilted table on a METAL SHED fixes through the sheet into the purlin
-      // below. Casting a pedestal on corrugated steel is not a thing, and
-      // ballast puts dead weight on a roof designed to carry its own sheet —
-      // so neither is offered, rather than offered and quietly wrong (E1).
-      if (roof.roofType === 'metal_shed') return ['anchor'];
-      return ['concrete', 'anchor', 'ballast'];
-    default:
-      return [];
-  }
+  const allowed = allowedFoundations(roof, seg);
+  if (roof.roofType === 'ground') return allowed.filter((k) => k !== 'ballast');
+  return allowed;
 }
 
 /** Shapes a foundation kind can be cast in. Only a cast pedestal has a choice. */

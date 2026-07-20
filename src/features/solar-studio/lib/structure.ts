@@ -156,7 +156,7 @@ export function resolveRacking(
   const frontLegM = Math.max(r.frontLegM, clearance);
   const { h } = panelFootprintM(spec, seg.orientation);
   const rise = h * Math.sin((r.tiltDeg * Math.PI) / 180);
-  const foundation =
+  const wanted =
     r.foundation ??
     roofO?.foundation ??
     projD?.foundation ??
@@ -165,6 +165,13 @@ export function resolveRacking(
       : roof.roofType === 'metal_shed'
         ? DEFAULT_SHEET_FOUNDATION
         : DEFAULT_FOUNDATION);
+  // CLAMP to what this surface can carry. A persisted value the surface cannot
+  // take is not honoured — it is corrected, at read time, so an existing
+  // project stops drawing and pricing a foundation that cannot be built there.
+  // Read-time means nothing is rewritten: change the roof back and the stored
+  // preference returns.
+  const allowed = allowedFoundations(roof, seg);
+  const foundation = allowed.length === 0 || allowed.includes(wanted) ? wanted : allowed[0];
   return {
     kind: r.kind,
     tiltDeg: r.tiltDeg,
@@ -715,6 +722,35 @@ function norm(v: { x: number; y: number }): { x: number; y: number } {
  * it — what the UI offers and what the model builds must come from one answer.
  */
 export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'none';
+
+/**
+ * Foundations this surface can physically carry.
+ *
+ * THE single source for both the picker and the resolution. Offering a choice
+ * the surface cannot take is one bug; silently resolving to one is a worse
+ * one, and 22h fixed only the first half — it changed the DEFAULT for a metal
+ * shed, which does nothing for a project that already had `foundation:
+ * 'concrete'` written on the segment. Those kept drawing cast pedestals on
+ * corrugated steel and claiming ~9 tonnes of dead load, while the picker
+ * offered a list that did not contain the value in use.
+ */
+export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKind[] {
+  switch (topologyOf(roof, seg)) {
+    case 'elevated_table':
+      // ground takes anything you can put in or on earth — including BALLAST,
+      // which is what you use where excavation is not possible (rock, leased
+      // or restored land). The app's own ground_ballast preset relies on it;
+      // my first list omitted it and quietly rewrote those designs to pile.
+      if (roof.roofType === 'ground') return ['pile', 'concrete', 'ballast'];
+      // a shed fixes through the sheet into the purlin: you cannot cast on
+      // trapezoidal steel, and ballast loads a roof built to carry its own deck
+      if (roof.roofType === 'metal_shed') return ['anchor'];
+      // a rooftop takes anything but a PILE — you do not drive a post into a slab
+      return ['concrete', 'anchor', 'ballast'];
+    default:
+      return [];
+  }
+}
 
 export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
   if (seg.racking.kind === 'flush') {

@@ -13,6 +13,7 @@ import { segmentFrameAngle } from '../lib/segment-ops';
 import { panelFootprintM } from '../lib/layout';
 import {
   addLeg,
+  autoSeedPoints,
   buildableRegion,
   moveLeg,
   nudgeFor,
@@ -71,6 +72,14 @@ export function LegPlanEditor({
   const angle = useMemo(() => segmentFrameAngle(roof, seg, mine), [roof, seg, mine]);
   const pts = planPoints(seg);
   const mode = planMode(seg);
+  // On AUTO the plan held no points, so the editor drew an empty roof — which
+  // reads as "your legs are gone" rather than "these are placed for you". The
+  // automatic stations are shown dimmed and non-interactive: you can see what
+  // you are about to take over, and pressing Add leg starts from exactly them.
+  const autoGhosts = useMemo(
+    () => (mode === 'auto' ? autoSeedPoints(roof, seg, mine, legSpacingM, spec) : []),
+    [mode, roof, seg, mine, legSpacingM, spec],
+  );
 
   // panels and the buildable outline, both in the segment's local frame
   const localPanels = useMemo(() => mine.map((p) => rotate(p.center, -angle)), [mine, angle]);
@@ -266,6 +275,18 @@ export function LegPlanEditor({
             strokeWidth={1}
           />
         ))}
+
+        {/* automatic stations, shown but not editable until you take over */}
+        {autoGhosts.map((p, i) => {
+          const cx = view.toX(p.x);
+          const cy = view.toY(p.y);
+          return (
+            <g key={`auto-${i}`} opacity={0.34} aria-hidden>
+              <line x1={cx - 6} y1={cy} x2={cx + 6} y2={cy} stroke="var(--ink)" strokeWidth={1.5} strokeDasharray="2 2" />
+              <line x1={cx} y1={cy - 6} x2={cx} y2={cy + 6} stroke="var(--ink)" strokeWidth={1.5} strokeDasharray="2 2" />
+            </g>
+          );
+        })}
 
         {/* legs — crosshairs, focusable in plan order */}
         {pts.map((p, i) => {
