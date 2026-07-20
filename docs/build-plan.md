@@ -488,3 +488,280 @@ Do not start Phase 2 until Phase 1 is reviewed and fixed.
 **Not in Phase 1, deliberately:** company profile (logo, GSTIN, bank details) and invite-
 team are skippable in the journey and are collected later — they are built in Phase 8
 alongside the other settings screens.
+
+---
+
+# PHASE 2 — THE PROMPT SEQUENCE
+
+**Pattern foundation.** These four screens establish the patterns the remaining 32 reuse.
+Every prompt below produces mobile AND desktop in one design.
+
+### The viewport block for APP screens — attach to every Phase 2 prompt
+
+*(different from Phase 1's, which was written for forms)*
+
+```
+BOTH VIEWPORTS, one design, genuinely different layouts:
+
+· MOBILE 375px — bottom arc nav, single column, content as cards,
+  primary action within thumb reach, detail opens full screen
+
+· DESKTOP 1440px — NO bottom nav. A 240px left sidebar with icons AND
+  text labels instead. Multiple columns. Denser rows, not cards. Detail
+  opens in a right-hand panel with the list still visible beside it.
+  Rows have hover states.
+
+Same data and copy in both. Desktop is not a stretched phone — if the
+two layouts look alike, the desktop one is wrong.
+
+Place them side by side on one canvas, mobile left, desktop right,
+aligned to the same top edge.
+```
+
+---
+
+## 2.1 · My Day  ▸ journey Stage 7
+
+```
+Design "My Day" — the sales rep's home screen, the first thing they open
+every morning.
+
+WHO: a sales rep at an Indian solar EPC, 9am, coffee in hand
+GOAL: know exactly who to contact today without thinking
+
+This is NOT a dashboard of numbers. It is a list of what to do today.
+No charts, no KPI tiles, no percentages.
+
+FOUR SECTIONS, in this exact order — all four must appear on BOTH
+mobile and desktop:
+
+1. OVERDUE (2) — red, always first
+   · Priya Sharma · Nashik · follow-up 3 days late · 8.2 kWp · ₹4,52,000
+   · Anand Traders · Pune · proposal unopened 5 days · 180 kWp ·
+     ₹92,00,000
+
+2. TODAY (5) — with times
+   · 10:00 · Site visit · Suresh Kulkarni · Kothrud, Pune · 6.5 kWp ·
+     ₹3,40,000
+   · 14:00 · Call back Rohit Mehta · Aundh · asked about subsidy ·
+     ₹5,60,000
+   · 16:30 · Follow-up · Vikram Deshpande · Baner · ₹2,90,000
+   · 17:00 · Send proposal · Kavita Joshi · Wakad · ₹4,10,000
+   · 18:00 · Call · Imran Shaikh · Camp · ₹7,80,000
+
+3. AGENT ACTIVITY (3) — what the AI voice agent did overnight.
+   VISUALLY DISTINCT from the rep's own tasks — a different container,
+   marked as automated. The rep must see at a glance what a machine did
+   on their behalf.
+   · Rakesh Patil · interested · wants a callback Thursday 4pm
+   · Sunita Deshmukh · no answer · will retry tomorrow
+   · Vinod Kumar · asked about warranty · answered · still deciding
+
+4. UPCOMING THIS WEEK (8) — collapsed summary, expandable
+   · Follow-ups 8 · Site visits 3 · Proposals to send 2
+
+ROW CONTENT: every row shows the customer name, city, what the task is,
+system size in kWp, and value in ₹. Overdue rows also show how late.
+
+ACTIONS:
+- Tap any row → opens that lead
+- Call and WhatsApp buttons directly on each row, no menu
+- The elevated centre nav button is "Add lead"
+
+STATES TO SHOW:
+- The normal state above
+- EMPTY — a brand-new rep with nothing assigned. Not a blank screen:
+  say what will appear here and who assigns it.
+- ALL DONE — everything ticked off for the day. This should feel like a
+  reward, not an error.
+
+Do not show a greeting card with a gradient. Do not show KPI tiles.
+The work is the interface.
+
+[+ APP VIEWPORT BLOCK]
+```
+
+---
+
+## 2.2 · Leads list  ▸ journey Stages 2 & 3
+
+```
+Design the "Leads" list screen.
+
+WHO: a sales rep looking for a specific lead, or scanning their pipeline
+GOAL: find the right lead fast, and see the state of everything
+
+SHOWS — 10 leads, realistic Indian mix of residential and commercial:
+  Priya Sharma · Nashik · 8.2 kWp · ₹4,52,000 · Proposal sent · overdue
+  Anand Traders · Pune · 180 kWp · ₹92,00,000 · Negotiating
+  Suresh Kulkarni · Kothrud · 6.5 kWp · ₹3,40,000 · Survey scheduled
+  Rohit Mehta · Aundh · 10 kWp · ₹5,60,000 · Qualified
+  Vikram Deshpande · Baner · 5.4 kWp · ₹2,90,000 · New lead
+  Kavita Joshi · Wakad · 7.6 kWp · ₹4,10,000 · Designing
+  Imran Shaikh · Camp · 14 kWp · ₹7,80,000 · Contacted
+  Deshmukh Textiles · Nashik · 250 kWp · ₹1,28,00,000 · Site visit
+  Sunita Deshmukh · Hadapsar · 4.8 kWp · ₹2,65,000 · New lead
+  Ganesh Patil · Chinchwad · 9.1 kWp · ₹4,95,000 · Snoozed till 12 Aug
+
+EACH ROW SHOWS: name, city, system size, value, stage, and the next
+action with its date. Snoozed leads look visibly dormant.
+
+CONTROLS:
+- Search by name, phone or city
+- Filter by stage, and a "My leads / All" toggle (reps see only their
+  own by default)
+- Sort: newest, oldest, value, next action due
+- A visible count and the active filter state — "10 leads · Pune ·
+  this week"
+
+STATES TO SHOW:
+- The normal list
+- EMPTY (no leads at all) — teaches what goes here, one action
+- FILTERED EMPTY (filters match nothing) — different message, offers to
+  clear filters. These two are NOT the same screen.
+- LOADING — skeleton rows matching the real row shape
+
+MOBILE: cards, one per lead, tappable full width. Filters open as a
+bottom sheet.
+DESKTOP: a real table with a sticky header, sortable columns, row hover,
+bulk-select checkboxes, and filters as a left rail or top bar.
+
+[+ APP VIEWPORT BLOCK]
+```
+
+---
+
+## 2.3 · Lead detail  ▸ journey Stage 3
+
+```
+Design the Lead detail screen — where a rep spends most of their day.
+
+WHO: a sales rep about to call a customer, or logging what happened
+GOAL: everything about one lead in one place, and the next action obvious
+
+HEADER: Priya Sharma · Nashik · 8.2 kWp · ₹4,52,000 · stage "Proposal
+sent" · owner "Rajesh Patil" · phone number
+
+PRIMARY ACTIONS, always reachable: Call · WhatsApp · Log activity ·
+Book site visit · Create design
+
+SECTIONS:
+
+1. ACTIVITY TIMELINE — newest first, mixed human and agent entries:
+   · Today 09:12 — Proposal sent on WhatsApp · delivered · not yet
+     opened
+   · Yesterday 16:40 — 🤖 Agent called · 2 min · interested · "asked
+     about subsidy, wants callback Thursday 4pm" · [Transcript]
+   · 18 Jul — Site survey completed by Amit
+   · 16 Jul — Call · 4 min · "wants to compare with two other vendors"
+   · 14 Jul — Lead created · source: referral from Mehta
+
+   Agent entries are visually distinct from human ones.
+
+2. QUALIFICATION — six inline fields, not a separate form:
+   monthly bill ₹ · roof ownership (own/rent) · roof type · shading
+   obvious? · timeline · decision maker
+   Filled ones show their value; empty ones show as gaps to fill.
+
+3. SITE — address, roof type, sanctioned load, DISCOM, tariff ₹/kWh
+
+4. DESIGNS & PROPOSALS — what exists, version, status, value
+
+5. TASKS — next follow-up with its date and owner
+
+6. FILES — survey photos, documents
+
+SECONDARY ACTIONS: Snooze (with a wake-up date) · Reassign · Disqualify
+(requires a reason: renting, budget, not interested, unreachable,
+already installed, wrong number)
+
+STATES TO SHOW:
+- A rich lead as above
+- A NEW lead with almost nothing filled in — most sections empty, the
+  qualification gaps obvious
+- SNOOZED — visibly dormant, showing the wake-up date
+
+MOBILE: header sticky at top, sections stacked and collapsible, primary
+actions as a fixed bar at the bottom above the nav.
+DESKTOP: two columns — timeline on the left, the structured panels
+(qualification, site, designs, tasks) on the right. Primary actions in
+the header.
+
+[+ APP VIEWPORT BLOCK]
+```
+
+---
+
+## 2.4 · Quick add lead + duplicate found  ▸ journey Stage 2
+
+```
+Design "Quick add lead" — opened from the elevated centre button in the
+bottom nav.
+
+WHO: a rep who just got a phone call, standing somewhere, one hand free
+GOAL: capture the lead in under 30 seconds before it evaporates
+
+FOUR FIELDS ONLY:
+- Name
+- Phone (+91, 10 digits)
+- City
+- Type — Residential / Commercial, as a segmented choice
+
+Everything else is collected later. Do not add fields.
+
+LIVE DUPLICATE CHECK on the phone number as it is typed — this is the
+most important behaviour on this screen. A homeowner who calls Monday,
+fills a form Tuesday and WhatsApps Wednesday must not become three
+leads owned by three reps.
+
+DUPLICATE FOUND state:
+  "Priya Sharma from Nashik already exists.
+   Owned by Rajesh Patil · last contacted 4 days ago · Proposal sent"
+  Three choices:
+   · Open the existing lead
+   · Log this as a new enquiry on the existing lead
+   · Create anyway — requires a short reason
+
+VALIDATION:
+- Phone must be 10 digits → "Enter a 10-digit mobile number"
+- Must start with 6, 7, 8 or 9 → "That isn't a valid Indian mobile
+  number"
+- Name required, minimum 2 characters
+- City required
+- Validate on blur, not per keystroke. Once an error shows, clear it as
+  soon as it is fixed. Never wipe what they typed.
+
+INCOMPLETE LEADS ARE ALLOWED: if only a phone number is known, it can
+still be saved. The missing fields show as gaps on the lead, not as a
+blocked form.
+
+AFTER SAVING: land on the new lead, not back on the list. The rep's next
+move is usually to call.
+
+STATES TO SHOW:
+- Empty form
+- Filled and valid
+- Duplicate found (the three choices)
+- Phone validation error
+- Saving in progress
+
+MOBILE: a bottom sheet rising from the centre nav button, dismissible by
+dragging down.
+DESKTOP: a centred modal, max 480px, opened from the "Add lead" button.
+
+[+ APP VIEWPORT BLOCK]
+```
+
+---
+
+## After Phase 2 — STOP
+
+These four screens define the patterns for the remaining 32. Check specifically:
+
+- Does the same status chip look identical on My Day, Leads list and Lead detail?
+- Do rows show the same fields in the same order everywhere?
+- Does the desktop sidebar behave identically on all four?
+- Does agent activity read as automated on both My Day and the Lead timeline?
+- Do the empty and filtered-empty states genuinely differ?
+
+Then bring all four back before starting Phase 3.
