@@ -46,6 +46,7 @@ Not optional, and they shape the UI:
 | D18 | After a call the timeline shows **outcome + one-line summary + interest signal**, with transcript and recording available on tap. | 2026-07-21 |
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
+| D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
 
 ---
 
@@ -386,6 +387,207 @@ out, the next action must already exist and be owned.
 
 ---
 
+## STAGE 6B — The Proposal Builder (the two paths)
+
+**This is the most-used screen in the product.** Every deal passes through it, and many
+deals never touch the design studio at all.
+
+### The two paths
+
+```
+PATH A — WITH DESIGN                    PATH B — WITHOUT DESIGN
+Survey → studio → BOM → proposal        Lead → proposal, straight away
+
+Used when: the job is won on                Used when: the customer wants a
+engineering credibility, C&I, a             number today, a small residential
+complex roof, a customer comparing          job, a repeat/standard system, or
+vendors on technical detail.                the rep is standing in their living
+                                            room.
+Numbers are DERIVED from the model.      Numbers are ESTIMATED or ASSUMED.
+```
+
+**Both paths use the same 11-step builder.** The difference is only how much arrives
+pre-filled. This is the key architectural decision — not two proposal systems, one builder
+with two entry points.
+
+### What a design pre-fills
+
+| Step | With design | Without design |
+|---|---|---|
+| 3 · Solar System Setup | capacity, type, category **derived** | typed |
+| 4 · Performance Metrics | generation from real shading simulation — **derived** | ✦ AI auto-fill — **estimated** |
+| 5 · Financial Data | savings/payback from the real quote — **derived** | ✦ AI auto-fill — **estimated** |
+| 8 · Components | the actual BOM — **derived** | picked from catalog — **assumed** |
+| Cost | the real bill of materials | typed lump sum |
+
+### ⚠️ The honesty rule this creates
+The product already labels every number **measured / derived / estimated / assumed**. Path B
+numbers are *not* derived — they are estimates from capacity and location heuristics.
+
+**A proposal built without a design must say so.** Not in fine print — visibly, on the
+document. Something like:
+
+> *Indicative proposal. Generation and savings are estimated from system size and location.
+> A site survey and shadow analysis will confirm the final figures.*
+
+This is a genuine competitive advantage, not a disclaimer. Every competitor prints
+estimates as though they were calculations. Being the one product that distinguishes them
+is exactly the "shows its working" positioning — and it protects the EPC when the customer
+compares the final numbers to the promise.
+
+### Entry points to the builder
+- Lead detail → **Create proposal** → "With design or without?"
+- Design complete → **Generate proposal** (goes straight to Path A, most steps filled)
+- Duplicate an earlier proposal → all steps pre-filled from it (the fastest path of all,
+  and how repeat residential jobs should actually work)
+
+---
+
+### The 11-step builder — full specification
+
+**Shell & navigation**
+- **Chip rail (top)** — 11 jump chips, one per step. Tap any to jump, in any order.
+  Completed steps turn sage green.
+- **Footer bar** — `‹ Back` · `{step} / 11 · {step title}` · `Next ›`. The last step's
+  button becomes **Generate PDF ⤓**.
+- **Gating** — Next is disabled until that step's required (\*) fields are valid. A pill
+  reads *"Complete the required (\*) fields to continue."*
+
+#### 1 · Company
+- Phone number \* — locked, 🔗 linked to account
+- Company name \*
+- Email address \* — locked, 🔗 linked to account
+- Website
+- Company address
+- Company logo — "HG" swatch + **Change logo** (max 5 MB · 12×6 cm · PNG/JPG)
+
+→ **Proposal Type modal** (bottom sheet, fires after Company → Next): drag handle,
+"Choose proposal type", two radio cards — **CAPEX** (purchase outright) / **OPEX / PPA**
+(PRO badge, per-unit billing). Actions: Back · Continue ›
+
+#### 2 · Achievements *(optional, skippable)*
+- About your company (textarea — "shown on proposal cover")
+- Total capacity installed (kW) → "200 kW"
+- Happy customers → "350+"
+- Cities served → "10+"
+- Numbers only; units auto-added
+
+#### 3 · Solar System Setup
+- **Location:** State \* · District \*
+- **System configuration:** System capacity kW \* (0.5–7000) · System type \* segmented
+  **ONGRID / OFFGRID / HYBRID**
+- **Battery storage card** — *Add battery backup*. OFFGRID/HYBRID force a
+  ⚠ "Battery required" notice. Added state shows a summary with Edit / Remove.
+- **Category** \* — Residential / Commercial
+- **AMC** \* — Free AMC · NO AMC · 1–8 years
+- **Commissioning included** (toggle)
+- **Pricing & subsidies:** System cost excl. battery incl. GST \* · excl. GST · GST % \* ·
+  GST amount (auto) · Subsidy ₹ \* (PM Surya Ghar) · Discount \* (% ⇄ ₹ mode switch) ·
+  Easy financing EMI (toggle → EMI interest rate 0–100%) · Electricity tariff ₹/kWh \* (1–50)
+- **Client-payable summary card** — live: `cost + battery − subsidy − discount = payable`.
+  Warns if the discount drives payable ≤ ₹0.
+
+→ **Battery modal** (bottom sheet): Battery capacity kWh (1–100) · Cost excl./incl. GST ·
+GST on battery % · Cell chemistry — Lithium LFP / Lithium NMC / Lead-acid / Custom
+(Custom reveals a free-text field). Cancel · Save.
+
+#### 4 · Performance Metrics
+✦ **AI Auto-fill**. Chart with **Generation / Savings / ROI** tabs.
+Efficiency / PR % \* (50–100) · Monsoon dip % \* (0–50) · Units per kW/day \*
+↺ Reset to AI values
+
+#### 5 · Financial Data
+✦ **AI Auto-fill**. Same tabbed chart.
+Yearly savings ₹ \* · Payback years \* · Lifetime lakhs \* (25 yr) ·
+Electricity inflation % \* (~6%)
+↺ Reset to AI values
+
+#### 6 · Project Timeline
+Reorderable phase rows (⌃ / ⌄ arrows, 🗑 delete). Each: Title \* (char count) +
+Description \* (char count).
+↺ Reset to System Default · ＋ Add Step
+
+#### 7 · Payment Terms
+↺ Reset + templates **10/60/20/10 · 30/60/10 · …**
+Tranche rows (label + % + ✕) · ＋ Add tranche
+Progress bar + validation: **"Total allocation must = 100%"**
+
+#### 8 · Components
+Sections: **Panel · Inverter · Cable · Electrical · Structure** (＋ **Battery** when added).
+Each shows Selected / Empty status, ＋ add, brand rows (✎ edit / ✕ remove), and count
+fields for Panel and Inverter.
+Footer: **"Components Selected X/5 ✓"**
+
+→ **Component Edit sheet** (bottom sheet, per type): Brand Name (locked), plus:
+| Type | Fields |
+|---|---|
+| Panel | Watt Peak Range · Panel Type (Mono PERC / TOPCon / Bifacial / Mono / Poly / HJT / Thin-film) · Product & Performance Warranty |
+| Inverter | Capacity kW · Inverter Type (On / Off / Hybrid) · Warranty |
+| Cable | Cable Type · Specification · Warranty |
+| Electrical | Includes · Standard |
+| Structure | Warranty · Weight per kW · Standard |
+| Battery | Capacity kWh · Chemistry · Warranty |
+
+Plus **Description** (max 110 chars). Cancel · Done.
+
+#### 9 · Terms & Conditions *(optional, up to 3 pages)*
+Add / Skip choice. When added: Add-logo toggle · rich-text toolbar + textarea ·
+"Save as template" · char count · ≈ PDF page estimate.
+
+#### 10 · Client Details
+Proposal number \* (auto, disabled) · Prepared by \* · Prepared for \* · Client address \* ·
+Client phone \* (10-digit validation) · Date \* · Time generated \* · Customer support number
+
+#### 11 · Bank Details *(optional)*
+Include-in-proposal toggle · Bank name · Account name · Account number · IFSC.
+Note when hidden: details save but will not print.
+
+→ **Add 3D Design prompt** and **"Almost done!" bank prompt** (bottom sheets) — Yes / No,
+then **Add Bank Details** · ⤓ **Generate Proposal**
+
+---
+
+### Product recommendations on this flow
+
+**1. Eleven steps is a lot for Path B.** A rep in a customer's living room needs a number
+in minutes. Recommendation: a **Quick mode** that asks only steps 1, 3, 10 (company,
+system, client), AI-fills 4 and 5, and uses defaults for 6, 7, 9, 11 — with a "review the
+rest" link. Full mode stays for C&I. *Same builder, one toggle.*
+
+**2. The chip rail and the gating fight each other.** Free jumping plus per-step required
+fields means a user can land on step 8 with step 3 incomplete. Recommendation: allow the
+jump, but show incomplete steps in the rail with a subtle dot, and block only the final
+**Generate PDF** — not each Next. Let people work out of order; validate at the end.
+
+**3. Duplicate-from-previous should be the primary path for residential.** Most residential
+jobs are near-identical. "Same as the Sharma proposal, new customer, 6 kW" should take
+under a minute. This deserves to be a first-class entry point, not buried.
+
+**4. On mobile, the chip rail must not eat the screen.** Eleven chips at 375px is a
+horizontal scroller nobody reads. Recommendation: mobile shows `‹ 3 / 11 · Solar System ›`
+with a tap to open the full step list as a sheet. Desktop keeps the full rail.
+
+**5. Save continuously, never on Next.** Someone will lose a network mid-build. Every field
+commits on blur; a draft always exists and is resumable from the lead.
+
+### What goes wrong
+- **Rep abandons at step 7** → draft saved, resumable, visible on the lead as "Proposal
+  draft — 7/11"
+- **Discount makes payable ≤ ₹0** → warned at step 3 (already in the spec) and blocked at
+  Generate
+- **Payment tranches ≠ 100%** → blocked with the remainder shown ("12% unallocated")
+- **No components selected** → allowed for Path B (a lump-sum quote is legitimate) but the
+  proposal then omits the component table rather than printing an empty one
+- **Logo too large / wrong format** → validated on upload with the actual limits stated
+- **OFFGRID chosen, no battery** → hard block; the system cannot work
+- **Design changed after the proposal was generated** → the proposal is stale and must say
+  so; regenerate offered
+- **Proposal number collides** (two users at once) → server-assigned, never client-generated
+- **Path B proposal later gets a design** → offer to upgrade the numbers from estimated to
+  derived, showing what changed before committing
+
+---
+
 ## STAGE 7 — Follow-up, the voice agent, and close
 
 **Who:** the rep, and the voice agent working alongside them.
@@ -573,7 +775,51 @@ Persistent left sidebar nav. Three columns: Overdue+Today,
 Agent activity, Upcoming. Denser, but same hierarchy.
 ```
 
+### Example — the proposal builder (the highest-traffic screen)
+
+```
+Design step 3 of 11 — "Solar System Setup" — in the proposal builder.
+Mobile 375px. Follow the HelioGrid — Instrument design system exactly.
+
+WHO: sales rep building a proposal, sometimes sitting in the
+customer's living room
+GOAL: enter the system and pricing, and see what the customer pays
+
+SHELL:
+- Mobile step indicator at top: "‹ 3 / 11 · Solar System ›" — tapping
+  it opens the full 11-step list as a bottom sheet. Do NOT put 11
+  chips in a horizontal scroller at this width.
+- Footer: ‹ Back · Next ›
+
+SHOWS, grouped in cards:
+1. Location — State, District (both required)
+2. System — capacity kW (0.5–7000), and a segmented control
+   ONGRID / OFFGRID / HYBRID
+3. Battery storage — an "Add battery backup" card. If OFFGRID or
+   HYBRID is selected, show a warning that a battery is required.
+4. Category — Residential / Commercial. AMC dropdown.
+   Commissioning included toggle.
+5. Pricing — system cost incl. GST, GST %, GST amount (auto,
+   read-only), subsidy ₹ (PM Surya Ghar), discount with a % ⇄ ₹
+   mode switch, EMI toggle, electricity tariff ₹/kWh
+6. A live "Client pays" summary card, visually distinct:
+   cost + battery − subsidy − discount = ₹ payable
+
+Use realistic values: 8.2 kW, Maharashtra / Pune, ₹4,52,471 incl.
+GST at 13.8%, ₹78,000 subsidy, 5% discount.
+
+STATES: show the filled state. Also show what the warning looks like
+when a discount drives the payable amount to zero or below.
+
+ACTIONS: every numeric field commits on blur, never per keystroke.
+
+Primary buttons are brass #C8842A with a near-black #1A1712 label.
+Nothing below 12px. Touch targets 44px minimum.
+```
+
 ### Build order
+0. **Proposal builder step 3** — the densest, most-used step. Get it right and the
+   other ten steps follow the same pattern.
 1. My Day (rep home) — mobile, then desktop
 2. Leads list → Lead detail
 3. Quick add lead + duplicate-found
