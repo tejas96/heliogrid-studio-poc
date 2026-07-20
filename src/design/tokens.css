@@ -115,7 +115,11 @@
   /* ═══ TYPE ═════════════════════════════════════════════════════════════════ */
   /* Loaded via next/font in app/layout.tsx. The old app DECLARED Inter and never
      shipped it, so every layout was tuned against a fallback. */
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Inter has NO Devanagari coverage. Hindi and Marathi (D25) fall back to a system
+     font without the pair, which looks broken beside the Latin. Noto Sans Devanagari
+     sits second so the browser reaches it only for Devanagari codepoints. */
+  --font-sans: var(--font-inter), var(--font-devanagari), ui-sans-serif, system-ui,
+    -apple-system, sans-serif;
   --font-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo, monospace;
 
   /* 8 steps. Nothing below 12px, ever (rule N3). */

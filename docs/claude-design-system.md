@@ -92,7 +92,16 @@ Canvas/map surfaces stay dark in **both** themes.
 
 ## 3. Typography
 
-One sans family (Inter or similar). Weights 400 / 500 / 600 / 700 only.
+**Two families, one system.** Inter for Latin, **Noto Sans Devanagari** for Hindi and
+Marathi. Inter has no Devanagari coverage — without the pair, Hindi text falls back to a
+system font and looks broken beside the English. Match them on optical size and weight.
+
+Weights 400 / 500 / 600 / 700 only.
+
+**Devanagari needs more line height** than the Latin scale below — same sizes, looser
+leading, because of the headline stroke and matras. And Hindi/Marathi strings run 15–30%
+longer than English, so **no layout may be tuned to English string lengths.** Buttons,
+chips and table headers must wrap or truncate gracefully, never overflow.
 
 ```
 36/44  page hero, proposal cover

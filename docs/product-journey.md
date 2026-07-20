@@ -47,6 +47,8 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
+| D25 | **The app UI is multilingual: English, Hindi, Marathi.** Supersedes the English-only half of D12. Voice agent languages stay configurable per tenant, defaulting to the same three. Devanagari support is a design-system change, not just a translation task — see "Multilingual". | 2026-07-21 |
+| D26 | **Billing screens are MOCK for now.** Pricing, tiers and limits are not decided. Design the shape — plans, usage, upgrade, payment failure, suspension — with placeholder numbers, so the flows exist and the real pricing drops in later. | 2026-07-21 |
 | D24 | **Everything commercial is configurable per tenant; everything about safety, honesty and compliance is locked by the platform.** The agent's instructions and business knowledge are configured through guided questions and a structured knowledge base — **never a raw prompt box**. Unanswered questions from real calls feed back as one-tap additions. See "Tenant configuration". | 2026-07-21 |
 | D23 | **The design studio (Stage 5) and all 3D screens are LOW PRIORITY — design them last.** Everything else ships first: onboarding, CRM, survey, proposal builder, voice agent, close, project tracking. The studio already works in code; redesigning it is an improvement, not a blocker. | 2026-07-21 |
 | D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. Solved for speed with saved **component kits**, not by making it optional. | 2026-07-21 |
@@ -848,6 +850,159 @@ owner reviews and personalises. Day one it works; week four it sounds like them.
 mechanism that keeps the whole system honest and improving, and it costs almost nothing:
 capture what the agent couldn't handle, show the owner, make answering it one tap. Without
 it, every tenant's agent decays into a script nobody maintains.
+
+---
+
+## AGENT PERFORMANCE — proving the voice agent is worth keeping
+
+**The retention problem.** An owner paying for automated calls who cannot see what they
+bought will cancel within a month. This dashboard is not analytics garnish; it is the
+reason the agent survives its first invoice.
+
+### The screen: Agent performance
+
+```
+THIS MONTH                          vs last month
+  412  calls attempted                   ↑ 18%
+  246  connected                    60%  ↑  4%
+   38  callbacks booked
+   17  site visits booked
+   29  handed to a human
+   11  questions it could not answer   → review
+
+OUTCOMES
+  ▇▇▇▇▇▇▇▇  Interested            94
+  ▇▇▇▇▇     Not interested        61
+  ▇▇▇▇      Callback requested    38
+  ▇▇▇       No answer            166
+  ▇▇        Asked to stop          9
+
+WHAT IT SAVED YOU
+  246 conversations your team did not have to start
+  ≈ 20 hours of calling time
+
+DEALS IT TOUCHED                              (see note)
+  31 proposals were quiet, the agent called,
+     and the customer responded within 3 days
+  ₹ 1.4 Cr of pipeline in those deals
+```
+
+### The honesty rule this must follow
+**"Deals it touched" is correlation, not attribution — and the screen must say so.**
+
+> *The agent called and the customer responded within 3 days. We cannot prove the call
+> caused it.*
+
+Every competitor's AI dashboard claims credit for revenue. Claiming an agent "generated
+₹1.4 Cr" when it made one follow-up call is exactly the dishonesty this product exists to
+avoid — and an owner who catches you inflating it stops trusting every other number you
+show them. Being the one product that states the limit is consistent with everything else
+here (N7, D21).
+
+### Supporting screens
+| Screen | Contains |
+|---|---|
+| **Call log** | Every call: customer, duration, outcome, language, which config version, transcript, recording. Filterable. |
+| **Unanswered questions** | The list from D24 — what customers asked that the agent could not handle. One tap to answer. **This is where the dashboard turns into improvement.** |
+| **Cost** | Calls made, minutes used, against whatever the plan allows. Placeholder until pricing exists (D26). |
+| **Per-rep view** | Which reps lean on the agent, whose leads it rescued. Manager-only. |
+
+### What goes wrong
+- **Connect rate collapses** (wrong numbers, bad timing) → surfaced as a warning with the
+  likely cause, not left for the owner to notice
+- **Agent escalating almost everything** → its knowledge is too thin; link straight to the
+  unanswered-questions list
+- **Owner sees a big "deals touched" number and over-trusts it** → the caveat is on the
+  screen, not in a tooltip
+- **Nobody opens this screen** → a monthly summary goes to the owner on WhatsApp, where
+  they actually read things
+
+---
+
+## BILLING & SUBSCRIPTION — mock, shape only (D26)
+
+**Pricing is undecided.** Design the flows with placeholder numbers so the screens exist
+and the real model drops in later without a redesign.
+
+| Screen | Contains |
+|---|---|
+| **Plans** | Three placeholder tiers. Whatever the axis turns out to be — users, proposals, agent minutes, system size — the card shape holds. Use obviously-fake numbers so nobody mistakes them for real. |
+| **Current plan & usage** | What they are on, what they have used this cycle, when it renews. Usage bars for whichever limits end up mattering. |
+| **Upgrade / change plan** | Compare, pick, confirm. Show the price difference clearly, prorated. |
+| **Payment method** | Card / UPI / netbanking — India needs UPI as a first-class option, not an afterthought. |
+| **Invoices** | List, download GST invoice. Indian businesses need this for input tax credit. |
+| **Trial status** | A quiet banner: "12 days left in your trial." It grows more prominent in the last 3 days, and never blocks work. |
+
+### The states that actually matter
+| State | What the user sees |
+|---|---|
+| **Trial active** | Everything works. Quiet countdown. |
+| **Trial ending (≤3 days)** | Persistent but dismissible banner, one-tap upgrade. |
+| **Trial expired** | **Read-only.** They can see and export everything; they cannot create. |
+| **Payment failed** | 7-day grace with full access, clear banner, one-tap retry. Not instant lockout — cards fail for boring reasons. |
+| **Suspended** | **Read-only, never locked out.** Data stays visible and exportable. |
+| **Cancelled** | Export window, then archive. Tell them exactly when data is deleted. |
+
+### The rule I would not bend
+**Never hold a customer's data hostage.** A suspended tenant keeps read access and full
+export of their own leads and quotes. It is the right thing to do, it is likely required
+under DPDP anyway, and practically — an owner locked out of their pipeline turns into a
+public complaint, while one who can still see it usually just pays.
+
+### What goes wrong
+- **Card fails silently** → grace period, banner, WhatsApp reminder, then read-only
+- **Owner upgrades mid-cycle** → prorate, show the maths
+- **Team exceeds the seat limit** → block *new* invites, never disable working users
+- **Limit hit mid-proposal** → let them finish and send it; enforce on the next one
+- **The current app's dead "Upgrade" button** → this is what replaces it (audit finding)
+
+---
+
+## MULTILINGUAL — English · Hindi · Marathi (D25)
+
+### This is a design-system change, not a translation task
+
+**The font.** Our design system specifies **Inter**, which has no Devanagari coverage.
+Hindi and Marathi both need it. Pair Inter with **Noto Sans Devanagari**, matched for
+optical size and weight, or Devanagari text will render in a system fallback that looks
+broken beside the Latin.
+
+**Text expansion.** Hindi and Marathi run roughly 15–30% longer than English, and
+Devanagari needs more line height for its headline stroke and matras. **Any layout tuned
+to English string lengths will break.** Buttons, chips, table headers and the 11 proposal
+step titles are the usual casualties.
+
+**Line height.** Devanagari needs more than the Latin scale allows. The type scale keeps
+its sizes; line heights get a per-script adjustment.
+
+### What is translated, and what is not
+| Translated | Not translated |
+|---|---|
+| All UI labels, buttons, navigation | Customer names, addresses |
+| Empty states, errors, help text | Brand and model names (panels, inverters) |
+| Notifications and WhatsApp templates | Technical units — kW, kWh, kWp |
+| Voice agent speech | ₹ formatting stays Indian in every language |
+
+### Screens
+| Screen | Contains |
+|---|---|
+| **Language picker** | In onboarding and in profile. Shows each language *in its own script* — English · हिंदी · मराठी — never translated names. |
+| **Per-user, not per-tenant** | One company can have an English-speaking owner and a Marathi-speaking surveyor. Language is a user setting. |
+
+### What goes wrong
+- **Missing translation** → falls back to English, never shows a raw key
+- **Long string breaks a button** → buttons wrap or truncate with the full text available;
+  they never overflow
+- **Mixed script in one line** ("8.2 kWp सिस्टम") → normal and must look deliberate; test it
+- **Agent language ≠ app language** → they are independent; a Marathi-speaking rep may call
+  a Hindi-speaking customer
+- **Numbers** → Indian grouping in all three languages, always
+
+### Recommendation
+**Design every screen in Hindi at least once, early.** English-only design that gets
+translated later always breaks — and the breakage is invisible until a real user opens it.
+Building one screen in Devanagari now surfaces the font, spacing and line-height issues
+while they are cheap to fix.
 
 ---
 
