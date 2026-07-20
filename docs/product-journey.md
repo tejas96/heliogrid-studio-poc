@@ -4,9 +4,13 @@
 the prompts we feed Claude Design. Grows as we walk the journey stage by stage.
 
 Companions (already done, do not duplicate here):
-- `docs/claude-design-system.md` — how it looks
+- **The design system lives in Claude Design**, in the Design systems tab — brand, tokens
+  and components are already set up there. **Do not restate visual rules in this file or
+  in prompts.** Prompts describe the SCREEN; the system is selected in the dropdown.
 - `docs/product-spec.md` — objects and screen inventory
-- `docs/DESIGN-SYSTEM.md` — the Claude Code rulebook
+- `docs/DESIGN-SYSTEM.md` — the Claude Code rulebook (for building in React later, not
+  for Claude Design)
+- `docs/build-plan.md` — the phase worklist
 
 ---
 
@@ -47,7 +51,7 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
-| D31 | **Mobile navigation is an ARC BAR with an elevated centre**, not a flat five-tab rectangle. Slots: My Day · Leads · **➕ Add lead** (centre) · Projects · More. Centre is brass with an ink glyph and never changes per screen; the verb adapts by role (surveyor = Start survey). Full spec in `claude-design-system.md` §5b. | 2026-07-21 |
+| D31 | **Mobile navigation is an ARC BAR with an elevated centre**, not a flat five-tab rectangle. Slots: My Day · Leads · **➕ Add lead** (centre) · Projects · More. Centre is brass with an ink glyph and never changes per screen; the verb adapts by role (surveyor = Start survey). **Add this component to the Claude Design system** — see "Arc nav — addition" at the end of this file. | 2026-07-21 |
 | D30 | **Survey has two modes: REMOTE (address → Google Solar API → AI roof detection, minutes, no travel) and PHYSICAL (on site).** Remote is the default first pass for residential and is enough to design and quote; the physical visit becomes verification before installation rather than a prerequisite for quoting. Remote data is labelled **derived from imagery**, physical data **measured on site**. | 2026-07-21 |
 | D27 | **Six fixed preset roles; one person may hold SEVERAL.** Permission granted if any held role grants it; lead visibility takes the widest. Solves the small-firm "one person does three jobs" case without a custom-role builder. | 2026-07-21 |
 | D28 | **No per-person permission exceptions, ever.** To know what someone can do, you look at their roles — one source of truth. Exceptions are how permission systems become unauditable. | 2026-07-21 |
@@ -1635,3 +1639,66 @@ Nothing below 12px. Touch targets 44px minimum.
     screen for mobile. Read the codebase first; do not reinvent.
 14. 🔻 3D scene and capture screens — the hardest touch problem in the product, and the
     least urgent. Leave it until the pattern language is settled everywhere else.
+
+---
+
+# ARC NAV — addition for the Claude Design system
+
+**Paste this into your existing design system in Claude Design, as a component.**
+It is the only visual rule agreed after that system was set up. Everything else — brand,
+tokens, type, spacing — is already in there and must not be restated here or in prompts.
+
+```
+Bottom navigation — arc bar with elevated centre
+
+The signature element of the mobile app. A shallow arc, not a flat tab
+rectangle, with one raised primary action at its peak.
+
+GEOMETRY
+- Five slots maximum: four secondary + one elevated centre
+- Shallow arc: 24-32px of rise from the outer edge to the centre at 375px
+  width. More than that reads as a novelty.
+- Centre item is a circle 56-60px, sitting ABOVE the arc and overlapping
+  it so roughly a third of the circle breaks the arc's top line
+- Secondary items sit ON the curve, so their baselines step down toward
+  the screen edges — aligned to the arc, not to a straight line
+- Full bleed to screen edges; respects safe-area-inset-bottom
+
+SLOTS
+  My Day    Leads    [+ Add lead]    Projects    More
+
+- The elevated centre is "Add lead" — quick capture, under 30 seconds
+- The centre NEVER changes per screen
+- The verb adapts by role: a surveyor's centre is "Start survey"
+
+COLOUR
+- Centre circle: accent brass fill with the near-black ink glyph — the
+  same primary-action language as every button. NOT a gradient, NOT an
+  iridescent object.
+- Inactive items: muted text colour, which must pass 4.5:1. Never a pale
+  tint of the background.
+- Active item: accent text colour plus a bolded label or a small dot.
+  Never colour alone.
+- Arc surface uses elevation 2; the centre circle uses elevation 3 so it
+  reads as floating above.
+
+BEHAVIOUR
+- Hit areas are 44x44px minimum and RECTANGULAR regardless of the curve.
+  The visual follows the arc; the touch target does not.
+- Labels always visible under secondary icons, 12px minimum. Never
+  icon-only.
+- The bar is fixed and never hides on scroll. This is a work tool —
+  losing navigation mid-task to gain 60px is a bad trade.
+
+DARK THEME
+- Arc becomes the raised surface on the page surface
+- Centre stays brass but moves lighter up the ramp; label stays ink
+- The soft edge is a border, not a glow
+
+DO NOT
+- Frosted/blurred translucency over content — costs performance on
+  mid-range Android and hurts legibility over dense lists
+- Icon-only navigation
+- Low-contrast "ghost" items
+- A decorative centre object that is not an action
+```
