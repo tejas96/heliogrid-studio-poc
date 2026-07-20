@@ -47,6 +47,7 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
+| D24 | **Everything commercial is configurable per tenant; everything about safety, honesty and compliance is locked by the platform.** The agent's instructions and business knowledge are configured through guided questions and a structured knowledge base — **never a raw prompt box**. Unanswered questions from real calls feed back as one-tap additions. See "Tenant configuration". | 2026-07-21 |
 | D23 | **The design studio (Stage 5) and all 3D screens are LOW PRIORITY — design them last.** Everything else ships first: onboarding, CRM, survey, proposal builder, voice agent, close, project tracking. The studio already works in code; redesigning it is an improvement, not a blocker. | 2026-07-21 |
 | D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. Solved for speed with saved **component kits**, not by making it optional. | 2026-07-21 |
 
@@ -726,6 +727,130 @@ support calls in Indian solar are "what is the status?". One honest link answers
 
 ---
 
+## TENANT CONFIGURATION — everything an EPC can make their own
+
+Every company on the platform is different: different brands, different warranties,
+different pitch, different service area. **Configuration is a first-class product surface,
+not a settings dumping ground.**
+
+### The governing principle
+
+```
+LOCKED BY THE PLATFORM          CONFIGURED BY THE TENANT
+─────────────────────           ────────────────────────
+safety, honesty, compliance     everything commercial
+cannot be overridden by         and everything about
+any tenant, ever                how they sell
+```
+
+**What a tenant may never change** — because these protect their customer, and them:
+- The agent identifies itself as an automated assistant
+- "Talk to a person" always works
+- The agent never discusses, offers or agrees a discount (D10)
+- The agent never makes structural or engineering guarantees
+- Calling stays inside legal hours and respects DND / do-not-call
+- Numbers keep their provenance labels; estimates are never printed as calculations
+- The customer is never told something the system cannot support
+
+Everything else is theirs.
+
+---
+
+### A · Voice agent configuration
+
+**The design problem:** a solar business owner cannot and should not write a prompt.
+So we never show them one. They answer questions about their business; we assemble the
+instructions.
+
+| Screen | Contains |
+|---|---|
+| **Agent setup — guided** | 6 short steps, plain language. Agent name · voice · languages · tone (Professional / Friendly / Direct) · what to say when asked something it doesn't know · when to hand to a human. Defaults are pre-filled and work on day one. |
+| **Opening line** | Editable, with the mandatory AI disclosure fixed and visible as locked text. "Namaste, this is *Asha* calling from *Suryodaya Solar*. I'm an automated assistant — is now a good time?" The bold parts are theirs; the disclosure is not. |
+| **Escalation rules** | Toggle list: price/discount questions (locked ON) · angry customer · asks for the owner · technical question the agent can't answer · customer asks to stop. Each with "what the agent says as it hands over". |
+| **Calling window** | Days, hours, holiday calendar. Bounded by the legal window — a tenant can narrow it, never widen it past 9am–9pm. |
+| **Test the agent** | **The most important screen here.** Call yourself, or run a typed conversation. Hear exactly what a customer hears, before anyone else does. |
+| **Version history** | Every change is versioned. Each call records which version answered it — so a dispute about what the agent said is answerable. |
+
+### B · Business knowledge — what the agent knows
+
+Not a document upload. A **structured, reviewable knowledge base** in the owner's own words.
+
+| Section | Examples |
+|---|---|
+| **About us** | Years in business, installations completed, certifications, service area |
+| **Products** | Panel brands offered, inverter brands, why we chose them |
+| **Warranty** | Panel 25yr performance / 12yr product, inverter 5yr, workmanship 2yr |
+| **Process & timeline** | Survey in 2 days · design in 3 · install 1–2 days · net-metering 3–6 weeks |
+| **Pricing policy** | What's included, what's extra. **No discount authority** — locked. |
+| **Subsidy** | How PM Surya Ghar works, who qualifies, who applies, typical timeline |
+| **Financing** | Which banks/NBFCs, typical EMI, documents needed |
+| **Common objections** | "Too expensive" · "I'll wait for prices to drop" · "Does it work in monsoon?" · "What about cleaning?" — with the answer the owner wants given |
+
+**How it stays current — the feature that makes this work:**
+
+> When a customer asks something the agent could not answer, it is captured as an
+> **unanswered question**. The owner sees a short list: *"3 customers asked about hail
+> damage this week."* One tap to answer it, and the agent knows it from the next call.
+
+The knowledge base grows from real calls instead of a blank page. This is the difference
+between a config screen people fill in once and abandon, and one that gets better weekly.
+
+**Seeded, not empty.** Every new tenant starts with a solar-industry default pack —
+generic but correct answers for subsidy, warranty, monsoon, cleaning, net metering. The
+owner reviews and personalises. Day one it works; week four it sounds like them.
+
+### C · Everything else configurable per tenant
+
+| Area | What |
+|---|---|
+| **Branding** | Logo, letterhead, colours on customer documents, company details |
+| **Component kits** | Saved combinations that fill step 8 in one tap (D22) |
+| **Price book** | Rates per component, versioned so old quotes keep their prices |
+| **Catalog** | Which panels/inverters/BOS this company actually sells |
+| **Proposal templates** | Cover, sections included, default T&C, bank details |
+| **Payment terms** | Named tranche templates — 10/60/20/10, 30/60/10 |
+| **Project timeline** | Default phases and descriptions (Stage 6B, step 6) |
+| **Discount limits** | Currently owner-approves-all (D19); the limit lives here when that changes |
+| **Lead sources** | Which channels are live |
+| **Roles** | Who sees what, who approves what |
+| **Message templates** | WhatsApp proposal message, follow-up nudge, reminder |
+
+### D · Making configuration not feel like work
+
+1. **Nothing is required on day one.** Every setting has a working default. A tenant can
+   sign up and send a real proposal without opening settings once.
+2. **Configure in context, not in a settings maze.** The moment a rep needs a component
+   kit, offer to create one *there*. The first proposal they complete offers to become the
+   template. Settings screens exist for revisiting, not for setup.
+3. **Show the effect.** Every config screen shows a live preview — the proposal with your
+   logo, the agent's opening line spoken aloud, the payment tranches as the customer sees
+   them.
+4. **One "Business profile" screen that feeds many places.** Company name, logo, address
+   and GSTIN are asked once and used by the proposal, the agent's script, the customer link
+   and the invoice.
+
+### What goes wrong
+- **Owner writes an instruction that breaks a locked rule** ("offer 10% if they hesitate")
+  → rejected at save with a plain explanation, not silently ignored
+- **Knowledge base contradicts itself** (two different warranty answers) → flagged on save
+- **Agent config changed mid-campaign** → versioned; calls already scheduled use the
+  version they were queued with, and the owner is told
+- **Tenant deletes a component kit still referenced by a draft proposal** → draft keeps
+  its components; the kit is archived, not destroyed
+- **Price book updated after quotes were sent** → sent quotes keep original prices, always
+- **A tenant with no config at all** → everything falls back to platform defaults and
+  nothing breaks
+- **Agent's tone set to "Direct" but the knowledge is verbose** → preview shows the
+  mismatch before it goes live
+
+### Recommendation
+**Build the "unanswered questions" loop early, even before the agent is live.** It is the
+mechanism that keeps the whole system honest and improving, and it costs almost nothing:
+capture what the agent couldn't handle, show the owner, make answering it one tap. Without
+it, every tenant's agent decays into a script nobody maintains.
+
+---
+
 ## CROSS-CUTTING
 
 **Roles** — Owner (everything, approves discounts) · Manager (team's leads, reassigns) ·
@@ -863,6 +988,8 @@ Nothing below 12px. Touch targets 44px minimum.
 10. Projects board → project detail → customer progress link
 11. Onboarding: signup → what do you sell → ready
 12. Settings: team, roles, catalog, price book, **component kits**
+12b. **Agent setup (guided, 6 steps) + business knowledge base + test-the-agent**
+     — including the *unanswered questions* review list
 
 **— everything above ships before anything below —**
 
