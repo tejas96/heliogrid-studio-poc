@@ -22,6 +22,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/google.maps": "^3.65.2",
@@ -33,6 +34,8 @@
     "axe-core": "^4.12.1",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^29.1.1",
+    "postcss": "^8.5.20",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }
