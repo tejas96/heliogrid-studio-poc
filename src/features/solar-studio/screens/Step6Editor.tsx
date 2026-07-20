@@ -222,6 +222,16 @@ export function Step6Editor() {
   const heatCacheRef = useRef<{ fp: string; res: HeatmapResult } | null>(null);
   const [showStrings, setShowStrings] = useState(true);
   const [show3D, setShow3D] = useState(false);
+  // Phase 22p: leaving the 3D view must put focus back on the button that
+  // opened it. Scene3D cannot do this itself — the 3D view REPLACES this
+  // editor, so by the time Scene3D unmounts the button is already detached.
+  // Only here, after the editor has re-rendered, does a target exist again.
+  const open3DRef = useRef<HTMLButtonElement>(null);
+  const was3D = useRef(false);
+  useEffect(() => {
+    if (was3D.current && !show3D) open3DRef.current?.focus();
+    was3D.current = show3D;
+  }, [show3D]);
   const [locked, setLocked] = useState(false);
   const [confirmPlace, setConfirmPlace] = useState(false);
   const [whySheet, setWhySheet] = useState(false);
@@ -1853,6 +1863,7 @@ export function Step6Editor() {
           fontSize: 12.5,
           borderRadius: 12,
         }}
+        ref={open3DRef}
         aria-label="Open 3D shadow view"
         data-tip="3D shadow view"
         data-tip-right=""

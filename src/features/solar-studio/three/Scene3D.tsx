@@ -321,6 +321,87 @@ export function Scene3D({
     c.update();
   }
 
+  /**
+   * Orbit the camera from the keyboard (Phase 22p).
+   *
+   * The 3D view was mouse-only: no tab stop, no way to change the viewpoint
+   * without a pointer. Every other control in this app is reachable, and the
+   * scene is where the design is actually inspected — a shaded panel, a leg
+   * standing clear of its footing — so "look at it from another angle" cannot
+   * be a mouse-only capability.
+   *
+   * Drives the same OrbitControls instance the view presets use, in spherical
+   * coordinates about its target, so mouse and keyboard cannot diverge.
+   */
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  function orbitBy(dAzimuth: number, dElevation: number, zoomFactor = 1) {
+    const c = controlsRef.current;
+    if (!c) return;
+    const offset = c.object.position.clone().sub(c.target);
+    const s = new THREE.Spherical().setFromVector3(offset);
+    s.theta += dAzimuth;
+    // clamp above the horizon and below straight-down, matching what dragging
+    // allows — going under the ground plane is disorienting, not useful
+    s.phi = Math.max(0.06, Math.min(Math.PI / 2 - 0.02, s.phi + dElevation));
+    s.radius = Math.max(4, Math.min(320, s.radius * zoomFactor));
+    c.object.position.copy(c.target.clone().add(new THREE.Vector3().setFromSpherical(s)));
+    c.object.lookAt(c.target);
+    c.update();
+  }
+
+  /**
+   * Arrow keys orbit, +/− dolly, 1/2/3 jump to a preset, Escape exits.
+   *
+   * This handler is on the WRAPPER, so it also sees keys bubbling up from the
+   * controls layered over the scene. Camera keys must therefore only fire when
+   * the scene itself has focus: without this guard, arrowing the time-of-day
+   * slider orbited the camera instead of moving the sun, and typing a date was
+   * likewise eaten. Escape is deliberately left global — leaving the view is a
+   * reasonable thing to want from anywhere inside it.
+   */
+  function onSceneKeyDown(e: React.KeyboardEvent) {
+    const t = e.target as HTMLElement;
+    const inControl =
+      t !== e.currentTarget &&
+      !!t.closest?.('input,select,textarea,button,[role="slider"],[contenteditable="true"]');
+    const STEP = e.shiftKey ? 0.04 : 0.12; // Shift = fine, as everywhere else
+    const map: Record<string, () => void> = {
+      ArrowLeft: () => orbitBy(-STEP, 0),
+      ArrowRight: () => orbitBy(STEP, 0),
+      ArrowUp: () => orbitBy(0, -STEP),
+      ArrowDown: () => orbitBy(0, STEP),
+      '+': () => orbitBy(0, 0, 0.9),
+      '=': () => orbitBy(0, 0, 0.9),
+      '-': () => orbitBy(0, 0, 1.1),
+      '1': () => goView('top'),
+      '2': () => goView('iso'),
+      '3': () => goView('front'),
+    };
+    const fn = inControl ? undefined : map[e.key];
+    if (fn) {
+      e.preventDefault();
+      fn();
+      return;
+    }
+    if (e.key === 'Escape' && onClose) {
+      e.preventDefault();
+      onClose();
+    }
+  }
+
+  // Phase 22p: take focus when the scene opens, so the keys below are live
+  // immediately. Opening used to leave focus on <body> — you pressed Enter on
+  // the toolbar button and then had to Tab back in to move the camera.
+  //
+  // Note this does NOT try to restore focus on unmount: the 3D view REPLACES
+  // the 2D editor, so the button that opened it is already detached by then
+  // and focusing it is a no-op. Handing focus back is the parent's job, since
+  // only the parent still has a mounted element to hand it to.
+  useEffect(() => {
+    wrapRef.current?.focus();
+  }, []);
+
   function capture() {
     const gl = glRef.current;
     if (!gl || !onCapture) return;
@@ -331,6 +412,13 @@ export function Scene3D({
 
   return (
     <div
+      ref={wrapRef}
+      // Phase 22p: a tab stop on the scene itself. Without one the 3D view was
+      // unreachable by keyboard — you could open it and then not move it.
+      tabIndex={0}
+      role="application"
+      aria-label="3D scene. Arrow keys orbit, Shift for finer steps, plus and minus zoom, 1 top view, 2 isometric, 3 front, Escape closes."
+      onKeyDown={onSceneKeyDown}
       style={{
         position: 'absolute',
         inset: 0,

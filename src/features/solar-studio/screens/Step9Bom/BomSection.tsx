@@ -1,6 +1,6 @@
 // ─── One category block: header, derivation inputs, staleness, rows ─────────
 import { RefreshCw } from 'lucide-react';
-import { DataTable } from '../../components/ui';
+import { DataTable, SR_ONLY } from '../../components/ui';
 import { sectionState } from '../../lib/bom/view';
 import type { OverridableField } from '../../lib/bom/merge';
 import type { BomCategory, BomLine, Project } from '../../types';
@@ -26,7 +26,15 @@ const COLUMNS = [
   { key: 'gstpct', label: 'GST', width: 74 },
   { key: 'gst', label: 'GST ₹', width: 84, align: 'right' as const },
   { key: 'total', label: 'Total ₹', width: 96, align: 'right' as const },
-  { key: 'actions', label: '', width: 56, align: 'center' as const },
+  // Named, but only for assistive tech — the column is visually just icons.
+  // An empty <th> is announced as an unnamed column, which is how a screen
+  // reader user loses track of which cell they are in. Caught by axe-core.
+  {
+    key: 'actions',
+    label: <span style={SR_ONLY}>Actions</span>,
+    width: 56,
+    align: 'center' as const,
+  },
 ];
 
 export function BomSection({
