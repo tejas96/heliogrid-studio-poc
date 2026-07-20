@@ -47,6 +47,7 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
+| D23 | **The design studio (Stage 5) and all 3D screens are LOW PRIORITY — design them last.** Everything else ships first: onboarding, CRM, survey, proposal builder, voice agent, close, project tracking. The studio already works in code; redesigning it is an improvement, not a blocker. | 2026-07-21 |
 | D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. Solved for speed with saved **component kits**, not by making it optional. | 2026-07-21 |
 
 ---
@@ -301,7 +302,15 @@ rework than any amount of validation.
 **Who:** designer, on desktop or tablet. **This stage already exists in code.**
 **Goal:** turn a survey into a system that is buildable and honest.
 
-> ⚠️ **These screens EXIST — redesign them, do not invent them.** The codebase has a
+> 🔻 **LOW PRIORITY — DESIGN THIS LAST (D23).**
+> The studio and every 3D screen come after all other design work is finished. They
+> already work in code, so a customer can be quoted today; redesigning them is an
+> improvement, not a blocker. Do not spend early design cycles here.
+>
+> Build first: onboarding → CRM → survey → **proposal builder** → voice agent → close →
+> project tracking. Come back to the studio when those are done.
+
+> ⚠️ **When you do get here: these screens EXIST — redesign them, do not invent them.** The codebase has a
 > working 10-step studio with real satellite imagery, roof tracing, shading simulation, 3D,
 > auto-layout and a bill of materials. When connecting the codebase, Claude Design should
 > read the existing screens and improve the UX, not design a new solar tool from scratch.
@@ -853,4 +862,11 @@ Nothing below 12px. Touch targets 44px minimum.
 9. Customer proposal link (no login)
 10. Projects board → project detail → customer progress link
 11. Onboarding: signup → what do you sell → ready
-12. Settings: team, roles, catalog, price book
+12. Settings: team, roles, catalog, price book, **component kits**
+
+**— everything above ships before anything below —**
+
+13. 🔻 Design studio redesign (Stage 5) — one screen at a time, starting with the BOM
+    screen for mobile. Read the codebase first; do not reinvent.
+14. 🔻 3D scene and capture screens — the hardest touch problem in the product, and the
+    least urgent. Leave it until the pattern language is settled everywhere else.
