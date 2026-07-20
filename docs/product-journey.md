@@ -47,6 +47,9 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
+| D27 | **Six fixed preset roles; one person may hold SEVERAL.** Permission granted if any held role grants it; lead visibility takes the widest. Solves the small-firm "one person does three jobs" case without a custom-role builder. | 2026-07-21 |
+| D28 | **No per-person permission exceptions, ever.** To know what someone can do, you look at their roles — one source of truth. Exceptions are how permission systems become unauditable. | 2026-07-21 |
+| D29 | **Custom roles deferred to v2.** Ship the six, watch which combinations companies actually ask for, then add the presets they wanted — rather than guessing at a checkbox editor nobody fills in. | 2026-07-21 |
 | D25 | **The app UI is multilingual: English, Hindi, Marathi.** Supersedes the English-only half of D12. Voice agent languages stay configurable per tenant, defaulting to the same three. Devanagari support is a design-system change, not just a translation task — see "Multilingual". | 2026-07-21 |
 | D26 | **Billing screens are MOCK for now.** Pricing, tiers and limits are not decided. Design the shape — plans, usage, upgrade, payment failure, suspension — with placeholder numbers, so the flows exist and the real pricing drops in later. | 2026-07-21 |
 | D24 | **Everything commercial is configurable per tenant; everything about safety, honesty and compliance is locked by the platform.** The agent's instructions and business knowledge are configured through guided questions and a structured knowledge base — **never a raw prompt box**. Unanswered questions from real calls feed back as one-tap additions. See "Tenant configuration". | 2026-07-21 |
@@ -1292,6 +1295,115 @@ its sizes; line heights get a per-script adjustment.
 translated later always breaks — and the breakage is invisible until a real user opens it.
 Building one screen in Devanagari now surfaces the font, spacing and line-height issues
 while they are cheap to fix.
+
+---
+
+## ROLES & PERMISSIONS
+
+### The design principle
+**Six fixed presets. One person can hold several. No custom roles in v1, no per-person
+exceptions, ever.**
+
+The small-firm problem — one person is rep *and* surveyor *and* designer — is solved by
+**stacking roles**, not by building a custom one. Rajesh gets `Sales rep + Surveyor` and
+can do both jobs. The permission check is simply: *does any of my roles allow this?*
+
+That removes the need for a role editor in v1 entirely, and it removes the screen nobody
+completes — 18 unchecked boxes on a blank page.
+
+### The six preset roles
+
+| Role | For | Lead visibility |
+|---|---|---|
+| **Owner** | The business owner. Everything, always. Cannot be deleted or restricted. | All |
+| **Manager** | Runs a team. Sees and reassigns the team's leads, approves nothing financial by default. | Team |
+| **Sales rep** | Sells. Own leads, own quotes, sends proposals. | Own |
+| **Surveyor** | Visits sites and captures surveys. | Assigned only |
+| **Designer** | Builds designs and quotes. | Assigned only |
+| **Engineer** | Reviews and signs off designs. | Assigned only |
+
+### What each preset grants
+
+18 capabilities, phrased in plain language — never as CRUD on entities. This matrix is the
+definition of the presets, and it becomes the checkbox list when custom roles arrive later.
+
+| Capability | Owner | Manager | Sales rep | Surveyor | Designer | Engineer |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| **Lead visibility** | All | Team | Own | Assigned | Assigned | Assigned |
+| Add and edit leads | ✓ | ✓ | ✓ | — | — | — |
+| Assign leads to others | ✓ | ✓ | — | — | — | — |
+| Delete leads | ✓ | — | — | — | — | — |
+| Capture site surveys | ✓ | ✓ | ✓ | ✓ | — | — |
+| Create and edit designs | ✓ | — | — | — | ✓ | — |
+| Approve designs (sign-off) | ✓ | — | — | — | — | ✓ |
+| Create quotes and proposals | ✓ | ✓ | ✓ | — | ✓ | — |
+| Send proposals to customers | ✓ | ✓ | ✓ | — | — | — |
+| Apply discounts | ✓ | ✓ | ✓ | — | — | — |
+| **Approve discounts** | ✓ | — | — | — | — | — |
+| Update project stages | ✓ | ✓ | — | — | — | — |
+| Record payments, upload documents | ✓ | ✓ | — | — | — | — |
+| Configure the agent and its knowledge | ✓ | — | — | — | — | — |
+| See agent performance | ✓ | ✓ | — | — | — | — |
+| Manage team and roles | ✓ | — | — | — | — | — |
+| Manage catalog, price book, kits | ✓ | — | — | — | — | — |
+| Manage billing | ✓ | — | — | — | — | — |
+| See company reports | ✓ | ✓ | — | — | — | — |
+
+**Approve discounts is Owner-only** (D19) — the one row that is currently a bottleneck and
+the first that will move when the team grows.
+
+**No object-level permissions, no field-level rules, no inheritance tree.** If a company
+needs more than this, they need a different product.
+
+### Stacking roles
+
+```
+Rajesh Patil
+  Sales rep · Surveyor · Designer
+  → can sell, survey and design. Lead visibility = the widest of the three.
+```
+
+- Permission granted if **any** held role grants it
+- Lead visibility takes the **widest** scope among them
+- The team list shows all roles a person holds as chips
+- Presets are fixed and cannot be edited — a company cannot break "Sales rep" for
+  everyone who came after
+
+### Screens — v1
+| Screen | Contains |
+|---|---|
+| **Team** | People, the roles each holds (as chips), status (active / invited / removed), last active. Invite by phone number. |
+| **Assign roles** | A person, with the six presets as toggles. A live plain-English line updates as they toggle: *"Rajesh can sell, survey and design."* |
+| **Roles reference** | Read-only in v1. The six presets and the matrix above, so an owner can see what each grants before assigning it. Shows how many people hold each. |
+| **Invite person** | Name, phone, one or more roles. That is all. |
+
+### Deferred to v2
+Custom roles, the role editor, duplicate-from-preset. **We ship the six, watch which
+combinations companies actually ask for, and then build the presets they wanted** —
+rather than guessing at a checkbox editor nobody fills in.
+
+### What goes wrong
+- **Owner removes their own admin rights** → blocked; there must always be at least one
+  Owner
+- **Last person with "Manage team" is removed** → blocked with an explanation
+- **A role is deleted while people hold it** → cannot delete; offer to move them to another
+  role first
+- **A permission is removed while someone is mid-task** → they finish what they started;
+  the restriction applies to the next action, not a mid-flight error
+- **Person invited with no role at all** → blocked; they would sign in and see nothing
+- **Someone holds two roles with different lead visibility** → the widest applies, and the
+  team list shows which one is doing the work
+- **Person leaves the company** → deactivate, never delete. Their leads and activity stay
+  attributed, and get reassigned.
+
+### Recommendations
+1. **Show the plain-English line while they toggle roles.** *"Rajesh can sell, survey and
+   design"* is the only way a non-technical owner verifies what they just granted.
+2. **Role decides the home screen** (Stage 1). Someone holding several roles gets a home
+   screen for their *widest* role, and can switch — a rep+surveyor lands on My Day with
+   today's visits shown inside it, not on two competing home screens.
+3. **Never delete a person — deactivate.** Their leads and activity stay attributed and get
+   reassigned. Deleting a user orphans a year of history.
 
 ---
 
