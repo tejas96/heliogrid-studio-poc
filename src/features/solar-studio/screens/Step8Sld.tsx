@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { BookOpen, Cable, Download, Grid3x3, PencilLine, RotateCcw, Sparkles, Zap, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
+import { Sheet, TitleBlock } from '../components/drawing';
 import { engineeringStatus, STRUCTURE_DISCLAIMER, windZoneInfo } from '../lib/structure';
 import { Dialog } from '../components/ui';
 import type { Project, SldParams } from '../types';
@@ -357,9 +358,7 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
   const stringYs = strings.map((_, i) => 120 + i * Math.min(90, 380 / strings.length));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', minWidth: 900, background: '#fff', border: '1px solid #ccc' }}>
-      {/* frame + title */}
-      <rect x={6} y={6} width={W - 12} height={H - 12} fill="none" stroke="#111" strokeWidth={1.4} />
+    <Sheet>
       <text x={W / 2} y={30} textAnchor="middle" fontSize={15} fontWeight={800} fontFamily="monospace">
         {project.info.name.toUpperCase()} — {r.capacityKwp} kWp SOLAR PV SYSTEM · SINGLE LINE DIAGRAM
       </text>
@@ -575,7 +574,7 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
       <text x={12} y={FOOT_Y} fontSize={9} fill="#666">
         {drawingFootnote(project)}
       </text>
-    </svg>
+    </Sheet>
   );
 }
 
@@ -609,8 +608,7 @@ function LayoutSheet() {
   if (!t) return null;
 
   return (
-    <svg viewBox="0 0 980 640" style={{ width: '100%', minWidth: 900, background: '#fff', border: '1px solid #ccc' }}>
-      <rect x={6} y={6} width={968} height={628} fill="none" stroke="#111" strokeWidth={1.4} />
+    <Sheet>
       <text x={490} y={32} textAnchor="middle" fontSize={15} fontWeight={800} fontFamily="monospace">
         ROOFTOP PV ARRAY LAYOUT · SCALE 1:{Math.round(100 / t.scale) * 10} · SHEET 1 OF 2
       </text>
@@ -705,7 +703,7 @@ function LayoutSheet() {
       <text x={12} y={FOOT_Y} fontSize={9} fill="#666">
         {drawingFootnote(project)}
       </text>
-    </svg>
+    </Sheet>
   );
 }
 
@@ -716,8 +714,7 @@ function StringSheet() {
   const byId = new Map(project.panels.map((p) => [p.id, p]));
 
   return (
-    <svg viewBox="0 0 980 640" style={{ width: '100%', minWidth: 900, background: '#fff', border: '1px solid #ccc' }}>
-      <rect x={6} y={6} width={968} height={628} fill="none" stroke="#111" strokeWidth={1.4} />
+    <Sheet>
       <text x={490} y={32} textAnchor="middle" fontSize={15} fontWeight={800} fontFamily="monospace">
         DC STRING CABLE ROUTE · SHEET 2 OF 2
       </text>
@@ -768,27 +765,13 @@ function StringSheet() {
       <text x={12} y={FOOT_Y} fontSize={9} fill="#666">
         {drawingFootnote(project)}
       </text>
-    </svg>
+    </Sheet>
   );
 }
 
-function TitleBlock({ rows }: { rows: [string, string][] }) {
-  return (
-    <g fontFamily="monospace" fontSize={8.5}>
-      <rect x={30} y={560} width={920} height={60} fill="none" stroke="#111" strokeWidth={1.2} />
-      {rows.map(([k, v], i) => {
-        const col = i % 3;
-        const row = Math.floor(i / 3);
-        return (
-          <text key={k} x={44 + col * 310} y={582 + row * 24}>
-            <tspan fontWeight={800}>{k}: </tspan>
-            {v}
-          </text>
-        );
-      })}
-    </g>
-  );
-}
+// TitleBlock moved to components/drawing (Phase 22o) — it was pinned to this
+// one sheet size while the new printable sheets need it on A3, and the gate
+// there pins its original geometry so nothing on these sheets moved.
 
 // ─── Edit ratings dialog ────────────────────────────────────────────────────
 
