@@ -152,6 +152,63 @@ Respect device safe areas on all fixed mobile chrome.
 
 ---
 
+## 5b. The bottom navigation — arc bar with an elevated centre
+
+**This is the signature element of the mobile app.** Not a flat rectangle of five tabs
+like every other business app — a shallow arc with one raised primary action at its peak.
+
+### Geometry
+
+```
+            ╭─────────────╮
+        ╭───╯      ●      ╰───╮          ● elevated centre — the primary action
+    ╭───╯   ◇             ◇   ╰───╮      ◇ secondary items, following the curve
+────╯  ◇                     ◇  ╰────    curve rises ~28px from edge to centre
+```
+
+- **Five slots max.** Four secondary + one elevated centre.
+- The surface is a **shallow arc**, not a semicircle — roughly 24–32px of rise from the
+  outer edge to the centre across a 375px width. Any more and it reads as a novelty.
+- The **centre item sits above the arc**, overlapping it — a circle roughly 56–60px,
+  raised so about a third of it breaks the arc's top line.
+- Secondary items sit **on** the curve, so their baselines step down toward the edges.
+  They stay visually aligned to the arc, not to a straight line.
+- Full-bleed to the screen edges. Respects `env(safe-area-inset-bottom)`.
+
+### Two adaptations from the reference — both deliberate
+
+**1. The centre is brass, not iridescent.** The reference uses a gradient 3D object. Ours
+uses the accent fill `#C8842A` with an ink glyph — the same primary-action language as
+every button in the product (§2). A rainbow gradient would be the one element in the app
+that belongs to no system.
+
+**2. Contrast must pass.** The reference sets pale grey icons on white — beautiful in a
+screenshot, and it fails WCAG. Our inactive items use `--text-muted` (7.1:1), not a tint
+of the background. **The arc may be soft; the icons may not be.**
+
+### Behaviour
+| | |
+|---|---|
+| **Hit area** | ≥44×44px per item, **rectangular**, regardless of the curve. The visual follows the arc; the touch target does not. |
+| **Active state** | Icon in `--accent-text`, label in `--text`, plus a small dot or the label bolding. Never colour alone (N6/§7). |
+| **Centre action** | Always the same action; it does not change per screen. |
+| **Labels** | Always visible under secondary icons, 12px — never icon-only (N4). The centre may carry a label above it, as in the reference. |
+| **Elevation** | Arc surface `--elev-2`; the centre circle `--elev-3` so it reads as floating above. |
+| **Scroll** | The bar is fixed and never hides. This is a work tool — losing navigation mid-task to gain 60px is a bad trade. |
+
+### Dark theme
+Arc becomes `--surface-raised` on `--surface`; the centre stays brass but moves up the ramp
+to `#D9A24E`, label still ink (§2). The soft edge is a border, not a glow.
+
+### What NOT to copy from the reference
+- Frosted/blurred translucency over content — it costs performance on mid-range Android and
+  hurts legibility over dense lists
+- Icon-only navigation
+- Low-contrast "ghost" items
+- A centre object that is decorative rather than an action
+
+---
+
 ## 6. Components
 
 **Buttons** — 10px radius, 14px semibold, 8px/16px padding, 44px min height on mobile.
