@@ -1,5 +1,6 @@
 import type { BomLine } from '../../../types';
-import { acBreakerA, acFullLoadA, dcCableSizeMm2 } from '../../electrical-sizing';
+import { acBreakerA, acFullLoadA, dcCableSizeMm2, sizeAcCable } from '../../electrical-sizing';
+import { cableRatePerM } from '../../../data/pricebook';
 import type { BomContext } from '../context';
 import { AC_ALLOWANCE_M } from '../context';
 import { line } from '../line';
@@ -35,6 +36,15 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
     pricebook: PRICE_BOOK,
   } = ctx;
   const out: BomLine[] = [];
+  // `inv.acKw * invCount` — the SAME expression the ACDB breaker line uses, so
+  // the cable and the device protecting it are sized from one number. Two
+  // copies of this product would be two things that merely happen to agree.
+  const acSystemKw = inv.acKw * invCount;
+  // Sized against the RUN, because voltage drop usually governs it. `acRunM`
+  // is the same length this line bills, so the cable is sized for the cable
+  // that is actually quoted.
+  const acCable = sizeAcCable(acSystemKw, inv.phases, acRunM);
+  const acSizeMm2 = acCable.mm2;
 
   out.push(
     line({
@@ -61,7 +71,7 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
         dcSource === 'routed' ? 'derived' : dcSource === 'input' ? 'measured' : 'estimated',
       qty: dcCableM,
       unit: 'm',
-      unitPriceInr: PRICE_BOOK.dcCablePerM,
+      unitPriceInr: cableRatePerM(PRICE_BOOK.dcCablePerMBySize, dcCableSizeMm2(ctx.spec)),
       // The old text claimed "(+15% slack incl.)" on a figure that had no slack
       // in it — the traceability line is the one thing a reviewer trusts, so it
       // now states exactly what was summed.
@@ -81,7 +91,10 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
       key: 'elec.ac_cable',
       category: 'Electrical BOS',
       item: 'AC Cable',
-      spec: inv.phases === 3 ? '4-core 10 sq.mm Cu' : '3-core 6 sq.mm Cu',
+      // SIZED, not asserted. This was `phases === 3 ? '10 sq.mm' : '6 sq.mm'`
+      // — a fixed pair that ignored system size, so any three-phase system past
+      // roughly 30 kW was quoted a cable that could not carry its own breaker.
+      spec: `${inv.phases === 3 ? 4 : 3}-core ${acSizeMm2} sq.mm Cu`,
       confidence:
         acSource === 'routed' ? 'derived' : acSource === 'input' ? 'measured' : 'assumed',
       // `acRunM`, not a second copy of the same ternary. This line used to
@@ -90,16 +103,29 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
       // to agree — a third source would have moved one and not the other.
       qty: acRunM,
       unit: 'm',
-      unitPriceInr: PRICE_BOOK.acCablePerM,
+      unitPriceInr: cableRatePerM(PRICE_BOOK.acCablePerMBySize, acSizeMm2),
       // Measured only when the service entry has actually been placed. Until
       // then the length is genuinely unknown, so it is an ALLOWANCE and says
       // so — never an assumption dressed as a calculation.
+      // Two independent stories on this line — how LONG and how THICK — so the
+      // formula carries both. The conductor caveat is not boilerplate: ampacity
+      // alone does not size an AC run, and an installer reading "10 sq.mm"
+      // without knowing voltage drop was skipped could under-build the job.
       formula:
-        acSource === 'routed'
+        (acSource === 'routed'
           ? `Routed inverter → meter ${routedAc.meters} m (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop)`
           : acSource === 'input'
             ? `YOUR SURVEYED RUN — ${project.bom!.inputs!.avgAcRunM} m inverter → LT panel, +${Math.round(rules.cable.slackPct * 100)}% slack. Placing the meter in Step 6 would replace this with measured geometry.`
-            : `ASSUMED ${AC_ALLOWANCE_M} m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter), enter your surveyed run above, or edit the quantity.`,
+            : `ASSUMED ${AC_ALLOWANCE_M} m allowance — no meter/service entry placed, so this run cannot be measured. Place it (Step 6 → Mount inverter → Meter), enter your surveyed run above, or edit the quantity.`) +
+        ` · Conductor ${acSizeMm2} sq.mm from ${acAmps(acSystemKw, inv.phases)} A full load, carrying the ${mcbFor(acSystemKw, inv.phases)} A breaker. Governed by ${
+          acCable.governedBy === 'voltage-drop'
+            ? `VOLTAGE DROP (${acCable.voltDropPct.toFixed(1)}% over ${Math.round(acRunM)} m, limit ${rules.acSizing.voltDropLimitPct}% — ampacity alone would have allowed ${acCable.ampacityMm2} sq.mm)`
+            : `AMPACITY (drop ${acCable.voltDropPct.toFixed(1)}% over ${Math.round(acRunM)} m, inside the ${rules.acSizing.voltDropLimitPct}% limit)`
+        }.${
+          acCable.singleRunAdequate
+            ? ''
+            : ' NO SINGLE CABLE CARRIES THIS BREAKER — parallel runs or a busbar are required; engineer to size.'
+        } Grouping, ambient above 40 °C and installation method are NOT modelled — engineer to verify.`,
     }),
     line({
       key: 'elec.mc4',

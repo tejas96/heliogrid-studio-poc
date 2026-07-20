@@ -1,5 +1,5 @@
 import type { BomLine, StructureProfile } from '../../../types';
-import type { PriceBook } from '../../../data/pricebook';
+import type { PriceKey } from '../../../data/pricebook';
 import { STRUCTURE_PROFILES } from '../../../data/profiles';
 import { STRUCTURE_DISCLAIMER, type SegmentStructure } from '../../structure';
 import type { BomContext, SlopedCovering } from '../context';
@@ -73,10 +73,10 @@ const SLOPED_HARDWARE: Record<
     covering: string;
     anchorItem: string;
     anchorSpec: string;
-    anchorPriceKey: keyof PriceBook;
+    anchorPriceKey: PriceKey;
     anchorNote: string;
     sealSpec: string;
-    sealPriceKey: keyof PriceBook;
+    sealPriceKey: PriceKey;
     sealNote: string;
   }
 > = {

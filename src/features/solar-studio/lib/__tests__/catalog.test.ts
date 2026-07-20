@@ -69,9 +69,37 @@ describe('catalog envelope', () => {
   });
 
   it('pricebook values are positive finite rupees', () => {
+    // Not every entry is a scalar since cable is priced BY SIZE, so this walks
+    // into the lookup tables rather than skipping them — a zero rate hiding
+    // inside one would otherwise quote a conductor at nothing.
     for (const [key, val] of Object.entries(cat.pricebook)) {
+      if (typeof val === 'object' && val !== null) {
+        const entries = Object.entries(val as Record<string, number>);
+        expect(entries.length, `pricebook.${key} is empty`).toBeGreaterThan(0);
+        for (const [size, rate] of entries) {
+          expect(Number.isFinite(rate), `pricebook.${key}[${size}]`).toBe(true);
+          expect(rate, `pricebook.${key}[${size}]`).toBeGreaterThan(0);
+          expect(Number.isFinite(Number(size)), `pricebook.${key} key ${size}`).toBe(true);
+        }
+        continue;
+      }
       expect(Number.isFinite(val), `pricebook.${key}`).toBe(true);
       expect(val, `pricebook.${key}`).toBeGreaterThan(0);
+    }
+  });
+
+  it('a dearer conductor never costs less per metre', () => {
+    // the tables are lookups, so nothing structural stops a typo putting
+    // 25 sq.mm below 16 — which would quote the thicker cable for less
+    for (const table of [cat.pricebook.acCablePerMBySize, cat.pricebook.dcCablePerMBySize]) {
+      const rows = Object.entries(table)
+        .map(([s, r]) => [Number(s), r] as const)
+        .sort((a, b) => a[0] - b[0]);
+      for (let i = 1; i < rows.length; i++) {
+        expect(rows[i][1], `${rows[i][0]} sq.mm vs ${rows[i - 1][0]}`).toBeGreaterThan(
+          rows[i - 1][1],
+        );
+      }
     }
   });
 

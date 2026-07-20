@@ -17,7 +17,14 @@ vi.mock('../../data/catalog', async () => {
     resolveCatalog: () => ({
       ...base,
       catalogVersion: '9999.99-test',
-      pricebook: { ...base.pricebook, dcCablePerM: 999 },
+      // the whole by-size table is dear, so whichever size the fixture's
+      // module derives, the quoted rate is DEAR_CABLE
+      pricebook: {
+        ...base.pricebook,
+        dcCablePerMBySize: Object.fromEntries(
+          Object.keys(base.pricebook.dcCablePerMBySize).map((k) => [k, 999]),
+        ),
+      },
     }),
   };
 });
@@ -30,7 +37,9 @@ describe('prices resolve through resolveCatalog(), not a frozen import', () => {
   it('a swapped catalog changes the quoted rate', () => {
     const cable = deriveBom(fixtureProject(8)).find((l) => l.id === 'elec.dc_cable')!;
     expect(cable.unitPriceInr).toBe(DEAR_CABLE);
-    expect(cable.unitPriceInr).not.toBe(REAL.resolveCatalog().pricebook.dcCablePerM);
+    expect(cable.unitPriceInr).not.toBe(
+      REAL.resolveCatalog().pricebook.dcCablePerMBySize[4],
+    );
   });
 
   it('reaches the module-level sloped-hardware table too', () => {

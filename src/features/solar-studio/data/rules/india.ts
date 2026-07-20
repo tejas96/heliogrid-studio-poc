@@ -30,6 +30,40 @@ export interface AcSizingRules {
    * systems are never silently rated below their load current.
    */
   breakerLadder: number[];
+  /**
+   * Copper AC-cable ampacity, [mm², A] ascending.
+   *
+   * REFERENCE VALUES — multicore copper, PVC/XLPE, run in conduit or on tray
+   * at 40 °C ambient. That is the derated column an Indian rooftop actually
+   * runs in; quoting free-air figures here would undersize the conductor on
+   * every real installation.
+   *
+   * These size the conductor against the OVERCURRENT DEVICE, which is the
+   * coordination rule (the cable must carry what protects it) and matches how
+   * `cableAmpacity` is used on the DC side.
+   *
+   * WHAT THIS DOES NOT DO: voltage drop is not checked, and on a long AC run
+   * it — not ampacity — usually governs the size. Nor are grouping factors,
+   * buried-vs-tray installation, or a non-40 °C ambient. The derived size is a
+   * STARTING POINT for the engineer, and every surface that prints it says so.
+   */
+  cableAmpacity: [number, number][];
+  /**
+   * Copper conductor resistance, [mm², Ω/km] — REFERENCE values at operating
+   * temperature (~70 °C), which is what a loaded cable actually runs at. Using
+   * 20 °C figures would understate the drop by roughly a fifth.
+   *
+   * Needed because ampacity ALONE does not size an AC run. On anything but a
+   * short run the voltage drop reaches its limit while the conductor is still
+   * thermally comfortable, so the drop is what picks the size.
+   */
+  cableResistanceOhmPerKm: [number, number][];
+  /**
+   * Maximum acceptable voltage drop on the inverter → LT panel run, percent.
+   * 3% is ordinary Indian LV practice for a final circuit; a stricter house
+   * standard belongs here rather than in the sizer.
+   */
+  voltDropLimitPct: number;
 }
 
 export interface SubsidyRules {
@@ -355,6 +389,44 @@ export const INDIA_RULES: MarketRules = {
   acSizing: {
     breakerFactor: 1.25,
     breakerLadder: [16, 25, 32, 40, 63, 80, 100, 125, 160, 200, 250, 320, 400, 500, 630],
+    // Ascending, and it must REMAIN ascending: the sizer takes the first rung
+    // that carries the breaker, so an out-of-order entry silently undersizes.
+    // Tops out at 240 mm², which carries the 630 A end of the breaker ladder.
+    cableAmpacity: [
+      [4, 32],
+      [6, 41],
+      [10, 55],
+      [16, 73],
+      [25, 95],
+      [35, 117],
+      [50, 141],
+      [70, 179],
+      [95, 216],
+      [120, 249],
+      [150, 285],
+      [185, 324],
+      [240, 380],
+      [300, 440],
+      [400, 500],
+    ],
+    cableResistanceOhmPerKm: [
+      [4, 6.7],
+      [6, 4.5],
+      [10, 2.7],
+      [16, 1.7],
+      [25, 1.07],
+      [35, 0.77],
+      [50, 0.57],
+      [70, 0.39],
+      [95, 0.28],
+      [120, 0.23],
+      [150, 0.18],
+      [185, 0.15],
+      [240, 0.11],
+      [300, 0.092],
+      [400, 0.073],
+    ],
+    voltDropLimitPct: 3,
   },
   subsidy: {
     firstSlabPerKwInr: 30000,

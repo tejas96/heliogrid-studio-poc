@@ -1,7 +1,25 @@
 // Org price book used by the BOM engine (₹). Editable per line in the UI.
 export const PRICE_BOOK = {
-  dcCablePerM: 68, // 4 sq.mm solar DC cable, per meter (single core)
-  acCablePerM: 210, // 4-core 6-10 sq.mm, per meter
+  // Cable is priced BY CONDUCTOR SIZE. Both cable specs are DERIVED — DC from
+  // the string fuse (22b), AC from the breaker — so a single flat rate would
+  // quote a 25 sq.mm run at the 6 sq.mm price and understate the job by more
+  // than the margin on it. The size the spec prints is the size that is billed.
+  dcCablePerMBySize: { 4: 68, 6: 96, 10: 152, 16: 235 } as Record<number, number>,
+  acCablePerMBySize: {
+    4: 150,
+    6: 210,
+    10: 320,
+    16: 470,
+    25: 690,
+    35: 930,
+    50: 1280,
+    70: 1750,
+    95: 2320,
+    120: 2900,
+    150: 3550,
+    185: 4350,
+    240: 5600,
+  } as Record<number, number>,
   mc4PairPrice: 95,
   conduitPerM: 55,
   earthingStripPerM: 92,
@@ -86,5 +104,34 @@ export const PRICE_BOOK = {
  * their signatures, so an imported book substitutes cleanly for the bundled one.
  */
 export type PriceBook = typeof PRICE_BOOK;
+
+/**
+ * Keys whose value is a plain ₹ rate.
+ *
+ * Not every entry is one any more: the by-size cable tables are lookups, not
+ * rates. A line that prices itself as `PRICE_BOOK[someKey]` may only point at
+ * a scalar, and saying so in the type is what stopped the compiler from
+ * letting a line quote an OBJECT as its unit price.
+ */
+export type PriceKey = {
+  [K in keyof PriceBook]: PriceBook[K] extends number ? K : never;
+}[keyof PriceBook];
+
+/**
+ * Rate for a derived conductor size.
+ *
+ * Falls UP to the next size the book prices, never down: quoting a 25 sq.mm
+ * run at the 16 sq.mm rate would understate the job, and understating is the
+ * failure that costs the installer money. Past the end of the book it returns
+ * the dearest rung — still an understatement, but the size ladder itself tops
+ * out at 240 mm², so this is only reachable via a hand-edited price book.
+ */
+export function cableRatePerM(table: Record<number, number>, mm2: number): number {
+  const sizes = Object.keys(table)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const hit = sizes.find((s) => s >= mm2);
+  return table[hit ?? sizes[sizes.length - 1]];
+}
 
 export const DEFAULT_MARGIN_PCT = 12;
