@@ -238,7 +238,17 @@ describe('the printed components sum to the printed total', () => {
 
   it('a zero-line BOM is zero everywhere, not NaN', () => {
     const m = bomMoney([], { pricing: { marginPct: 12 } } as Project);
-    expect(m).toEqual({ subtotal: 0, taxable: 0, gst: 0, total: 0, gstByRate: [] });
+    expect(m).toEqual({
+      subtotal: 0,
+      taxableBeforeDiscount: 0,
+      discount: 0,
+      taxable: 0,
+      gst: 0,
+      total: 0,
+      gstByRate: [],
+      // zero is not LESS than zero — an empty quote is not "below cost"
+      belowCost: false,
+    });
   });
 });
 

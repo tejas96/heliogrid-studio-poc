@@ -3,7 +3,13 @@
 // launch get defaults, malformed sub-entities are dropped item-by-item
 // (all-or-nothing per item, never per project), and one-time field migrations
 // run (sldParams snapshot → derived.sldOverrides diff). Pure — no storage I/O.
-import type { ArraySegment, Keepout, Project, SiteWeather } from '../../types';
+import type {
+  ArraySegment,
+  Keepout,
+  Project,
+  QuoteDiscount,
+  SiteWeather,
+} from '../../types';
 import { isValidSiteWeather } from '../pvgis';
 import { deriveSldDefaults, diffSldOverrides } from '../sld';
 import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
@@ -74,15 +80,41 @@ function isValidHealthSnapshot(hs: unknown): hs is NonNullable<Project['derived'
   return entryOk(h.current) && (h.prev == null || entryOk(h.prev));
 }
 
+/**
+ * Repair a stored discount, or drop it.
+ *
+ * Returns a SPREADABLE fragment so an absent rule appends nothing — the
+ * lazy-field contract, so a project that never discounted keeps serializing
+ * byte-identically and its captures stay fresh. A zero or nonsense value is
+ * treated as no discount rather than as a discount of nothing.
+ */
+function normalizeDiscount(d: QuoteDiscount | undefined): { discount?: QuoteDiscount } {
+  if (!d || typeof d !== 'object') return {};
+  const kind: QuoteDiscount['kind'] = d.kind === 'amount' ? 'amount' : 'percent';
+  if (typeof d.value !== 'number' || !Number.isFinite(d.value) || d.value <= 0) return {};
+  // a percentage beyond 100 gives the job away; bomMoney clamps to the quote
+  // anyway, but storing 5000% invites a UI to redisplay it as a real setting
+  const value = kind === 'percent' ? Math.min(100, d.value) : d.value;
+  return { discount: { kind, value, ...(d.label ? { label: d.label } : {}) } };
+}
+
 export function normalizeProject(p: Project): Project {
   return {
     ...p,
-    // pricing was added after launch — default it (and repair NaN/out-of-range)
+    // pricing was added after launch — default it (and repair NaN/out-of-range).
+    //
+    // ⚠️ This REBUILDS the object rather than spreading `p.pricing`, so every
+    // field has to be named here or it is silently dropped on load. That is
+    // deliberate — it is what repairs a corrupt margin — but it means adding a
+    // sibling field to PricingSettings without touching this function produces
+    // a value that saves correctly and then vanishes on the next normalize
+    // pass. The discount did exactly that until this line existed.
     pricing: {
       marginPct:
         typeof p.pricing?.marginPct === 'number' && Number.isFinite(p.pricing.marginPct)
           ? Math.min(60, Math.max(0, p.pricing.marginPct))
           : DEFAULT_MARGIN_PCT,
+      ...normalizeDiscount(p.pricing?.discount),
     },
     // derived-state stamps were added with the fingerprint graph — default them.
     // A legacy project loads with solarAccessFp=null (= "provisional"), so the

@@ -26,6 +26,8 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../../store/store';
+import { DiscountField } from './DiscountField';
+import type { QuoteDiscount } from '../../types';
 import {
   CATEGORY_ORDER,
   bomConfidence,
@@ -67,6 +69,19 @@ export function Step9Bom() {
 
   // THE money path — same call the financials and the proposal make.
   const money = useMemo(() => bomMoney(lines, project), [lines, project]);
+  const discount = project.pricing?.discount;
+  /**
+   * `undefined` REMOVES the rule rather than storing `{value: 0}` — the
+   * lazy-field contract, so a project that never discounted keeps serializing
+   * byte for byte and its captures stay fresh.
+   */
+  const setDiscount = (next: QuoteDiscount | undefined) => {
+    const { discount: _drop, ...rest } = project.pricing ?? {};
+    patch(
+      { pricing: next ? { ...rest, marginPct: margin, discount: next } : { ...rest, marginPct: margin } },
+      true,
+    );
+  };
   const confidence = useMemo(() => bomConfidence(lines), [lines]);
   const perW = report.capacityKwp > 0 ? Math.round(money.total / (report.capacityKwp * 1000)) : 0;
 
@@ -198,12 +213,34 @@ export function Step9Bom() {
               max={60}
               suffix="%"
               ariaLabel="Margin percentage"
-              onCommit={(v) => patch({ pricing: { marginPct: v ?? 0 } }, true)}
+              // SPREAD, don't replace. `pricing` gained a sibling field, and
+              // writing a fresh object here would silently drop the discount
+              // every time someone nudged the margin.
+              onCommit={(v) => patch({ pricing: { ...project.pricing, marginPct: v ?? 0 } }, true)}
               style={{ width: 54, fontWeight: 800, fontSize: 14 }}
             />
           }
         />
-        <Stat label="Taxable" value={`₹${money.taxable.toLocaleString('en-IN')}`} />
+        <Stat
+          label="Discount"
+          value={
+            <DiscountField discount={discount} onChange={setDiscount} />
+          }
+        />
+        <Stat
+          label="Taxable"
+          value={
+            <span>
+              ₹{money.taxable.toLocaleString('en-IN')}
+              {money.discount > 0 && (
+                <span style={{ display: 'block', fontSize: 9.5, fontWeight: 600, opacity: 0.85 }}>
+                  −₹{money.discount.toLocaleString('en-IN')} off ₹
+                  {money.taxableBeforeDiscount.toLocaleString('en-IN')}
+                </span>
+              )}
+            </span>
+          }
+        />
         <Stat
           label="GST"
           value={
@@ -245,6 +282,18 @@ export function Step9Bom() {
           onKeep={onKeepOrphan}
           onDiscard={(o) => apply(discardOrphan(project, o.lineKey))}
         />
+      )}
+
+      {money.belowCost && (
+        // Reported, not blocked: selling under cost is occasionally deliberate
+        // (a reference site, a foot in the door with a builder). It should
+        // never happen because someone typed 45 meaning 4.5.
+        <div className="banner-warn" style={{ borderRadius: 8, marginBottom: 14, fontSize: 11.5 }}>
+          <b>This discount sells below cost.</b> The kit costs ₹
+          {money.subtotal.toLocaleString('en-IN')} to buy and the quote is priced at ₹
+          {money.taxable.toLocaleString('en-IN')} before tax — a loss of ₹
+          {(money.subtotal - money.taxable).toLocaleString('en-IN')}.
+        </div>
       )}
 
       {lines.some((l) => l.formula.includes(STRUCTURE_DISCLAIMER)) && (

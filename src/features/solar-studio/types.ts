@@ -789,6 +789,22 @@ export interface BomStaleField {
 export interface PricingSettings {
   /** installer margin % applied on the BOM subtotal (persisted — single money path) */
   marginPct: number;
+  /**
+   * Negotiated deduction on the quote. Absent when none is given, so a project
+   * that never discounts serializes byte-identically (conditional-append).
+   *
+   * Adders have always been expressible as custom BOM lines; deductions never
+   * were, because qty and rate are both floored at 0.
+   */
+  discount?: QuoteDiscount;
+}
+
+export interface QuoteDiscount {
+  /** '%' of the pre-discount taxable value, or a flat rupee figure */
+  kind: 'percent' | 'amount';
+  value: number;
+  /** printed on the quote beside the deduction, e.g. "Festive offer" */
+  label?: string;
 }
 
 // ─── SLD parameters ─────────────────────────────────────────────────────────

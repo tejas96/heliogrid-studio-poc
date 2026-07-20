@@ -451,8 +451,19 @@ export function ProposalView() {
               // hold is worse than one that prints no breakdown at all.
               <>
                 Cost ₹{money.subtotal.toLocaleString('en-IN')} +{' '}
-                {project.pricing?.marginPct ?? DEFAULT_MARGIN_PCT}% margin = taxable ₹
-                {money.taxable.toLocaleString('en-IN')} + GST ₹
+                {project.pricing?.marginPct ?? DEFAULT_MARGIN_PCT}% margin ={' '}
+                {money.discount > 0 && (
+                  // The discount belongs IN the chain, not beside it. Without
+                  // this term the line reads "cost + margin = taxable" while
+                  // `taxable` is the POST-discount figure — an equation that
+                  // does not hold, which is the exact failure the note above
+                  // was written about.
+                  <>
+                    ₹{money.taxableBeforeDiscount.toLocaleString('en-IN')} − discount ₹
+                    {money.discount.toLocaleString('en-IN')} ={' '}
+                  </>
+                )}
+                taxable ₹{money.taxable.toLocaleString('en-IN')} + GST ₹
                 {money.gst.toLocaleString('en-IN')} = ₹
                 {fin.systemCostInr.toLocaleString('en-IN')}
               </>
