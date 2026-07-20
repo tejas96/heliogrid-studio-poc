@@ -17,6 +17,7 @@
 import type { Project, ShadowCapture } from '../types';
 import { panelSampleHeightM } from './panel-pose';
 import { resolveCatalog } from '../data/catalog';
+import { structureModelVersion } from './structure';
 
 const r = (v: number, f: number) => Math.round(v * f);
 
@@ -108,7 +109,22 @@ export function layoutFp(p: Project): string {
     // would not be picked up at all; appending here keeps untouched projects
     // byte-identical while still re-keying a design whose legs have moved —
     // and moving a leg moves steel, which moves the quote.
-    p.segments.map((s) => (s.legPlan ? `|lp:${s.id}:${JSON.stringify(s.legPlan.points)}` : '')).join('')
+    p.segments.map((s) => (s.legPlan ? `|lp:${s.id}:${JSON.stringify(s.legPlan.points)}` : '')).join('') +
+    // STRUCTURE MODEL VERSION — deliberately UNCONDITIONAL, like the catalog
+    // version in designFp and for the same reason.
+    //
+    // Every structural field is lazy, so a project that never chose a
+    // foundation stores the same bytes before and after the built-in default
+    // moves. Its layoutFp would not change, and its captures would keep
+    // reporting FRESH while the scene had gained a pedestal under every leg.
+    // There is no absent field to conditionally append here — the change is in
+    // the MODEL, so the model has to be part of the key.
+    //
+    // Consequence, accepted: bumping it re-keys every project and stales their
+    // captures. That is correct — Phase 22 genuinely changed what an untouched
+    // project builds — and it is exactly what the bump means.
+    '|sm:' +
+    structureModelVersion()
   );
 }
 

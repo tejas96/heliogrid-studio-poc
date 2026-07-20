@@ -93,6 +93,31 @@ const DEFAULT_LEG_SPACING_M = 2.0;
 //
 // ⚠️ This ADDS DEAD LOAD to the slab (~32 kg per leg) and we do NOT check roof
 // capacity (§F). buildStructure reports the total so the DRC can warn.
+/**
+ * BUMP THIS whenever the built-in structure model changes what it BUILDS for a
+ * project that has not explicitly asked for anything: the default foundation,
+ * the member emission, the D15 height chain, the foundation clamp.
+ *
+ * It exists because `layoutFp` stringifies the STORED racking, and every
+ * structural field is lazy. A project that never set a foundation has the same
+ * stored bytes before and after the default moves — so its fingerprint does
+ * not change, and every capture keyed on that fingerprint keeps reporting
+ * FRESH while the scene it depicts has gained a pedestal under every leg.
+ * That is the "silently staled capture" failure the plan calls out, and no
+ * conditional-append trick can catch it: there is no field to append.
+ *
+ * v2 — Phase 22. Since v1 the rooftop default became a cast pedestal (22a),
+ * a metal shed became anchor-only (22h), the D15 chain put the foundation
+ * under the leg rather than beside it, and impossible foundations are now
+ * clamped. Every one of those changes what an untouched project renders.
+ */
+const STRUCTURE_MODEL_VERSION = 'sm2';
+
+/** The model stamp that joins `layoutFp` — see STRUCTURE_MODEL_VERSION. */
+export function structureModelVersion(): string {
+  return STRUCTURE_MODEL_VERSION;
+}
+
 const DEFAULT_FOUNDATION = 'concrete' as const;
 const DEFAULT_GROUND_FOUNDATION = 'pile' as const;
 /**

@@ -43,6 +43,15 @@ export type LineKey =
   | 'mech.sloped_flashing'
   | 'mech.mms_metal_shed'
   | 'mech.rail'
+  /**
+   * RETIRED in 22j — split into the two lines below because a mid clamp and an
+   * end clamp are different parts at different prices. No emitter produces it.
+   *
+   * Kept in the union deliberately: a project saved before the split may hold
+   * an override on this key, and `mergeBom` reports it as an ORPHAN with
+   * keep-as-custom / discard rather than dropping the user's pricing work. Do
+   * not re-use the name for anything else.
+   */
   | 'mech.clamps'
   // split from mech.clamps (22j) — different parts, different prices
   | 'mech.clamps_mid'
