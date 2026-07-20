@@ -8,6 +8,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { getPanelMaterials } from './textures';
+import { panelInstanceMatrix } from '../lib/scene-frame';
 
 export interface PanelInstance {
   id: string;
@@ -30,25 +31,10 @@ function accessColor(access: number): THREE.Color {
   return new THREE.Color(access > 0.95 ? '#16a34a' : access > 0.85 ? '#ca8a04' : '#dc2626');
 }
 
-const T = new THREE.Matrix4();
-const R = new THREE.Matrix4();
-const S = new THREE.Matrix4();
-
-/** M = T(pos) · Ry(yaw) [· Rx(−tilt)] · T(offset) · S(scale) */
-function composeInstance(
-  out: THREE.Matrix4,
-  p: PanelInstance,
-  tilt: boolean,
-  offset: [number, number, number],
-  scale: [number, number, number],
-): THREE.Matrix4 {
-  out.makeTranslation(p.position[0], p.position[1], p.position[2]);
-  out.multiply(R.makeRotationY(p.yawRad));
-  if (tilt) out.multiply(R.makeRotationX(-p.tiltRad));
-  out.multiply(T.makeTranslation(offset[0], offset[1], offset[2]));
-  out.multiply(S.makeScale(scale[0], scale[1], scale[2]));
-  return out;
-}
+// The matrix moved to lib/scene-frame.ts so the one-frame gate can exercise
+// the SAME composition the scene draws with, rather than a second copy of it
+// that would be free to drift from the model alongside this one.
+const composeInstance = panelInstanceMatrix;
 
 export function PanelsInstanced({
   items,
