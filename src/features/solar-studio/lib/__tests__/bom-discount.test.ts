@@ -214,10 +214,16 @@ describe('the discount survives persistence', () => {
     expect(normalizeProject(p).pricing.marginPct).toBe(18);
   });
 
-  it('a project with no discount still normalizes without the key', async () => {
+  it('a project with no discount SERIALIZES without the key', async () => {
+    // the invariant is the stored BYTES, not the in-memory key. normalizePricing
+    // always mentions `discount` (that is what makes forgetting it a compile
+    // error) but an absent rule is `undefined`, and JSON.stringify drops it —
+    // so a project that never discounted persists byte-identically and its
+    // captures stay fresh.
     const { normalizeProject } = await import('../persistence/normalize');
     const out = normalizeProject(proj(12) as Project);
-    expect('discount' in out.pricing).toBe(false);
+    expect(out.pricing.discount).toBeUndefined();
+    expect(JSON.stringify(out.pricing)).toBe('{"marginPct":12}');
   });
 
   it('a corrupt or zero rule is dropped, not carried', async () => {
@@ -232,7 +238,8 @@ describe('the discount survives persistence', () => {
       const out = normalizeProject({
         pricing: { marginPct: 12, discount: bad },
       } as unknown as Project);
-      expect('discount' in out.pricing, JSON.stringify(bad)).toBe(false);
+      expect(out.pricing.discount, JSON.stringify(bad)).toBeUndefined();
+      expect(JSON.stringify(out.pricing), JSON.stringify(bad)).toBe('{"marginPct":12}');
     }
   });
 

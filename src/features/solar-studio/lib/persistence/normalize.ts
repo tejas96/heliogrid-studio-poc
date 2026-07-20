@@ -5,7 +5,10 @@
 // run (sldParams snapshot → derived.sldOverrides diff). Pure — no storage I/O.
 import type {
   ArraySegment,
+  Calibration,
+  DerivedState,
   Keepout,
+  PricingSettings,
   Project,
   QuoteDiscount,
   SiteWeather,
@@ -81,6 +84,20 @@ function isValidHealthSnapshot(hs: unknown): hs is NonNullable<Project['derived'
 }
 
 /**
+ * Forces a rebuilt object to MENTION every field of its type, optional ones
+ * included.
+ *
+ * Plain assignability does not: `{marginPct: 12}` satisfies `PricingSettings`
+ * even though `discount?` exists, which is exactly how the discount came to be
+ * saved correctly and then erased on load. Mapping through `Required` makes
+ * every key mandatory, so omitting one is a compile error rather than silent
+ * data loss. Writing `undefined` is still allowed — and still serializes away,
+ * since JSON.stringify drops undefined values — so the lazy-field contract is
+ * intact; the field just cannot be FORGOTTEN.
+ */
+type Exhaustive<T> = { [K in keyof Required<T>]: unknown };
+
+/**
  * Repair a stored discount, or drop it.
  *
  * Returns a SPREADABLE fragment so an absent rule appends nothing — the
@@ -88,14 +105,24 @@ function isValidHealthSnapshot(hs: unknown): hs is NonNullable<Project['derived'
  * byte-identically and its captures stay fresh. A zero or nonsense value is
  * treated as no discount rather than as a discount of nothing.
  */
-function normalizeDiscount(d: QuoteDiscount | undefined): { discount?: QuoteDiscount } {
-  if (!d || typeof d !== 'object') return {};
+function normalizeDiscount(d: QuoteDiscount | undefined): QuoteDiscount | undefined {
+  if (!d || typeof d !== 'object') return undefined;
   const kind: QuoteDiscount['kind'] = d.kind === 'amount' ? 'amount' : 'percent';
-  if (typeof d.value !== 'number' || !Number.isFinite(d.value) || d.value <= 0) return {};
+  if (typeof d.value !== 'number' || !Number.isFinite(d.value) || d.value <= 0) return undefined;
   // a percentage beyond 100 gives the job away; bomMoney clamps to the quote
   // anyway, but storing 5000% invites a UI to redisplay it as a real setting
   const value = kind === 'percent' ? Math.min(100, d.value) : d.value;
-  return { discount: { kind, value, ...(d.label ? { label: d.label } : {}) } };
+  return { kind, value, ...(d.label ? { label: d.label } : {}) };
+}
+
+function normalizePricing(p: Project): PricingSettings {
+  return {
+    marginPct:
+      typeof p.pricing?.marginPct === 'number' && Number.isFinite(p.pricing.marginPct)
+        ? Math.min(60, Math.max(0, p.pricing.marginPct))
+        : DEFAULT_MARGIN_PCT,
+    discount: normalizeDiscount(p.pricing?.discount),
+  } satisfies Exhaustive<PricingSettings>;
 }
 
 export function normalizeProject(p: Project): Project {
@@ -109,13 +136,7 @@ export function normalizeProject(p: Project): Project {
     // sibling field to PricingSettings without touching this function produces
     // a value that saves correctly and then vanishes on the next normalize
     // pass. The discount did exactly that until this line existed.
-    pricing: {
-      marginPct:
-        typeof p.pricing?.marginPct === 'number' && Number.isFinite(p.pricing.marginPct)
-          ? Math.min(60, Math.max(0, p.pricing.marginPct))
-          : DEFAULT_MARGIN_PCT,
-      ...normalizeDiscount(p.pricing?.discount),
-    },
+    pricing: normalizePricing(p),
     // derived-state stamps were added with the fingerprint graph — default them.
     // A legacy project loads with solarAccessFp=null (= "provisional"), so the
     // recompute host re-verifies its shading on first open and stamps it fresh.
@@ -131,7 +152,7 @@ export function normalizeProject(p: Project): Project {
       healthSnapshot: isValidHealthSnapshot(p.derived?.healthSnapshot)
         ? p.derived!.healthSnapshot
         : null,
-    },
+    } satisfies Exhaustive<DerivedState>,
     sldParams: null,
     captures: Array.isArray(p.captures)
       ? p.captures.map((c) => ({
@@ -156,7 +177,7 @@ export function normalizeProject(p: Project): Project {
           ? p.calibration.northOffsetDeg
           : 0,
       reference: p.calibration?.reference ?? null,
-    },
+    } satisfies Exhaustive<Calibration>,
     segments: Array.isArray(p.segments)
       ? p.segments.filter(isValidSegment).map(sanitizeLegPlan)
       : [],
