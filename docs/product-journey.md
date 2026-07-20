@@ -729,6 +729,214 @@ support calls in Indian solar are "what is the status?". One honest link answers
 
 ---
 
+## THE CUSTOMER'S JOURNEY — the other side of the glass
+
+Everything above is written from the EPC's side. This is the same story from the
+customer's — a homeowner or a factory owner about to spend ₹5–50 lakh with a company
+they do not yet trust.
+
+### The framing that matters
+**The customer almost never touches the app.** They have no login (D5). Their entire
+experience is:
+
+```
+WhatsApp messages  ·  phone calls  ·  ONE link
+```
+
+So the product's job on this side is not screens. It is **making sure the right message
+arrives at the right moment, and that the one link always answers "what is happening?"**
+
+Trust is the actual product here. A ₹8 lakh decision made from a WhatsApp message.
+
+---
+
+### C1 · They make an enquiry
+**Trigger:** they call, or a rep adds them. **What they experience:** a phone call.
+
+They are shopping. They have probably contacted two or three companies the same week.
+**Speed of first response is the single biggest predictor of who wins the job.**
+
+- Called back within an hour → strong signal
+- Called back in three days → the job is already lost
+- Called by three different people from the same company → looks disorganised
+  *(this is what the duplicate check at Stage 2 prevents)*
+
+**Goes wrong:** nobody calls back · they get called at 10pm · they are asked the same
+questions twice by two different reps.
+
+### C2 · First conversation
+**They experience:** a rep asking about their electricity bill, roof and timeline.
+
+What they are silently judging: does this person know more than I do? A rep fumbling
+basic subsidy questions loses the deal here, before any price is discussed.
+
+*(This is why the agent's business-knowledge base matters — the same answers must be
+right whoever, or whatever, is speaking.)*
+
+**They receive:** a WhatsApp confirming the site visit — date, time, name of who is
+coming, and the person's phone number.
+
+### C3 · The site visit
+**They experience:** somebody on their roof for 30–45 minutes with a phone.
+
+What builds trust: the surveyor explaining what they are photographing and why. What
+destroys it: silent photographing, then leaving without saying what happens next.
+
+**They receive:** a WhatsApp — *"Survey done. Your proposal will reach you by Thursday."*
+**A promise with a date.**
+
+**Goes wrong:** surveyor arrives late, or not at all · nobody tells them what happens next
+· the surveyor gives a verbal price that the real quote later contradicts.
+
+### C4 · The wait
+**They experience:** silence, for 1–3 days.
+
+This is where enthusiasm decays and competitors land their proposals first. **Nothing in
+the product should let this gap be silent** — an automatic "we are working on your design"
+message on day two costs nothing and holds the position.
+
+### C5 · The proposal arrives
+**They experience:** a WhatsApp with a message, a PDF, and a link.
+
+This is the moment of maximum attention. They will open it once, properly, probably in the
+evening, probably on a phone, possibly with their spouse.
+
+**What the link shows:**
+- System size, annual generation, monthly savings
+- Total price, subsidy, what they actually pay
+- Payback period
+- **A 3D view of their own roof** — this is the moment that separates you from a PDF
+  emailed by a competitor
+- Financing options
+- **Accept** · **Ask a question**
+
+**The honesty rule shows up here.** If the proposal came from Path B — no design — it says
+so on the document: *"Indicative proposal. A site survey and shadow analysis will confirm
+the final figures."* Competitors print estimates as certainties. When a customer compares
+three proposals and only yours admits which numbers are estimated, that reads as
+confidence, not weakness.
+
+**Goes wrong:** the PDF is too large to open on a slow connection · the link expires · the
+numbers on the PDF and the link disagree · it is in English and they read Marathi (D25).
+
+### C6 · They think about it
+**They experience:** comparing quotes, asking a relative who "knows about solar",
+searching the panel brand online, worrying about the roof leaking.
+
+**Nothing happens in the app. Everything happens in their head.** Typical decision window:
+3 days to 3 weeks.
+
+Their real questions are rarely about price:
+- Will this actually reduce my bill?
+- What if it does not work?
+- Who fixes it if something breaks in year four?
+- Will it damage my roof?
+- Is the subsidy real, and who does that paperwork?
+
+**This is exactly what the voice agent must be able to answer** (D24 knowledge base). Not
+a sales pitch — the boring, specific reassurance a person needs before spending ₹8 lakh.
+
+### C7 · The follow-up
+**They experience:** a call. Sometimes from the rep, sometimes from the agent.
+
+The agent opens by saying it is automated (locked rule). Handled well, this is fine —
+people are increasingly used to it, and an agent that answers a warranty question at 8pm
+is more useful than a rep who calls back on Tuesday.
+
+Handled badly it is insulting: calling three times in a week, calling at dinner, not
+understanding Marathi, not letting them reach a human. **Every one of those is prevented by
+a locked platform rule, not by tenant configuration** — which is exactly why those rules
+are locked.
+
+**Goes wrong:** they ask about a discount and the agent tries to answer *(cannot — it
+escalates, D10)* · they say stop and get called again *(cannot — irreversible flag)*.
+
+### C8 · The decision
+**They experience:** tapping **Accept** on the link, or going quiet, or saying no.
+
+- **Accept** → they expect immediate acknowledgement. A WhatsApp within seconds, not a
+  silence that makes them wonder if the tap registered.
+- **Negotiate** → they ask for a discount. It goes to the owner (D19). **They should not
+  wait two days for an answer** — this is where the owner-approves-everything bottleneck
+  costs real deals.
+- **No** → the reason is recorded (Stage 7). They should not then be called for six months.
+
+### C9 · Paying the advance
+**They experience:** a payment link, then a receipt.
+
+Highest-anxiety moment in the entire journey — first real money to a company they met three
+weeks ago. What reduces the anxiety: an instant receipt, a named person to contact, and a
+clear statement of what happens next and when.
+
+### C10 · The long wait — the most under-served part of solar
+**They experience:** weeks. Material ordering, scheduling, and **net metering approval,
+which alone can take 3–6 weeks with the DISCOM.**
+
+**This is where every Indian solar customer becomes unhappy**, and almost always because
+of silence rather than delay. They call the rep. The rep does not know. They call again.
+
+**The single highest-value screen in Stage 8 is the customer progress link** — the same URL
+the proposal used, now showing:
+
+```
+✅ Advance received          12 Aug
+✅ Material ordered          14 Aug
+🔵 Installation scheduled    22 Aug
+⬜ Commissioning
+⬜ Net metering — waiting for DISCOM approval
+    Applied 15 Aug · typically 3–6 weeks
+```
+
+**That last line prevents more support calls than anything else in the product.** A delay
+you explained is tolerable; a delay you hid is a complaint.
+
+### C11 · Installation
+**They experience:** a crew on their roof for 1–2 days.
+
+They want to know: who is coming, when, how long, and will there be noise and mess.
+A WhatsApp the evening before with the crew lead's name and number covers it.
+
+*(The existing Installation Plan already derives the real work sequence from the structural
+model — foundation → legs → rafters → purlins → modules → stringing → BOS. It plugs in
+here rather than being rebuilt.)*
+
+### C12 · Commissioning & handover
+**They experience:** the system switching on, and a pile of documents.
+
+**They receive:** the handover pack on WhatsApp — warranty documents, commissioning
+certificate, net-metering approval, and how to read their generation.
+
+This is the moment they will decide whether to refer you. **Ask for the referral here**,
+while the roof is new and the first bill is about to drop — not six months later.
+
+### C13 · Living with it *(beyond v1)*
+They will want: generation monitoring, cleaning reminders, service contact, and eventually
+warranty claims. Out of scope for v1 (D9), but the handover should leave them knowing
+exactly who to call.
+
+---
+
+### The customer's actual surface area
+
+| Touchpoint | Count in a whole project |
+|---|---|
+| WhatsApp messages | ~12–18 |
+| Phone calls | 3–6 (mix of human and agent) |
+| Web link | **1** — reused for proposal, then progress, then handover |
+| Logins | **0** |
+| App installs | **0** |
+
+**One link, its whole life.** The tokenised URL sent with the proposal becomes the progress
+tracker after Won, and the document pack after handover. The customer bookmarks it once.
+Designing it as three separate things would be the mistake.
+
+### The three moments that decide everything
+1. **Speed of first callback** — decides whether you are in the running at all
+2. **The proposal link, opened once, on a phone, in the evening** — decides the sale
+3. **Visible progress during the net-metering wait** — decides whether they refer you
+
+---
+
 ## TENANT CONFIGURATION — everything an EPC can make their own
 
 Every company on the platform is different: different brands, different warranties,
