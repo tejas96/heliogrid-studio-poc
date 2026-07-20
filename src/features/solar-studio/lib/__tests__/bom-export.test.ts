@@ -3,7 +3,7 @@
 // my memory of it. Two of them were arithmetic that had gone wrong on a
 // document, which is the failure class this project cares about most.
 import { describe, expect, it } from 'vitest';
-import { bomMoney, bomToCsv, mergedBom, orderQtyOf } from '../bom';
+import { bomMoney, bomToCsv, deriveBom, mergedBom, orderQtyOf } from '../bom';
 import { fixtureProject } from './fixtures/project';
 import type { Project } from '../../types';
 
@@ -91,5 +91,121 @@ describe('the proposal’s engineering breakdown is arithmetically true', () => 
     const m = bomMoney(mergedBom(p), p);
     const oldClaim = Math.round(m.subtotal * (1 + p.pricing.marginPct / 100));
     expect(Math.abs(m.total - oldClaim - m.gst)).toBeLessThanOrEqual(2);
+  });
+});
+
+// ─── The two gaps the CSV still had after the Step-9 row gained them ─────────
+// Both are the same shape: a value became editable/derivable on screen and the
+// file procurement actually orders from never learned about it.
+describe('brand reaches the file people order from', () => {
+  it('there is a Brand column', () => {
+    const csv = bomToCsv(deriveBom(fixtureProject(8)), fixtureProject(8));
+    expect(csv.split('\n')[0]).toContain('"Brand"');
+  });
+
+  it('a brand set on a line is exported', () => {
+    const lines = deriveBom(fixtureProject(8));
+    const withBrand = lines.map((l) =>
+      l.id === 'elec.dc_cable' ? { ...l, brand: 'Polycab' } : l,
+    );
+    expect(bomToCsv(withBrand, fixtureProject(8))).toContain('"Polycab"');
+  });
+
+  it('a line with no brand exports empty, not "undefined"', () => {
+    const csv = bomToCsv(deriveBom(fixtureProject(8)), fixtureProject(8));
+    expect(csv).not.toContain('undefined');
+  });
+});
+
+/**
+ * Parse the CSV properly.
+ *
+ * `split(',')` does not work here and quietly gives a WRONG answer rather than
+ * an error: `formula` routinely contains commas ("incl. 10% slack, 3 m drop"),
+ * so naive splitting mangles those rows, a length check then drops them, and
+ * the column sums short by most of the quote. Cost me a false failure.
+ */
+function parseCsv(csv: string): string[][] {
+  return csv.split('\n').map((line) => {
+    const cells: string[] = [];
+    let cur = '';
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQ) {
+        if (c === '"' && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else if (c === '"') inQ = false;
+        else cur += c;
+      } else if (c === '"') inQ = true;
+      else if (c === ',') {
+        cells.push(cur);
+        cur = '';
+      } else cur += c;
+    }
+    cells.push(cur);
+    return cells;
+  });
+}
+
+/** Sum one numeric column over the data rows (NOTE rows excluded). */
+function sumColumn(csv: string, header: string): number {
+  const rows = parseCsv(csv);
+  const i = rows[0].indexOf(header);
+  expect(i, `no ${header} column`).toBeGreaterThanOrEqual(0);
+  return rows
+    .slice(1)
+    .filter((r) => r[0] !== 'NOTE' && r.length === rows[0].length)
+    .reduce((s, r) => s + Number(r[i]), 0);
+}
+
+describe('the discount reaches the export', () => {
+  const discounted = (): Project => {
+    const p = fixtureProject(8);
+    return { ...p, pricing: { ...p.pricing, discount: { kind: 'percent', value: 10 } } };
+  };
+
+  it('the Total column SUMS to the quote total, not the undiscounted one', () => {
+    // the actual defect: with no total row nothing was stated wrongly, but
+    // adding up the column gave a number that disagreed with Step 9
+    const p = discounted();
+    const lines = deriveBom(p);
+    const summed = sumColumn(bomToCsv(lines, p), 'Total (INR)');
+    const quote = bomMoney(lines, p).total;
+    // per-line rounding, so allow a rupee a line — but not the discount
+    expect(Math.abs(summed - quote), `summed ${summed} vs quote ${quote}`).toBeLessThanOrEqual(
+      lines.length,
+    );
+  });
+
+  it('and WITHOUT the fix that sum would have been the undiscounted total', () => {
+    // pins the defect: the gap is the discount, not rounding
+    const p = discounted();
+    const lines = deriveBom(p);
+    const undiscounted = bomMoney(lines, { ...p, pricing: { marginPct: p.pricing.marginPct } });
+    const summed = sumColumn(bomToCsv(lines, p), 'Total (INR)');
+    expect(undiscounted.total - summed).toBeGreaterThan(1000);
+  });
+
+  it('the supplier cost is NOT discounted — Amount still sums to subtotal', () => {
+    // you still pay the supplier full price; only the quote moves
+    const p = discounted();
+    const lines = deriveBom(p);
+    const plain = bomToCsv(lines, { ...p, pricing: { marginPct: p.pricing.marginPct } });
+    const cut = bomToCsv(lines, p);
+    expect(sumColumn(cut, 'Amount (INR)')).toBe(sumColumn(plain, 'Amount (INR)'));
+  });
+
+  it('says a discount was applied rather than quietly repricing every row', () => {
+    const csv = bomToCsv(deriveBom(discounted()), discounted());
+    expect(csv).toMatch(/"NOTE","DISCOUNT 10%/);
+    expect(csv).toMatch(/NOT discounted/);
+  });
+
+  it('an undiscounted quote gains no note and no change', () => {
+    const p = fixtureProject(8);
+    const csv = bomToCsv(deriveBom(p), p);
+    expect(csv).not.toContain('DISCOUNT');
   });
 });

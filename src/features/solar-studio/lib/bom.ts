@@ -17,7 +17,7 @@ import { emitSafety } from './bom/emitters/safety';
 import { emitCivil } from './bom/emitters/civil';
 
 import { _setDeriver, mergeBom, type MergedBomResult } from './bom/merge';
-import { bomMoney, lineMoney, orderQtyOf } from './bom/money';
+import { bomMoney, discountAmount, lineMoney, orderQtyOf } from './bom/money';
 
 export { bomMoney, lineMoney, orderQtyOf, type BomMoney, type LineMoney } from './bom/money';
 export { isDiscreteUnit, wastePctFor } from './bom/registry';
@@ -157,13 +157,29 @@ export function bomTotal(lines: BomLine[], project: Project): number {
  * `project` supplies the margin. It is optional so the older call sites keep
  * compiling; without it the taxable/total columns are computed at zero margin
  * and the header says so, rather than quietly printing cost as if it were price.
+ *
+ * A DISCOUNT is applied to the sell-side columns only. `Amount` is what you pay
+ * the supplier and a customer's negotiated deduction does not change it — but
+ * Taxable/GST/Total are the QUOTE, and leaving them undiscounted meant the
+ * Total column summed to a figure that no longer matched Step 9 or the
+ * proposal. Same failure as the proposal equation that printed a sum which did
+ * not hold; it is only less visible here because the file has no total row.
  */
 export function bomToCsv(lines: BomLine[], project?: Project): string {
   const p = project ?? ({ pricing: { marginPct: 0 } } as Project);
   const marginPct = p.pricing?.marginPct ?? 0;
+  // Pro-rata share each line keeps after the project-level discount — the same
+  // apportionment bomMoney does across GST buckets, so the columns reconcile
+  // with the quote instead of merely looking plausible.
+  const taxableBefore = lines.reduce((s, l) => s + lineMoney(l, marginPct).taxable, 0);
+  const cut = discountAmount(p.pricing?.discount, taxableBefore);
+  const keep = taxableBefore > 0 ? (taxableBefore - cut) / taxableBefore : 1;
   const COLS = [
     'Category',
     'Item',
+    // Brand is editable on the Step-9 row but had nowhere to land here, so a
+    // make/model someone typed never reached the person ordering the parts.
+    'Brand',
     'Spec',
     'Included',
     'Qty',
@@ -187,6 +203,7 @@ export function bomToCsv(lines: BomLine[], project?: Project): string {
     return [
       l.category,
       l.item,
+      l.brand ?? '',
       l.spec,
       (l.included ?? true) ? 'yes' : 'NO — supplied by others',
       l.qty,
@@ -194,11 +211,13 @@ export function bomToCsv(lines: BomLine[], project?: Project): string {
       m.orderQty,
       l.unit,
       l.unitPriceInr,
+      // buy-side: what the supplier is paid, NEVER discounted
       Math.round(m.base),
-      Math.round(m.taxable),
+      // sell-side: the customer's quote, so the deduction applies
+      Math.round(m.taxable * keep),
       l.gstPct ?? 0,
-      Math.round(m.gst),
-      Math.round(m.total),
+      Math.round(m.gst * keep),
+      Math.round(m.total * keep),
       l.overridden ? 'measured' : l.confidence,
       l.formula,
     ]
@@ -211,6 +230,18 @@ export function bomToCsv(lines: BomLine[], project?: Project): string {
   const note = (t: string) => `"NOTE","${t}"${',""'.repeat(COLS.length - 2)}`;
   if (lines.some((l) => l.formula.includes(STRUCTURE_DISCLAIMER))) {
     out.push(note(STRUCTURE_DISCLAIMER));
+  }
+  // A deduction spread silently across every line reads as mispriced rows.
+  // Say it happened, and say it did NOT touch what the supplier is owed.
+  if (cut > 0) {
+    const d = p.pricing!.discount!;
+    out.push(
+      note(
+        `DISCOUNT ${d.kind === 'percent' ? `${d.value}%` : `₹${d.value.toLocaleString('en-IN')}`}` +
+          `${d.label ? ` (${d.label})` : ''} — ₹${Math.round(cut).toLocaleString('en-IN')} deducted pro-rata` +
+          ` from the Taxable/GST/Total columns BEFORE tax. Amount (INR) is the supplier cost and is NOT discounted.`,
+      ),
+    );
   }
   const conf = bomConfidence(lines);
   if (conf.preliminary) {
