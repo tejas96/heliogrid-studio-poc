@@ -760,6 +760,27 @@ export interface BomLine {
   overriddenFields?: string[];
   /** overridden fields whose derived value has since MOVED (Phase 22e) */
   staleFields?: string[];
+  /**
+   * The numbers behind `staleFields`, one entry per stale field (E17).
+   *
+   * `staleFields` alone can only say WHICH field drifted, which left the banner
+   * saying "Mounting Rail (qty)" — true, and useless for deciding what to do
+   * about it. Answering "keep mine or take the design's?" needs all three
+   * values, and they are only simultaneously in scope inside mergeBom's
+   * override loop, so that is where they get captured.
+   */
+  staleDetail?: BomStaleField[];
+}
+
+/** One overridden field whose derived value has moved since the user set it. */
+export interface BomStaleField {
+  field: string;
+  /** what the user typed, and what the line currently shows */
+  yours: unknown;
+  /** what the engine said at the moment they typed it */
+  wasAtEdit: unknown;
+  /** what the engine says now — the reason this is being reported at all */
+  now: unknown;
 }
 
 // ─── Pricing ────────────────────────────────────────────────────────────────

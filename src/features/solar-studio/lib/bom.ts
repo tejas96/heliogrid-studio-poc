@@ -102,6 +102,12 @@ export function bomConfidence(lines: BomLine[]): {
   const needs: string[] = [];
   let worst = 0;
   for (const l of lines) {
+    // An EXCLUDED line is not in the quote, so it cannot set the quote's
+    // confidence. This used to count everything, which meant excluding the
+    // uncertain item left its "site verification required" warning behind —
+    // and would have made the qty-0 prompt lines mark every quote PRELIMINARY
+    // forever, since they ship excluded by design.
+    if (l.included === false) continue;
     const c = l.overridden ? 'measured' : l.confidence;
     counts[c] += 1;
     worst = Math.max(worst, order.indexOf(c));

@@ -8,6 +8,7 @@
 import { Info, RotateCcw } from 'lucide-react';
 import { NumberField, TextField } from '../../components/ui';
 import { rowState } from '../../lib/bom/view';
+import { UNIT_OPTIONS } from '../../lib/bom/registry';
 import type { OverridableField } from '../../lib/bom/merge';
 import type { BomLine } from '../../types';
 
@@ -129,19 +130,73 @@ export function BomRow({
         </span>
       </td>
 
-      <td style={{ ...td, color: 'var(--ink-3)', fontSize: 11.5 }}>{line.spec}</td>
+      {/* Spec and brand were both static text, though both have always been in
+          OVERRIDABLE_FIELDS with full merge/reset/staleness support behind
+          them. Spec is what a supplier quotes against ("4 sq.mm Cu"), and no
+          emitter sets brand at all — so without an editor the make/brand a
+          tender asks for could not be entered anywhere. They share this column
+          rather than taking two more: eleven columns already overflow a laptop. */}
+      <td style={{ ...td, color: 'var(--ink-3)', fontSize: 11.5 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {cell(
+            'spec',
+            <TextField
+              value={line.spec ?? ''}
+              ariaLabel={`Spec of ${line.item}`}
+              onCommit={(v) => onEdit('spec', v)}
+              style={{ fontSize: 11.5 }}
+            />,
+          )}
+          {cell(
+            'brand',
+            <TextField
+              value={line.brand ?? ''}
+              placeholder="Brand"
+              ariaLabel={`Brand of ${line.item}`}
+              onCommit={(v) => onEdit('brand', v)}
+              style={{ fontSize: 10.5, color: 'var(--ink-3)' }}
+            />,
+          )}
+        </span>
+      </td>
 
       <td style={td}>
-        {cell(
-          'qty',
-          <NumberField
-            value={line.qty}
-            min={0}
-            ariaLabel={`Quantity of ${line.item}`}
-            onCommit={(v) => onEdit('qty', v ?? 0)}
-            style={{ width: 62 }}
-          />,
-        )}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          {cell(
+            'qty',
+            <NumberField
+              value={line.qty}
+              min={0}
+              ariaLabel={`Quantity of ${line.item}`}
+              onCommit={(v) => onEdit('qty', v ?? 0)}
+              style={{ width: 56 }}
+            />,
+          )}
+          {/* A select, not a text box: `isDiscreteUnit` matches the literal
+              string, so a typed "pcs" would silently stop the order quantity
+              ceiling and start quoting 116.15 modules again. */}
+          {cell(
+            'unit',
+            <select
+              value={line.unit}
+              onChange={(e) => onEdit('unit', e.target.value)}
+              aria-label={`Unit of ${line.item}`}
+              style={{ fontSize: 11, padding: '1px 2px', maxWidth: 62 }}
+            >
+              {/* a unit the project already holds but the list does not offer
+                  (an older project, a hand-made line) must not be silently
+                  rewritten by rendering a select that cannot represent it */}
+              {!UNIT_OPTIONS.includes(line.unit as (typeof UNIT_OPTIONS)[number]) && (
+                <option value={line.unit}>{line.unit}</option>
+              )}
+              {UNIT_OPTIONS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>,
+          )}
+        </span>
       </td>
 
       <td style={td}>

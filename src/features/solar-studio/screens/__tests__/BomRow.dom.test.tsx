@@ -129,9 +129,76 @@ describe('accessibility of the traceability story', () => {
 
   it('every editable cell is labelled', () => {
     renderRow(mk());
-    for (const label of [/Quantity of/i, /Waste allowance for/i, /Unit rate of/i, /GST rate for/i]) {
+    for (const label of [
+      /Quantity of/i,
+      /Waste allowance for/i,
+      /Unit rate of/i,
+      /GST rate for/i,
+      // spec, brand and unit joined the row late — they were overridable in the
+      // data model long before they were reachable on screen
+      /Spec of/i,
+      /Brand of/i,
+      /Unit of/i,
+    ]) {
       expect(screen.getByLabelText(label)).toBeDefined();
     }
+  });
+});
+
+describe('spec, brand and unit are editable (was: static text)', () => {
+  it('spec commits an edit', async () => {
+    const onEdit = vi.fn();
+    const user = userEvent.setup();
+    renderRow(mk(), { onEdit });
+    const input = screen.getByLabelText(/Spec of DC Solar Cable/i);
+    await user.clear(input);
+    await user.type(input, '6 sq.mm Cu');
+    await user.tab(); // TextField commits on blur, so a rename is ONE undo step
+    expect(onEdit).toHaveBeenCalledWith('spec', '6 sq.mm Cu');
+  });
+
+  it('brand starts empty with a placeholder — no emitter sets it', () => {
+    renderRow(mk());
+    const input = screen.getByLabelText(/Brand of DC Solar Cable/i) as HTMLInputElement;
+    expect(input.value).toBe('');
+    expect(input.placeholder).toBe('Brand');
+  });
+
+  it('brand commits an edit', async () => {
+    const onEdit = vi.fn();
+    const user = userEvent.setup();
+    renderRow(mk(), { onEdit });
+    await user.type(screen.getByLabelText(/Brand of DC Solar Cable/i), 'Polycab');
+    await user.tab();
+    expect(onEdit).toHaveBeenCalledWith('brand', 'Polycab');
+  });
+
+  it('unit is a constrained select, not free text', () => {
+    renderRow(mk());
+    const sel = screen.getByLabelText(/Unit of DC Solar Cable/i) as HTMLSelectElement;
+    expect(sel.tagName).toBe('SELECT');
+    expect(sel.value).toBe('m');
+    // the trap this closes: a typed "pcs" would silently stop order-qty ceiling
+    expect([...sel.options].map((o) => o.value)).toContain('nos');
+    expect([...sel.options].map((o) => o.value)).not.toContain('pcs');
+  });
+
+  it('unit commits an edit', async () => {
+    const onEdit = vi.fn();
+    const user = userEvent.setup();
+    renderRow(mk(), { onEdit });
+    await user.selectOptions(screen.getByLabelText(/Unit of DC Solar Cable/i), 'kg');
+    expect(onEdit).toHaveBeenCalledWith('unit', 'kg');
+  });
+
+  it('a unit the list does not offer is preserved, not silently rewritten', () => {
+    // an older project, or a hand-made line, may hold a unit we no longer offer.
+    // Rendering a select that cannot represent it would rewrite the value to
+    // whatever happened to be first the moment anything re-rendered.
+    renderRow(mk({ unit: 'furlong' }));
+    const sel = screen.getByLabelText(/Unit of DC Solar Cable/i) as HTMLSelectElement;
+    expect(sel.value).toBe('furlong');
+    expect([...sel.options].map((o) => o.value)).toContain('furlong');
   });
 });
 

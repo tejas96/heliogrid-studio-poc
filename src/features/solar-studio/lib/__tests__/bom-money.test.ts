@@ -199,11 +199,41 @@ describe('the printed components sum to the printed total', () => {
 
   it('every emitted line carries the three procurement fields', () => {
     for (const l of deriveBom(fixtureProject(8))) {
-      expect(l.included, l.id).toBe(true);
+      expect(typeof l.included, l.id).toBe('boolean');
       expect(typeof l.wastePct, l.id).toBe('number');
       expect(typeof l.gstPct, l.id).toBe('number');
       expect(l.gstPct, l.id).toBeGreaterThan(0);
     }
+  });
+
+  it('everything is quoted EXCEPT the site-dependent prompts', () => {
+    // this used to assert `included === true` for every line, which held only
+    // because no emitter had ever shipped one excluded. The qty-0 prompts are
+    // the deliberate exception, so pin exactly which lines may be excluded
+    // rather than dropping the assertion.
+    const excluded = deriveBom(fixtureProject(8))
+      .filter((l) => l.included === false)
+      .map((l) => l.id)
+      .sort();
+    expect(excluded).toEqual([
+      'civil.civil_works',
+      'civil.crane',
+      'civil.scaffolding',
+      'civil.trenching',
+    ]);
+  });
+
+  it('the prompts cost nothing until someone gives them a quantity', () => {
+    const lines = deriveBom(fixtureProject(8));
+    const project = { pricing: { marginPct: 12 } } as Project;
+    const withPrompts = bomMoney(lines, project);
+    const withoutPrompts = bomMoney(
+      lines.filter((l) => !l.id.startsWith('civil.') || l.included !== false),
+      project,
+    );
+    expect(withPrompts).toEqual(withoutPrompts);
+    // and no phantom GST bucket for a zero-taxable line
+    expect(withPrompts.gstByRate.every((b) => b.taxable > 0)).toBe(true);
   });
 
   it('a zero-line BOM is zero everywhere, not NaN', () => {

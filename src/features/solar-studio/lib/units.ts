@@ -27,6 +27,19 @@ export function lenValue(m: number, units: UnitSystem, dp = 2): string {
     : `${+m.toFixed(dp)}`;
 }
 
+/**
+ * Inverse of `lenValue`: a number the user TYPED in display units, back to the
+ * meters we store. Every other helper here is one-way because most lengths are
+ * read-only on screen; an editable field needs the return trip or an imperial
+ * user's "100" is stored as 100 meters.
+ *
+ * Rounded to 0.1 mm so a metric→imperial→metric round trip does not leave
+ * float dust in the project and churn the fingerprint.
+ */
+export function lenToM(v: number, units: UnitSystem): number {
+  return units === 'imperial' ? Math.round((v / M_TO_FT) * 1e4) / 1e4 : v;
+}
+
 /** Format an area stored in m² for display (whole numbers). */
 export function fmtArea(m2: number, units: UnitSystem): string {
   return units === 'imperial'
@@ -48,6 +61,7 @@ export function useUnits() {
     areaUnit: areaUnit(units),
     fmtLen: (m: number, dp = 2) => fmtLen(m, units, dp),
     lenValue: (m: number, dp = 2) => lenValue(m, units, dp),
+    lenToM: (v: number) => lenToM(v, units),
     fmtArea: (m2: number) => fmtArea(m2, units),
   };
 }

@@ -73,6 +73,96 @@ export function rowState(line: BomLine, marginPct: number): RowState {
   };
 }
 
+/**
+ * Human names for the overridable fields. The banner used to print the raw
+ * property name — "Mounting Rail (unitPriceInr)" — which is the schema talking,
+ * not the product.
+ */
+export const FIELD_LABELS: Record<string, string> = {
+  item: 'Name',
+  spec: 'Spec',
+  brand: 'Brand',
+  qty: 'Qty',
+  unit: 'Unit',
+  unitPriceInr: 'Rate',
+  wastePct: 'Waste',
+  gstPct: 'GST',
+  included: 'Included',
+};
+
+export function fieldLabel(field: string): string {
+  return FIELD_LABELS[field] ?? field;
+}
+
+/**
+ * One overridable value as text. Kept here rather than in the banner because
+ * the units differ per field and getting them wrong ("Rate 68%") is the sort
+ * of thing that reads as a bug in the number itself.
+ */
+export function fmtFieldValue(field: string, v: unknown): string {
+  if (v === undefined || v === null) return '—';
+  if (typeof v === 'boolean') return v ? 'yes' : 'no';
+  if (typeof v === 'number') {
+    const n = Math.round(v * 100) / 100;
+    if (field === 'unitPriceInr') return `₹${n.toLocaleString('en-IN')}`;
+    if (field === 'wastePct' || field === 'gstPct') return `${n}%`;
+    return String(n);
+  }
+  return String(v);
+}
+
+/** A stale field flattened for display: which line, which field, and the two
+ *  numbers the user has to choose between. */
+export interface StaleRow {
+  lineKey: string;
+  item: string;
+  field: string;
+  label: string;
+  yoursText: string;
+  nowText: string;
+  now: unknown;
+}
+
+/**
+ * Every drifted field across the given lines, newest-derived value included.
+ *
+ * Falls back to a detail-less row when `staleDetail` is absent, which is the
+ * case for a project whose merge ran before E17 added it — those still list
+ * the field, they just cannot show the comparison.
+ */
+export function staleRows(lines: BomLine[]): StaleRow[] {
+  const out: StaleRow[] = [];
+  for (const l of lines) {
+    const detail = l.staleDetail;
+    if (detail && detail.length > 0) {
+      for (const d of detail) {
+        out.push({
+          lineKey: l.id,
+          item: l.item,
+          field: d.field,
+          label: fieldLabel(d.field),
+          yoursText: fmtFieldValue(d.field, d.yours),
+          nowText: fmtFieldValue(d.field, d.now),
+          now: d.now,
+        });
+      }
+      continue;
+    }
+    for (const f of l.staleFields ?? []) {
+      out.push({
+        lineKey: l.id,
+        item: l.item,
+        field: f,
+        label: fieldLabel(f),
+        yoursText: '—',
+        nowText: '—',
+        now: undefined,
+      });
+    }
+  }
+  return out;
+}
+
 export interface SectionState {
   category: BomCategory;
   lines: BomLine[];

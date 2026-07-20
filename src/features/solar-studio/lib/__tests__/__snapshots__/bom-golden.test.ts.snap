@@ -19,7 +19,11 @@ Safety | Earthing Pits | Chemical earthing, 3m electrode | 2 | nos | 2650 | assu
 Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 36 | m | 92 | assumed | true | false | 2 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
 Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
 Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 4.3 | kW | 2500 | derived | true | false | 4.3 kWp × ₹2500/kW
-Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum
+Civil & Misc | Crane / Hydra Hire | Material lifting to roof | 0 | day | 12000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Scaffolding | Access and edge protection | 0 | day | 3500 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Civil Works | Pedestal PCC, chasing, waterproofing | 0 | lot | 15000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Cable Trenching | Excavate, sand-bed, backfill | 0 | m | 450 | assumed | true | false | Site-dependent — enter a quantity from the site survey"
 `;
 
 exports[`deriveBom golden output (pre-22b refactor contract) > rich four-roof project 1`] = `
@@ -55,7 +59,11 @@ Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | 
 Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
 Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
 Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
-Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum
+Civil & Misc | Crane / Hydra Hire | Material lifting to roof | 0 | day | 12000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Scaffolding | Access and edge protection | 0 | day | 3500 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Civil Works | Pedestal PCC, chasing, waterproofing | 0 | lot | 15000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Cable Trenching | Excavate, sand-bed, backfill | 0 | m | 450 | assumed | true | false | Site-dependent — enter a quantity from the site survey"
 `;
 
 exports[`deriveBom golden output (pre-22b refactor contract) > unstrung project 1`] = `
@@ -91,7 +99,11 @@ Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | 
 Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
 Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
 Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
-Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum
+Civil & Misc | Crane / Hydra Hire | Material lifting to roof | 0 | day | 12000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Scaffolding | Access and edge protection | 0 | day | 3500 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Civil Works | Pedestal PCC, chasing, waterproofing | 0 | lot | 15000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Cable Trenching | Excavate, sand-bed, backfill | 0 | m | 450 | assumed | true | false | Site-dependent — enter a quantity from the site survey"
 `;
 
 exports[`deriveBom golden output (pre-22b refactor contract) > with central-inverter combiner topology 1`] = `
@@ -129,7 +141,11 @@ Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | 
 Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
 Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
 Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
-Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum
+Civil & Misc | Crane / Hydra Hire | Material lifting to roof | 0 | day | 12000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Scaffolding | Access and edge protection | 0 | day | 3500 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Civil Works | Pedestal PCC, chasing, waterproofing | 0 | lot | 15000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Cable Trenching | Excavate, sand-bed, backfill | 0 | m | 450 | assumed | true | false | Site-dependent — enter a quantity from the site survey"
 `;
 
 exports[`deriveBom golden output (pre-22b refactor contract) > with module-level optimisers 1`] = `
@@ -166,5 +182,9 @@ Safety | Perimeter Fencing | chain-link on HDG posts | 68 | m | 850 | assumed | 
 Safety | Fence Gate | single vehicle gate | 1 | nos | 14000 | assumed | true | false | 1 per array area — ASSUMED; access strategy is a site decision.
 Safety | Ground Array Earthing Ring | GI strip, buried ring around the array | 68 | m | 92 | assumed | true | false | 68 m ring following the array boundary. A ground array has no building to run conductor down — ASSUMED convention; ring sizing per IS 3043 and measured soil resistivity, engineer to confirm.
 Civil & Misc | Installation & Commissioning | Labour, testing, net-meter liaison | 11.9 | kW | 2500 | derived | true | false | 11.9 kWp × ₹2500/kW
-Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum"
+Civil & Misc | Transport & Handling | To site | 1 | lot | 6000 | derived | true | false | Lumpsum
+Civil & Misc | Crane / Hydra Hire | Material lifting to roof | 0 | day | 12000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Scaffolding | Access and edge protection | 0 | day | 3500 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Civil Works | Pedestal PCC, chasing, waterproofing | 0 | lot | 15000 | assumed | true | false | Site-dependent — enter a quantity from the site survey
+Civil & Misc | Cable Trenching | Excavate, sand-bed, backfill | 0 | m | 450 | assumed | true | false | Site-dependent — enter a quantity from the site survey"
 `;

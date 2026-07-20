@@ -70,6 +70,14 @@ export const PRICE_BOOK = {
   signageKit: 950,
   installationPerKw: 2500, // labour
   transportLumpsum: 6000,
+  // Site-dependent rates. These back the qty-0 prompt lines: the rate is a
+  // representative figure so that typing a quantity immediately produces a
+  // number, but the QUANTITY is the surveyor's to give — nothing in the model
+  // can see whether a crane can reach the roof.
+  cranePerDay: 12000, // hydra / crane hire incl. operator
+  scaffoldingPerDay: 3500,
+  civilWorksLumpsum: 15000, // pedestal PCC, chasing, waterproofing touch-up
+  trenchingPerM: 450, // excavate, sand-bed, backfill for buried LT run
 };
 
 /**

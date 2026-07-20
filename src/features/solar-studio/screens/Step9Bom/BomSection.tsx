@@ -13,12 +13,14 @@ import { StaleBanner } from './StaleBanner';
 // CMER-132BDS 610" over four lines while the numeric columns sit comfortable.
 // A min-width on the table makes the CARD scroll instead — the numbers stay
 // aligned and the item stays readable.
-const TABLE_MIN_WIDTH = 1000;
+const TABLE_MIN_WIDTH = 1060;
 
 const COLUMNS = [
   { key: 'item', label: 'Item', width: 210 },
   { key: 'spec', label: 'Spec', width: 170 },
-  { key: 'qty', label: 'Qty', width: 84 },
+  // holds the quantity AND its unit — the unit belongs to the quantity, not to
+  // the derived order quantity where it used to be printed as static text
+  { key: 'qty', label: 'Qty', width: 144 },
   { key: 'waste', label: 'Waste', width: 74 },
   { key: 'order', label: 'Order qty', width: 96 },
   { key: 'rate', label: 'Rate ₹', width: 96 },
@@ -111,7 +113,13 @@ export function BomSection({
         <SectionInputs category={category} project={project} onSetInput={onSetInput} />
       )}
 
-      {staleLines.length > 0 && <StaleBanner lines={staleLines} onRefresh={onRefreshSection} />}
+      {staleLines.length > 0 && (
+        <StaleBanner
+          lines={staleLines}
+          onRefresh={onRefreshSection}
+          onResetField={onReset}
+        />
+      )}
 
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <DataTable

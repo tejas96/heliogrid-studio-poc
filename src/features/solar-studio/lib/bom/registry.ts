@@ -73,7 +73,15 @@ export type LineKey =
   | 'safety.ground_earth_ring'
   // ── Civil & Misc
   | 'civil.installation'
-  | 'civil.transport';
+  | 'civil.transport'
+  /**
+   * Site-dependent PROMPTS — emitted at qty 0 and excluded, because the model
+   * cannot see whether a crane can reach the roof. See emitters/civil.ts.
+   */
+  | 'civil.crane'
+  | 'civil.scaffolding'
+  | 'civil.civil_works'
+  | 'civil.trenching';
 
 /**
  * The order deriveBom emits categories in — and therefore the order the BOM
@@ -123,6 +131,30 @@ export function wastePctFor(lineKey: string): number {
  * decimals. The reference tool prints `116.15 Nos` — this is the fix.
  */
 const DISCRETE_UNITS = new Set(['nos', 'no', 'set', 'sets', 'pair', 'pairs', 'lot', 'kit', 'ea']);
+
+/**
+ * The units the emitters actually produce, discrete first.
+ *
+ * `unit` is user-overridable, and offering it as free text would be a trap:
+ * `isDiscreteUnit` matches on the literal string, so typing "pcs" where the
+ * line meant "Nos" silently drops out of the ceiling branch and goes back to
+ * quoting 116.15 modules — the exact defect the DISCRETE_UNITS set was added
+ * to fix. A constrained list cannot express that mistake.
+ */
+export const UNIT_OPTIONS = [
+  'nos',
+  'set',
+  'pairs',
+  'kit',
+  'lot',
+  'plate',
+  'panel-set',
+  'day',
+  'm',
+  'm²',
+  'kg',
+  'kW',
+] as const;
 
 export function isDiscreteUnit(unit: string): boolean {
   return DISCRETE_UNITS.has(unit.trim().toLowerCase());

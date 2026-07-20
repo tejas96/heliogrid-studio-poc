@@ -20,7 +20,7 @@
 // each records `autoAtEdit` — what the engine said when the user overrode it.
 // Everything else on the line stays live, so a formula always describes the
 // number next to it unless that number is itself overridden.
-import type { BomLine, BomOverride, BomState, Project } from '../../types';
+import type { BomLine, BomOverride, BomStaleField, BomState, Project } from '../../types';
 
 /** Fields a user may override. Anything else is derived, full stop. */
 export const OVERRIDABLE_FIELDS = [
@@ -154,6 +154,7 @@ export function mergeBom(auto: BomLine[], project: Project): MergedBomResult {
     let line = target;
     const overriddenFields: string[] = [];
     const staleFields: string[] = [];
+    const staleDetail: BomStaleField[] = [];
     for (const [field, entry] of Object.entries(ov.fields)) {
       // A field the registry no longer produces is reported, not applied — the
       // shape of a line can change between versions.
@@ -170,7 +171,13 @@ export function mergeBom(auto: BomLine[], project: Project): MergedBomResult {
       // what it was, and guessing would cry wolf.
       if (entry.autoAtEdit !== undefined) {
         const now = (target as unknown as Record<string, unknown>)[field];
-        if (!Object.is(now, entry.autoAtEdit)) staleFields.push(field);
+        if (!Object.is(now, entry.autoAtEdit)) {
+          staleFields.push(field);
+          // E17: capture all three values here. This is the only place they
+          // coexist — withField overwrites the derived figure on the next
+          // line, so by the time the row renders, `now` is gone.
+          staleDetail.push({ field, yours: entry.value, wasAtEdit: entry.autoAtEdit, now });
+        }
       }
       line = withField(line, field, entry.value);
       overriddenFields.push(field);
@@ -180,7 +187,7 @@ export function mergeBom(auto: BomLine[], project: Project): MergedBomResult {
         ...line,
         overridden: true,
         overriddenFields,
-        ...(staleFields.length > 0 ? { staleFields } : {}),
+        ...(staleFields.length > 0 ? { staleFields, staleDetail } : {}),
       };
       byKey.set(ov.lineKey, line);
     }
