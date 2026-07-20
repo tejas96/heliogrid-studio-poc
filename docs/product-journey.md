@@ -73,7 +73,7 @@ Not optional, and they shape the UI:
  STAGE 3   Qualify & assign          owner/rep triages, assigns, schedules
  STAGE 4   Site survey               ⚡ REMOTE (Solar API, minutes) or PHYSICAL (on site)
  STAGE 5   Design                    the existing studio → variants → sign-off
- STAGE 6   Quote & proposal          BOM → approval → send on WhatsApp
+ STAGE 6   Proposal                  11 steps → approval → send on WhatsApp
  STAGE 7   Follow-up & close         tracking, VOICE AGENT, negotiate, won/lost
  STAGE 8   Handover                  won deal → execution (scope TBD, Q1)
  ─────────
@@ -224,7 +224,7 @@ it will not get done.
 | Screen | Contains |
 |---|---|
 | **Assign** | Pick a rep, or use a rule. Shows each rep's current open load so you do not bury someone. |
-| **Lead detail** | Header: name, phone, city, value, stage, owner. Then activity timeline, site info, designs, quotes, tasks, files. Actions: Call · WhatsApp · Log activity · Book visit · Create design. |
+| **Lead detail** | Header: name, phone, city, value, stage, owner. Then activity timeline, site info, designs, proposals, tasks, files. Actions: Call · WhatsApp · Log activity · Book visit · Create design. |
 | **Qualification** | Six things that decide whether this is real: monthly bill ₹, roof ownership (own/rent), roof type, shading obvious?, timeline, decision maker. Inline, not a separate form. |
 | **Book site visit** | Date, time, surveyor, address confirm. Sends the customer a WhatsApp confirmation. |
 | **Disqualify** | Requires a reason: renting · budget · not interested · unreachable · already installed · wrong number. **The reason list is the most valuable analytics in the product.** |
@@ -433,7 +433,8 @@ proposal captures → single-line diagram → bill of materials → done.
 - **Customer changes their mind on size** → variant, not a rewrite
 - **Engineer returns the design** → back to the designer with comments; the customer never
   sees an unapproved design
-- **Design edited after the quote exists** → quote goes stale and **must visibly say so**
+- **Design edited after the proposal exists** → its pricing goes stale and **must visibly
+  say so**
 
 ### Recommendation
 **Do not let Claude Design redesign the studio from imagination.** Connect the codebase,
@@ -443,29 +444,43 @@ logic in there took months and is test-covered.
 
 ---
 
-## STAGE 6 — Quote & proposal
+## STAGE 6 — Proposal
 
-**Who:** designer builds it, rep sends it, manager approves discounts.
+> **ONE OBJECT, NOT TWO.** There is no separate "quote" a user manages. The **proposal** is
+> the thing — built in the 11 steps (Stage 6B), it contains the pricing, and it is what gets
+> versioned, sent, and accepted.
+>
+> The **BOM** is a different thing entirely: the line-item bill of materials produced by the
+> design studio. It is internal, engineering- and procurement-facing, and it *feeds* the
+> proposal's price when a design exists (Path A). Path B has no BOM at all — just a system
+> cost typed into step 3.
+>
+> *Naming note: Indian EPCs usually say "quotation" for the document. If the UI label should
+> read "Quotation" rather than "Proposal", that is a copy decision — but it is still one
+> object either way.*
+
+**Who:** designer or rep builds it, rep sends it, owner approves discounts.
 **Goal:** a price the customer trusts, delivered where they will actually read it.
 
 ### Screens
 | Screen | Contains |
 |---|---|
-| **Quote builder** | Line items grouped by category. Each: item, spec, qty, unit, rate, GST, total. Margin and discount at the bottom. **The densest screen in the product — mobile gets a card list with an edit sheet, never a wide table.** |
-| **Quote versions** | v1 vs v2 with what changed, and why. |
-| **Discount request** | Rep asks for more than their limit → goes to a manager with a reason. |
-| **Approval queue** | Manager's list of pending discount requests with the margin impact shown. |
+| **Proposal builder** | The 11 steps — see Stage 6B for the full specification. |
+| **BOM detail** *(Path A only)* | The line items behind the price: item, spec, qty, unit, rate, GST, total. Comes from the design. **The densest screen in the product — mobile gets a card list with an edit sheet, never a wide table.** Internal; the customer never sees it. |
+| **Proposal versions** | v1 vs v2 with what changed, and why. |
+| **Discount request** | Rep asks for a discount → goes to the owner with a reason (D19). |
+| **Approval queue** | Owner's list of pending discount requests with the margin impact shown. |
 | **Proposal preview** | Exactly what the customer will see, before sending. |
 | **Send** | Channel (WhatsApp default), message preview, attachments. One clear send. |
 | **Delivery tracking** | Sent → delivered → opened → viewed for how long. Feeds the follow-up. |
 
 ### Happy path
-Design approved → quote generated automatically from the BOM → margin applied → preview →
-send on WhatsApp → delivered → a follow-up task is created automatically for +2 days.
+Design approved → proposal pre-filled from the BOM → margin applied → preview → send on
+WhatsApp → delivered → a follow-up task is created automatically for +2 days.
 
 ### What goes wrong
-- **Design changed after quoting** → quote is stale; **money must never render as final
-  while stale** — this is a hard product rule
+- **Design changed after the proposal was built** → its pricing is stale; **money must
+  never render as final while stale** — this is a hard product rule
 - **Discount exceeds the rep's limit** → blocked, routed to approval, rep can still send
   the undiscounted version meanwhile
 - **Discount pushes the job below cost** → warned explicitly, with the loss stated in ₹
@@ -473,7 +488,8 @@ send on WhatsApp → delivered → a follow-up task is created automatically for
 - **Customer never opens it** → tracked; this is exactly what the voice agent picks up
 - **Customer asks for changes** → new version, old one preserved; the customer link always
   shows the latest
-- **Proposal sent, then the price book changes** → the sent quote keeps its original prices
+- **Proposal sent, then the price book changes** → the sent proposal keeps its original
+  prices
 - **Two reps quote the same customer** → the duplicate check at Stage 2 should have caught
   it; if not, the customer record shows both and one must be withdrawn
 
@@ -513,7 +529,7 @@ with two entry points.
 |---|---|---|
 | 3 · Solar System Setup | capacity, type, category **derived** | typed |
 | 4 · Performance Metrics | generation from real shading simulation — **derived** | ✦ AI auto-fill — **estimated** |
-| 5 · Financial Data | savings/payback from the real quote — **derived** | ✦ AI auto-fill — **estimated** |
+| 5 · Financial Data | savings/payback from the real BOM pricing — **derived** | ✦ AI auto-fill — **estimated** |
 | 8 · Components | the actual BOM — **derived** | picked from catalog — **assumed** |
 | Cost | the real bill of materials | typed lump sum |
 
@@ -839,7 +855,7 @@ milestone that has already passed is the most common leak.
 | Screen | Contains |
 |---|---|
 | **Projects board** | Won deals as cards by stage. Each: customer, size, value, days in stage, **payment collected vs due**, blocker flag. Aged cards surface. Mobile = one column with a stage filter; desktop = the full board. |
-| **Project detail** | Stage timeline, the approved design, final quote, **payments**, documents, blockers, activity. One screen the coordinator lives in. |
+| **Project detail** | Stage timeline, the approved design, the accepted proposal, **payments**, documents, blockers, activity. One screen the coordinator lives in. |
 | **Payments** | The tranche schedule above. Mark received, request on WhatsApp, record mode (UPI/NEFT/cheque), attach receipt. |
 | **Document checklist** | Signed proposal · advance receipt · net-metering application · DISCOM approval · **subsidy application & sanction** · commissioning certificate · warranty documents · handover pack. Each: pending / uploaded / verified. |
 | **Blockers** | Explicit, with a reason and who is waiting on whom: *waiting on DISCOM* · *waiting on customer* (site access, documents) · *waiting on material* · *waiting on us*. **The "waiting on customer" state is the one that protects the EPC.** |
@@ -866,7 +882,7 @@ pack sent → closed.
   not the supplier's problem
 - **Subsidy rejected or delayed** → surfaced with the reason; this is the customer's money
   and they will ask
-- **Change after Won** (customer wants 2 more panels) → new quote version, revised tranches,
+- **Change after Won** (customer wants 2 more panels) → new proposal version, revised tranches,
   original preserved
 - **Project cancelled after Won** → allowed with a reason; **reporting must not silently
   keep counting it as revenue**
@@ -1422,7 +1438,7 @@ definition of the presets, and it becomes the checkbox list when custom roles ar
 | Capture site surveys | ✓ | ✓ | ✓ | ✓ | — | — |
 | Create and edit designs | ✓ | — | — | — | ✓ | — |
 | Approve designs (sign-off) | ✓ | — | — | — | — | ✓ |
-| Create quotes and proposals | ✓ | ✓ | ✓ | — | ✓ | — |
+| Create and edit proposals | ✓ | ✓ | ✓ | — | ✓ | — |
 | Send proposals to customers | ✓ | ✓ | ✓ | — | — | — |
 | Apply discounts | ✓ | ✓ | ✓ | — | — | — |
 | **Approve discounts** | ✓ | — | — | — | — | — |
@@ -1624,7 +1640,7 @@ Nothing below 12px. Touch targets 44px minimum.
 4. Lead inbox (owner triage) + assign
 5. Survey: my visits → guided capture → review
 6. Agent: settings → queue → call result on timeline
-7. Quote builder (mobile card list first — this is the hard one)
+7. Proposal builder (step 3 first — the densest step)
 8. Proposal preview → send → tracking
 9. Customer proposal link (no login)
 10. Projects board → project detail → customer progress link

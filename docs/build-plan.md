@@ -57,9 +57,9 @@ HelioGrid is a mobile-first SaaS for solar EPC companies in India — the
 businesses that sell, design and install rooftop and commercial solar.
 
 It covers the sales cycle: capturing leads, assigning them to reps,
-surveying the site, designing the array, building an itemised quote, and
-sending the proposal to the customer over WhatsApp. An AI voice agent
-follows up with customers who go quiet.
+surveying the site, designing the array, and sending an itemised proposal
+to the customer over WhatsApp. An AI voice agent follows up with
+customers who go quiet.
 
 Users are sales reps, surveyors, designers, engineers and owners. Most
 work on mid-range Android phones, often on a roof with poor signal.
@@ -460,7 +460,7 @@ SHOWS:
 - "You're a Sales Rep"
 - Three short lines:
   · You'll see the leads assigned to you
-  · You can create designs, quotes and send proposals
+  · You can create designs and send proposals
   · Your owner approves discounts
 - One "Got it" button
 
