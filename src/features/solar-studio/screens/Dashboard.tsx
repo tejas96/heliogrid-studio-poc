@@ -283,8 +283,26 @@ export function Dashboard() {
                 <div
                   key={p.id}
                   className="card proj-card"
+                  // Phase 22p. This was a bare div with an onClick: no tab
+                  // stop, no role, no accessible name — so the ONLY thing a
+                  // keyboard or screen-reader user could reach on a project
+                  // card was its ⋮ menu. Opening a project, the primary action
+                  // of the home screen, was mouse-only.
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open project ${p.info.name || 'Untitled'}${
+                    p.info.customerName ? `, customer ${p.info.customerName}` : ''
+                  }`}
                   style={{ padding: 0, overflow: 'hidden', cursor: 'pointer', position: 'relative' }}
                   onClick={() => openProject(p)}
+                  onKeyDown={(e) => {
+                    // Enter and Space are what a button responds to; Space also
+                    // scrolls the page unless prevented
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openProject(p);
+                    }
+                  }}
                 >
                   <div
                     style={{

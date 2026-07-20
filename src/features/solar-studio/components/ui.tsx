@@ -1,5 +1,5 @@
 // ─── Shared UI primitives: sheets, dialogs, sliders, toggles, chips ─────────
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { X, Check } from 'lucide-react';
 import { commitNumber } from '../lib/bom/view';
 
@@ -12,6 +12,59 @@ function useEscape(onClose?: () => void) {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
+}
+
+const FOCUSABLE =
+  'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+/**
+ * Focus trap + restore for a modal surface (Phase 22p).
+ *
+ * `aria-modal="true"` is a PROMISE to assistive tech that the rest of the page
+ * is inert. Both surfaces made that promise and neither kept it: Tab walked
+ * straight out of the dialog into the page behind it, and on close focus was
+ * dumped on <body>, so a keyboard user lost their place entirely and a screen
+ * reader started reading from the top.
+ *
+ * Restoring focus to whatever opened the dialog is the half people forget, and
+ * it is the half that matters most — it is what makes closing a dialog feel
+ * like returning rather than being teleported.
+ */
+function useFocusTrap(active: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!active) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const root = ref.current;
+    // move focus IN, preferring the first control over the container itself
+    const first = root?.querySelector<HTMLElement>(FOCUSABLE);
+    (first ?? root)?.focus?.();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !root) return;
+      const items = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
+      if (items.length === 0) return;
+      const firstEl = items[0];
+      const lastEl = items[items.length - 1];
+      // wrap at the ends rather than letting Tab escape the modal
+      if (e.shiftKey && document.activeElement === firstEl) {
+        e.preventDefault();
+        lastEl.focus();
+      } else if (!e.shiftKey && document.activeElement === lastEl) {
+        e.preventDefault();
+        firstEl.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      // put the user back where they were, not on <body>
+      previous?.focus?.();
+    };
+  }, [active]);
+  return ref;
 }
 
 export function Sheet({
@@ -28,10 +81,11 @@ export function Sheet({
   right?: ReactNode;
 }) {
   useEscape(onClose);
+  const trapRef = useFocusTrap(true);
   return (
     <>
       <div className="sheet-backdrop" onClick={onClose} aria-hidden />
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+      <div ref={trapRef} className="sheet" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <div className="sheet-head">
           <h3>
             {icon}
@@ -64,13 +118,16 @@ export function Dialog({
   onClose?: () => void;
 }) {
   useEscape(onClose);
+  const trapRef = useFocusTrap(true);
   return (
     <div className="dialog-backdrop" onClick={onClose} aria-hidden={false}>
       <div
+        ref={trapRef}
         className="dialog"
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
         <h3>
