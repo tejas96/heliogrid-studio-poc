@@ -139,9 +139,26 @@ export function Notes({
       <text x={x} y={y} fontWeight={800} fontSize={8.5}>
         {title}
       </text>
-      {items.map((t, i) => (
-        <text key={i} x={x} y={y + 12 + i * 11}>
-          {`${i + 1}. ${t}`.slice(0, Math.floor(width / 4))}
+      {/* Wrapped, not truncated. A note that runs off the sheet edge — which
+          the first version did, mid-word — is worse than one that wraps: these
+          carry the engineer-verification and roof-capacity caveats, and half a
+          caveat is not a caveat. ~1.85 units per char at 7.5pt monospace. */}
+      {items.flatMap((t, i) => {
+        const perLine = Math.max(12, Math.floor(width / 3.9));
+        const words = `${i + 1}. ${t}`.split(' ');
+        const lines: string[] = [];
+        let cur = '';
+        for (const word of words) {
+          if ((cur + ' ' + word).trim().length > perLine) {
+            lines.push(cur.trim());
+            cur = word;
+          } else cur = `${cur} ${word}`;
+        }
+        if (cur.trim()) lines.push(cur.trim());
+        return lines.map((ln, j) => ({ key: `${i}-${j}`, ln, i, j }));
+      }).map((row, idx) => (
+        <text key={row.key} x={x} y={y + 12 + idx * 10}>
+          {row.j === 0 ? row.ln : `   ${row.ln}`}
         </text>
       ))}
     </g>

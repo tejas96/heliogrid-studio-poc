@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { BookOpen, Cable, Download, Grid3x3, PencilLine, RotateCcw, Sparkles, Zap, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { Sheet, TitleBlock } from '../components/drawing';
+import { StructureSheet } from '../components/drawing/StructureSheet';
 import { engineeringStatus, STRUCTURE_DISCLAIMER, windZoneInfo } from '../lib/structure';
 import { Dialog } from '../components/ui';
 import type { Project, SldParams } from '../types';
@@ -15,7 +16,7 @@ import { autoString } from '../lib/stringing';
 import { layoutToDxf, dxfFileName } from '../lib/export-dxf';
 import { navigate } from '../router';
 
-type Tab = 'sld' | 'layout' | 'strings';
+type Tab = 'sld' | 'layout' | 'strings' | 'structure';
 
 export function Step8Sld() {
   const project = useActiveProject()!;
@@ -85,6 +86,7 @@ export function Step8Sld() {
               ['sld', 'SLD', <Zap key="sld" size={13} aria-hidden />],
               ['layout', 'PV Layout', <Grid3x3 key="layout" size={13} aria-hidden />],
               ['strings', 'String Route', <Cable key="strings" size={13} aria-hidden />],
+              ['structure', 'Structure', <Grid3x3 key="structure" size={13} aria-hidden />],
             ] as [Tab, string, ReactNode][]
           ).map(([t, label, icon]) => (
             <button
@@ -181,10 +183,36 @@ export function Step8Sld() {
         </div>
       </div>
 
-      <div ref={svgHostRef} style={{ flex: 1, overflow: 'auto', background: '#f0f1f3', padding: 18 }}>
+      {/* Print: A3 landscape, and ONLY the sheet (Phase 22o). Without this the
+          browser prints the app chrome around the drawing at whatever the
+          default paper is, which is not a drawing anyone can use. The plan's
+          route is deliberately Save-as-PDF rather than a PDF library — zero
+          dependency, and the ₹ glyph renders correctly. */}
+      <style>{`
+        @media print {
+          @page { size: A3 landscape; margin: 8mm; }
+          body * { visibility: hidden; }
+          [data-sheet-host], [data-sheet-host] * { visibility: visible; }
+          [data-sheet-host] {
+            position: absolute; inset: 0;
+            overflow: visible !important;
+            background: #fff !important;
+            padding: 0 !important;
+          }
+          [data-sheet-host] svg { width: 100% !important; min-width: 0 !important; border: none !important; }
+        }
+      `}</style>
+      <div
+        ref={svgHostRef}
+        data-sheet-host
+        style={{ flex: 1, overflow: 'auto', background: '#f0f1f3', padding: 18 }}
+      >
         {tab === 'sld' && (hasStrings ? <SldSheet sld={sld} threeLine={threeLine} /> : <UnstrungState />)}
         {tab === 'layout' && <LayoutSheet />}
         {tab === 'strings' && (hasStrings ? <StringSheet /> : <UnstrungState />)}
+        {/* Phase 22o: the structure has been modelled since 22a and priced
+            throughout, and nothing printed it until now. */}
+        {tab === 'structure' && <StructureSheet project={project} />}
       </div>
 
       {showIntro && (
