@@ -697,35 +697,116 @@ line is how people stop trusting the automation.
 
 ---
 
-## STAGE 8 — Handover & light project tracking
+## STAGE 8 — Project management (light)
 
-**Who:** owner and operations. **Goal:** the customer knows what is happening without calling.
+**Who:** owner and an operations coordinator. **Goal:** know what is stuck, collect the
+money, and let the customer see progress without phoning.
 
-Scope is deliberately small (D9): a status board and a document checklist. **No inventory,
-no purchase orders, no crew scheduling.**
+### What "light" means — the v1 boundary
+
+```
+IN v1                              NOT in v1
+─────                              ────────
+stage board                        inventory / stock levels
+payment collection vs tranches     purchase orders to suppliers
+document checklist                 crew rostering & scheduling engine
+blockers with reasons              Gantt charts, dependencies
+customer progress link             procurement workflow
+the existing install checklist     O&M, monitoring, AMC, tickets
+```
+
+**This is a status + documents + money tracker, not project-management software.** Small
+and mid-size Indian EPCs do not run Primavera; they run a WhatsApp group and a notebook.
+We are replacing the notebook, not selling them MS Project.
+
+### The real stages of a solar project after Won
+
+```
+WON → MATERIAL ORDERED → DISPATCHED → INSTALLATION → ELECTRICAL & METERING
+    → DISCOM INSPECTION → COMMISSIONED → SUBSIDY CLAIMED → HANDED OVER
+```
+
+Two of these are almost entirely outside the EPC's control and cause nearly all the delay:
+- **DISCOM inspection & net-metering approval** — 3–6 weeks, sometimes longer
+- **Subsidy disbursement** (PM Surya Ghar, residential) — paid to the customer's bank
+  after inspection; the EPC usually does the paperwork and gets blamed for the wait
+
+**The product's job is not to speed these up. It is to make the waiting visible and
+attributable**, so the EPC stops absorbing blame for a utility's timeline.
+
+### 💡 The connection that makes this valuable: payment tranches
+
+Step 7 of the proposal builder already defines payment terms — **10 / 60 / 20 / 10**. Those
+are not just words on a PDF. **They are the project's collection schedule.**
+
+```
+10%  on booking          ✅ received   12 Aug   ₹45,247
+60%  on material dispatch ✅ received   14 Aug   ₹2,71,483
+20%  on installation      🔵 due now    ₹90,494   [Request on WhatsApp]
+10%  on commissioning     ⬜ upcoming   ₹45,247
+```
+
+When a stage completes, the matching tranche becomes due and the coordinator can request
+it on WhatsApp in one tap. **This is the feature an EPC owner will actually pay for** —
+solar businesses die of cash flow, not of bad design software, and money owed against a
+milestone that has already passed is the most common leak.
 
 ### Screens
 | Screen | Contains |
 |---|---|
-| **Projects board** | Won deals by stage: Ordered → Installed → Commissioned → Handed over. Card shows customer, size, value, days in stage. |
-| **Project detail** | The deal's history, the approved design, the final quote, documents, and the stage timeline. |
-| **Document checklist** | Per project: signed proposal, advance receipt, net-metering application, DISCOM approval, commissioning certificate, warranty documents. Each: pending / uploaded / verified. |
-| **Customer progress link** | The same tokenised link the proposal used, now showing progress. No login. |
-| **Handover** | Final documents pack, sent on WhatsApp. |
+| **Projects board** | Won deals as cards by stage. Each: customer, size, value, days in stage, **payment collected vs due**, blocker flag. Aged cards surface. Mobile = one column with a stage filter; desktop = the full board. |
+| **Project detail** | Stage timeline, the approved design, final quote, **payments**, documents, blockers, activity. One screen the coordinator lives in. |
+| **Payments** | The tranche schedule above. Mark received, request on WhatsApp, record mode (UPI/NEFT/cheque), attach receipt. |
+| **Document checklist** | Signed proposal · advance receipt · net-metering application · DISCOM approval · **subsidy application & sanction** · commissioning certificate · warranty documents · handover pack. Each: pending / uploaded / verified. |
+| **Blockers** | Explicit, with a reason and who is waiting on whom: *waiting on DISCOM* · *waiting on customer* (site access, documents) · *waiting on material* · *waiting on us*. **The "waiting on customer" state is the one that protects the EPC.** |
+| **Installation** | ↳ reuses the **existing InstallationSheet** — foundation → legs → rafters → purlins → modules → stringing → BOS, derived from the structural model, crew ticks persisted. **Do not rebuild it.** |
+| **Customer progress link** | Same tokenised URL as the proposal. Shows stages, what is done, what is waiting and why, expected dates. |
+| **Handover** | Document pack sent on WhatsApp, project closed, referral asked for. |
+
+### Happy path
+Won → project created automatically from the deal → coordinator moves it stage by stage →
+each stage triggers the matching payment request and updates the customer link → handover
+pack sent → closed.
 
 ### What goes wrong
-- **Stuck in a stage for weeks** → aged cards surface to the owner
-- **DISCOM approval delayed** → a blocked flag with a reason; the customer sees "waiting for
-  DISCOM approval", which prevents the "what is happening?" phone call
-- **Customer wants a change after Won** → change request creates a new quote version; the
-  original stays intact
-- **Documents missing at handover** → checklist blocks marking Handed over
-- **Project cancelled after Won** → allowed, with a reason; reporting must not silently
-  count it as revenue
+- **Stuck in a stage for weeks** → aged cards surface to the owner with days-in-stage
+- **DISCOM delay** → blocker with a reason; the customer link says *"waiting for DISCOM
+  approval, applied 15 Aug, typically 3–6 weeks"* — this single line prevents most support
+  calls
+- **Customer not paying a due tranche** → visible on the board and in the owner's dashboard;
+  reminders go on WhatsApp; **never block the customer's progress link over money** — chase
+  the person, do not punish the view
+- **Customer blocks access** (nobody home, terrace locked) → *waiting on customer* with the
+  date it started, so responsibility for the delay is recorded and visible
+- **Material shortage** → blocked with an expected date; customer sees *"material ordered"*,
+  not the supplier's problem
+- **Subsidy rejected or delayed** → surfaced with the reason; this is the customer's money
+  and they will ask
+- **Change after Won** (customer wants 2 more panels) → new quote version, revised tranches,
+  original preserved
+- **Project cancelled after Won** → allowed with a reason; **reporting must not silently
+  keep counting it as revenue**
+- **Install done but commissioning blocked for a month** → the board must not show it as
+  "nearly finished"; days-in-stage tells the truth
 
-### Recommendation
-**The customer-visible progress link is the highest-value screen in this stage.** Most
-support calls in Indian solar are "what is the status?". One honest link answers them.
+### Roles here
+| Role | Can |
+|---|---|
+| **Owner** | Everything. Sees all projects, all money, all blockers. |
+| **Coordinator / ops** | Move stages, upload documents, request payments, set blockers. |
+| **Installer / crew** | The installation checklist only. Ticks steps. Nothing financial. |
+| **Sales rep** | Read-only on their own won deals — so they can answer a customer without asking ops. |
+| **Customer** | The progress link. No login. |
+
+### Recommendations
+1. **Create the project automatically the moment a deal is Won.** No "create project" step —
+   a won deal *is* a project. Asking someone to re-enter the customer is how data diverges.
+2. **Days-in-stage is the only metric that matters on the board.** Not percentages, not
+   burndown. "This one has been in DISCOM inspection for 34 days" is the whole insight.
+3. **Every blocker names who is waiting.** Us, the customer, or the DISCOM. Over a year this
+   becomes the honest answer to "why do our projects take so long".
+4. **The customer link is the highest-value screen in the stage** — most support calls in
+   Indian solar are "what is the status?", and one honest link answers them.
 
 ---
 
