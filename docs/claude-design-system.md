@@ -186,6 +186,29 @@ that belongs to no system.
 screenshot, and it fails WCAG. Our inactive items use `--text-muted` (7.1:1), not a tint
 of the background. **The arc may be soft; the icons may not be.**
 
+### The five slots
+
+```
+   My Day      Leads        ➕        Projects      More
+                        Add lead
+```
+
+| Slot | Goes to |
+|---|---|
+| **My Day** | The rep's home — overdue, today, agent activity |
+| **Leads** | The full list, searchable and filterable |
+| **➕ Add lead** | **The elevated centre.** Opens quick-add: name, phone, city, type. Under 30 seconds. |
+| **Projects** | Won deals — the stage board |
+| **More** | Designs, survey, settings, team, agent, profile |
+
+**Why Add lead is the centre:** a lead can arrive at any moment — a call, a referral,
+someone at the door — and capturing it before it evaporates is the product's core promise.
+It is the most frequent create action a rep performs, and it earns the most valuable
+60 × 60 pixels on the screen. The centre action **never changes per screen**.
+
+*Non-sales roles keep the same bar shape; a surveyor's centre is "Start survey", an
+owner's is "Add lead" too. One structure, one slot, role-appropriate verb.*
+
 ### Behaviour
 | | |
 |---|---|
