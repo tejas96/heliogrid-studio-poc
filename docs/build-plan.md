@@ -13,8 +13,9 @@ build a phase  →  STOP  →  review together  →  fix  →  next phase
 establishes patterns the next one reuses — an unfixed problem in Phase 1 gets copied into
 40 screens.
 
-Every screen is built **mobile 375px first, then desktop 1440px**, before moving to the
-next screen in the phase.
+**Mobile and desktop are designed together in ONE prompt.** Claude Design has no viewport
+setting — you state it in the prompt, and asking for both at once keeps them consistent.
+Two separate prompts drift apart.
 
 ---
 
@@ -28,7 +29,7 @@ Same nine checks, every time. A phase is not done until all pass.
 | 2 | Nothing below **12px**; touch targets **44px** |
 | 3 | Colours all come from the system — no invented hex |
 | 4 | Data colours never used for chrome, accent never used on a chart |
-| 5 | Works at **375px AND 1440px** — no horizontal scroll at either |
+| 5 | Works at **375px AND 1440px** — no horizontal scroll at either. **Also check 768px**, where responsive layouts usually break and neither target width reveals it |
 | 6 | **Realistic Indian data** — ₹4,52,471 format, real cities, 8+ rows |
 | 7 | **Empty / loading / error** states exist |
 | 8 | Numbers show provenance where the journey says they should |
@@ -271,203 +272,219 @@ connect the codebase and improve one at a time. Do not reinvent.
 
 ---
 
+
 # PHASE 1 — THE PROMPT SEQUENCE
 
-Run these in order. After each mobile screen, immediately ask for the desktop version
-before moving on — while the context is fresh.
+Six prompts, run in order. **Each one produces mobile AND desktop together** — Claude
+Design has no viewport control, so it goes in the prompt.
 
-**Reminder: never put colours, hex values or token names in a prompt.** The design system
-is selected in the dropdown. Prompts describe content, actions and states only.
+**Rules for every prompt below:**
+- Never include colours, hex values or token names. The design system is in the dropdown.
+- If you attach `product-journey.md`, add: *"The attached file is BACKGROUND ONLY. Design
+  only the screen described below."*
+- Journey references are given so you can pull extra detail if Claude Design asks.
+
+### The block that goes at the end of EVERY prompt
+
+```
+BOTH VIEWPORTS, in one design:
+· Mobile 375px — single column, primary action in thumb reach
+· Desktop 1440px — centred, max 480px for forms; never stretch a form
+  across the screen
+
+Same content and copy in both. Not a stretched phone, not a squeezed
+desktop. Show the two side by side.
+```
 
 ---
 
-### 1.1 · Login
+## 1.1 · Login  ▸ journey Stage 1
 
 ```
-Design the Login screen for mobile, 375px.
+Design the Login screen.
 
-WHO: a solar sales rep or company owner in India, signing in on an
-Android phone
-GOAL: get in with a phone number, no password
+WHO: a solar sales rep or company owner in India, signing in on a
+mid-range Android phone
+GOAL: get in with a phone number — there is no password anywhere in this
+product
 
-SHOWS — state 1, phone entry:
-- App logo mark and name
-- "Welcome back" heading, one line of supporting text
-- Country prefix +91 (fixed) and a 10-digit phone field
-- Continue button, disabled until 10 digits are entered
-- A small line: "New company? Create an account"
+STATE 1 — phone entry
+- Logo mark and product name
+- "Welcome back" + one supporting line
+- Fixed +91 prefix, 10-digit phone field
+- Continue, disabled until 10 digits
+- Small link: "New company? Create an account"
 
-SHOWS — state 2, OTP:
+STATE 2 — OTP
 - "Enter the code sent to +91 98765 43210" with a change-number link
-- 6 separate digit boxes, auto-advancing
+- 6 separate auto-advancing digit boxes
 - "Resend code" — disabled with a 30 second countdown, then active
 - After two failed resends, offer "Call me with the code instead"
 
-STATES: show both states side by side. Also show the error state for a
-wrong OTP — the entered digits stay visible so the user can correct
-rather than retype.
+STATE 3 — wrong code
+- Error below the boxes; the entered digits STAY so the user can correct
+  rather than retype the whole thing
 
-No password anywhere. Phone number is the identity.
-```
-
-Then:
-```
-Now the desktop version, 1440px. Same two states.
-Centred card on a calm background, max 420px wide. Do not stretch the
-form across the screen.
+Show all three states.
+[+ BOTH VIEWPORTS block]
 ```
 
 ---
 
-### 1.2 · Sign up
+## 1.2 · Sign up  ▸ journey Stage 0
 
 ```
-Design the Sign up screen for mobile, 375px.
+Design the Sign up screen.
 
 WHO: a solar EPC company owner creating an account for the first time
-GOAL: get to a working account in under a minute
+GOAL: a working account in under a minute
 
-SHOWS:
-- "Create your account"
+SHOWS — five fields, nothing more:
 - Your name
 - Company name
 - City
 - Phone number (+91, 10 digits) — this becomes the login
 - Continue
 
-That is the entire form. Five fields. We ask for GSTIN, logo, address
-and team later, only when they are actually needed.
+We deliberately do NOT ask for GSTIN, logo, address or team here. Those
+are collected later, only when they are actually needed.
 
 Below the form, one reassuring line: "Free to try. No card needed."
 
-STATES: empty, filled, and the error when a phone number already has an
-account — which should offer "Sign in instead" rather than just showing
-an error.
-```
+STATES:
+- empty · filled
+- phone already registered → offers "Sign in instead", not just an error
 
-Then:
-```
-Now desktop, 1440px. Centred card, max 480px. Same five fields.
+[+ BOTH VIEWPORTS block]
 ```
 
 ---
 
-### 1.3 · What do you sell
+## 1.3 · What do you sell  ▸ journey Stage 0
 
 ```
-Design the "What do you sell?" onboarding step for mobile, 375px.
+Design the "What do you install?" onboarding step.
 
 WHO: the owner, immediately after signing up
 GOAL: one question that lets us set sensible defaults, so their first
 quote is close to right
 
 SHOWS:
-- Step indicator: step 1 of 2
+- Step indicator: 1 of 2
 - Heading: "What do you install?"
 - Three large selectable cards, single choice:
   · Residential rooftop — homes, 1 to 15 kW
   · Commercial & industrial — factories and warehouses, 20 kW and above
   · Both
-- Below that, one optional field: "Typical system size" with a sensible
-  default based on the choice
-- Continue button
-- A "Skip for now" text link
+- One optional field below: "Typical system size", pre-filled based on
+  the choice
+- Continue, and a quiet "Skip for now" text link
 
-STATES: nothing selected (Continue disabled), one selected.
+STATES: nothing selected (Continue disabled) · one selected
 
-Cards should feel tappable and substantial — this is the only question
-we ask, so it should not look like a form field.
-```
+The cards should feel substantial and tappable — this is the only
+question we ask, so it must not look like a form field.
 
-Then:
-```
-Now desktop, 1440px. Three cards in a row instead of stacked.
+[+ BOTH VIEWPORTS block — desktop shows the three cards in a row]
 ```
 
 ---
 
-### 1.4 · You're ready
+## 1.4 · You're ready  ▸ journey Stage 0
 
 ```
-Design the "You're ready" screen for mobile, 375px.
+Design the "You're ready" screen.
 
 WHO: the owner, having just finished a 60-second signup
 GOAL: give them a real next action, not an empty dashboard
 
 SHOWS:
-- A brief, warm confirmation — "You're set up, Rajesh"
-- Two clear doors, as cards:
-  1. "Add your first lead" — primary. Start selling immediately.
+- Warm, brief confirmation: "You're set up, Rajesh"
+- Two doors, as cards:
+  1. "Add your first lead" — primary. Start selling now.
   2. "Explore a demo project" — secondary. A finished 8.2 kWp Pune
      rooftop they can open and poke at without fear of breaking
      anything.
-- Below, a quiet collapsed list: "Finish setting up later — company
-  logo, GST details, invite your team" with a chevron. Not a nag, not a
-  progress bar.
+- Below, a quiet collapsed row: "Finish setting up later — company
+  logo, GST details, invite your team" with a chevron
 
-This screen must NOT be a checklist of incomplete tasks. It is a
-doorway, and the demo project is how people actually learn this
-product.
-```
+This must NOT be a checklist of incomplete tasks and must NOT show a
+setup progress bar. It is a doorway. The demo project is how people
+actually learn this product.
 
-Then:
-```
-Now desktop, 1440px. Two doors side by side.
+[+ BOTH VIEWPORTS block — desktop shows the two doors side by side]
 ```
 
 ---
 
-### 1.5 · Invite landing
+## 1.5 · Invite landing + your profile  ▸ journey Stage 1
 
 ```
-Design the invite landing screen for mobile, 375px.
+Design the invite landing flow for someone JOINING an existing company.
 
-WHO: a sales rep or surveyor who was just invited by their company owner
-and tapped a WhatsApp link
-GOAL: join and be useful in two minutes
+WHO: a sales rep or surveyor who was invited by their owner and tapped a
+WhatsApp link
+GOAL: joined and useful in two minutes
 
-SHOWS:
+SCREEN 1 — the invite
 - "Rajesh Patil invited you to join Suryodaya Solar"
-- The company name and city
-- Their phone number, pre-filled and not editable — the invite was sent
+- Company name and city
+- Their phone number, pre-filled and NOT editable — the invite was sent
   to it
-- "Continue" → goes to OTP (reuse the pattern from 1.1)
-- Then a single screen asking only for their name, with an optional
-  photo
+- Continue (goes to the OTP pattern from 1.1)
 
-STATES: normal, plus the expired-invite state — "This invite has
-expired" with a one-tap "Ask Rajesh to invite me again".
+SCREEN 2 — your profile
+- Name
+- Photo (optional)
+- That is all. Nothing else is asked.
+
+STATE — expired invite
+- "This invite has expired" with a one-tap "Ask Rajesh to invite me
+  again"
+
+[+ BOTH VIEWPORTS block]
 ```
 
 ---
 
-### 1.6 · Your role, explained
+## 1.6 · Your role, explained  ▸ journey Stage 1
 
 ```
-Design the first-run role explainer for mobile, 375px.
+Design the first-run role explainer.
 
-WHO: an employee who just joined, before they see the app
+WHO: an employee who just joined, before they see the app for the first
+time
 GOAL: they understand what they can and cannot do, in one screen
 
 SHOWS:
 - "You're a Sales Rep"
-- Three short lines of what that means:
+- Three short lines:
   · You'll see the leads assigned to you
   · You can create designs, quotes and send proposals
   · Your owner approves discounts
-- A single "Got it" button
+- One "Got it" button
 
-If the person holds several roles — for example Sales Rep and Surveyor —
-show both, and say they can do both jobs.
+MULTI-ROLE VERSION: a person can hold several roles at once. Show a
+second version for someone who is both Sales Rep and Surveyor — it lists
+both and says they can do both jobs.
 
-Keep this to ONE screen. Never a swipeable carousel.
+ONE screen. Never a swipeable carousel, never more than three lines.
 
-STATES: single role, and the multi-role version.
+Also show what comes immediately after: at most THREE dismissible coach
+marks on the screen they actually land on. Not a tour.
+
+[+ BOTH VIEWPORTS block]
 ```
 
 ---
 
 ## After Phase 1 — STOP
 
-Bring all six screens back and run the nine-point review gate. Do not start Phase 2 until
-Phase 1 is reviewed and fixed.
+Run the nine-point review gate. Bring all six screens back to Claude Code and say
+**"review these against the design system"**.
+
+Do not start Phase 2 until Phase 1 is reviewed and fixed.
+
+**Not in Phase 1, deliberately:** company profile (logo, GSTIN, bank details) and invite-
+team are skippable in the journey and are collected later — they are built in Phase 8
+alongside the other settings screens.
