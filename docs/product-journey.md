@@ -47,6 +47,7 @@ Not optional, and they shape the UI:
 | D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
+| D30 | **Survey has two modes: REMOTE (address → Google Solar API → AI roof detection, minutes, no travel) and PHYSICAL (on site).** Remote is the default first pass for residential and is enough to design and quote; the physical visit becomes verification before installation rather than a prerequisite for quoting. Remote data is labelled **derived from imagery**, physical data **measured on site**. | 2026-07-21 |
 | D27 | **Six fixed preset roles; one person may hold SEVERAL.** Permission granted if any held role grants it; lead visibility takes the widest. Solves the small-firm "one person does three jobs" case without a custom-role builder. | 2026-07-21 |
 | D28 | **No per-person permission exceptions, ever.** To know what someone can do, you look at their roles — one source of truth. Exceptions are how permission systems become unauditable. | 2026-07-21 |
 | D29 | **Custom roles deferred to v2.** Ship the six, watch which combinations companies actually ask for, then add the presets they wanted — rather than guessing at a checkbox editor nobody fills in. | 2026-07-21 |
@@ -65,7 +66,7 @@ Not optional, and they shape the UI:
  STAGE 1   User onboarding           employee joins, learns their job
  STAGE 2   Lead capture              lead arrives from any channel
  STAGE 3   Qualify & assign          owner/rep triages, assigns, schedules
- STAGE 4   Site survey               surveyor captures the roof, offline
+ STAGE 4   Site survey               ⚡ REMOTE (Solar API, minutes) or PHYSICAL (on site)
  STAGE 5   Design                    the existing studio → variants → sign-off
  STAGE 6   Quote & proposal          BOM → approval → send on WhatsApp
  STAGE 7   Follow-up & close         tracking, VOICE AGENT, negotiate, won/lost
@@ -247,9 +248,84 @@ represent that cleanly, reps keep it in their head — and that is how pipeline 
 
 ## STAGE 4 — Site survey
 
+> ### ⚡ There are TWO survey modes, and remote is often the first one
+>
+> **The app can survey a roof without anyone going there.** Type an address and Google
+> Solar API returns building insights and elevation data; the existing AI roof detection
+> traces the roof, finds obstructions and estimates pitch and azimuth from real DSM
+> rasters. A designable roof, from a desk, in minutes.
+>
+> ```
+> REMOTE SURVEY                          PHYSICAL SURVEY
+> address → Solar API → roof + shading   someone goes and photographs it
+>
+> minutes, no travel, no appointment     hours, travel, needs the customer home
+> enough to DESIGN and QUOTE             confirms reality before installing
+> data is DERIVED from imagery           data is MEASURED on site
+> ```
+>
+> **This is a competitive weapon, not a shortcut.** C1 says speed of first callback decides
+> who wins the job — a company that sends a real, design-backed proposal the same afternoon
+> beats one that books a visit for next Tuesday.
+>
+> **The sequence changes:** for residential, remote survey → design → proposal → *then* a
+> physical visit once the customer is interested. The site visit becomes **verification
+> before installation**, not a prerequisite for quoting.
+>
+> The 3D/design part of the product implements this. The UX must make the choice obvious
+> and make the difference in confidence honest.
+
+### Which mode, and when
+| | Use remote | Use physical |
+|---|---|---|
+| **Residential, simple roof** | ✅ default | after they show interest |
+| **C&I, large or complex** | start here | ✅ always, before quoting |
+| **Solar API has no data** | not possible | ✅ required |
+| **Roof recently modified** | unreliable | ✅ required |
+| **Before installation** | never enough | ✅ always |
+
+### The honesty consequence
+Remote data is **derived from satellite imagery**; physical data is **measured on site**.
+The product already labels numbers this way (N7), and it must here too:
+
+> *Roof measured from satellite imagery. A site visit will confirm dimensions, shading and
+> electrical access.*
+
+A proposal built on remote data is legitimate and sellable — it just must not claim to be
+a site survey. **This is the same rule as Path B in Stage 6B**, applied a layer earlier.
+
+### What remote CANNOT tell you
+Worth stating on screen, because it is what a site visit is actually for:
+- The meter, the sanctioned load, the main panel and whether it has room
+- Roof condition, age, waterproofing, structural doubts
+- Access — stairs, lift, crane, lane width for a truck
+- Shading from anything not visible from above (a neighbour's wall, a tree at ground level)
+- Whether the customer actually owns that roof
+
+---
+
+### Mode A · Remote survey
+**Who:** rep or designer, at a desk, minutes after the lead arrives.
+
+| Screen | Contains |
+|---|---|
+| **Address entry** | Search or drop a pin. Satellite preview with the building highlighted. |
+| **Detecting** | Honest progress — "fetching imagery · detecting roof · estimating shading". Fails gracefully. |
+| **Review detection** | The detected roof as an editable overlay: outline, obstructions, pitch, area. **Accept / adjust / reject** — never applied silently. Confidence shown per detection. |
+| **Coverage failure** | *"No detailed roof data available for this address."* → offer manual outline, or book a physical survey. **Not a dead end.** |
+| **Gaps to fill** | What remote could not determine (the list above), each with "ask the customer" or "capture on site". |
+
+**Goes wrong:** address resolves to the wrong building · Solar API has no coverage (real
+in parts of India) · imagery is years out of date and the roof has changed · a tall
+neighbouring building is missed · roof detected but obviously wrong → the customer must
+always be able to correct it.
+
+---
+
+### Mode B · Physical survey
 **Who:** whoever the survey task is assigned to (D15). **On a phone, on a roof, in the sun,
 often with one bar of signal or none.**
-**Goal:** capture everything the designer needs, so nobody has to go back.
+**Goal:** capture everything remote could not, so nobody has to go back.
 
 ### The constraint that shapes everything
 **Offline is the normal case, not the edge case.** A terrace in a dense Pune neighbourhood
@@ -860,8 +936,13 @@ right whoever, or whatever, is speaking.)*
 **They receive:** a WhatsApp confirming the site visit — date, time, name of who is
 coming, and the person's phone number.
 
-### C3 · The site visit
-**They experience:** somebody on their roof for 30–45 minutes with a phone.
+### C3 · The site visit — *which may not happen yet (D30)*
+**If the roof was surveyed remotely**, the customer experiences *nothing here* — and gets
+their proposal the same day instead of next week. That speed is often what wins the job.
+The visit then happens after they show interest, to verify before installation.
+
+**If a physical survey happens first**, they experience somebody on their roof for 30–45
+minutes with a phone.
 
 What builds trust: the surveyor explaining what they are photographing and why. What
 destroys it: silent photographing, then leaving without saying what happens next.
