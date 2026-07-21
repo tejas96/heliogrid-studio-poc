@@ -21,7 +21,8 @@ Companions (already done, do not duplicate here):
 | D1 | Residential **and** C&I, both high volume | 2026-07-20 |
 | D2 | Full mobile parity — every screen works at 375px, including the design studio | 2026-07-20 |
 | D3 | Brand: "Instrument" — warm graphite + brass, ink label on brass fills | 2026-07-20 |
-| D4 | WhatsApp is the primary customer channel; email secondary | 2026-07-20 |
+| D4 | ~~WhatsApp is the primary customer channel; email secondary~~ **SUPERSEDED by D32.** | 2026-07-20 |
+| D32 | **No WhatsApp integration in v1.** The rep taps **Download PDF** and **Copy link**, then pastes both into their own WhatsApp. WhatsApp remains the channel customers actually use — the app just does not send on their behalf. **The link is ours, so opens ARE tracked**; delivery is not, because we do not control the sending. | 2026-07-21 |
 | D5 | Customer never logs in — tokenised link only | 2026-07-20 |
 | D6 | Tailwind + Radix in code; Claude Design for screens | 2026-07-20 |
 | D7 | Three audiences: company **owner**, **employees**, and the **EPC's customer** | 2026-07-21 |
@@ -73,7 +74,7 @@ Not optional, and they shape the UI:
  STAGE 3   Qualify & assign          owner/rep triages, assigns, schedules
  STAGE 4   Site survey               ⚡ REMOTE (Solar API, minutes) or PHYSICAL (on site)
  STAGE 5   Design                    the existing studio → variants → sign-off
- STAGE 6   Proposal                  11 steps → approval → send on WhatsApp
+ STAGE 6   Proposal                  11 steps → approval → PDF + link, shared by rep
  STAGE 7   Follow-up & close         tracking, VOICE AGENT, negotiate, won/lost
  STAGE 8   Handover                  won deal → execution (scope TBD, Q1)
  ─────────
@@ -226,12 +227,12 @@ it will not get done.
 | **Assign** | Pick a rep, or use a rule. Shows each rep's current open load so you do not bury someone. |
 | **Lead detail** | Header: name, phone, city, value, stage, owner. Then activity timeline, site info, designs, proposals, tasks, files. Actions: Call · WhatsApp · Log activity · Book visit · Create design. |
 | **Qualification** | Six things that decide whether this is real: monthly bill ₹, roof ownership (own/rent), roof type, shading obvious?, timeline, decision maker. Inline, not a separate form. |
-| **Book site visit** | Date, time, surveyor, address confirm. Sends the customer a WhatsApp confirmation. |
+| **Book site visit** | Date, time, surveyor, address confirm. Gives the rep a ready-to-paste confirmation message to send the customer (D32 — the app does not send). |
 | **Disqualify** | Requires a reason: renting · budget · not interested · unreachable · already installed · wrong number. **The reason list is the most valuable analytics in the product.** |
 
 ### Happy path
 Assigned → rep calls within the hour → qualifies on the call → books the site visit →
-customer gets a WhatsApp confirmation.
+rep sends the customer the ready-made confirmation message.
 
 ### What goes wrong
 - **Customer does not answer** → log the attempt, auto-schedule a retry; after 3 failed
@@ -471,12 +472,13 @@ logic in there took months and is test-covered.
 | **Discount request** | Rep asks for a discount → goes to the owner with a reason (D19). |
 | **Approval queue** | Owner's list of pending discount requests with the margin impact shown. |
 | **Proposal preview** | Exactly what the customer will see, before sending. |
-| **Send** | Channel (WhatsApp default), message preview, attachments. One clear send. |
-| **Delivery tracking** | Sent → delivered → opened → viewed for how long. Feeds the follow-up. |
+| **Share** | Two actions: **Download PDF** and **Copy link**. Plus a suggested message the rep can copy. The rep pastes into their own WhatsApp — the app does not send (D32). Marking it shared is what starts the clock. |
+| **Link tracking** | Shared → opened → viewed for how long. **No "delivered" state** — we do not control the sending, so we cannot know it arrived. Only that the link was opened. |
 
 ### Happy path
-Design approved → proposal pre-filled from the BOM → margin applied → preview → send on
-WhatsApp → delivered → a follow-up task is created automatically for +2 days.
+Design approved → proposal pre-filled from the BOM → margin applied → preview → Download
+PDF + Copy link → rep pastes into WhatsApp → marks it shared → a follow-up task is created
+automatically for +2 days → when the customer opens the link, the rep is notified.
 
 ### What goes wrong
 - **Design changed after the proposal was built** → its pricing is stale; **money must
@@ -842,12 +844,12 @@ are not just words on a PDF. **They are the project's collection schedule.**
 ```
 10%  on booking          ✅ received   12 Aug   ₹45,247
 60%  on material dispatch ✅ received   14 Aug   ₹2,71,483
-20%  on installation      🔵 due now    ₹90,494   [Request on WhatsApp]
+20%  on installation      🔵 due now    ₹90,494   [Copy request message]
 10%  on commissioning     ⬜ upcoming   ₹45,247
 ```
 
 When a stage completes, the matching tranche becomes due and the coordinator can request
-it on WhatsApp in one tap. **This is the feature an EPC owner will actually pay for** —
+a ready-to-paste request message in one tap. **This is the feature an EPC owner will actually pay for** —
 solar businesses die of cash flow, not of bad design software, and money owed against a
 milestone that has already passed is the most common leak.
 
@@ -856,12 +858,12 @@ milestone that has already passed is the most common leak.
 |---|---|
 | **Projects board** | Won deals as cards by stage. Each: customer, size, value, days in stage, **payment collected vs due**, blocker flag. Aged cards surface. Mobile = one column with a stage filter; desktop = the full board. |
 | **Project detail** | Stage timeline, the approved design, the accepted proposal, **payments**, documents, blockers, activity. One screen the coordinator lives in. |
-| **Payments** | The tranche schedule above. Mark received, request on WhatsApp, record mode (UPI/NEFT/cheque), attach receipt. |
+| **Payments** | The tranche schedule above. Mark received, copy a ready-made request message, record mode (UPI/NEFT/cheque), attach receipt. |
 | **Document checklist** | Signed proposal · advance receipt · net-metering application · DISCOM approval · **subsidy application & sanction** · commissioning certificate · warranty documents · handover pack. Each: pending / uploaded / verified. |
 | **Blockers** | Explicit, with a reason and who is waiting on whom: *waiting on DISCOM* · *waiting on customer* (site access, documents) · *waiting on material* · *waiting on us*. **The "waiting on customer" state is the one that protects the EPC.** |
 | **Installation** | ↳ reuses the **existing InstallationSheet** — foundation → legs → rafters → purlins → modules → stringing → BOS, derived from the structural model, crew ticks persisted. **Do not rebuild it.** |
 | **Customer progress link** | Same tokenised URL as the proposal. Shows stages, what is done, what is waiting and why, expected dates. |
-| **Handover** | Document pack sent on WhatsApp, project closed, referral asked for. |
+| **Handover** | Document pack downloaded and shared by the rep, project closed, referral asked for. |
 
 ### Happy path
 Won → project created automatically from the deal → coordinator moves it stage by stage →
@@ -874,7 +876,7 @@ pack sent → closed.
   approval, applied 15 Aug, typically 3–6 weeks"* — this single line prevents most support
   calls
 - **Customer not paying a due tranche** → visible on the board and in the owner's dashboard;
-  reminders go on WhatsApp; **never block the customer's progress link over money** — chase
+  the rep is prompted to chase; **never block the customer's progress link over money** — chase
   the person, do not punish the view
 - **Customer blocks access** (nobody home, terrace locked) → *waiting on customer* with the
   date it started, so responsibility for the delay is recorded and visible
@@ -1089,7 +1091,7 @@ here rather than being rebuilt.)*
 ### C12 · Commissioning & handover
 **They experience:** the system switching on, and a pile of documents.
 
-**They receive:** the handover pack on WhatsApp — warranty documents, commissioning
+**They receive:** the handover pack — warranty documents, commissioning
 certificate, net-metering approval, and how to read their generation.
 
 This is the moment they will decide whether to refer you. **Ask for the referral here**,
@@ -1308,7 +1310,7 @@ here (N7, D21).
   unanswered-questions list
 - **Owner sees a big "deals touched" number and over-trusts it** → the caveat is on the
   screen, not in a tooltip
-- **Nobody opens this screen** → a monthly summary goes to the owner on WhatsApp, where
+- **Nobody opens this screen** → a monthly summary is pushed to the owner in-app, where
   they actually read things
 
 ---

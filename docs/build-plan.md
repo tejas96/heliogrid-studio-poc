@@ -126,7 +126,7 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 | 3.2 | **Proposal builder — step 8** (Components) + Apply a kit | Stage 6B |
 | 3.3 | **Proposal builder — step 7** (Payment terms) — tranche pattern | Stage 6B |
 | 3.4 | **Proposal preview** | Stage 6B |
-| 3.5 | **Send proposal** (WhatsApp) + delivery tracking | Stage 6 |
+| 3.5 | **Share proposal** — Download PDF + Copy link + link tracking | Stage 6 |
 
 **Review focus:** Does the 11-step shell work at 375px without a chip scroller? Is step 3
 readable with all its pricing fields? Does the mandatory-components gate feel helpful or
@@ -184,7 +184,7 @@ editable distinction visible? Does "deals it touched" state its limit honestly?
 |---|---|---|
 | 7.1 | **Projects board** — stages, days-in-stage, blockers | Stage 8 |
 | 7.2 | **Project detail** | Stage 8 |
-| 7.3 | **Payments** — tranches, request on WhatsApp | Stage 8 |
+| 7.3 | **Payments** — tranches, copy a request message | Stage 8 |
 | 7.4 | **Document checklist** + blockers | Stage 8 |
 
 **Review focus:** Can the owner see what's stuck in three seconds? Does the payment schedule
@@ -537,7 +537,7 @@ mobile and desktop:
 
 1. OVERDUE (2) — red, always first
    · Priya Sharma · Nashik · follow-up 3 days late · 8.2 kWp · ₹4,52,000
-   · Anand Traders · Pune · proposal unopened 5 days · 180 kWp ·
+   · Anand Traders · Pune · proposal not opened · 5 days · 180 kWp ·
      ₹92,00,000
 
 2. TODAY (5) — with times
@@ -648,8 +648,7 @@ Book site visit · Create design
 SECTIONS:
 
 1. ACTIVITY TIMELINE — newest first, mixed human and agent entries:
-   · Today 09:12 — Proposal sent on WhatsApp · delivered · not yet
-     opened
+   · Today 09:12 — Proposal shared · link not opened yet
    · Yesterday 16:40 — 🤖 Agent called · 2 min · interested · "asked
      about subsidy, wants callback Thursday 4pm" · [Transcript]
    · 18 Jul — Site survey completed by Amit
