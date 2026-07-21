@@ -116,17 +116,20 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 
 ---
 
-## PHASE 3 · The money path  ▸ 5 screens
+## PHASE 3 · The money path  ▸ 6 screens
 
 **Goal: the proposal builder.** Highest-traffic surface in the product.
 
+📄 **Prompts: `docs/phase-3-prompts.md`**
+
 | # | Screen | Journey ref |
 |---|---|---|
-| 3.1 | **Proposal builder — step 3** (Solar System Setup) — the densest step | Stage 6B |
-| 3.2 | **Proposal builder — step 8** (Components) + Apply a kit | Stage 6B |
-| 3.3 | **Proposal builder — step 7** (Payment terms) — tranche pattern | Stage 6B |
-| 3.4 | **Proposal preview** | Stage 6B |
-| 3.5 | **Share proposal** — Download PDF + Copy link + link tracking | Stage 6 |
+| 3.1 | **Entry + the 11-step shell** — with design / without / duplicate | Stage 6B |
+| 3.2 | **Step 3 — Solar System Setup** — the densest screen in the product | Stage 6B |
+| 3.3 | **Step 8 — Components** + Apply a kit (the mandatory gate) | Stage 6B |
+| 3.4 | **Step 7 — Payment terms** — tranches totalling 100% | Stage 6B |
+| 3.5 | **Proposal preview** — with the Path B estimate label | Stage 6B |
+| 3.6 | **Share proposal** — Download PDF + Copy link + link tracking | Stage 6 |
 
 **Review focus:** Does the 11-step shell work at 375px without a chip scroller? Is step 3
 readable with all its pricing fields? Does the mandatory-components gate feel helpful or
@@ -236,11 +239,15 @@ connect the codebase and improve one at a time. Do not reinvent.
 
 ## Progress
 
+**Prompt files:** Phases 1–2 are inline below (historical). **Phase 3 onward each gets its
+own file** — `docs/phase-3-prompts.md`, `phase-4-prompts.md`, … — so no file grows
+unmanageable. This document stays the index and the tracker.
+
 | Phase | Screens | Status | Reviewed |
 |---|---|---|---|
-| 1 · Entry & onboarding | 6 | ⬜ not started | — |
-| 2 · Pattern foundation | 4 | ⬜ | — |
-| 3 · Money path | 5 | ⬜ | — |
+| 1 · Entry & onboarding | 6 | ✅ built | ✅ |
+| 2 · Pattern foundation | 4 | ✅ built | ✅ |
+| 3 · Money path | 6 | ⬜ next | — |
 | 4 · Customer side | 3 | ⬜ | — |
 | 5 · Survey | 4 | ⬜ | — |
 | 6 · Voice agent | 4 | ⬜ | — |
