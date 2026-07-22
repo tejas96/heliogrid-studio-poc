@@ -116,7 +116,7 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 
 ---
 
-## PHASE 3 · The money path  ▸ 6 screens
+## PHASE 3 · The money path  ▸ 8 screens
 
 **Goal: the proposal builder.** Highest-traffic surface in the product.
 
@@ -130,6 +130,11 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 | 3.4 | **Step 7 — Payment terms** — tranches totalling 100% | Stage 6B |
 | 3.5 | **Proposal preview** — with the Path B estimate label | Stage 6B |
 | 3.6 | **Share proposal** — Download PDF + Copy link + link tracking | Stage 6 |
+| 3.7 | **Steps 1, 2, 10, 11** — company, achievements, client, bank (one page) | Stage 6B |
+| 3.8 | **Steps 4, 5, 6, 9** — performance, financial, timeline, T&C (one page) | Stage 6B |
+
+⚠️ **No bottom navigation anywhere in Phase 3** — the builder is a nested flow.
+⚠️ **One page per screen**; every state is a frame on that page, not a new page.
 
 **Review focus:** Does the 11-step shell work at 375px without a chip scroller? Is step 3
 readable with all its pricing fields? Does the mandatory-components gate feel helpful or

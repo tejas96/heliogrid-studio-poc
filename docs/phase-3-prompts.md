@@ -25,18 +25,73 @@ Worklist and review gate: `build-plan.md`.
 
 ---
 
+## ⚠️ TWO RULES FOR THIS WHOLE PHASE
+
+### 1 · NO BOTTOM NAVIGATION anywhere in the proposal builder
+
+The builder is a **nested flow**, not a top-level destination. It is entered from a lead
+and exited by finishing or cancelling.
+
+| Bottom arc nav appears | Bottom arc nav does NOT appear |
+|---|---|
+| My Day · Leads · Projects · More | **Every screen in Phase 3** |
+| Top-level destinations only | Builder steps · preview · share |
+
+On mobile a builder screen is **full-screen**, with a close ✕ or back ‹ in the header and
+the step footer at the bottom. Showing the tab bar implies the user can wander off
+mid-proposal, which they cannot.
+
+### 2 · DO NOT CREATE A NEW PAGE FOR EVERY PROMPT
+
+Claude Design tends to add a new page each time. Most of what follows is a **state or an
+extension of an existing screen**, not a new screen.
+
+**One page per screen. Every state of that screen lives on that same page.**
+
+```
+3.1 Entry + shell     → page "3.1 Proposal builder — shell"
+3.2 Step 3            → page "3.2 Step 3 — Solar System"   ← built
+3.3 Step 8            → page "3.3 Step 8 — Components"
+3.4 Step 7            → page "3.4 Step 7 — Payment terms"
+3.5 Preview           → page "3.5 Proposal preview"
+3.6 Share             → page "3.6 Share proposal"
+```
+
+Everything else — a sheet opening, a validation error, an empty state, a filled state, a
+warning — is a **frame on the page it belongs to**, never a new page. The battery sheet is
+part of step 3. The component edit sheet is part of step 8. The tracking states are part
+of share.
+
+Put this at the top of every prompt:
+
+```
+Create ONE page for this screen. All states below are frames on that
+same page, side by side. Do NOT create a separate page per state, and
+do not create pages for sheets, errors or variants.
+```
+
+And when adding to something already built:
+
+```
+This MODIFIES the existing "[page name]" page. Do not create a new page.
+Add these frames beside the existing ones.
+```
+
+---
+
 ## The viewport block — attach to EVERY prompt in this phase
 
 ```
 BOTH VIEWPORTS, one design, genuinely different layouts:
 
-· MOBILE 375px — bottom arc nav where the shell shows it, single column,
-  content as cards, primary action within thumb reach, secondary panels
-  open as bottom sheets
+· MOBILE 375px — NO bottom navigation (this is a nested flow). Full
+  screen, close ✕ in the header, step footer pinned at the bottom.
+  Single column, content as cards, secondary panels open as bottom
+  sheets.
 
-· DESKTOP 1440px — NO bottom nav. A 240px left sidebar with icons AND
-  text labels. Multiple columns. Denser rows, not cards. Secondary
-  panels open beside the content, not over it. Rows have hover states.
+· DESKTOP 1440px — the 240px left sidebar stays visible but the builder
+  occupies the main content area. Multiple columns. Denser rows, not
+  cards. Secondary panels open beside the content, not over it.
 
 Same data and copy in both. Desktop is not a stretched phone — if the
 two layouts look alike, the desktop one is wrong.
@@ -262,6 +317,18 @@ Battery    — Capacity kWh · Chemistry · Warranty
 All types also have: Description, max 110 characters with a live count.
 Cancel · Done.
 
+── VALIDATION ──
+- Panel or Inverter count of 0 or blank → "Enter how many"
+- Negative count → not allowed
+- Description over 110 characters → the counter turns to a warning and
+  Done is blocked; the text is NOT truncated silently
+- Removing the last brand from a category → that category returns to
+  Empty and the footer counter drops
+- A category left Empty → Generate is blocked (see the gate below)
+- Battery category present but empty, when a battery was added in
+  step 3 → blocked with "This system has a battery — add the battery
+  component"
+
 ── STATES TO SHOW ──
 1. Empty — nothing selected, "0 / 5", kit picker prominent
 2. A kit applied — all five filled in one action
@@ -320,9 +387,15 @@ Generate is blocked unless it totals exactly 100%.
 ── VALIDATION ──
 - A tranche of 0% → not allowed, remove it instead
 - A negative percentage → not allowed
+- A single tranche over 100% → capped, with the total shown as over
 - An empty label → "Give this tranche a name" — the customer sees these
   words on the proposal
+- Duplicate labels → allowed but warned: "Two tranches are both called
+  'On delivery' — the customer will not be able to tell them apart"
 - Fewer than one tranche → at least one is required
+- Total not exactly 100% → Generate blocked, remainder stated
+- Changing the client-payable figure in step 3 → all rupee values here
+  recalculate, and the change is flagged so the rep notices
 
 ── STATES TO SHOW ──
 1. A template applied — a clean 100%
@@ -471,6 +544,146 @@ a delivered tick.
 
 MOBILE: the two share actions as large buttons, message in a card below.
 DESKTOP: share panel on the left, live tracking timeline on the right.
+
+[+ VIEWPORT BLOCK]
+```
+
+---
+
+# 3.7 · The simple steps — 1, 2, 10, 11
+
+**One page, four frames.** These are plain forms and follow the patterns already set.
+
+```
+Design four steps of the proposal builder on ONE page. These are simple
+forms — do not create four separate pages.
+
+Use the 11-step shell from 3.1. NO bottom navigation.
+
+── STEP 1 · COMPANY ──
+- Phone number — LOCKED, shown with a link icon: "from your account"
+- Company name — required
+- Email — LOCKED, "from your account"
+- Website — optional
+- Company address — optional
+- Company logo — current logo shown as a swatch, with "Change logo".
+  Constraints stated inline: max 5 MB, PNG or JPG
+
+Validation: company name required; logo over 5 MB → "That file is 7.2 MB.
+Maximum is 5 MB"; wrong format → "Use a PNG or JPG file".
+
+Locked fields must look deliberately locked — not disabled-and-broken.
+
+→ After Next on this step, a PROPOSAL TYPE sheet appears:
+   "Choose proposal type"
+   · CAPEX — purchase outright
+   · OPEX / PPA — per-unit billing  [PRO badge]
+   Back · Continue
+
+── STEP 2 · ACHIEVEMENTS (optional) ──
+- About your company — textarea, noted as "shown on the proposal cover"
+- Total capacity installed in kW → displays as "200 kW"
+- Happy customers → displays as "350+"
+- Cities served → displays as "10+"
+
+Numbers only; units are added automatically. Entirely skippable — show a
+clear "Skip this step" that does not feel like failure.
+
+── STEP 10 · CLIENT DETAILS ──
+- Proposal number — auto-generated, disabled, e.g. HG-2026-0142
+- Prepared by — required, defaults to the logged-in user
+- Prepared for — required, pre-filled from the lead
+- Client address — required
+- Client phone — required, 10 digits
+- Date — required, defaults to today
+- Time generated — auto
+- Customer support number — optional
+
+Validation: phone must be 10 digits and start 6–9; required fields
+marked; date cannot be in the past.
+
+── STEP 11 · BANK DETAILS (optional) ──
+- "Include bank details in the proposal" — toggle, off by default
+- Bank name · Account name · Account number · IFSC code
+
+When the toggle is OFF, show the note: "Your details are saved but will
+not be printed on the proposal."
+
+Validation: IFSC must be 11 characters, format 4 letters + 0 + 6
+alphanumeric → "That doesn't look like a valid IFSC. Example: HDFC0001234";
+account number 9–18 digits.
+
+── STATES PER STEP ──
+empty · filled · validation error · (step 2 and 11) skipped
+
+Create ONE page with all four steps as frames side by side.
+
+[+ VIEWPORT BLOCK]
+```
+
+---
+
+# 3.8 · The rich steps — 4, 5, 6, 9
+
+**One page, four frames.** These have charts, reorderable rows and rich text.
+
+```
+Design four more steps of the proposal builder on ONE page.
+
+Use the 11-step shell from 3.1. NO bottom navigation.
+
+── STEP 4 · PERFORMANCE METRICS ──
+- A prominent "✦ AI auto-fill" action at the top
+- A chart with three tabs: Generation · Savings · ROI
+- Fields: Efficiency / PR % (required, 50–100) · Monsoon dip %
+  (required, 0–50) · Units per kW per day (required)
+- "↺ Reset to AI values" — only visible once a value has been edited
+
+PROVENANCE: when values come from a DESIGN they are derived from a real
+shading simulation. When AI-filled without a design they are estimates.
+Label which is which — this is what the proposal's honesty line depends
+on.
+
+── STEP 5 · FINANCIAL DATA ──
+- The same "✦ AI auto-fill" and the same three-tab chart
+- Fields: Yearly savings ₹ (required) · Payback years (required) ·
+  Lifetime savings in lakhs over 25 years (required) · Electricity
+  inflation % (required, around 6%)
+- "↺ Reset to AI values"
+
+Validation: payback longer than 25 years → warn, "That is longer than
+the system's expected life"; inflation above 15% → warn as unrealistic.
+
+── STEP 6 · PROJECT TIMELINE ──
+Reorderable phase rows. Each: Title (required, with a character count)
+and Description (required, with a character count). Each row has ⌃ ⌄ to
+reorder and 🗑 to delete.
+Default phases, editable:
+  1. Site survey & design — 2 days
+  2. Material procurement — 5 to 7 days
+  3. Installation — 1 to 2 days
+  4. Net metering & DISCOM approval — 3 to 6 weeks
+  5. Commissioning & handover — 1 day
+Controls: "↺ Reset to system default" · "＋ Add step"
+
+Validation: at least one phase; empty title or description blocks
+Generate.
+
+── STEP 9 · TERMS & CONDITIONS (optional, up to 3 pages) ──
+- First an Add / Skip choice
+- When added: an "include our logo" toggle, a rich-text toolbar and
+  editor, "Save as template", a live character count, and an approximate
+  PDF page count
+- Warn when it exceeds 3 pages
+
+── STATES PER STEP ──
+- Step 4: AI-filled · manually edited (reset visible) · derived from a
+  design vs estimated
+- Step 5: AI-filled · edited · an unrealistic-payback warning
+- Step 6: default phases · reordered · a row mid-drag · empty-field error
+- Step 9: the skip choice · editor with content · over 3 pages
+
+Create ONE page with all four steps as frames side by side.
 
 [+ VIEWPORT BLOCK]
 ```
