@@ -142,15 +142,29 @@ punishing?
 
 ---
 
-## PHASE 4 · The customer's side  ▸ 3 screens
+## PHASE 4 · The customer's side  ▸ ONE page, ONE prompt
 
-**Goal: what a stranger sees on their phone.** No login, no context, ₹8 lakh decision.
+**Goal: what a stranger sees on their phone.** No login, no context, ₹3.5 lakh decision.
 
-| # | Screen | Journey ref |
+📄 **Prompt: `docs/phase-4-prompts.md`** — a single end-to-end prompt.
+
+Not three screens: **one link, three lives.** The same URL is the proposal, then the
+progress tracker, then the document pack. Eight lifecycle and edge states as frames on one
+page.
+
+| State | Covers | Journey ref |
 |---|---|---|
-| 4.1 | **Customer proposal link** — the single most important screen in the product | C5 |
-| 4.2 | **Accept / Ask a question** | C8 |
-| 4.3 | **Customer progress link** (same URL, post-Won) | C10 / Stage 8 |
+| A | Proposal, with a design | C5 |
+| B | Proposal, no design — the estimate label | C5 / Stage 6B |
+| C | Ask a question | C6 |
+| D | Accept → confirm → confirmed | C8 |
+| E | **Project progress** — the DISCOM waiting line | C10 / Stage 8 |
+| F | Handover complete | C12 |
+| — | 7 edge states: loading, expired, invalid, superseded, already accepted, declined, slow | — |
+| — | State A in Hindi | D25 |
+
+⚠️ **No app navigation at all** — this is a public web page, not the app.
+⚠️ **The EPC's branding**, not HelioGrid's. The customer sees *Suryodaya Solar*.
 
 **Review focus:** Would a 55-year-old homeowner in Nashik understand this in 30 seconds?
 Does the estimate label read as honest rather than hedging? One link, three lives — does it
