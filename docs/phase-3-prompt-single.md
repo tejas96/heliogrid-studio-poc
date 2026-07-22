@@ -17,7 +17,7 @@ The earlier prompts covered the builder but not the feature. This adds:
 | **Navigation** | No entry point — sidebar on desktop, More on mobile |
 | **Standalone creation** | A walk-in customer forced you to create a lead first, then start over |
 | **Versions** | The journey says a change creates v2 and preserves v1. No screen showed it. |
-| **Discount request + approval** | D19 says the owner approves *every* discount. A two-screen workflow that did not exist — so step 3's discount field wrote a number nobody approved. |
+| ~~Discount approval~~ | **Dropped for this release.** Anyone who can create a proposal can apply a discount and share it. No request, no queue, no pending status. |
 | **BOM detail** | Path A's line items had nowhere to be seen |
 
 ---
@@ -87,8 +87,9 @@ An Indian solar EPC company sells rooftop and commercial solar. A
 proposal is the customer-facing document containing the system, the
 generation estimate, the price and the terms. It is built in 11 steps.
 
-Users here: sales reps (build and share), owners (approve discounts),
-designers (build from a design).
+Users here: sales reps (build and share), designers (build from a
+design), owners. Anyone who can create a proposal can also apply a
+discount and share it — there is no approval step in this release.
 
 Money is Indian: ₹4,52,471 — never ₹452,471. System sizes in kWp.
 
@@ -120,7 +121,6 @@ FROM THE LIST
   "New proposal"                 → Entry, step 1 (who is it for)
   Row, status Draft              → Builder, at its last edited step
   Row, status Shared or Opened   → Proposal detail with tracking
-  Row, status Pending approval   → Proposal detail showing the pending banner
   Row, status Accepted           → Proposal detail, locked
   Row ⋯ menu → Duplicate         → Entry, step 2, duplicate pre-selected
   Row ⋯ menu → Share             → Share screen
@@ -156,20 +156,12 @@ INSIDE THE BUILDER
   Step 9 "Skip"                  → Step 10
   Step 11 "Generate proposal"    → SEE THE GENERATE LOGIC BELOW
 
-GENERATE LOGIC — three outcomes, wire all three
+GENERATE LOGIC — two outcomes, wire both
   a) Something required is missing → jumps to the FIRST incomplete step
      and highlights what is missing
-  b) A discount was applied        → Discount request sheet → Submit →
-     proposal detail showing "Pending approval", Share disabled
-  c) Complete, no discount         → Preview
-
-APPROVAL
-  Owner notification              → Approval queue
-  Queue row "Approve"             → approved state → rep notified →
-                                    Share now enabled
-  Queue row "Reject"              → reason sheet → rep sees the reason →
-                                    "Revise" → Builder step 3
-  Queue row "Approve different"   → amount sheet → approved at that value
+  b) Complete                      → Preview
+  (There is no approval step. A discount does not block anything unless
+   it drives the payable figure to zero or below.)
 
 PREVIEW AND SHARE
   Preview "Edit"                  → the step that content came from
@@ -206,7 +198,6 @@ version · last activity date.
 
 STATUSES, each visually distinct:
   Draft              · still being built, shows "7 of 11"
-  Pending approval   · a discount is awaiting the owner
   Ready              · complete, not yet shared
   Shared             · sent, link not opened
   Opened             · customer viewed it
@@ -218,7 +209,7 @@ USE THESE TEN ROWS:
   Priya Sharma · Nashik · 8.2 kWp · ₹4,52,471 · Shared · v1 · 2d ago
   Anand Traders · Pune · 180 kWp · ₹92,00,000 · Opened · v2 · 4h ago
   Suresh Kulkarni · Kothrud · 6.5 kWp · ₹3,40,000 · Draft 7/11 · v1 · 1d
-  Rohit Mehta · Aundh · 10 kWp · ₹5,60,000 · Pending approval · v1 · 3h
+  Rohit Mehta · Aundh · 10 kWp · ₹5,60,000 · Ready · v1 · 3h ago
   Deshmukh Textiles · Nashik · 250 kWp · ₹1,28,00,000 · Accepted · v3 · 5d
   Kavita Joshi · Wakad · 7.6 kWp · ₹4,10,000 · Ready · v1 · today
   Vikram Deshpande · Baner · 5.4 kWp · ₹2,90,000 · Rejected · v1 · 8d
@@ -509,38 +500,18 @@ Validation: IFSC 11 characters, 4 letters + 0 + 6 alphanumeric →
 "Example: HDFC0001234"; account number 9–18 digits.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BLOCK 5 — DISCOUNT REQUEST & APPROVAL
+DISCOUNTS — NO APPROVAL STEP
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-THE OWNER APPROVES EVERY DISCOUNT. Any discount entered in step 3 puts
-the proposal into "Pending approval" and it cannot be shared until
-approved.
+There is NO discount approval workflow in this release. Anyone who can
+create a proposal can apply a discount and share it immediately. No
+request sheet, no approval queue, no "Pending approval" status, no
+waiting on anyone.
 
-REP SIDE — request:
-A sheet after entering a discount: the amount and percentage, its effect
-on the price, and a required reason ("Customer comparing two other
-vendors"). Submit → the proposal shows "Pending approval · sent to
-Rajesh" and Share is disabled with that explanation.
-
-OWNER SIDE — approval queue:
-A list of pending requests. Each shows: customer · system size ·
-proposal value · discount asked · **the margin impact in ₹, not just a
-percentage** · who asked · the reason · how long it has waited.
-Actions per row: Approve · Reject with a reason · Approve a different
-amount.
-A bulk "Approve all" for small discounts.
-
-REP NOTIFICATION: approved (Share becomes available) or rejected (with
-the owner's reason, and the option to revise and resubmit).
-
-STATES: request sheet · pending state on the proposal · owner queue with
-4 requests · one approved · one rejected with a reason · empty queue.
-
-⚠️ This is a known bottleneck past about three people. Design the
-approval to be one tap from a notification, so it does not become the
-thing that delays every deal.
+The only guard stays in step 3: a discount that drives the client-payable
+figure to ₹0 or below is warned about clearly and blocks Generate.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BLOCK 6 — PREVIEW
+BLOCK 5 — PREVIEW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Exactly what the customer will see, shown to the rep before sharing.
 A paginated document: cover · your system · generation and savings ·
@@ -734,21 +705,13 @@ the switcher; do not summarise them away.
     a. Toggle off — "saved but will not print"
     b. Toggle on, filled  c. IFSC format error
 
-16. DISCOUNT
-    a. Request sheet with the required reason
-    b. Proposal in "Pending approval", Share disabled with the reason
-    c. Owner queue with four requests, margin impact in ₹
-    d. One approved — Share now available
-    e. One rejected with the owner's reason, revise-and-resubmit offered
-    f. Empty queue
-
-17. PREVIEW
+16. PREVIEW
     a. Built FROM a design — no estimate label
     b. Built WITHOUT a design — estimate label visible
     c. Incomplete — shows what is missing, links to that step
     d. Generating the PDF
 
-18. SHARE & TRACKING
+17. SHARE & TRACKING
     a. Ready to share — PDF and link buttons, message preview
     b. Marked as shared, waiting — "Not opened · shared 2 hours ago"
     c. Opened — with time and duration
@@ -757,13 +720,13 @@ the switcher; do not summarise them away.
        noted
     f. Customer accepted — the terminal happy state
 
-19. VERSIONS
+18. VERSIONS
     a. Single version — no comparison offered
     b. Two versions compared, showing only what changed
     c. Three versions
     d. An accepted version, locked
 
-20. BOM DETAIL (Path A only)
+19. BOM DETAIL (Path A only)
     a. Desktop table, grouped by category, with subtotals
     b. Mobile card list — NOT a scrolling table
     c. A single line's detail sheet open
@@ -784,8 +747,8 @@ BEFORE YOU FINISH — check all six
 3. Every item in the CLICK MAP is wired. Starting from the sidebar, a
    reviewer can reach a shared proposal without hitting a dead end.
 4. Every sheet and dialog has a working Cancel or ✕ that goes back.
-5. All three Generate outcomes are wired — missing fields, pending
-   approval, and straight to preview.
+5. Both Generate outcomes are wired — jump to the first missing field,
+   or straight to preview.
 6. It is ONE page. Sheets, errors and variants are frames on it, never
    separate pages.
 ```
@@ -799,6 +762,6 @@ BEFORE YOU FINISH — check all six
 - Does step 10 explain that it will create the lead?
 - Is the 11-step shell usable at 375px **without** a chip scroller?
 - Does the components gate jump to the gaps rather than just refusing?
-- Does the approval queue show **rupee margin impact**, not just a percentage?
+- Can a rep apply a discount and share immediately, with nothing blocking them?
 - Is the BOM a **card list** on mobile, never a wide scrolling table?
 - Does the version comparison show only **what changed**?

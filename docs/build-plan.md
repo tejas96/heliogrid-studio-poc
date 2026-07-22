@@ -122,8 +122,8 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 
 📄 **Prompt: `docs/phase-3-prompt-single.md`** — ONE consolidated prompt, one page.
 *(`phase-3-prompts.md` is the earlier eight-prompt version, superseded. It was missing the
-proposals list, navigation, standalone creation, versions, discount approval and BOM
-detail.)*
+proposals list, navigation, standalone creation, versions and BOM detail. It also still
+carried the discount-approval workflow, which is dropped for this release — D34.)*
 
 | # | Screen | Journey ref |
 |---|---|---|
@@ -490,7 +490,7 @@ SHOWS:
 - Three short lines:
   · You'll see the leads assigned to you
   · You can create designs and send proposals
-  · Your owner approves discounts
+  · You can apply a discount and share it yourself
 - One "Got it" button
 
 MULTI-ROLE VERSION: a person can hold several roles at once. Show a

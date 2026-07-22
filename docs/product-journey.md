@@ -22,6 +22,7 @@ Companions (already done, do not duplicate here):
 | D2 | Full mobile parity — every screen works at 375px, including the design studio | 2026-07-20 |
 | D3 | Brand: "Instrument" — warm graphite + brass, ink label on brass fills | 2026-07-20 |
 | D4 | ~~WhatsApp is the primary customer channel; email secondary~~ **SUPERSEDED by D32.** | 2026-07-20 |
+| D34 | **No discount approval in this release** — supersedes D19. Anyone with permission to create a proposal can apply a discount and share it immediately. No request sheet, no approval queue, no "Pending approval" status. The only guard is arithmetic: a discount driving the client-payable figure to ₹0 or below is warned about and blocks Generate. Rationale: the approval hop was a known bottleneck and the permission to build a proposal already implies the commercial trust. Revisit if a tenant asks for per-rep discount ceilings. | 2026-07-22 |
 | D33 | **C&I customers use the same single link as residential in v1.** No per-contact links, no identity check, no portal accounts. Deferred deliberately — revisit when it hurts. ⚠️ **Known accepted risk:** anyone holding the link can tap Accept, including someone without authority to commit a ₹92 lakh order, and view tracking cannot say *which* stakeholder opened it. The likely later fix is named links per contact plus an OTP at the moment of accepting — reading stays frictionless, only the commitment is verified. | 2026-07-21 |
 | D32 | **No WhatsApp integration in v1.** The rep taps **Download PDF** and **Copy link**, then pastes both into their own WhatsApp. WhatsApp remains the channel customers actually use — the app just does not send on their behalf. **The link is ours, so opens ARE tracked**; delivery is not, because we do not control the sending. | 2026-07-21 |
 | D5 | Customer never logs in — tokenised link only | 2026-07-20 |
@@ -50,7 +51,7 @@ Not optional, and they shape the UI:
 
 | D17 | Voice agent triggers **two ways**: automatically as a safety net (proposal unopened 3d · rep task overdue 2d · 3 failed manual attempts), **and** on demand when a rep hands a lead to it. | 2026-07-21 |
 | D18 | After a call the timeline shows **outcome + one-line summary + interest signal**, with transcript and recording available on tap. | 2026-07-21 |
-| D19 | **The owner approves every discount.** ⚠️ Known bottleneck past ~3 people — mitigated by one-tap approve from the notification, batch approve, and quotes with zero discount needing no approval at all. Revisit when a team passes 5 reps. | 2026-07-21 |
+| D19 | ~~The owner approves every discount.~~ **SUPERSEDED by D34.** | 2026-07-21 |
 | D20 | **Reps see only their own leads.** Managers see the team's, owner sees everything. | 2026-07-21 |
 | D21 | **Two ways to send a proposal: WITH a design, or WITHOUT one.** Both use the same 11-step proposal builder. A design pre-fills most of it; without a design the user types or AI-fills the same fields. See Stage 6B. | 2026-07-21 |
 | D31 | **Mobile navigation is an ARC BAR with an elevated centre**, not a flat five-tab rectangle. Slots: My Day · Leads · **➕ Add lead** (centre) · Projects · More. Centre is brass with an ink glyph and never changes per screen; the verb adapts by role (surveyor = Start survey). **Add this component to the Claude Design system** — see "Arc nav — addition" at the end of this file. | 2026-07-21 |
@@ -75,7 +76,7 @@ Not optional, and they shape the UI:
  STAGE 3   Qualify & assign          owner/rep triages, assigns, schedules
  STAGE 4   Site survey               ⚡ REMOTE (Solar API, minutes) or PHYSICAL (on site)
  STAGE 5   Design                    the existing studio → variants → sign-off
- STAGE 6   Proposal                  11 steps → approval → PDF + link, shared by rep
+ STAGE 6   Proposal                  11 steps → PDF + link, shared by rep
  STAGE 7   Follow-up & close         tracking, VOICE AGENT, negotiate, won/lost
  STAGE 8   Handover                  won deal → execution (scope TBD, Q1)
  ─────────
@@ -461,7 +462,8 @@ logic in there took months and is test-covered.
 > read "Quotation" rather than "Proposal", that is a copy decision — but it is still one
 > object either way.*
 
-**Who:** designer or rep builds it, rep sends it, owner approves discounts.
+**Who:** designer or rep builds it, rep sends it. Whoever can build a proposal can
+discount it and share it — no approval step (D34).
 **Goal:** a price the customer trusts, delivered where they will actually read it.
 
 ### Screens
@@ -470,8 +472,6 @@ logic in there took months and is test-covered.
 | **Proposal builder** | The 11 steps — see Stage 6B for the full specification. |
 | **BOM detail** *(Path A only)* | The line items behind the price: item, spec, qty, unit, rate, GST, total. Comes from the design. **The densest screen in the product — mobile gets a card list with an edit sheet, never a wide table.** Internal; the customer never sees it. |
 | **Proposal versions** | v1 vs v2 with what changed, and why. |
-| **Discount request** | Rep asks for a discount → goes to the owner with a reason (D19). |
-| **Approval queue** | Owner's list of pending discount requests with the margin impact shown. |
 | **Proposal preview** | Exactly what the customer will see, before sending. |
 | **Share** | Two actions: **Download PDF** and **Copy link**. Plus a suggested message the rep can copy. The rep pastes into their own WhatsApp — the app does not send (D32). Marking it shared is what starts the clock. |
 | **Link tracking** | Shared → opened → viewed for how long. **No "delivered" state** — we do not control the sending, so we cannot know it arrived. Only that the link was opened. |
@@ -484,9 +484,9 @@ automatically for +2 days → when the customer opens the link, the rep is notif
 ### What goes wrong
 - **Design changed after the proposal was built** → its pricing is stale; **money must
   never render as final while stale** — this is a hard product rule
-- **Discount exceeds the rep's limit** → blocked, routed to approval, rep can still send
-  the undiscounted version meanwhile
 - **Discount pushes the job below cost** → warned explicitly, with the loss stated in ₹
+- **Discount drives the client-payable figure to ₹0 or below** → the negative is shown and
+  the proposal cannot be generated until it is corrected. The only hard discount guard.
 - **Customer's WhatsApp number is wrong** → delivery fails visibly; offer SMS or email
 - **Customer never opens it** → tracked; this is exactly what the voice agent picks up
 - **Customer asks for changes** → new version, old one preserved; the customer link always
@@ -1046,9 +1046,9 @@ escalates, D10)* · they say stop and get called again *(cannot — irreversible
 
 - **Accept** → they expect immediate acknowledgement. A WhatsApp within seconds, not a
   silence that makes them wonder if the tap registered.
-- **Negotiate** → they ask for a discount. It goes to the owner (D19). **They should not
-  wait two days for an answer** — this is where the owner-approves-everything bottleneck
-  costs real deals.
+- **Negotiate** → they ask for a discount. The rep can apply it and reshare the same day —
+  there is no approval hop (D34). **They should not wait two days for an answer**, and now
+  nothing in the product makes them.
 - **No** → the reason is recorded (Stage 7). They should not then be called for six months.
 
 ### C9 · Paying the advance
@@ -1210,7 +1210,7 @@ owner reviews and personalises. Day one it works; week four it sounds like them.
 | **Proposal templates** | Cover, sections included, default T&C, bank details |
 | **Payment terms** | Named tranche templates — 10/60/20/10, 30/60/10 |
 | **Project timeline** | Default phases and descriptions (Stage 6B, step 6) |
-| **Discount limits** | Currently owner-approves-all (D19); the limit lives here when that changes |
+| **Discount limits** | Not in this release — no approval, no ceiling (D34). Reserved for when a tenant asks for per-rep limits. |
 | **Lead sources** | Which channels are live |
 | **Roles** | Who sees what, who approves what |
 | **Message templates** | WhatsApp proposal message, follow-up nudge, reminder |
@@ -1422,7 +1422,7 @@ completes — 18 unchecked boxes on a blank page.
 | Role | For | Lead visibility |
 |---|---|---|
 | **Owner** | The business owner. Everything, always. Cannot be deleted or restricted. | All |
-| **Manager** | Runs a team. Sees and reassigns the team's leads, approves nothing financial by default. | Team |
+| **Manager** | Runs a team. Sees and reassigns the team's leads, builds and sends proposals. Cannot change company settings, catalog, or billing. | Team |
 | **Sales rep** | Sells. Own leads, own quotes, sends proposals. | Own |
 | **Surveyor** | Visits sites and captures surveys. | Assigned only |
 | **Designer** | Builds designs and quotes. | Assigned only |
@@ -1430,7 +1430,7 @@ completes — 18 unchecked boxes on a blank page.
 
 ### What each preset grants
 
-18 capabilities, phrased in plain language — never as CRUD on entities. This matrix is the
+16 capabilities, phrased in plain language — never as CRUD on entities. This matrix is the
 definition of the presets, and it becomes the checkbox list when custom roles arrive later.
 
 | Capability | Owner | Manager | Sales rep | Surveyor | Designer | Engineer |
@@ -1442,10 +1442,8 @@ definition of the presets, and it becomes the checkbox list when custom roles ar
 | Capture site surveys | ✓ | ✓ | ✓ | ✓ | — | — |
 | Create and edit designs | ✓ | — | — | — | ✓ | — |
 | Approve designs (sign-off) | ✓ | — | — | — | — | ✓ |
-| Create and edit proposals | ✓ | ✓ | ✓ | — | ✓ | — |
+| Create and edit proposals *(includes applying discounts)* | ✓ | ✓ | ✓ | — | ✓ | — |
 | Send proposals to customers | ✓ | ✓ | ✓ | — | — | — |
-| Apply discounts | ✓ | ✓ | ✓ | — | — | — |
-| **Approve discounts** | ✓ | — | — | — | — | — |
 | Update project stages | ✓ | ✓ | — | — | — | — |
 | Record payments, upload documents | ✓ | ✓ | — | — | — | — |
 | Configure the agent and its knowledge | ✓ | — | — | — | — | — |
@@ -1455,8 +1453,10 @@ definition of the presets, and it becomes the checkbox list when custom roles ar
 | Manage billing | ✓ | — | — | — | — | — |
 | See company reports | ✓ | ✓ | — | — | — | — |
 
-**Approve discounts is Owner-only** (D19) — the one row that is currently a bottleneck and
-the first that will move when the team grows.
+**Discounting is not a separate permission** (D34). It rides with *Create and edit
+proposals* — if someone is trusted to build the price, they are trusted to discount it.
+There is no approval step and no per-rep ceiling in this release; per-rep limits are the
+first thing that will be added if a tenant asks.
 
 **No object-level permissions, no field-level rules, no inheritance tree.** If a company
 needs more than this, they need a different product.
@@ -1515,12 +1515,12 @@ rather than guessing at a checkbox editor nobody fills in.
 
 ## CROSS-CUTTING
 
-**Roles** — Owner (everything, approves discounts) · Manager (team's leads, reassigns) ·
+**Roles** — Owner (everything) · Manager (team's leads, reassigns) ·
 Sales rep (own leads) · Surveyor (assigned surveys) · Designer (designs) · Engineer
 (sign-off queue). Role decides the home screen (Stage 1).
 
-**Notifications** — proposal opened · discount awaiting approval · agent escalation ·
-follow-up due · survey submitted · design returned. Push + in-app. Never email-only.
+**Notifications** — proposal opened · agent escalation · follow-up due · survey submitted ·
+design returned. Push + in-app. Never email-only.
 
 **Search** — one field, finds leads, customers, sites, quotes by name, phone or city.
 
