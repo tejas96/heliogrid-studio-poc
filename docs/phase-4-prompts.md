@@ -80,13 +80,40 @@ The three things she actually wants to know, large and immediate:
     Pays for itself in 4.6 years
 Nothing else competes with these three.
 
-SECTION 2 — YOUR ROOF
-- A 3D view or satellite image of HER OWN roof with the panels on it.
-  This is the moment that separates this from a PDF a competitor
-  emailed. Make it prominent.
+SECTION 2 — YOUR ROOF  (the moment that beats a competitor's PDF)
+
+DEFAULT: a STATIC rendered image of her own roof with the panels laid
+out on it, taken from the design. Not a live 3D scene.
+- Full width, prominent, directly under the headline numbers
 - Caption: "12 panels on your rooftop, facing south"
-- If no design exists, show a simple illustration instead and do not
-  pretend it is her roof.
+- A small "Tap to view in 3D" button sits on the image
+
+WHY STATIC BY DEFAULT: she is on a mid-range Android, on mobile data, at
+9pm, and she wants the price. Loading a WebGL scene before she can read
+anything is a bad trade. The image does the selling; 3D is for the
+curious and the sceptical.
+
+THE 3D VIEW — only when she taps
+- Opens FULL SCREEN over the page, not inline
+- One-finger drag to rotate, pinch to zoom, two-finger drag to pan
+- A visible close ✕ that returns her exactly where she was scrolled to
+- A short hint on first open: "Drag to look around"
+- A loading state while the model loads, with the still image behind it
+  so the screen is never blank
+- On desktop: same, opened as a large overlay, mouse drag to rotate,
+  scroll to zoom
+
+STATES FOR THIS SECTION — show all four:
+1. Static image with the "view in 3D" button        ← default
+2. The 3D view open, full screen, with close ✕
+3. 3D loading — still image visible, quiet spinner over it
+4. 3D FAILED or unsupported device — falls back to the static image
+   with a plain line: "3D view isn't available on this device." Never a
+   broken canvas, never an error dialog.
+
+NO DESIGN (Path B): show a simple generic illustration of a rooftop
+array, captioned "Your roof will be surveyed before installation".
+Do NOT show a 3D button, and do NOT imply the illustration is her roof.
 
 SECTION 3 — WHAT YOU WILL GENERATE
 - Annual generation: 11,840 units (kWh)
@@ -227,7 +254,9 @@ STATE F — HANDOVER COMPLETE
 EDGE STATES — all required
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. LOADING — a skeleton that matches the real layout. The headline
-   numbers should appear before the roof image finishes loading.
+   numbers and the price MUST appear before the roof image finishes
+   loading. Order of arrival: text and numbers → roof image → chart →
+   3D only if tapped.
 2. EXPIRED LINK — "This proposal has expired" with the company's phone
    number and a "Request a new one" button. Never a dead end.
 3. INVALID / WRONG LINK — "We could not find this proposal." Same
@@ -239,7 +268,9 @@ EDGE STATES — all required
 6. DECLINED — after declining, a calm state, no guilt, with a way to
    reopen the conversation.
 7. SLOW CONNECTION — text and numbers render first; the roof image and
-   chart load progressively with placeholders.
+   chart load progressively with placeholders. The page is fully
+   READABLE and the Accept button works before any image has arrived.
+   She must be able to decide on a 3G connection.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 LANGUAGE
@@ -257,8 +288,10 @@ FRAMES TO PRODUCE — all on ONE page
  4. State D — accept confirmation + confirmed   mobile
  5. State E — project progress                  mobile + desktop
  6. State F — handover complete                 mobile
- 7. Edge states 1–7                             mobile
- 8. State A in Hindi                            mobile
+ 7. Roof section — 4 states (static · 3D open ·
+    3D loading · 3D unavailable)                mobile + desktop
+ 8. Edge states 1–7                             mobile
+ 9. State A in Hindi                            mobile
 
 BOTH VIEWPORTS, one design:
 · MOBILE 375px — the primary target; most customers open this on a
@@ -286,3 +319,7 @@ Priya Sharma · Nashik, Maharashtra · Suryodaya Solar · Rajesh Patil.
   call**?
 - Does it look like **Suryodaya Solar's** document, or like a SaaS product's screen?
 - Does the Hindi version still fit?
+- Can she **read the price and tap Accept before any image loads**? Test that mentally on
+  a 3G connection — it is the difference between a proposal that converts and one that
+  gets closed.
+- Does tapping into 3D and closing it **return her to the same scroll position**?
