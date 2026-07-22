@@ -126,7 +126,7 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 |---|---|---|
 | 3.1 | **Entry + the 11-step shell** — with design / without / duplicate | Stage 6B |
 | 3.2 | **Step 3 — Solar System Setup** — the densest screen in the product | Stage 6B |
-| 3.3 | **Step 8 — Components** + Apply a kit (the mandatory gate) | Stage 6B |
+| 3.3 | **Step 8 — Components** (the mandatory gate) | Stage 6B |
 | 3.4 | **Step 7 — Payment terms** — tranches totalling 100% | Stage 6B |
 | 3.5 | **Proposal preview** — with the Path B estimate label | Stage 6B |
 | 3.6 | **Share proposal** — Download PDF + Copy link + link tracking | Stage 6 |
@@ -205,7 +205,7 @@ make money owed obvious?
 | # | Screen | Journey ref |
 |---|---|---|
 | 8.1 | **Team** + assign roles (stackable) | Roles |
-| 8.2 | **Component kits** — create, edit, apply | D22 |
+| 8.2 | **Duplicate a proposal** — pick an earlier one as the starting point | Stage 6B |
 | 8.3 | **Catalog & price book** | Tenant config C |
 | 8.4 | **Billing** (mock) — plans, usage, states | Billing |
 
@@ -269,7 +269,7 @@ unmanageable. This document stays the index and the tracker.
 
 | Gap | Needed by |
 |---|---|
-| Component kits screen not specced | Phase 3 (3.2) and Phase 8 (8.2) |
+| ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
 | Only 2 worked example prompts exist | Phase 1 onward — write them as you go |
 

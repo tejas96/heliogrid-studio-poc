@@ -61,7 +61,7 @@ Not optional, and they shape the UI:
 | D26 | **Billing screens are MOCK for now.** Pricing, tiers and limits are not decided. Design the shape — plans, usage, upgrade, payment failure, suspension — with placeholder numbers, so the flows exist and the real pricing drops in later. | 2026-07-21 |
 | D24 | **Everything commercial is configurable per tenant; everything about safety, honesty and compliance is locked by the platform.** The agent's instructions and business knowledge are configured through guided questions and a structured knowledge base — **never a raw prompt box**. Unanswered questions from real calls feed back as one-tap additions. See "Tenant configuration". | 2026-07-21 |
 | D23 | **The design studio (Stage 5) and all 3D screens are LOW PRIORITY — design them last.** Everything else ships first: onboarding, CRM, survey, proposal builder, voice agent, close, project tracking. The studio already works in code; redesigning it is an improvement, not a blocker. | 2026-07-21 |
-| D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. Solved for speed with saved **component kits**, not by making it optional. | 2026-07-21 |
+| D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. **Component kits were considered and REMOVED (2026-07-21)** — speed comes instead from *duplicate an earlier proposal*, which carries its components, and from Path A filling them straight off the BOM. | 2026-07-21 |
 
 ---
 
@@ -635,8 +635,8 @@ Each shows Selected / Empty status, ＋ add, brand rows (✎ edit / ✕ remove),
 fields for Panel and Inverter.
 Footer: **"Components Selected X/5 ✓"** — this is the gate, not a status.
 
-**Apply a kit** sits at the top of this step: one tap fills all five categories from a
-saved combination (see recommendation 1b). Path A fills them from the BOM automatically.
+Path A fills all five from the BOM automatically. A duplicated proposal brings its
+components with it. Otherwise the rep picks five.
 
 → **Component Edit sheet** (bottom sheet, per type): Brand Name (locked), plus:
 | Type | Fields |
@@ -674,19 +674,20 @@ in minutes. Recommendation: a **Quick mode** asking only steps **1, 3, 8, 10** (
 system, **components**, client), AI-filling 4 and 5, and using defaults for 6, 7, 9, 11 —
 with a "review the rest" link. Full mode stays for C&I. *Same builder, one toggle.*
 
-**1b. Component kits — the answer to mandatory components (D22).** Components are required
-on every proposal, which is right for credibility but slow if a rep must pick five items
-from a catalog every time. An EPC actually sells the same three or four combinations over
-and over.
+**1b. How mandatory components stay fast (D22).** Components are required on every
+proposal, which is right for credibility but would be slow if a rep had to pick five items
+from a catalog every single time.
 
-So: **saved kits.** "5 kW Residential — Standard" fills all five categories in one tap.
-- Owner creates kits in settings; reps select, then adjust if needed
-- The first kit is created automatically from the first proposal they complete
-- On a design-backed proposal (Path A) the BOM fills components directly and no kit is needed
-- Kits are the reason mandatory components cost seconds instead of minutes
+**Saved "component kits" were specced and then removed.** Duplicate-an-earlier-proposal
+already does the same job without a second concept to build, explain and maintain:
 
-Without this, D22 makes Quick mode pointless — the rep would abandon the app and send a
-WhatsApp message with a number in it, which is exactly what we are replacing.
+- **Duplicate an earlier proposal** — components come with it. Most residential jobs are
+  near-identical, so this is the common path and the fastest one.
+- **Path A (with a design)** — the BOM fills all five categories directly.
+- **Genuinely new, no design, nothing to duplicate** — pick five. Slower, and rare.
+
+The lesson worth keeping: if mandatory components ever start costing minutes rather than
+seconds, the fix is to make duplicating easier, not to make components optional.
 
 **2. The chip rail and the gating fight each other.** Free jumping plus per-step required
 fields means a user can land on step 8 with step 3 incomplete. Recommendation: allow the
@@ -712,8 +713,8 @@ commits on blur; a draft always exists and is resumable from the lead.
 - **Payment tranches ≠ 100%** → blocked with the remainder shown ("12% unallocated")
 - **No components selected** → **hard block at Generate** (D22). The footer counter
   "Components Selected 3/5" is the gate; tapping Generate with gaps jumps to step 8 and
-  highlights exactly which categories are missing. Offer "Apply a kit" right there rather
-  than making them start picking.
+  highlights exactly which categories are missing, so the rep goes straight to the gaps
+  rather than re-reading the whole step.
 - **Logo too large / wrong format** → validated on upload with the actual limits stated
 - **OFFGRID chosen, no battery** → hard block; the system cannot work
 - **Design changed after the proposal was generated** → the proposal is stale and must say
@@ -1202,7 +1203,7 @@ owner reviews and personalises. Day one it works; week four it sounds like them.
 | Area | What |
 |---|---|
 | **Branding** | Logo, letterhead, colours on customer documents, company details |
-| **Component kits** | Saved combinations that fill step 8 in one tap (D22) |
+| **Catalog** | Which panels/inverters/BOS this company actually sells — the list step 8 picks from |
 | **Price book** | Rates per component, versioned so old quotes keep their prices |
 | **Catalog** | Which panels/inverters/BOS this company actually sells |
 | **Proposal templates** | Cover, sections included, default T&C, bank details |
@@ -1218,8 +1219,8 @@ owner reviews and personalises. Day one it works; week four it sounds like them.
 1. **Nothing is required on day one.** Every setting has a working default. A tenant can
    sign up and send a real proposal without opening settings once.
 2. **Configure in context, not in a settings maze.** The moment a rep needs a component
-   kit, offer to create one *there*. The first proposal they complete offers to become the
-   template. Settings screens exist for revisiting, not for setup.
+   product they do not stock, offer to add it to the catalog *there*. Settings screens
+   exist for revisiting, not for setup.
 3. **Show the effect.** Every config screen shows a live preview — the proposal with your
    logo, the agent's opening line spoken aloud, the payment tranches as the customer sees
    them.
@@ -1233,8 +1234,8 @@ owner reviews and personalises. Day one it works; week four it sounds like them.
 - **Knowledge base contradicts itself** (two different warranty answers) → flagged on save
 - **Agent config changed mid-campaign** → versioned; calls already scheduled use the
   version they were queued with, and the owner is told
-- **Tenant deletes a component kit still referenced by a draft proposal** → draft keeps
-  its components; the kit is archived, not destroyed
+- **Tenant removes a catalog product still used by a draft proposal** → the draft keeps
+  its components; the product is archived, not destroyed
 - **Price book updated after quotes were sent** → sent quotes keep original prices, always
 - **A tenant with no config at all** → everything falls back to platform defaults and
   nothing breaks
@@ -1449,7 +1450,7 @@ definition of the presets, and it becomes the checkbox list when custom roles ar
 | Configure the agent and its knowledge | ✓ | — | — | — | — | — |
 | See agent performance | ✓ | ✓ | — | — | — | — |
 | Manage team and roles | ✓ | — | — | — | — | — |
-| Manage catalog, price book, kits | ✓ | — | — | — | — | — |
+| Manage catalog and price book | ✓ | — | — | — | — | — |
 | Manage billing | ✓ | — | — | — | — | — |
 | See company reports | ✓ | ✓ | — | — | — | — |
 
@@ -1647,7 +1648,7 @@ Nothing below 12px. Touch targets 44px minimum.
 9. Customer proposal link (no login)
 10. Projects board → project detail → customer progress link
 11. Onboarding: signup → what do you sell → ready
-12. Settings: team, roles, catalog, price book, **component kits**
+12. Settings: team, roles, catalog, price book
 12b. **Agent setup (guided, 6 steps) + business knowledge base + test-the-agent**
      — including the *unanswered questions* review list
 

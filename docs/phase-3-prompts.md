@@ -18,7 +18,7 @@ Worklist and review gate: `build-plan.md`.
 |---|---|---|
 | Multi-step wizard shell | 3.1 | all 11 steps |
 | Dense form + live calculation | 3.2 | steps 4, 5 |
-| Selection with a required gate | 3.3 | catalog, kits |
+| Selection with a required gate | 3.3 | catalog, price book |
 | Repeating rows that must total 100% | 3.4 | payment tracking (Phase 7) |
 | Document preview | 3.5 | customer link (Phase 4) |
 | Share + tracked link | 3.6 | progress link (Phase 7) |
@@ -260,7 +260,7 @@ pinned in the right column.
 
 ---
 
-# 3.3 · Step 8 — Components (+ kits)
+# 3.3 · Step 8 — Components
 
 ```
 Design step 8 of the proposal builder — "Components".
@@ -272,14 +272,11 @@ GOAL: complete all five in seconds, not minutes
 COMPONENTS ARE MANDATORY. All five categories must be selected before
 Generate. There are no lump-sum proposals.
 
-── APPLY A KIT — at the top, before anything else ──
-An EPC sells the same three or four combinations repeatedly, so:
-  [Apply a kit ▾]  → "5 kW Residential — Standard"
-                     "10 kW Residential — Premium"
-                     "C&I 100 kW — Standard"
-One tap fills all five categories. The rep can then adjust any of them.
-If no kit exists yet, show "Save these as a kit" once all five are
-filled.
+── HOW THEY GET FILLED ──
+There are no saved "kits". Components arrive one of three ways:
+- From a DESIGN (Path A) — the bill of materials fills all five
+- From a DUPLICATED proposal — its components come with it
+- Picked by hand — the rep chooses from the company's catalog
 
 ── THE FIVE CATEGORIES ──
 Panel · Inverter · Cable · Electrical · Structure
@@ -330,12 +327,11 @@ Cancel · Done.
   component"
 
 ── STATES TO SHOW ──
-1. Empty — nothing selected, "0 / 5", kit picker prominent
-2. A kit applied — all five filled in one action
+1. Empty — nothing selected, "0 / 5", the catalog picker prominent
+2. All five filled by hand
 3. Partially filled — 3 / 5, the two gaps obvious
 4. The block: user taps Generate with gaps → jumps here, highlights the
-   missing categories, offers "Apply a kit" right there rather than
-   dumping them into a catalog
+   missing categories so the rep goes straight to the gaps
 5. Component edit sheet open, for a Panel
 6. Filled automatically from a DESIGN (Path A) — components come from
    the bill of materials, marked as derived, still editable
@@ -697,8 +693,8 @@ Run the review gate in `build-plan.md`, plus these five specific to this phase:
 - Does the 11-step shell work at 375px **without** a horizontal chip scroller?
 - Is step 3 readable with every pricing field visible, and is the client-payable card
   always in view while editing?
-- Does the mandatory-components gate feel **helpful** — offering a kit — rather than
-  punishing?
+- Does the mandatory-components gate feel **helpful** — jumping straight to the gaps —
+  rather than punishing?
 - Do the payment tranches show rupee values, not just percentages?
 - Does the estimate label on a Path B proposal read as **confidence** rather than hedging?
 
