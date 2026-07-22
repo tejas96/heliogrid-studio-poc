@@ -1,4 +1,4 @@
-# Phase 3 — The Money Path  ▸ 6 screens
+# Phase 3 — The Money Path  ▸ 10 screens
 
 **The highest-traffic surface in the product.** Every deal passes through the proposal
 builder, and many never touch the design studio at all.
@@ -16,12 +16,15 @@ Worklist and review gate: `build-plan.md`.
 
 | Pattern | Set by | Reused by |
 |---|---|---|
+| List → detail with status filters | 3.0 | projects, customers, designs |
 | Multi-step wizard shell | 3.1 | all 11 steps |
 | Dense form + live calculation | 3.2 | steps 4, 5 |
 | Selection with a required gate | 3.3 | catalog, price book |
 | Repeating rows that must total 100% | 3.4 | payment tracking (Phase 7) |
 | Document preview | 3.5 | customer link (Phase 4) |
 | Share + tracked link | 3.6 | progress link (Phase 7) |
+| Version compare | 3.9 | design variants (Phase 10) |
+| Dense internal data table | 3.10 | price book, reports |
 
 ---
 
@@ -30,12 +33,15 @@ Worklist and review gate: `build-plan.md`.
 ### 1 · NO BOTTOM NAVIGATION anywhere in the proposal builder
 
 The builder is a **nested flow**, not a top-level destination. It is entered from a lead
-and exited by finishing or cancelling.
+or from the proposals list, and exited by finishing or cancelling.
 
 | Bottom arc nav appears | Bottom arc nav does NOT appear |
 |---|---|
-| My Day · Leads · Projects · More | **Every screen in Phase 3** |
-| Top-level destinations only | Builder steps · preview · share |
+| My Day · Leads · Projects · More | Builder steps · preview · share · BOM |
+| **Proposals list only** (3.0) — it is a destination | Everything else in Phase 3 |
+
+The one exception is **3.0, the proposals list**. It is a top-level destination reached from
+the sidebar or the More sheet, so it keeps the arc nav. Every screen after it does not.
 
 On mobile a builder screen is **full-screen**, with a close ✕ or back ‹ in the header and
 the step footer at the bottom. Showing the tab bar implies the user can wander off
@@ -49,12 +55,17 @@ extension of an existing screen**, not a new screen.
 **One page per screen. Every state of that screen lives on that same page.**
 
 ```
+3.0 Nav + list        → page "3.0 Proposals — list"          ← do this FIRST
 3.1 Entry + shell     → page "3.1 Proposal builder — shell"
-3.2 Step 3            → page "3.2 Step 3 — Solar System"   ← built
+3.2 Step 3            → page "3.2 Step 3 — Solar System"
 3.3 Step 8            → page "3.3 Step 8 — Components"
 3.4 Step 7            → page "3.4 Step 7 — Payment terms"
 3.5 Preview           → page "3.5 Proposal preview"
 3.6 Share             → page "3.6 Share proposal"
+3.7 Steps 1,2,10,11   → page "3.7 Simple steps"
+3.8 Steps 4,5,6,9     → page "3.8 Rich steps"
+3.9 Versions          → page "3.9 Proposal versions"
+3.10 BOM detail       → page "3.10 BOM detail"
 ```
 
 Everything else — a sheet opening, a validation error, an empty state, a filled state, a
@@ -98,6 +109,91 @@ two layouts look alike, the desktop one is wrong.
 
 Place them side by side on one canvas, mobile left, desktop right,
 aligned to the same top edge.
+```
+
+**For 3.0 only**, swap the first line for: *MOBILE 375px — the arc bottom nav IS present
+(this is a top-level destination), with "More" active.* Everything else in the block stands.
+
+---
+
+# 3.0 · Navigation + the proposals list
+
+**Do this one first.** Without it there is no way to reach a proposal that is not attached
+to a lead you happen to be looking at, and no way to see the ones you already sent.
+
+```
+Design the PROPOSALS LIST and the navigation that reaches it.
+
+WHO: a rep or owner opening the app to see where every quote stands
+GOAL: find any proposal in seconds, and start a new one from here
+
+── HOW IT IS REACHED — show all three ──
+1. DESKTOP: a "Proposals" item in the existing 240px left sidebar,
+   sitting with My Day, Leads, Projects and Settings.
+2. MOBILE: the arc bottom nav has five slots — My Day · Leads ·
+   [+ Add lead] · Projects · More. Proposals lives under MORE. Show the
+   More sheet open, listing: Proposals · Designs · Customers · Reports ·
+   Settings · Profile.
+3. From a lead's detail screen, the existing "Create proposal" action.
+
+── EACH ROW SHOWS ──
+customer name · city · system size · value · status · version ·
+last activity
+
+── STATUSES, each visually distinct ──
+  Draft      · still being built, shows how far — "7 of 11"
+  Ready      · complete, not yet shared
+  Shared     · sent, link not opened
+  Opened     · the customer viewed it
+  Accepted   · the customer said yes
+  Rejected   · the customer said no
+  Expired    · past its validity date
+
+── USE THESE TEN ROWS ──
+  Priya Sharma · Nashik · 8.2 kWp · ₹4,52,471 · Shared · v1 · 2d ago
+  Anand Traders · Pune · 180 kWp · ₹92,00,000 · Opened · v2 · 4h ago
+  Suresh Kulkarni · Kothrud · 6.5 kWp · ₹3,40,000 · Draft 7/11 · v1 · 1d
+  Rohit Mehta · Aundh · 10 kWp · ₹5,60,000 · Ready · v1 · 3h ago
+  Deshmukh Textiles · Nashik · 250 kWp · ₹1,28,00,000 · Accepted · v3 · 5d
+  Kavita Joshi · Wakad · 7.6 kWp · ₹4,10,000 · Ready · v1 · today
+  Vikram Deshpande · Baner · 5.4 kWp · ₹2,90,000 · Rejected · v1 · 8d
+  Imran Shaikh · Camp · 14 kWp · ₹7,80,000 · Opened · v1 · 1d ago
+  Sunita Deshmukh · Hadapsar · 4.8 kWp · ₹2,65,000 · Expired · v1 · 32d
+  Ganesh Patil · Chinchwad · 9.1 kWp · ₹4,95,000 · Shared · v2 · 6h ago
+
+Residential and C&I sit in the same list — a ₹4.5 lakh house and a
+₹92 lakh factory. The row must stay readable at both magnitudes.
+
+── CONTROLS ──
+- Search by customer name or proposal number
+- Filter by status
+- Sort by date, value or status
+- A visible count and filter state: "10 proposals · Shared · this month"
+
+── ROW ACTIONS ──
+open · duplicate · share · delete (drafts only, with confirmation)
+
+── PRIMARY ACTION ──
+"New proposal" — goes to the 3.1 entry screen.
+
+── WHERE EACH ROW LEADS ──
+  Draft            → the builder, at its last edited step
+  Shared / Opened  → proposal detail with its tracking
+  Accepted         → proposal detail, locked
+  ⋯ Duplicate      → entry, with duplicate pre-selected
+  ⋯ Share          → the share screen
+
+── STATES TO SHOW ──
+1. The normal list
+2. Empty — no proposals have ever been made
+3. Filtered-empty — proposals exist, none match. This is a DIFFERENT
+   message from 2, and it offers "Clear filters"
+4. Loading skeleton
+
+MOBILE: cards, arc nav present, "More" active.
+DESKTOP: a table with a sticky header, sortable columns and row hover.
+
+[+ VIEWPORT BLOCK]
 ```
 
 ---
@@ -166,6 +262,49 @@ STATES TO SHOW:
 
 ---
 
+# 3.1b · Entry for a customer who is not in the system
+
+**Send this straight after 3.1.** The routes in 3.1 assume you came from a lead, so the
+customer is already known. Started from the proposals list, nobody has been chosen yet —
+and forcing a rep to go create a lead first, then start the proposal over, is the single
+most common reason a walk-in never gets quoted.
+
+```
+This MODIFIES the existing "3.1 Proposal builder — shell" page. Do not
+create a new page. Add these frames beside the existing ones.
+
+Add a step BEFORE the three route cards — "Who is this for?" — shown
+ONLY when the builder was started from the proposals list. Entered from
+a lead, it is skipped entirely because the customer is already known.
+
+── THE SCREEN ──
+- A search field: "Search existing leads and customers"
+- Results appear as you type — name, city, phone
+- Below them, a distinct option: "New customer — not in the system yet"
+
+── THE NEW-CUSTOMER PATH ──
+Choosing it goes STRAIGHT into the builder. No lead form first, no
+detour. The lead is created automatically from what is typed in step 10
+(Client Details) when the proposal is generated.
+
+Say this plainly on the screen, so the rep is not left wondering where
+the customer went: "We'll add them to your leads automatically."
+
+── STATES TO SHOW ──
+1. The search screen, empty, before typing
+2. Typing, with three matching results
+3. Typing, with no matches — "New customer" becomes the obvious action
+4. A customer chosen — the three route cards from 3.1, now showing whose
+   proposal this is in the header
+
+Entered from a LEAD, show that this step is skipped — the route cards
+appear immediately with the customer named.
+
+[+ VIEWPORT BLOCK]
+```
+
+---
+
 # 3.2 · Step 3 — Solar System Setup
 
 **The densest screen in the product.** If this works, the other ten steps are easy.
@@ -212,7 +351,9 @@ BATTERY SHEET (opens from the card):
 - GST % (required)
 - GST amount — calculated, read only
 - Subsidy ₹ (required) — labelled "PM Surya Ghar"
-- Discount (required) — with a % ⇄ ₹ mode switch
+- Discount (required) — with a % ⇄ ₹ mode switch. There is NO approval
+  step: whoever can build this proposal can discount it and share it
+  immediately. Do not add a request, a queue or a "pending" status.
 - Easy financing EMI — toggle; when on, reveals EMI interest rate
   (0 to 100%)
 - Electricity tariff ₹/kWh (required, 1 to 50)
@@ -226,8 +367,8 @@ Visually distinct, updates live:
   ─────────────────────────────
   Client pays        ₹3,51,847
 
-Use these realistic values: 8.2 kW, Maharashtra / Pune, ₹4,52,471 incl.
-GST at 13.8%, ₹78,000 subsidy, 5% discount.
+Use these realistic values: 8.2 kW, Maharashtra / Nashik, ₹4,52,471
+incl. GST at 13.8%, ₹78,000 subsidy, 5% discount.
 
 ── VALIDATION ──
 - Capacity outside 0.5–7000 → "Capacity must be between 0.5 and 7000 kW"
@@ -686,9 +827,119 @@ Create ONE page with all four steps as frames side by side.
 
 ---
 
+# 3.9 · Proposal versions
+
+**A price is rarely accepted first time.** The journey says a change creates v2 and
+preserves v1 — until now no screen showed it.
+
+```
+Design PROPOSAL VERSIONS — the list and the comparison.
+
+WHO: a rep whose customer asked for a bigger system after seeing v1
+GOAL: revise the price without destroying what was already sent
+
+A proposal can be revised after sharing. The original is NEVER
+destroyed.
+
+── THE VERSION LIST — on the proposal detail ──
+  v1  shared 18 Jul   ₹4,52,471   Opened
+  v2  shared 21 Jul   ₹5,68,200   Shared    ← current
+Each with its value, its status and its date.
+
+── THE COMPARISON VIEW ──
+v1 beside v2 showing ONLY WHAT CHANGED. Do not re-print the whole
+proposal twice — the point is the difference.
+
+  System         8.2 kWp     →  10.4 kWp
+  Panels         12          →  16
+  Price          ₹4,52,471   →  ₹5,68,200
+  Discount       5%          →  8%
+  Payment terms  unchanged
+
+Unchanged sections are named and collapsed, not hidden entirely — the
+rep needs to know they were checked.
+
+Plus a REASON field carried on the version: "Customer asked for a larger
+system." This is what the rep reads six weeks later when they cannot
+remember why the price moved.
+
+── THE RULES ──
+- The customer's link always shows the CURRENT version. Earlier versions
+  stay readable internally but the customer never sees a stale price.
+- An ACCEPTED version is locked. Editing it asks first: "This proposal
+  was accepted. Create version 3?"
+- "Make a new version" opens the builder at step 1, pre-filled from the
+  current version.
+
+── STATES TO SHOW ──
+1. A single version — no comparison offered, and it does not look broken
+2. Two versions compared
+3. Three versions — the list must still read cleanly
+4. An accepted version, locked, with the confirmation before v3
+
+MOBILE: versions as stacked cards; the comparison as changed rows, old
+value above new, never two columns at 375px.
+DESKTOP: the version list on the left, comparison in two columns.
+
+[+ VIEWPORT BLOCK]
+```
+
+---
+
+# 3.10 · BOM detail  *(Path A only)*
+
+**The densest data in the product.** Internal — the customer never sees this screen.
+
+```
+Design the BOM DETAIL — the line items behind the price, shown when the
+proposal was built FROM a design.
+
+WHO: an owner or designer checking what the price is actually made of
+GOAL: audit a quote line by line without leaving the proposal
+
+INTERNAL ONLY. The customer never sees this. Reached from the proposal
+detail via "View BOM".
+
+── THE DATA ──
+Grouped by category: Modules · Inverter · Electrical BOS ·
+Mechanical BOS · Safety · Civil & Misc.
+
+Each line: item · specification · quantity · unit · rate · GST % · total
+Category subtotals, then a grand total that reconciles with the system
+cost shown in step 3.
+
+⚠️ AROUND 25 LINES WITH 7 COLUMNS. On MOBILE this must NOT be a wide
+scrolling table — that is the failure mode here. Use a card list showing
+item name, quantity and total; tapping a card opens the full detail as a
+sheet. On DESKTOP, a real table with a sticky header and category
+grouping.
+
+── PROVENANCE ──
+Every figure carries where it came from — measured · derived ·
+estimated · assumed — shown quietly beside it, not as a loud badge on
+every row. This is a commercial document; a reader must be able to tell
+a surveyed quantity from an assumed one.
+
+── QUANTITIES STAY METRIC ──
+Even when the user's preference is feet. Indian suppliers sell cable and
+structure by the metre, so procurement quantities do not convert.
+
+── STATES TO SHOW ──
+1. A full BOM from a design — desktop table
+2. The mobile card list
+3. A single line's detail sheet open
+4. PATH B — no design, so no BOM exists. Explain why in a sentence
+   rather than showing an empty table: the proposal was priced by hand,
+   so there are no line items behind it.
+
+[+ VIEWPORT BLOCK]
+```
+
+---
+
 ## After Phase 3 — STOP
 
-Run the review gate in `build-plan.md`, plus these five specific to this phase:
+Run the review gate in `build-plan.md`, plus these nine specific to this phase:
 
 - Does the 11-step shell work at 375px **without** a horizontal chip scroller?
 - Is step 3 readable with every pricing field visible, and is the client-payable card
@@ -697,5 +948,10 @@ Run the review gate in `build-plan.md`, plus these five specific to this phase:
   rather than punishing?
 - Do the payment tranches show rupee values, not just percentages?
 - Does the estimate label on a Path B proposal read as **confidence** rather than hedging?
+- Does the proposals list read cleanly with a ₹4.5 lakh house and a ₹92 lakh factory in the
+  same table, and are empty and filtered-empty **different** messages?
+- Can a walk-in be quoted without creating a lead first?
+- Does the version comparison show only what changed, rather than the whole proposal twice?
+- Is the BOM a card list on mobile, and does its grand total reconcile with step 3?
 
-Then bring all six back before Phase 4.
+Then bring all ten back before Phase 4.

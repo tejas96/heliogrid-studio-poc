@@ -116,18 +116,20 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 
 ---
 
-## PHASE 3 · The money path  ▸ 8 screens
+## PHASE 3 · The money path  ▸ 10 screens
 
 **Goal: the proposal builder.** Highest-traffic surface in the product.
 
-📄 **Prompt: `docs/phase-3-prompt-single.md`** — ONE consolidated prompt, one page.
-*(`phase-3-prompts.md` is the earlier eight-prompt version, superseded. It was missing the
-proposals list, navigation, standalone creation, versions and BOM detail. It also still
-carried the discount-approval workflow, which is dropped for this release — D34.)*
+📄 **Prompt: `docs/phase-3-prompts.md`** — sent to Claude Design ONE screen at a time.
+*(`phase-3-prompt-single.md` was an attempt to consolidate all of it into one prompt. It is
+superseded: one prompt at a time produces better screens. Keep it only as a cross-check —
+every feature it added has since been folded back into the per-screen file.)*
 
 | # | Screen | Journey ref |
 |---|---|---|
+| 3.0 | **Navigation + proposals list** — sidebar, More sheet, all statuses | Stage 6 |
 | 3.1 | **Entry + the 11-step shell** — with design / without / duplicate | Stage 6B |
+| 3.1b | **Entry for a customer not in the system** — the walk-in path | Stage 6B |
 | 3.2 | **Step 3 — Solar System Setup** — the densest screen in the product | Stage 6B |
 | 3.3 | **Step 8 — Components** (the mandatory gate) | Stage 6B |
 | 3.4 | **Step 7 — Payment terms** — tranches totalling 100% | Stage 6B |
@@ -135,13 +137,17 @@ carried the discount-approval workflow, which is dropped for this release — D3
 | 3.6 | **Share proposal** — Download PDF + Copy link + link tracking | Stage 6 |
 | 3.7 | **Steps 1, 2, 10, 11** — company, achievements, client, bank (one page) | Stage 6B |
 | 3.8 | **Steps 4, 5, 6, 9** — performance, financial, timeline, T&C (one page) | Stage 6B |
+| 3.9 | **Proposal versions** — v1 vs v2, showing only what changed | Stage 6 |
+| 3.10 | **BOM detail** *(Path A only)* — the line items behind the price | Stage 6 |
 
-⚠️ **No bottom navigation anywhere in Phase 3** — the builder is a nested flow.
+⚠️ **No bottom navigation anywhere in Phase 3 except 3.0** — the proposals list is a
+top-level destination; the builder is a nested flow.
 ⚠️ **One page per screen**; every state is a frame on that page, not a new page.
+⚠️ **No discount approval** (D34) — whoever can build a proposal can discount and share it.
 
 **Review focus:** Does the 11-step shell work at 375px without a chip scroller? Is step 3
 readable with all its pricing fields? Does the mandatory-components gate feel helpful or
-punishing?
+punishing? Can a walk-in be quoted without creating a lead first?
 
 ---
 
