@@ -45,11 +45,24 @@ create a separate page per screen or per state.
 THREE RULES THAT APPLY TO EVERY FRAME
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-1 · MOBILE AND DESKTOP, SIDE BY SIDE, FOR EVERY SINGLE FRAME
-   Each screen and each state appears TWICE, paired horizontally:
-   mobile 375px on the left, desktop 1440px immediately to its right,
-   aligned to the same top edge, labelled underneath.
-   Never a mobile frame without its desktop partner, or the reverse.
+1 · ONE MOBILE + DESKTOP PAIR PER SCREEN — STATES ARE SWITCHED, NOT REPEATED
+   Each SCREEN gets exactly one pair: mobile 375px on the left, desktop
+   1440px immediately to its right, aligned to the same top edge.
+
+   Its STATES are handled by a state switcher ABOVE the pair — the same
+   pattern already used on the lead detail screen in this project, where
+   pills labelled "Rich lead · New lead · Snoozed" swap the content of
+   the same frames.
+
+   So for the Proposals list, one pair with a switcher offering:
+     Normal · Empty · Filtered empty · Loading
+   And for step 3, one pair with a switcher offering:
+     Empty · Filled · Battery sheet · Hybrid warning · Discount below
+     zero · From a design · Typed by hand
+
+   DO NOT duplicate the frame pair for every state. One pair per screen,
+   states swapped by the control above it. This keeps the page readable
+   and makes states directly comparable.
 
 2 · REUSE THE EXISTING DESIGN — DO NOT INVENT A NEW LAYOUT
    This app already exists in this project. Open the LEAD DETAIL and
@@ -628,9 +641,10 @@ empty table).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FRAMES TO PRODUCE — all on ONE page, mobile and desktop side by side
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Every state below is a required frame, and EVERY ONE appears as a
-MOBILE + DESKTOP PAIR side by side. Do not summarise them away and do
-not produce a mobile frame without its desktop partner.
+Each numbered item below is ONE screen = ONE mobile + desktop pair.
+The lettered items under it are its STATES, offered by a switcher above
+that pair — not extra frames. Every state listed must be reachable from
+the switcher; do not summarise them away.
 
  1. NAVIGATION
     a. Desktop sidebar with Proposals highlighted
@@ -763,7 +777,8 @@ Suryodaya Solar · Rajesh Patil.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEFORE YOU FINISH — check all six
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Every frame has BOTH a mobile and a desktop version, side by side.
+1. Each SCREEN is one mobile + desktop pair, with its states offered by
+   a switcher above it — not duplicated frame pairs per state.
 2. The sidebar, top bar, cards, rows, chips and buttons are IDENTICAL to
    the lead detail and leads list screens already in this project.
 3. Every item in the CLICK MAP is wired. Starting from the sidebar, a
