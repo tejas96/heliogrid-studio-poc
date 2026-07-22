@@ -33,12 +33,39 @@ page.
 # THE PROMPT
 
 ```
-Design the complete PROPOSALS area of a solar EPC app. Everything below
-goes on ONE page as frames laid side by side. Do NOT create a separate
-page per screen or per state.
+Build an INTERACTIVE PROTOTYPE of the complete PROPOSALS area of a solar
+EPC app. Not static mockups — a clickable prototype where every action
+below is WIRED to its destination, so the whole journey can be walked
+end to end.
 
-Every screen must be shown at BOTH sizes, side by side:
-· MOBILE 375px   · DESKTOP 1440px
+Everything goes on ONE page as frames laid out side by side. Do NOT
+create a separate page per screen or per state.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THREE RULES THAT APPLY TO EVERY FRAME
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1 · MOBILE AND DESKTOP, SIDE BY SIDE, FOR EVERY SINGLE FRAME
+   Each screen and each state appears TWICE, paired horizontally:
+   mobile 375px on the left, desktop 1440px immediately to its right,
+   aligned to the same top edge, labelled underneath.
+   Never a mobile frame without its desktop partner, or the reverse.
+
+2 · REUSE THE EXISTING DESIGN — DO NOT INVENT A NEW LAYOUT
+   This app already exists in this project. Open the LEAD DETAIL and
+   LEADS LIST screens already built here and match them exactly:
+   · the same 240px left sidebar with the same items and styling
+   · the same top bar, search field and page-header treatment
+   · the same card, row, table, status-chip and button styles
+   · the same mobile bottom arc navigation (five slots: My Day · Leads ·
+     [+ Add lead] · Projects · More)
+   · the same spacing rhythm, type sizes and empty-state style
+   The proposals area must look like the same product, not a new one.
+
+3 · EVERYTHING IS CONNECTED
+   Wire every button, row, tab and menu item to the frame it leads to,
+   following the CLICK MAP below. A reviewer must be able to start at
+   the sidebar and reach a shared proposal without a dead end.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CONTEXT
@@ -66,6 +93,95 @@ Proposals · Designs · Customers · Reports · Settings · Profile.
 THIRD ENTRY: from a lead's detail screen, an action "Create proposal".
 
 Show all three entry points.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE CLICK MAP — wire all of these
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+GETTING IN
+  Sidebar "Proposals"            → Proposals list
+  More sheet → "Proposals"       → Proposals list
+  Lead detail → "Create proposal"→ Entry, step 2 (customer already known)
+
+FROM THE LIST
+  "New proposal"                 → Entry, step 1 (who is it for)
+  Row, status Draft              → Builder, at its last edited step
+  Row, status Shared or Opened   → Proposal detail with tracking
+  Row, status Pending approval   → Proposal detail showing the pending banner
+  Row, status Accepted           → Proposal detail, locked
+  Row ⋯ menu → Duplicate         → Entry, step 2, duplicate pre-selected
+  Row ⋯ menu → Share             → Share screen
+  Row ⋯ menu → Delete (draft)    → confirm dialog → back to list
+  Filter chip                    → filtered list
+  Clear filters (in filtered-empty) → full list
+
+ENTRY
+  Search result row              → Entry, step 2
+  "New customer"                 → Entry, step 2
+  "From a design"                → Builder step 1, fields pre-filled
+  "Without a design"             → Builder step 1, empty
+  "Duplicate an earlier proposal"→ Duplicate picker → Builder step 1,
+                                   pre-filled
+
+INSIDE THE BUILDER
+  Next ›                         → the next step
+  ‹ Back                         → the previous step
+  Mobile "3 / 11" indicator      → step-list sheet
+  Step-list sheet → any step     → that step
+  Desktop step rail → any step   → that step
+  Close ✕                        → confirm "Save draft and exit?" →
+                                   Proposals list
+  Step 1 Next                    → Proposal type sheet → Continue → Step 2
+  Step 3 "Add battery backup"    → Battery sheet → Save → Step 3 with the
+                                   battery card filled
+  Step 3 battery card "Edit"     → Battery sheet, pre-filled
+  Step 8 "＋" on a category      → Catalog picker → select → Step 8 with
+                                   that category filled
+  Step 8 "✎" on a brand row      → Component edit sheet → Done → Step 8
+  Step 8 "✕" on a brand row      → that category returns to Empty
+  Step 7 template chip           → tranches filled to 100%
+  Step 9 "Skip"                  → Step 10
+  Step 11 "Generate proposal"    → SEE THE GENERATE LOGIC BELOW
+
+GENERATE LOGIC — three outcomes, wire all three
+  a) Something required is missing → jumps to the FIRST incomplete step
+     and highlights what is missing
+  b) A discount was applied        → Discount request sheet → Submit →
+     proposal detail showing "Pending approval", Share disabled
+  c) Complete, no discount         → Preview
+
+APPROVAL
+  Owner notification              → Approval queue
+  Queue row "Approve"             → approved state → rep notified →
+                                    Share now enabled
+  Queue row "Reject"              → reason sheet → rep sees the reason →
+                                    "Revise" → Builder step 3
+  Queue row "Approve different"   → amount sheet → approved at that value
+
+PREVIEW AND SHARE
+  Preview "Edit"                  → the step that content came from
+  Preview "Continue to share"     → Share
+  Share "Download PDF"            → success toast, stays on Share
+  Share "Copy link"               → "Link copied" toast
+  Share "Copy message"            → "Message copied" toast
+  Share "Mark as shared"          → tracking state, "Not opened yet"
+  Tracking "Opened"               → the opened state with duration
+
+VERSIONS
+  Proposal detail → "Versions"    → version list
+  Version list → "Compare"        → comparison view
+  Comparison → "Make a new version" → Builder step 1, pre-filled from
+                                    the current version
+  An accepted version → edit      → confirm "This proposal was accepted.
+                                    Create version 3?" → Builder
+
+BOM
+  Proposal detail → "View BOM"    → BOM detail (Path A only)
+  BOM line row (mobile)           → that line's detail sheet
+  BOM → back                      → Proposal detail
+
+EVERY SHEET AND DIALOG needs a working Cancel or ✕ that returns to where
+it opened from. No dead ends anywhere.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BLOCK 1 — THE PROPOSALS LIST
@@ -183,37 +299,69 @@ BLOCK 4 — THE 11 STEPS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 STEP 1 · COMPANY
-Phone (LOCKED, "from your account") · Company name (required) ·
-Email (LOCKED) · Website · Company address · Company logo with "Change
-logo", max 5 MB, PNG or JPG.
+  Field                 Type          Rule
+  Phone number          text, LOCKED  from the account, shown with a link icon
+  Company name          text          REQUIRED
+  Email address         text, LOCKED  from the account
+  Website               url           optional
+  Company address       textarea      optional
+  Company logo          file          PNG or JPG, max 5 MB; shows a swatch
+                                      of the current logo + "Change logo"
 → After Next, a PROPOSAL TYPE sheet: CAPEX (purchase outright) or
   OPEX / PPA (per-unit billing, PRO badge). Back · Continue.
-Validation: company name required; oversized logo states the actual size.
+Validation: company name required; an oversized logo states the ACTUAL
+file size; wrong format says which formats are accepted.
+Locked fields must look deliberately locked, not disabled-and-broken.
 
 STEP 2 · ACHIEVEMENTS (optional, skippable)
-About your company (textarea, "shown on the cover") · Total capacity
-installed kW → "200 kW" · Happy customers → "350+" · Cities served →
-"10+". Numbers only, units added automatically.
+  Field                       Type      Rule
+  About your company          textarea  "shown on the proposal cover"
+  Total capacity installed    number    kW; displays as "200 kW"
+  Happy customers             number    displays as "350+"
+  Cities served               number    displays as "10+"
+Numbers only — units are appended automatically. A clear "Skip this
+step" that does not read as failure.
 
 STEP 3 · SOLAR SYSTEM  ← THE DENSEST SCREEN, design it most carefully
-Location: State (required) · District (required)
-System: capacity kW (required, 0.5–7000) · type segmented
-  ONGRID / OFFGRID / HYBRID
-Battery card: "Add battery backup". OFFGRID or HYBRID force a warning
-  that a battery is required and block Generate without one. Once added
-  the card becomes a summary with Edit and Remove.
-  BATTERY SHEET: capacity kWh (1–100) · cost with excl./incl. GST
-  toggle · GST on battery % · chemistry (Lithium LFP · Lithium NMC ·
-  Lead-acid · Custom, which reveals a text field). Cancel · Save.
-Category (required): Residential · Commercial
-AMC (required): Free AMC · No AMC · 1–8 years
-Commissioning included: toggle
-Pricing: system cost excl. battery incl. GST (required) · the same
-  excl. GST (linked — editing one updates the other) · GST % (required) ·
-  GST amount (calculated, read-only) · Subsidy ₹ (required, "PM Surya
-  Ghar") · Discount (required, with a % ⇄ ₹ switch) · Easy financing EMI
-  toggle revealing an interest rate 0–100% · Electricity tariff ₹/kWh
-  (required, 1–50)
+
+  GROUP · LOCATION
+  State                     select    REQUIRED
+  District                  select    REQUIRED, depends on State
+
+  GROUP · SYSTEM
+  System capacity           number    REQUIRED, kW, 0.5 to 7000
+  System type               segmented REQUIRED, ONGRID / OFFGRID / HYBRID
+
+  GROUP · BATTERY
+  "Add battery backup"      button    optional for ONGRID;
+                                      REQUIRED for OFFGRID and HYBRID
+  Once added it becomes a summary card with Edit and Remove.
+  BATTERY SHEET
+  Battery capacity          number    kWh, 1 to 100
+  Cost                      number    with an excl./incl. GST toggle
+  GST on battery            number    %
+  Cell chemistry            select    Lithium LFP · Lithium NMC ·
+                                      Lead-acid · Custom
+  Custom chemistry name     text      appears only when Custom is chosen
+  Cancel · Save
+
+  GROUP · CATEGORY & SERVICE
+  Category                  segmented REQUIRED, Residential / Commercial
+  AMC                       select    REQUIRED, Free AMC · No AMC ·
+                                      1 to 8 years
+  Commissioning included    toggle    default on
+
+  GROUP · PRICING & SUBSIDIES
+  System cost incl. GST     number    REQUIRED, ₹, excludes the battery
+  System cost excl. GST     number    LINKED — editing either updates
+                                      the other
+  GST %                     number    REQUIRED
+  GST amount                number    CALCULATED, read-only
+  Subsidy                   number    REQUIRED, ₹, labelled "PM Surya Ghar"
+  Discount                  number    REQUIRED, with a % ⇄ ₹ mode switch
+  Easy financing EMI        toggle    off by default
+  EMI interest rate         number    %, 0 to 100, revealed by the toggle
+  Electricity tariff        number    REQUIRED, ₹/kWh, 1 to 50
 
 CLIENT-PAYABLE CARD — visually distinct, live:
     System cost      ₹4,52,471
@@ -320,11 +468,16 @@ and editor · "Save as template" · live character count · approximate PDF
 page count. Warn above 3 pages.
 
 STEP 10 · CLIENT DETAILS  ← this is what creates the lead
-Proposal number (auto, disabled, e.g. HG-2026-0142) · Prepared by
-(required, defaults to the signed-in user) · Prepared for (required) ·
-Client address (required) · Client phone (required, 10 digits) · Date
-(required, defaults to today) · Time generated (auto) · Customer support
-number (optional).
+  Field                   Type            Rule
+  Proposal number         text, DISABLED  auto, e.g. HG-2026-0142
+  Prepared by             text            REQUIRED, defaults to the
+                                          signed-in user
+  Prepared for            text            REQUIRED, pre-filled from the lead
+  Client address          textarea        REQUIRED
+  Client phone            tel             REQUIRED, 10 digits, starts 6–9
+  Date                    date            REQUIRED, defaults to today
+  Time generated          text, AUTO      read-only
+  Customer support number tel             optional
 When the proposal was started for a NEW CUSTOMER, show a quiet line:
 "These details will create a new lead when you generate this proposal."
 Validation: phone 10 digits starting 6–9 · required fields · date not in
@@ -332,8 +485,12 @@ the past · duplicate phone warns "A lead with this number already
 exists" and offers to link to it instead of creating another.
 
 STEP 11 · BANK DETAILS (optional)
-"Include bank details in the proposal" toggle, off by default · Bank
-name · Account name · Account number · IFSC.
+  Field                Type    Rule
+  Include in proposal  toggle  OFF by default
+  Bank name            text
+  Account name         text
+  Account number       text    9 to 18 digits
+  IFSC code            text    11 chars: 4 letters + 0 + 6 alphanumeric
 When off: "Your details are saved but will not be printed."
 Validation: IFSC 11 characters, 4 letters + 0 + 6 alphanumeric →
 "Example: HDFC0001234"; account number 9–18 digits.
@@ -471,7 +628,9 @@ empty table).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FRAMES TO PRODUCE — all on ONE page, mobile and desktop side by side
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Every state below is a required frame. Do not summarise them away.
+Every state below is a required frame, and EVERY ONE appears as a
+MOBILE + DESKTOP PAIR side by side. Do not summarise them away and do
+not produce a mobile frame without its desktop partner.
 
  1. NAVIGATION
     a. Desktop sidebar with Proposals highlighted
@@ -600,6 +759,20 @@ Use these figures throughout: Priya Sharma · Nashik, Maharashtra ·
 8.2 kWp · 12 panels · ₹4,52,471 system cost · ₹78,000 subsidy ·
 ₹22,624 discount · ₹3,51,847 payable · 11,840 kWh annual ·
 Suryodaya Solar · Rajesh Patil.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE YOU FINISH — check all six
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Every frame has BOTH a mobile and a desktop version, side by side.
+2. The sidebar, top bar, cards, rows, chips and buttons are IDENTICAL to
+   the lead detail and leads list screens already in this project.
+3. Every item in the CLICK MAP is wired. Starting from the sidebar, a
+   reviewer can reach a shared proposal without hitting a dead end.
+4. Every sheet and dialog has a working Cancel or ✕ that goes back.
+5. All three Generate outcomes are wired — missing fields, pending
+   approval, and straight to preview.
+6. It is ONE page. Sheets, errors and variants are frames on it, never
+   separate pages.
 ```
 
 ---
