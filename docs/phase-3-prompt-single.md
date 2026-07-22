@@ -304,9 +304,15 @@ COMPONENT EDIT SHEET, per type. Brand name locked, then:
   Structure  Warranty · Weight per kW · Standard
   Battery    Capacity kWh · Chemistry · Warranty
 All types: Description, max 110 characters with a live count.
-Validation: zero or blank counts · negative counts · description over
-110 blocks Done and is NOT silently truncated · removing the last brand
-returns the category to Empty.
+Validation:
+- Panel or Inverter count of 0 or blank → "Enter how many"
+- Negative count → not allowed
+- Description over 110 characters → the counter turns to a warning and
+  Done is blocked; the text is NOT silently truncated
+- Removing the last brand from a category returns it to Empty and the
+  footer counter drops
+- A battery was added in step 3 but no battery component is selected →
+  blocked with "This system has a battery — add the battery component"
 
 STEP 9 · TERMS & CONDITIONS (optional, up to 3 pages)
 Add / Skip choice. When added: include-logo toggle · rich-text toolbar
@@ -465,25 +471,130 @@ empty table).
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FRAMES TO PRODUCE — all on ONE page, mobile and desktop side by side
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- 1. Navigation — desktop sidebar · mobile More sheet · lead action
- 2. Proposals list — normal · empty · filtered-empty · loading
- 3. Entry — who is it for · new customer · how to build · duplicate picker
- 4. Shell — mobile step indicator · mobile step-list sheet · desktop rail
- 5. Step 1 + proposal type sheet
- 6. Step 2
- 7. Step 3 — empty · filled · battery sheet · hybrid warning · discount
-    below zero
- 8. Step 4 · Step 5
- 9. Step 6
-10. Step 7 — 100% · under · over
-11. Step 8 — empty · filled · 3 of 5 blocked · edit sheet
-12. Step 9 · Step 10 · Step 11
-13. Discount — request sheet · pending state · owner queue · approved ·
-    rejected
-14. Preview — from a design · without one · incomplete
-15. Share — ready · waiting · opened · never opened
-16. Versions — list · comparison · accepted lock
-17. BOM detail — desktop table · mobile cards · line sheet
+Every state below is a required frame. Do not summarise them away.
+
+ 1. NAVIGATION
+    a. Desktop sidebar with Proposals highlighted
+    b. Mobile More sheet open, listing Proposals
+    c. Lead detail showing the "Create proposal" action
+
+ 2. PROPOSALS LIST
+    a. Normal, all ten rows, mixed statuses
+    b. Empty — no proposals ever created
+    c. Filtered-empty — filters match nothing (a DIFFERENT message)
+    d. Loading skeleton matching the real row shape
+    e. Row actions menu open
+    f. Bulk select active (desktop)
+
+ 3. ENTRY
+    a. Who is it for — search existing
+    b. New customer chosen — "we'll add them to your leads"
+    c. How to build — the three route cards
+    d. "From a design" disabled because none exists
+    e. Duplicate picker open, searching earlier proposals
+
+ 4. SHELL
+    a. Mobile compact step indicator "‹ 3 / 11 ›"
+    b. Mobile step-list sheet open, showing mixed step states
+       (not started · in progress · complete · errors · skipped)
+    c. Desktop 11-step rail
+    d. A resumed draft — "Draft · 7 of 11" shown on the lead
+
+ 5. STEP 1 · COMPANY
+    a. Empty  b. Filled, locked fields visibly locked
+    c. Logo too large — error stating the actual file size
+    d. Proposal type sheet open (CAPEX / OPEX-PPA)
+
+ 6. STEP 2 · ACHIEVEMENTS
+    a. Empty  b. Filled  c. Skipped
+
+ 7. STEP 3 · SOLAR SYSTEM  ← most carefully designed
+    a. Empty, freshly opened
+    b. Fully filled, client-payable card populated
+    c. Battery sheet open
+    d. HYBRID selected with no battery — the warning
+    e. Discount pushed too far — payable at or below zero, blocked
+    f. Filled FROM A DESIGN (Path A) — capacity and cost show they came
+       from the design, marked derived
+    g. Filled WITHOUT a design (Path B) — same fields, typed by hand
+
+ 8. STEP 4 · PERFORMANCE
+    a. AI-filled  b. Manually edited, "Reset to AI values" now visible
+    c. Derived from a design vs estimated — the two labelled differently
+
+ 9. STEP 5 · FINANCIAL
+    a. AI-filled  b. Edited  c. Unrealistic-payback warning
+
+10. STEP 6 · TIMELINE
+    a. Default phases  b. Reordered  c. A row mid-drag
+    d. Empty-field error
+
+11. STEP 7 · PAYMENT TERMS
+    a. A template applied — a clean 100%
+    b. Under-allocated at 88%, remainder stated
+    c. Over-allocated at 112%
+    d. A custom set of six tranches
+    e. Empty label error on one row
+    f. A row mid-drag / being reordered
+
+12. STEP 8 · COMPONENTS
+    a. Empty — "0 / 5", catalog picker prominent
+    b. All five filled by hand
+    c. Partially filled — "3 / 5", the two gaps obvious
+    d. The block — Generate tapped with gaps, jumps here, gaps
+       highlighted
+    e. Component edit sheet open, for a Panel
+    f. Filled automatically FROM A DESIGN (Path A), marked derived
+    g. Battery present — six categories instead of five
+
+13. STEP 9 · TERMS
+    a. The Add / Skip choice  b. Editor with content
+    c. Over three pages — warned
+
+14. STEP 10 · CLIENT DETAILS
+    a. Empty  b. Filled
+    c. The new-customer note — "will create a new lead"
+    d. Phone already exists — offers to link instead of duplicating
+    e. Phone validation error
+
+15. STEP 11 · BANK DETAILS
+    a. Toggle off — "saved but will not print"
+    b. Toggle on, filled  c. IFSC format error
+
+16. DISCOUNT
+    a. Request sheet with the required reason
+    b. Proposal in "Pending approval", Share disabled with the reason
+    c. Owner queue with four requests, margin impact in ₹
+    d. One approved — Share now available
+    e. One rejected with the owner's reason, revise-and-resubmit offered
+    f. Empty queue
+
+17. PREVIEW
+    a. Built FROM a design — no estimate label
+    b. Built WITHOUT a design — estimate label visible
+    c. Incomplete — shows what is missing, links to that step
+    d. Generating the PDF
+
+18. SHARE & TRACKING
+    a. Ready to share — PDF and link buttons, message preview
+    b. Marked as shared, waiting — "Not opened · shared 2 hours ago"
+    c. Opened — with time and duration
+    d. Opened several times — presented as a buying signal
+    e. Never opened after 5 days — visually urgent, agent escalation
+       noted
+    f. Customer accepted — the terminal happy state
+
+19. VERSIONS
+    a. Single version — no comparison offered
+    b. Two versions compared, showing only what changed
+    c. Three versions
+    d. An accepted version, locked
+
+20. BOM DETAIL (Path A only)
+    a. Desktop table, grouped by category, with subtotals
+    b. Mobile card list — NOT a scrolling table
+    c. A single line's detail sheet open
+    d. Path B — no BOM exists, explained rather than shown empty
 
 Use these figures throughout: Priya Sharma · Nashik, Maharashtra ·
 8.2 kWp · 12 panels · ₹4,52,471 system cost · ₹78,000 subsidy ·
