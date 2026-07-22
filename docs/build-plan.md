@@ -120,7 +120,10 @@ survive 40 rows? Does the detail screen have room for everything a lead accumula
 
 **Goal: the proposal builder.** Highest-traffic surface in the product.
 
-📄 **Prompts: `docs/phase-3-prompts.md`**
+📄 **Prompt: `docs/phase-3-prompt-single.md`** — ONE consolidated prompt, one page.
+*(`phase-3-prompts.md` is the earlier eight-prompt version, superseded. It was missing the
+proposals list, navigation, standalone creation, versions, discount approval and BOM
+detail.)*
 
 | # | Screen | Journey ref |
 |---|---|---|
