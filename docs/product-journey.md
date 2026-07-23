@@ -398,6 +398,11 @@ rework than any amount of validation.
 **Who:** designer, on desktop or tablet. **This stage already exists in code.**
 **Goal:** turn a survey into a system that is buildable and honest.
 
+**The survey comes with its photos.** The roof, obstruction and surroundings photos captured
+in Stage 4 — on site, sent by the customer, or uploaded — are the designer's reference here
+while tracing the roof and placing panels (D35). The app never measures from them
+automatically; a person still enters every dimension.
+
 > 🔻 **LOW PRIORITY — DESIGN THIS LAST (D23).**
 > The studio and every 3D screen come after all other design work is finished. They
 > already work in code, so a customer can be quoted today; redesigning them is an

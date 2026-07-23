@@ -1,5 +1,17 @@
 # HelioGrid — Product Spec (v1)
 
+> ⚠️ **HISTORICAL — SUPERSEDED BY `product-journey.md`.** This is the original v1 spec. The
+> source of truth is now **`product-journey.md`** (35 numbered decisions) with
+> **`build-plan.md`** as the tracker and `phase-N-prompts.md` as the screen prompts. Where
+> this file disagrees, they win. Known drift this file still carries:
+> - **Survey is remote-first** — address → Google Solar API → AI roof detection, enough to
+>   quote with no site visit (D30). This file's visit-first pipeline is outdated.
+> - **There is no discount approval** — anyone who can build a proposal can discount and
+>   share it (D34). Ignore the "Discount approval" flow below.
+> - **Survey photos are design reference, not measurement** (D35).
+>
+> Kept for historical context only. Do not build from it without checking the journey.
+
 Companion to the design system. That file says how things should LOOK.
 This file says WHAT to build — screens, content, actions and flows.
 

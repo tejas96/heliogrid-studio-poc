@@ -195,7 +195,7 @@ feel like one thing?
 on the roof, offline. The mode decides whether a number is *derived* or *measured*.
 
 📄 **Prompt: `docs/phase-5-prompts.md`** — sent to Claude Design ONE screen at a time,
-following the Phase 3 pattern: two standing rules, a **viewport block on every prompt**, and
+following the Phase 3 pattern: its standing rules, a **viewport block on every prompt**, and
 bodies that state what each screen must do and handle (no hex, no tokens — the design system
 carries the look).
 
@@ -292,6 +292,11 @@ connect the codebase and improve one at a time. Do not reinvent.
 | 10.3 | Panel layout — touch model |
 | 10.4 | 3D scene + captures |
 
+⚠️ **The studio consumes the survey.** Roof data and the photos captured in Phase 5 (roof,
+obstructions, surroundings) are the designer's reference here — D35. Wire the Phase 5 hand-off
+into the site-setup / roof-drawing steps; this is the placeholder those survey screens link to
+until this phase is built (backward-compat rule).
+
 ---
 
 ## Progress
@@ -323,7 +328,7 @@ unmanageable. This document stays the index and the tracker.
 |---|---|
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
-| Prompt files exist for Phases 1–4; **write 5–10 as each phase begins** | Phase 5 onward |
+| Prompt files exist for Phases 1–5; **write 6–10 as each phase begins** | Phase 6 onward |
 
 ---
 
@@ -332,7 +337,7 @@ unmanageable. This document stays the index and the tracker.
 **Phases 1–4 are built and reviewed.** Next is **Phase 5 — the site survey**.
 
 📄 **Prompt: `docs/phase-5-prompts.md`** — ten screens, sent to Claude Design ONE at a time,
-on the Phase 3 pattern (two standing rules + a viewport block per prompt). Two modes: remote
+on the Phase 3 pattern (standing rules + a viewport block per prompt). Two modes: remote
 (a rep at a desk reads satellite imagery) and physical (a surveyor on a roof, offline).
 
 ⚠️ **Provenance travels** — remote is *derived from imagery*, physical is *measured on site*.
