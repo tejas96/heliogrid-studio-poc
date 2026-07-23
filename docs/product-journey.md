@@ -22,6 +22,7 @@ Companions (already done, do not duplicate here):
 | D2 | Full mobile parity — every screen works at 375px, including the design studio | 2026-07-20 |
 | D3 | Brand: "Instrument" — warm graphite + brass, ink label on brass fills | 2026-07-20 |
 | D4 | ~~WhatsApp is the primary customer channel; email secondary~~ **SUPERSEDED by D32.** | 2026-07-20 |
+| D35 | **Survey photos are reference for the design, not measurement.** The survey captures and attaches photos of the roof, its obstructions and everything around the building — however taken: phone on site, customer-sent on WhatsApp, or a drone / other shot uploaded. Every photo is tagged and travels with the survey to the designer, who uses them when building the 3D proposal. What stays out of v1 is *deriving numbers* from photos (LiDAR, auto roof measurement, AR height) — a person still enters every dimension. This refines the earlier "drone out of scope" note: drone-as-imagery is fine; drone-as-automatic-measurement is not. | 2026-07-23 |
 | D34 | **No discount approval in this release** — supersedes D19. Anyone with permission to create a proposal can apply a discount and share it immediately. No request sheet, no approval queue, no "Pending approval" status. The only guard is arithmetic: a discount driving the client-payable figure to ₹0 or below is warned about and blocks Generate. Rationale: the approval hop was a known bottleneck and the permission to build a proposal already implies the commercial trust. Revisit if a tenant asks for per-rep discount ceilings. | 2026-07-22 |
 | D33 | **C&I customers use the same single link as residential in v1.** No per-contact links, no identity check, no portal accounts. Deferred deliberately — revisit when it hurts. ⚠️ **Known accepted risk:** anyone holding the link can tap Accept, including someone without authority to commit a ₹92 lakh order, and view tracking cannot say *which* stakeholder opened it. The likely later fix is named links per contact plus an OTP at the moment of accepting — reading stays frictionless, only the commitment is verified. | 2026-07-21 |
 | D32 | **No WhatsApp integration in v1.** The rep taps **Download PDF** and **Copy link**, then pastes both into their own WhatsApp. WhatsApp remains the channel customers actually use — the app just does not send on their behalf. **The link is ours, so opens ARE tracked**; delivery is not, because we do not control the sending. | 2026-07-21 |
@@ -377,7 +378,12 @@ designer is notified.
 - **Two surveys of the same site** (revisit) → versioned, not overwritten
 
 ### Deliberately not in v1
-Drone capture, LiDAR, automatic roof measurement from photos, AR height estimation.
+**Deriving numbers from photos automatically:** LiDAR, automatic roof measurement from
+photos, AR height estimation. Every dimension and height is still entered or estimated by a
+person. **Capturing and attaching reference photos is IN scope** (D35) — of the roof, its
+obstructions and everything around the building, taken by the phone on site, sent by the
+customer, or uploaded from a drone / other camera. Those photos are kept with the survey and
+handed to the designer for the 3D proposal; the app just does not measure from them.
 
 ### Recommendation
 **Make the review screen the star.** The surveyor's mistake is not laziness, it is

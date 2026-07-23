@@ -17,6 +17,13 @@ establishes patterns the next one reuses — an unfixed problem in Phase 1 gets 
 setting — you state it in the prompt, and asking for both at once keeps them consistent.
 Two separate prompts drift apart.
 
+**New screens link back into old ones — backward compatibility is a standing rule.** Every
+phase wires its screens into the actions of already-built screens (a survey is *started from*
+the lead detail; the surveyor's home sits *alongside* My Day; a survey *hands off to* the
+designer). New work extends the existing flow — it never orphans or replaces it. Every prompt
+must say which existing action opens the new screen and where it returns to, so the whole
+prototype stays traversable end to end.
+
 ---
 
 ## Review gate — run this after EVERY phase

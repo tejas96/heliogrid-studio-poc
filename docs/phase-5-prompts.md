@@ -25,7 +25,7 @@ Worklist and review gate: `build-plan.md`.
 
 ---
 
-## ⚠️ TWO RULES FOR THIS WHOLE PHASE
+## ⚠️ RULES FOR THIS WHOLE PHASE
 
 ### 1 · One screen keeps the bottom navigation — the rest do not
 
@@ -87,6 +87,23 @@ Wire it. This is clickable, not a picture of a screen.
   dead ends anywhere.
 - Where an action leads to another screen in this phase, link to that screen's page so the
   whole survey is traversable end to end.
+
+### 4 · LINK EVERY NEW SCREEN BACK INTO THE APP — never an island
+
+These screens do not stand alone. Each must connect to what is already built, so the
+prototype stays one continuous flow and nothing regresses:
+
+- the survey is **started from the existing lead-detail screen** (Phase 2) — its "Survey" /
+  "Book site visit" action opens 5.1; do not invent a new entry point
+- the surveyor's home (5.6) sits **alongside My Day** in the same app shell and nav
+- a finished survey **hands off to the designer**, and its roof data and photos are what the
+  **design studio (Phase 10)** opens for the 3D proposal
+- a rescheduled or "could not complete" visit **writes back to the lead's timeline**
+
+Wire into the REAL action on the existing screen. When a target is not built yet (the studio),
+link to a clearly labelled placeholder frame — never a dead end. Backward compatibility is a
+standing rule for every phase from here on: new work links into the existing flow, it never
+replaces or orphans it.
 
 ---
 
@@ -170,8 +187,15 @@ STRUCTURAL NOTES ARE OBSERVATIONS, NEVER A VERDICT. The app records
 
 ONE CAPTURE FLOW SERVES BOTH A REP AND A DEDICATED SURVEYOR (D15).
 
-OUT OF SCOPE for v1 — do not invent these: drone capture, LiDAR,
-automatic roof measurement from photos, AR height estimation.
+PHOTOS ARE REFERENCE FOR THE DESIGN, NOT MEASUREMENT. Capturing and
+attaching photos of the roof, its obstructions and everything AROUND the
+building is in scope, however they were taken — the phone on site, photos
+the customer sends on WhatsApp, or a drone / other shot uploaded. Every
+photo is kept and carried to the designer, who uses it when building the
+3D proposal. What stays OUT of v1 is deriving numbers from photos
+automatically: LiDAR, automatic roof measurement from photos, and AR
+height estimation. A person still enters or estimates every dimension and
+height (D35).
 
 REALISTIC INDIAN DATA THROUGHOUT: real cities (Nashik, Pune, Kothrud,
 Aundh, Baner), Indian names, DISCOM names (MSEDCL), sanctioned load in kW,
@@ -428,6 +452,10 @@ HOLDS a checklist of what remote cannot see, each item resolvable as
 - shading from anything not visible from above (a neighbour's wall, a
   ground-level tree)
 - whether the customer actually owns this roof
+- photos of the roof and everything around the building — offer to ask the
+  customer to send them on WhatsApp, so the designer gets real imagery for
+  the 3D proposal without anyone travelling. Attached photos are kept with
+  the survey and handed to the designer.
 
 Anything entered here as told-by-the-customer is labelled reported, not
 confirmed.
@@ -539,6 +567,17 @@ flagged as missing:
 - STRUCTURAL NOTES — visible cracks, roof age, existing waterproofing.
   OBSERVATIONS ONLY. The app records what is seen; it never declares the
   roof safe or unsafe.
+- SURROUNDINGS — photos of what sits AROUND and BESIDE the building:
+  neighbouring structures, the street side, tall things nearby that a
+  satellite cannot judge from above. These are reference for the
+  designer's 3D model and shading, not measurements.
+
+PHOTOS FEED THE 3D DESIGN. Every photo is tagged to its group and travels
+with the survey to the designer — they are what the design studio opens
+when building the 3D proposal, so nothing is left behind on the phone.
+Live capture opens the camera inline; a photo taken another way — a drone
+shot, for example — can instead be ATTACHED. No numbers are auto-derived
+from any photo.
 
 A clear sense of progress through the groups. What is done, what is
 skipped, what is left.
@@ -638,7 +677,10 @@ language, show:
 - what was FLAGGED (skipped on purpose, low confidence, height unsure)
 - a total of photos and notes captured
 
-Submitting hands the survey to the designer. It should be possible to jump
+Submitting hands the survey to the designer — the notes, the measurements
+AND every photo (roof, obstructions, surroundings). Those photos are what
+the design studio opens when building the 3D proposal, so the review must
+show they are captured and going with it. It should be possible to jump
 back to any group to fix a gap before submitting.
 
 SUBMIT IS ALLOWED EVEN WITH GAPS — the surveyor is not trapped on a roof by
