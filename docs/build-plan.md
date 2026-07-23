@@ -339,13 +339,13 @@ unmanageable. This document stays the index and the tracker.
 | 3 · Money path | 10 | ✅ built | ✅ |
 | 4 · Customer side | 3 lives, one page | ✅ built | ✅ |
 | 5 · Survey | 10 | ✅ built | ✅ |
-| 6 · Voice agent | 7 | ⬜ next | — |
-| 7 · Project management | 4 | ⬜ | — |
+| 6 · Voice agent | 7 | ✅ built | ✅ |
+| 7 · Project management | 4 | ⬜ next | — |
 | 8 · Admin & settings | 5 | ⬜ | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~57 screens, mobile + desktop each.** Phases 1–5 built and reviewed (33 screens).
+**~57 screens, mobile + desktop each.** Phases 1–6 built and reviewed (40 screens).
 
 ---
 
@@ -362,20 +362,17 @@ unmanageable. This document stays the index and the tracker.
 
 ## Where we are
 
-**Phases 1–5 are built and reviewed.** Next is **Phase 6 — the voice agent**.
+**Phases 1–6 are built and reviewed** (40 screens). Next is **Phase 7 — project management**.
 
-📄 **Prompt: `docs/phase-6-prompts.md`** — seven screens, sent to Claude Design ONE at a time.
-Each prompt is **self-contained** (context, states, wiring, viewport and rules baked in — copy
-one block, paste, done; nothing to splice).
+📄 **Prompt: `docs/phase-7-prompts.md`** — *not written yet.* When it is, it follows the same
+pattern: self-contained per-screen prompts (copy one block, paste, done), states switched by a
+header chip, working prototype, and every screen wired back into what's already built.
 
-🔓 **The agent is fully tenant-configurable — nothing locked (D36).** India's calling rules
-(DND, 9am–9pm, AI disclosure) ship as editable defaults; the owner shapes everything and owns
-compliance. Keep config simple; say the defaults note once, plainly.
-🔗 **It wires into built screens** — My Day's agent-activity block and the lead timeline
-(Phase 2) link to the call result; the lead gains a "Hand to the agent" action. Flag these in
-the prompts; do not rebuild those screens.
-
-**Build them one at a time, then bring all seven back for the review gate** before Phase 7.
+Phase 7 covers what happens **after a deal is won** — the project goes into execution: a
+projects board (stages, days-in-stage, blockers), project detail, payment collection against
+the tranches from the proposal, and a document checklist. It's the far side of "Mark won"
+(Stage 8 in the journey) and it wires into the lead → won handoff and the payment tranches set
+back in the proposal builder.
 
 ---
 
