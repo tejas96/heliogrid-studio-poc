@@ -22,6 +22,7 @@ Companions (already done, do not duplicate here):
 | D2 | Full mobile parity — every screen works at 375px, including the design studio | 2026-07-20 |
 | D3 | Brand: "Instrument" — warm graphite + brass, ink label on brass fills | 2026-07-20 |
 | D4 | ~~WhatsApp is the primary customer channel; email secondary~~ **SUPERSEDED by D32.** | 2026-07-20 |
+| D36 | **The voice agent is FULLY tenant-configurable — nothing is locked by the platform.** Supersedes the "compliance locked by the platform" half of D24. The owner sets and can change everything: name, voice, tone, languages, opening line, what it may discuss (including price), its whole knowledge, its hand-over rules, and its calling schedule. The app **ships India's calling rules as the starting defaults** — DND respected, 9am–9pm, and the agent disclosing it's automated — but the owner can change or switch off any of them. **The tenant owns compliance** (TRAI/DND and the rest); we provide safe defaults and one honest line, not a wall. Config stays simple: everything pre-filled, plain questions, plus a free-text box so the owner is never boxed in. **Accepted risk:** a tenant can configure calls that break local rules; that is their responsibility, surfaced once, plainly, not enforced. | 2026-07-23 |
 | D35 | **Survey photos are reference for the design, not measurement.** The survey captures and attaches photos of the roof, its obstructions and everything around the building — however taken: phone on site, customer-sent on WhatsApp, or a drone / other shot uploaded. Every photo is tagged and travels with the survey to the designer, who uses them when building the 3D proposal. What stays out of v1 is *deriving numbers* from photos (LiDAR, auto roof measurement, AR height) — a person still enters every dimension. This refines the earlier "drone out of scope" note: drone-as-imagery is fine; drone-as-automatic-measurement is not. | 2026-07-23 |
 | D34 | **No discount approval in this release** — supersedes D19. Anyone with permission to create a proposal can apply a discount and share it immediately. No request sheet, no approval queue, no "Pending approval" status. The only guard is arithmetic: a discount driving the client-payable figure to ₹0 or below is warned about and blocks Generate. Rationale: the approval hop was a known bottleneck and the permission to build a proposal already implies the commercial trust. Revisit if a tenant asks for per-rep discount ceilings. | 2026-07-22 |
 | D33 | **C&I customers use the same single link as residential in v1.** No per-contact links, no identity check, no portal accounts. Deferred deliberately — revisit when it hurts. ⚠️ **Known accepted risk:** anyone holding the link can tap Accept, including someone without authority to commit a ₹92 lakh order, and view tracking cannot say *which* stakeholder opened it. The likely later fix is named links per contact plus an OTP at the moment of accepting — reading stays frictionless, only the commitment is verified. | 2026-07-21 |
@@ -31,19 +32,21 @@ Companions (already done, do not duplicate here):
 | D7 | Three audiences: company **owner**, **employees**, and the **EPC's customer** | 2026-07-21 |
 | D8 | A **voice agent** calls customers for follow-ups and answers inbound questions | 2026-07-21 |
 | D9 | v1 = **Sell + light project tracking**. Won deal → Ordered → Installed → Commissioned → Handed over, plus a document checklist and customer-visible progress. **No** inventory, POs, scheduling engine or O&M. | 2026-07-21 |
-| D10 | Voice agent may: follow up, answer FAQ, book callbacks/visits, gauge interest. It may **never** discuss discounts, negotiate, or accept a deal — price always escalates to a human. Every call is transcribed onto the lead timeline. | 2026-07-21 |
+| D10 | Voice agent's **default** behaviour: follow up, answer FAQ, book callbacks/visits, gauge interest; by default it offers a human for price/discount rather than negotiating. ~~It may never discuss discounts or negotiate.~~ **The "never" is SUPERSEDED by D36** — discount/negotiation are now owner-configurable defaults, not hard rules. (Actual deal *acceptance* still happens when the customer taps Accept on the proposal link — C8 — not by a verbal agent agreement.) Every call is transcribed onto the lead timeline. | 2026-07-21 |
 | D11 | **Self-serve signup**, free trial. Billing prompted later, not at signup. | 2026-07-21 |
 | D12 | App UI **English**. Voice agent speaks **Hindi, Marathi, Gujarati, Tamil, Telugu + English**, chosen per customer. | 2026-07-21 |
 
-## Constraints the voice agent inherits (India)
+## India's calling rules — shipped as defaults, owned by the tenant (D36)
 
-Not optional, and they shape the UI:
-- **TRAI / DND** — commercial calls to DND-registered numbers are restricted. The app must
-  hold consent per customer and visibly show call eligibility before an agent dials.
-- **Calling hours** — no automated calls outside ~9am–9pm local. The scheduler enforces it.
-- **AI disclosure** — the agent identifies itself as an automated assistant at call start.
-- **Recording consent** — captured and stored; the customer can decline and still be served.
-- **Human escape hatch** — "talk to a person" must always work, on every call.
+These are India's rules for automated commercial calling. The app ships them as the
+**starting defaults** so a tenant is compliant out of the box, but **the owner can change or
+switch off any of them** and owns the responsibility (D36). They are surfaced once, plainly —
+not enforced as locks.
+- **TRAI / DND** — default: don't call DND-registered numbers; consent tracked per customer.
+- **Calling hours** — default: 9am–9pm local; the owner can widen, narrow or move it.
+- **AI disclosure** — default opening line says it's an automated assistant; fully editable.
+- **Recording consent** — default: captured; a customer can decline and still be served.
+- **Human escape hatch** — "talk to a person" ships on by default; the owner shapes hand-over.
 
 | D13 | v1 lead sources: **manual quick-add, CSV import, inbound call via voice agent.** Website form and inbound WhatsApp are deferred — WhatsApp is outbound-only in v1. | 2026-07-21 |
 | D14 | Assignment is **manual, with each rep's open load visible** at the moment of assigning. No auto-routing rules in v1. | 2026-07-21 |
@@ -62,7 +65,7 @@ Not optional, and they shape the UI:
 | D29 | **Custom roles deferred to v2.** Ship the six, watch which combinations companies actually ask for, then add the presets they wanted — rather than guessing at a checkbox editor nobody fills in. | 2026-07-21 |
 | D25 | **The app UI is multilingual: English, Hindi, Marathi.** Supersedes the English-only half of D12. Voice agent languages stay configurable per tenant, defaulting to the same three. Devanagari support is a design-system change, not just a translation task — see "Multilingual". | 2026-07-21 |
 | D26 | **Billing screens are MOCK for now.** Pricing, tiers and limits are not decided. Design the shape — plans, usage, upgrade, payment failure, suspension — with placeholder numbers, so the flows exist and the real pricing drops in later. | 2026-07-21 |
-| D24 | **Everything commercial is configurable per tenant; everything about safety, honesty and compliance is locked by the platform.** The agent's instructions and business knowledge are configured through guided questions and a structured knowledge base — **never a raw prompt box**. Unanswered questions from real calls feed back as one-tap additions. See "Tenant configuration". | 2026-07-21 |
+| D24 | **The agent is configured through guided questions and a structured knowledge base, kept simple** — with a free-text box so the owner is never boxed in. Unanswered questions from real calls feed back as one-tap additions. ~~Everything about safety, honesty and compliance is locked by the platform.~~ **The "locked by platform" half is SUPERSEDED by D36** — the agent is fully tenant-configurable; the app ships safe defaults, the owner owns compliance. See "Tenant configuration". | 2026-07-21 |
 | D23 | **The design studio (Stage 5) and all 3D screens are LOW PRIORITY — design them last.** Everything else ships first: onboarding, CRM, survey, proposal builder, voice agent, close, project tracking. The studio already works in code; redesigning it is an improvement, not a blocker. | 2026-07-21 |
 | D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. **Component kits were considered and REMOVED (2026-07-21)** — speed comes instead from *duplicate an earlier proposal*, which carries its components, and from Path A filling them straight off the BOM. | 2026-07-21 |
 
@@ -769,20 +772,20 @@ UPCOMING THIS WEEK (8)
 | **Agent settings** | On/off. Which triggers are live (D17). Calling window (default 9am–9pm). Language per customer or auto-detect. Max attempts before it gives up. |
 | **Agent queue** | Who is scheduled to be called, when, and why. The owner can remove anyone from it. |
 | **Call result** | On the lead timeline: outcome, one-line summary, interest signal, any action taken. Transcript and recording on tap. |
-| **Consent & eligibility** | Per customer: consent captured? DND-listed? Do-not-call flag set by a rep? **The agent cannot dial without this being clear.** |
+| **Consent & eligibility** | Per customer: consent captured? DND-listed? Do-not-call flag? Shown before a dial; set to respect them by default, the owner owns the choice (D36). |
 | **Escalations** | Calls the agent handed to a human, and why — with the reason visible ("customer asked for a discount"). |
 
-### What the agent may and may not do
-| May | May not |
+### What the agent does by default — all editable by the owner (D36)
+| By default it does | By default it holds back |
 |---|---|
-| Ask whether the proposal was received and reviewed | Discuss, offer or agree any discount |
-| Answer FAQs: timeline, subsidy, warranty, process, financing options | Negotiate price |
+| Ask whether the proposal was received and reviewed | Discuss or offer a discount *(the owner can enable this)* |
+| Answer FAQs: timeline, subsidy, warranty, process, financing | Negotiate price *(the owner can enable this)* |
 | Book a callback or a site visit | Accept or confirm a deal |
 | Record interest level and objections | Make technical or structural commitments |
 | Hand off to a human at any point | Continue after the customer asks to stop |
 
-**Every call opens by identifying itself as an automated assistant, and "talk to a person"
-works at any moment.**
+**By default every call opens by identifying itself as an automated assistant, and "talk to a person"
+works at any moment — both are on by default and the owner can change them (D36).**
 
 ### Close
 | Screen | Contains |
@@ -1040,17 +1043,19 @@ a sales pitch — the boring, specific reassurance a person needs before spendin
 ### C7 · The follow-up
 **They experience:** a call. Sometimes from the rep, sometimes from the agent.
 
-The agent opens by saying it is automated (locked rule). Handled well, this is fine —
+The agent opens by saying it is automated (the default; D36). Handled well, this is fine —
 people are increasingly used to it, and an agent that answers a warranty question at 8pm
 is more useful than a rep who calls back on Tuesday.
 
 Handled badly it is insulting: calling three times in a week, calling at dinner, not
-understanding Marathi, not letting them reach a human. **Every one of those is prevented by
-a locked platform rule, not by tenant configuration** — which is exactly why those rules
-are locked.
+understanding Marathi, not letting them reach a human. **The app ships defaults that prevent
+all of those** — capped attempts, a 9am–9pm window, per-customer language, an always-offered
+human hand-off. The owner can change them and owns that choice (D36), so the defaults are set
+to protect the customer out of the box.
 
-**Goes wrong:** they ask about a discount and the agent tries to answer *(cannot — it
-escalates, D10)* · they say stop and get called again *(cannot — irreversible flag)*.
+**Goes wrong:** they ask about a discount and the agent handles it however the owner set it
+to *(by default it offers a human — D36)* · they say stop and get called again *(a "stop"
+sets do-not-call, on by default)*.
 
 ### C8 · The decision
 **They experience:** tapping **Accept** on the link, or going quiet, or saying no.
@@ -1144,43 +1149,43 @@ Every company on the platform is different: different brands, different warranti
 different pitch, different service area. **Configuration is a first-class product surface,
 not a settings dumping ground.**
 
-### The governing principle
+### The governing principle (updated — D36)
 
-```
-LOCKED BY THE PLATFORM          CONFIGURED BY THE TENANT
-─────────────────────           ────────────────────────
-safety, honesty, compliance     everything commercial
-cannot be overridden by         and everything about
-any tenant, ever                how they sell
-```
+The **agent is fully the tenant's** — nothing about it is locked. The app ships **safe,
+India-legal defaults** and the owner can change or switch off any of them; the tenant owns
+compliance. Config is kept **simple**: everything pre-filled, plain questions, plus a
+free-text box so they're never boxed in.
 
-**What a tenant may never change** — because these protect their customer, and them:
-- The agent identifies itself as an automated assistant
-- "Talk to a person" always works
-- The agent never discusses, offers or agrees a discount (D10)
-- The agent never makes structural or engineering guarantees
-- Calling stays inside legal hours and respects DND / do-not-call
-- Numbers keep their provenance labels; estimates are never printed as calculations
-- The customer is never told something the system cannot support
+**Safe defaults the app ships — all editable by the owner (D36):**
+- The agent introduces itself as an automated assistant *(default; editable)*
+- "Talk to a person" is offered *(default on; the owner shapes hand-over)*
+- Hand-over on price questions, an angry customer, "stop" *(default; add / edit / remove)*
+- Calls run 9am–9pm and skip DND numbers *(default; the owner can change it)*
+- Recording consent captured *(default; a customer may decline and still be served)*
 
-Everything else is theirs.
+The owner decides how their agent talks, what it discusses (including price), and when it
+calls. They own the responsibility; we surface it once, plainly, not as a wall.
+
+*(Separate from the agent, and still platform behaviour: the product's own number-honesty —
+provenance labels, and estimates never printed as calculations — because that governs the
+proposal and design **output**, not the agent's speech. See N7.)*
 
 ---
 
 ### A · Voice agent configuration
 
-**The design problem:** a solar business owner cannot and should not write a prompt.
-So we never show them one. They answer questions about their business; we assemble the
-instructions.
+**The design approach:** a solar business owner shouldn't have to write a prompt, so the
+default is **guided questions with everything pre-filled** — plus a free-text box for anything
+else, so they're never limited. Simple by default, open when they want more.
 
 | Screen | Contains |
 |---|---|
-| **Agent setup — guided** | 6 short steps, plain language. Agent name · voice · languages · tone (Professional / Friendly / Direct) · what to say when asked something it doesn't know · when to hand to a human. Defaults are pre-filled and work on day one. |
-| **Opening line** | Editable, with the mandatory AI disclosure fixed and visible as locked text. "Namaste, this is *Asha* calling from *Suryodaya Solar*. I'm an automated assistant — is now a good time?" The bold parts are theirs; the disclosure is not. |
-| **Escalation rules** | Toggle list: price/discount questions (locked ON) · angry customer · asks for the owner · technical question the agent can't answer · customer asks to stop. Each with "what the agent says as it hands over". |
-| **Calling window** | Days, hours, holiday calendar. Bounded by the legal window — a tenant can narrow it, never widen it past 9am–9pm. |
+| **Agent setup — guided** | Plain-language steps, all pre-filled: name · voice · languages · tone · opening line · what to say when it doesn't know · when to hand to a human · when it may call (hours, days, holidays). Plus a free-text "anything else". Everything editable; nothing locked. |
+| **Opening line** | Pre-filled with an AI disclosure — "Namaste, this is *Asha* from *Suryodaya Solar*. I'm an automated assistant — is now a good time?" — that the owner can keep or change. All of it is theirs. |
+| **Hand-over rules** | A list the owner edits, adds to or removes: price questions · angry customer · asks for the owner · a question it can't answer · asks to stop. Each with what the agent says as it hands over. Sensible defaults, none forced. |
+| **Calling window** | Days, hours, holiday calendar. Defaults to 9am–9pm and skips DND; the owner can change any of it (and owns that choice — D36). |
 | **Test the agent** | **The most important screen here.** Call yourself, or run a typed conversation. Hear exactly what a customer hears, before anyone else does. |
-| **Version history** | Every change is versioned. Each call records which version answered it — so a dispute about what the agent said is answerable. |
+| **Change history** | Kept quietly in the background — each call records which settings answered it, so a dispute is answerable. Not a chore the owner manages. |
 
 ### B · Business knowledge — what the agent knows
 
@@ -1192,7 +1197,7 @@ Not a document upload. A **structured, reviewable knowledge base** in the owner'
 | **Products** | Panel brands offered, inverter brands, why we chose them |
 | **Warranty** | Panel 25yr performance / 12yr product, inverter 5yr, workmanship 2yr |
 | **Process & timeline** | Survey in 2 days · design in 3 · install 1–2 days · net-metering 3–6 weeks |
-| **Pricing policy** | What's included, what's extra. **No discount authority** — locked. |
+| **Pricing & offers** | What's included, what's extra, and whatever the owner wants the agent to say about price — their call (D36). |
 | **Subsidy** | How PM Surya Ghar works, who qualifies, who applies, typical timeline |
 | **Financing** | Which banks/NBFCs, typical EMI, documents needed |
 | **Common objections** | "Too expensive" · "I'll wait for prices to drop" · "Does it work in monsoon?" · "What about cleaning?" — with the answer the owner wants given |
@@ -1241,8 +1246,8 @@ owner reviews and personalises. Day one it works; week four it sounds like them.
    and the invoice.
 
 ### What goes wrong
-- **Owner writes an instruction that breaks a locked rule** ("offer 10% if they hesitate")
-  → rejected at save with a plain explanation, not silently ignored
+- **Owner sets the agent to do something legally risky** (calls outside hours, edits out the
+  disclosure) → allowed (D36); the one honest note has already told them they own that choice
 - **Knowledge base contradicts itself** (two different warranty answers) → flagged on save
 - **Agent config changed mid-campaign** → versioned; calls already scheduled use the
   version they were queued with, and the owner is told

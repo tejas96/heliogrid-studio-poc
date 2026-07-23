@@ -1,12 +1,12 @@
-# Phase 6 — The Voice Agent  ▸ 8 screens
+# Phase 6 — The Voice Agent  ▸ 7 screens
 
-**The most compliance-loaded surface in the product.** An automated assistant calls real
-customers in India. Every screen here is shaped by law (TRAI/DND, calling hours), by honesty
-(AI self-disclosure, no discount authority), and by trust (the owner must see exactly what a
-machine did on their behalf).
+**An automated assistant that calls customers, shaped entirely by the company that owns it.**
+The agent is **fully configurable per tenant** — name, voice, tone, languages, what it says,
+what it knows, when it hands over, when it calls. Our job is to make configuring it feel
+**simple**, with good defaults, not a control panel.
 
-Reference: `product-journey.md` — Stage 7, "Constraints the voice agent inherits", Tenant
-Configuration A & B, Agent Performance; decisions **D8, D10, D17, D18, D24, D25**.
+Reference: `product-journey.md` — Stage 7, Tenant Configuration A & B, Agent Performance;
+decisions **D8, D17, D18, D36** (D36 supersedes the "locked by platform" half of D24).
 Worklist and review gate: `build-plan.md`.
 
 ---
@@ -14,53 +14,46 @@ Worklist and review gate: `build-plan.md`.
 ## ⚠️ HOW TO USE THESE PROMPTS — read once
 
 **Each prompt below is SELF-CONTAINED.** Copy the ONE fenced block for a screen and paste it
-into Claude Design as-is. There is nothing to splice in — the context, the states, the
-wiring, the viewport and the standing rules are already inside every block. (This is the
-change from Phase 5, where you had to paste the prompt *and* the shared blocks.)
+into Claude Design as-is — the context, states, wiring, viewport and rules are already inside
+every block. Nothing to splice. The prose outside the blocks is for **you**; don't paste it.
 
-The prose outside the fenced blocks (this section, the maps below, the headings) is for **you**
-— do not paste it.
-
-Still true, and baked into every block so you don't have to remember it:
-- No colours, hex or token names in a prompt — the design system in the dropdown carries the
-  look; Claude Design decides the layout.
+Baked into every block so you needn't remember it:
+- No colours, hex or token names in a prompt — the design system carries the look; Claude
+  Design decides the layout.
 - One page per screen, states swapped by a header chip (not separate static frames).
 - It must be a working prototype — actions wired, sheets open and close, no dead ends.
 
 ---
 
-## 🔒 WHAT THE PLATFORM LOCKS — the tenant can never change these (D24, D10)
+## The one principle: everything is the owner's, kept simple (D36)
 
-These appear as fixed, visibly-locked elements inside the relevant prompts. Listed here once
-so you understand why:
+**Nothing is locked.** The owner configures the agent their way — its whole personality,
+script, knowledge, hand-over rules and calling schedule are theirs to set and change.
 
-- The agent **opens every call by identifying itself as an automated assistant**.
-- **"Talk to a person" always works**, on every call, at any moment.
-- The agent **never discusses, offers or agrees a discount** (D10), and never makes
-  structural or engineering guarantees.
-- Calls happen **only within legal hours (9am–9pm local)** and **respect DND / do-not-call**.
-  The agent cannot dial a customer whose eligibility is not clear.
-- **Recording consent** is captured; a customer may decline and still be served.
-- The owner configures the agent by **answering guided questions and filling a structured
-  knowledge base — NEVER a raw prompt box.**
-
-Everything else — name, voice, tone, languages, what it knows, when it hands over — is theirs.
+**Make it easy, not powerful-looking:**
+- Every setting has a **sensible default already filled**, so the agent works on day one
+  without touching anything.
+- Plain questions and toggles in the owner's language — never a wall of technical options.
+- The app ships **India's calling rules as the starting defaults** — DND respected, calls
+  9am–9pm, and the agent mentioning it's an automated assistant. The owner can change or
+  switch off any of these; they decide how their agent calls and are responsible for it.
+  State this **once, plainly, as a helpful note — never as a lock or a warning wall.**
 
 ---
 
 ## 🔗 SCREENS THIS PHASE TOUCHES THAT ARE ALREADY BUILT — flag, don't rebuild
 
-Phase 6 does **not** touch the Phase 5 survey screens at all. It connects to Phase 2:
+Phase 6 does **not** touch the Phase 5 survey screens. It connects to Phase 2:
 
 | Built screen | What Phase 6 does to it |
 |---|---|
-| **My Day (2.1)** — already has an "Agent activity" block | **Wire only.** Each agent-activity row now links to the call result (6.7). Do not redesign My Day. |
-| **Lead detail (2.3)** — already shows 🤖 agent timeline entries with a [Transcript] link | **Wire + one real change.** The call result (6.7) is the expansion of that timeline entry. AND add a new action **"Hand to the agent"** (on-demand trigger, D17) plus a small **agent-status line** on the lead (queued for a call · do-not-call · consent captured). This is a genuine modification to a built screen — call it out in the prompt. |
-| **Settings** (in More / the sidebar) | The agent configuration screens (6.1–6.5) are reached from here. |
-| **Notifications (Phase 9, not built yet)** | A price/discount escalation notifies the rep, not a task. Link to a labelled placeholder until Phase 9 exists. |
+| **My Day (2.1)** — already has an "Agent activity" block | **Wire only.** Each agent-activity row links to the call result (6.6). Do not redesign My Day. |
+| **Lead detail (2.3)** — already shows 🤖 agent timeline entries with a [Transcript] link | **Wire + one real change.** The call result (6.6) is the expansion of that entry. AND add a new action **"Hand to the agent"** (on-demand, D17) plus a small **agent-status line** on the lead (queued for a call · do-not-call · will call at…). Call this modification out in the prompt. |
+| **Settings** (in More / the sidebar) | The agent config screens (6.1–6.4) are reached from here. |
+| **Notifications (Phase 9, not built yet)** | The agent hands some calls to the rep (e.g. a price question, if the owner set it to) — link to a labelled placeholder until Phase 9 exists. |
 
-Close (mark won / lost) is **not** in this phase — lost already lives on the lead as
-"Disqualify", and won → project belongs to Phase 7.
+Close (mark won / lost) is **not** in this phase — lost lives on the lead as "Disqualify",
+won → project belongs to Phase 7.
 
 ---
 
@@ -68,178 +61,163 @@ Close (mark won / lost) is **not** in this phase — lost already lives on the l
 
 ```
 CONFIGURE  (owner, at a desk — reached from Settings)
-  6.1  Agent setup — the guided 6 steps + the opening line
-  6.2  Escalation rules & the calling window
-  6.3  Test the agent            ← the most important config screen
-  6.4  Business knowledge — the structured, seeded knowledge base
-  6.5  Unanswered questions      ← the loop that keeps it honest
+  6.1  Set up your agent — who it is, how it talks, when it calls, when it hands over
+  6.2  Business knowledge — what it knows
+  6.3  Test your agent          ← hear it before any customer does
+  6.4  Unanswered questions     ← the loop that keeps it improving
 
-RUN  (rep- and owner-facing)
-  6.6  Agent queue & call eligibility
-  6.7  Call result + transcript  ← expands the existing lead timeline
+RUN
+  6.5  Who the agent will call
+  6.6  Call result + transcript ← expands the existing lead timeline
 
-MEASURE  (owner — retention)
-  6.8  Agent performance         ← with the correlation-not-attribution caveat
+MEASURE
+  6.7  Agent performance        ← with the correlation-not-attribution caveat
 ```
 
 ---
 
-# 6.1 · Agent setup — the guided 6 steps + the opening line
+# 6.1 · Set up your agent
 
 ```
-Design the VOICE AGENT SETUP for a solar company owner. Use the selected
-design system; no colours or token names here — you decide the layout.
-
-WHO: Rajesh Patil, owner of Suryodaya Solar, Nashik. Not technical. He
-must NEVER see a prompt box — he answers questions and we assemble the
-agent's instructions for him.
-GOAL: a working agent in a few minutes, with safe defaults already filled.
-
-THE 6 GUIDED STEPS — plain language, each pre-filled with a sensible
-default so it works on day one:
-1. Agent name — e.g. "Asha"
-2. Voice — a small set of sample voices he can play and pick
-3. Languages it speaks — English · हिंदी · मराठी (per customer, or
-   auto-detect)
-4. Tone — Professional · Friendly · Direct
-5. What to say when asked something it doesn't know — offer a callback,
-   never guess
-6. When to hand to a human — sensible defaults, refined in 6.2
-
-THE OPENING LINE — editable, with the mandatory AI disclosure fixed and
-shown as LOCKED text he cannot remove:
-  "Namaste, this is Asha calling from Suryodaya Solar. I'm an automated
-   assistant — is now a good time?"
-The bold parts (name, company) are his; the "I'm an automated assistant"
-disclosure is locked.
-
-VERSION HISTORY — every change is versioned; each call later records which
-version answered it, so a dispute is answerable. Show this as a panel, not
-a separate screen.
-
-🔒 LOCKED, show as fixed and non-editable: the AI self-disclosure in the
-opening line; "talk to a person" always available; the agent never
-discusses or offers a discount and makes no structural guarantees. The
-owner configures by answering questions — there is NO raw prompt box
-anywhere on this screen.
-
-STATES — switch from a header chip on ONE mobile+desktop frame pair (never
-separate static frames); sheets are overlays reached by tapping, not chip
-states:
-- first-time setup, defaults pre-filled, nothing customised yet
-- fully customised by the owner
-- playing a voice sample (overlay)
-- an invalid entry — e.g. he tries to edit out the AI disclosure → blocked
-  with a plain explanation, his other edits kept
-- version history panel open, showing 3 past versions
-
-WIRE THESE — real prototype, actions connected:
-- reached FROM Settings (in More / the sidebar) → this screen
-- "Next / Continue" moves through the 6 steps on the same page
-- "Set escalation & calling hours" → 6.2
-- "Test it" → 6.3
-- "Save" → confirmation, stays here
-
-VIEWPORTS — build both, one design:
-- DESKTOP 1440px is the primary surface (an owner configures at a desk);
-  the 240px left sidebar stays, this occupies the main area.
-- MOBILE 375px is a capable companion; this is a nested settings flow, so
-  no bottom nav — full screen with a back ‹ in the header.
-Same content in both; desktop is not a stretched phone. Place them side by
-side, mobile left, desktop right.
-```
-
----
-
-# 6.2 · Escalation rules & the calling window
-
-```
-Design the AGENT ESCALATION RULES and CALLING WINDOW. Use the selected
+Design "Set up your agent" for a solar company owner. Use the selected
 design system; no colours or token names — you decide the layout.
 
-WHO: the owner, deciding when the agent must step back and let a human in,
-and when it is allowed to call at all.
-GOAL: set the guardrails once, in plain toggles, and trust them.
+WHO: Rajesh Patil, owner of Suryodaya Solar, Nashik. Not technical. He
+should feel like he's answering a few easy questions, not operating a
+console. No prompt box, no jargon.
+GOAL: a working, personalised agent in a few minutes, with everything
+pre-filled so he could also just accept the defaults and move on.
 
-ESCALATION RULES — a toggle list, each with an editable line of "what the
-agent says as it hands over":
-- price / discount question — LOCKED ON, cannot be turned off (D10)
-- angry or upset customer
-- customer asks for the owner by name
-- a technical question the agent can't answer
-- customer asks it to stop
-When any fires, the rep is notified immediately (not buried in a task
-list), and the reason is recorded ("customer asked for a discount").
+ONE simple guided setup, everything editable, sensible defaults filled:
+- Name — e.g. "Asha"
+- Voice — a few samples he can play and pick
+- Languages it speaks — English · हिंदी · मराठी, per customer or auto-detect
+- Tone — Professional · Friendly · Direct
+- Opening line — pre-written and fully editable, e.g. "Namaste, this is
+  Asha from Suryodaya Solar. Is now a good time?"
+- What it does when it doesn't know something — default: offer a callback
+- When to hand the call to a person — a short, editable list (price
+  questions, an upset customer, asks for the owner, asks to stop), each
+  with what the agent says as it hands over. He can add, edit or remove any.
+- When it may call — days, hours, and a holiday calendar
+- One free-text box: "Anything else you'd like Asha to know or do" — so he
+  is never boxed in by our fields
 
-CALLING WINDOW:
-- days of the week, start and end time
-- a holiday calendar (Indian festivals) when the agent stays silent
-- BOUNDED by the legal window: the owner can NARROW it, never widen past
-  9am–9pm local. Show the legal bound as a fixed edge he cannot cross.
+THE ONE HONEST NOTE (a single calm line, NOT a lock or a warning wall):
+"These are set to India's calling rules — DND respected, calls between
+9am and 9pm, and Asha mentioning she's an automated assistant. Change any
+of them; you decide how your agent calls."
+Everything in that note is editable like anything else on the screen.
 
-🔒 LOCKED, shown as fixed: the price/discount escalation stays ON; calls
-never fall outside 9am–9pm; DND / do-not-call is always respected. A
-customer who said "stop" is never dialled again.
+Keep it SIMPLE: grouped, skippable, defaults visible. It must be possible
+to reach "Test it" without changing a single field.
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
-separate static frames):
-- default rules and window
-- customised (narrower hours, extra escalations on)
-- the owner tries to widen hours past the legal edge → blocked, explained
-- a holiday added to the calendar
+separate static frames); voice samples and the free-text box are inline,
+not chip states:
+- fresh, all defaults filled (he could stop here)
+- personalised (his name, tone, hours, extra hand-over rules)
+- playing a voice sample
+- the "anything else" free-text in use
 
 WIRE THESE — real prototype:
-- reached from 6.1 ("Set escalation & calling hours") and from Settings
-- editing an escalation's hand-over line opens an inline editor
-- "Save" → confirmation, stays here
+- reached FROM Settings (More / the sidebar)
+- moving through the groups happens on the same page
 - "Test it" → 6.3
+- "What it knows" → 6.2
+- "Save" → confirmation, stays here
 
-VIEWPORTS — build both, one design: DESKTOP 1440px primary (owner at a
-desk, sidebar stays), MOBILE 375px companion, nested settings flow so no
-bottom nav (back ‹ in the header). Side by side, mobile left, desktop
-right; desktop is not a stretched phone.
+VIEWPORTS — build both, one design: DESKTOP 1440px primary (an owner sets
+this up at a desk; the 240px sidebar stays, this fills the main area),
+MOBILE 375px a capable companion; nested settings flow, no bottom nav
+(back ‹ in the header). Side by side, mobile left, desktop right; desktop
+is not a stretched phone.
 ```
 
 ---
 
-# 6.3 · Test the agent
+# 6.2 · Business knowledge — what it knows
 
 ```
-Design the TEST THE AGENT screen — the most important screen in the agent
-configuration. Use the selected design system; no colours or token names —
-you decide the layout.
+Design "Business knowledge" — what the agent knows about this company. Use
+the selected design system; no colours or token names — you decide the
+layout.
+
+WHO: the owner, teaching the agent his business in his own words.
+GOAL: a simple, editable set of answers — filled in already, so it works
+day one and he only tweaks what he cares about.
+
+SECTIONS, each in plain language and SEEDED with correct generic solar
+answers he can personalise (or leave as-is):
+- About us — years, installations, certifications, area
+- Products — panel and inverter brands, why chosen
+- Warranty — panel 25yr / inverter 5yr / workmanship 2yr
+- Process & timeline — survey 2 days · design 3 · install 1–2 · net
+  metering 3–6 weeks
+- Pricing & offers — what's included, what's extra, and whatever he wants
+  the agent to say about price. It's HIS call what the agent may discuss.
+- Subsidy — how PM Surya Ghar works
+- Financing — banks / NBFCs, typical EMI
+- Common objections — "too expensive", "I'll wait", "does it work in
+  monsoon?", "what about cleaning?" — with the answer he wants given
+- A free-text "Anything else" so he's never limited to our sections
+
+Make clear every section is already filled (seeded) and editable — day one
+it works, over weeks it sounds like him.
+
+STATES — switch from a header chip on ONE mobile+desktop frame pair (never
+separate static frames); editing a section is an inline editor / sheet:
+- seeded defaults, nothing personalised yet
+- personalised by the owner
+- a section being edited
+- the free-text "anything else" in use
+
+WIRE THESE — real prototype:
+- reached from Settings and from 6.1
+- "See what customers asked" → 6.4 Unanswered questions
+- "Test how it answers" → 6.3
+- "Save" → confirmation, stays here
+
+VIEWPORTS — build both, one design: DESKTOP 1440px primary (sidebar
+stays), MOBILE 375px companion, nested settings flow, no bottom nav (back
+‹). Side by side, mobile left, desktop right; desktop is not a stretched
+phone.
+```
+
+---
+
+# 6.3 · Test your agent
+
+```
+Design "Test your agent" — where the owner hears exactly what a customer
+will hear, before anyone else does. Use the selected design system; no
+colours or token names — you decide the layout.
 
 WHO: the owner, about to let an automated voice represent his company.
-GOAL: hear exactly what a customer will hear, BEFORE any customer does.
+GOAL: try it, trust it, and fix anything that sounds off — in one place.
 
-TWO WAYS TO TEST, both on this screen:
-1. CALL YOURSELF — enter a number, the agent calls it, the owner has a
-   real spoken conversation and hears the voice, tone and opening line.
-2. TYPED CONVERSATION — a chat-style simulation for a quick check without
-   a phone call: the owner types what a customer might say and sees how
-   the agent responds, in the chosen language.
+TWO WAYS TO TEST:
+1. CALL YOURSELF — enter a number, the agent calls, he has a real spoken
+   conversation and hears the voice, tone and opening line.
+2. TYPED CONVERSATION — a quick chat-style simulation without a call: he
+   types what a customer might say and sees the agent's replies, in the
+   chosen language.
 
-It must be obvious which agent version is being tested, and the owner can
-jump back to 6.1 / 6.2 / 6.4 to fix anything that sounds wrong, then
-re-test.
-
-🔒 LOCKED and audible/visible in the test: the opening AI disclosure; the
-agent refusing to discuss a discount and offering a human instead; "talk
-to a person" working mid-conversation.
+He can jump back to 6.1 / 6.2 to fix anything, then re-test. Keep it
+light and obvious — this should feel like pressing play, not configuring
+a test harness.
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
 separate static frames); the live call is an overlay, not a chip state:
 - idle, choose how to test
-- a live test call in progress (overlay) — connected, with a way to end it
-- a typed simulation mid-conversation, showing several turns
-- the owner triggers a discount question in the sim → the agent declines
-  and offers a human (proving the lock works)
-- "talk to a person" tapped mid-sim → hand-over message shown
+- a live test call in progress (overlay), with a way to end it
+- a typed simulation mid-conversation, several turns
+- something sounded wrong → quick links back to fix the script or knowledge
 
 WIRE THESE — real prototype:
 - reached from 6.1 / 6.2 ("Test it")
-- "Fix the script" → back to 6.1; "Fix knowledge" → 6.4
-- "Looks good — turn the agent on" → confirmation
+- "Fix the script" → 6.1; "Fix knowledge" → 6.2
+- "Turn the agent on" → confirmation
 
 VIEWPORTS — build both, one design: DESKTOP 1440px primary, MOBILE 375px
 companion, nested settings flow, no bottom nav (back ‹). Side by side,
@@ -248,158 +226,89 @@ mobile left, desktop right; desktop is not a stretched phone.
 
 ---
 
-# 6.4 · Business knowledge — the structured knowledge base
+# 6.4 · Unanswered questions
 
 ```
-Design the BUSINESS KNOWLEDGE base — what the agent knows about this
-company. Use the selected design system; no colours or token names — you
-decide the layout.
-
-WHO: the owner, teaching the agent his business in his own words.
-GOAL: a reviewable, structured knowledge base — NOT a document upload, NOT
-a prompt box.
-
-STRUCTURED SECTIONS, each editable in plain language, and SEEDED on day
-one with correct generic solar answers the owner then personalises:
-- About us — years in business, installations done, certifications, area
-- Products — panel and inverter brands offered, why chosen
-- Warranty — panel 25yr performance / 12yr product, inverter 5yr,
-  workmanship 2yr
-- Process & timeline — survey 2 days · design 3 · install 1–2 days ·
-  net-metering 3–6 weeks
-- Pricing policy — what's included, what's extra. NO discount authority
-  (locked).
-- Subsidy — how PM Surya Ghar works, who qualifies, timeline
-- Financing — which banks / NBFCs, typical EMI, documents
-- Common objections — "too expensive", "I'll wait for prices to drop",
-  "does it work in monsoon?", "what about cleaning?" — each with the
-  answer the owner wants given
-
-Make clear each section is SEEDED (a generic default is already there) and
-editable — day one it works, week four it sounds like him.
-
-🔒 LOCKED, shown as fixed: the "Pricing policy" section carries no discount
-authority — the agent cannot be taught to offer one.
-
-STATES — switch from a header chip on ONE mobile+desktop frame pair (never
-separate static frames); editing a section is an inline editor / sheet,
-not a chip state:
-- seeded defaults, nothing personalised yet
-- personalised by the owner
-- a section being edited
-- a contradiction flagged on save — e.g. two different warranty answers →
-  shown plainly, not silently accepted
-- an attempt to add discount authority → rejected with a plain reason
-
-WIRE THESE — real prototype:
-- reached from Settings and from 6.1
-- "See what customers asked" → 6.5 Unanswered questions
-- "Test how it answers" → 6.3
-- "Save" → confirmation, stays here
-
-VIEWPORTS — build both, one design: DESKTOP 1440px primary (owner at a
-desk, sidebar stays), MOBILE 375px companion, nested settings flow, no
-bottom nav (back ‹). Side by side, mobile left, desktop right; desktop is
-not a stretched phone.
-```
-
----
-
-# 6.5 · Unanswered questions — the improvement loop
-
-```
-Design the UNANSWERED QUESTIONS screen — the loop that keeps the agent
-honest and improving. Use the selected design system; no colours or token
-names — you decide the layout.
+Design "Unanswered questions" — the simple loop that keeps the agent
+improving. Use the selected design system; no colours or token names —
+you decide the layout.
 
 WHO: the owner (or a manager), turning real gaps into knowledge.
 GOAL: answer, in one tap, what customers actually asked that the agent
-couldn't handle — so it knows it from the next call.
+couldn't handle — so it knows it next time.
 
-HOLDS a short, grouped list of questions the agent could not answer,
-clustered when several customers asked the same thing:
+A short list of what the agent couldn't answer, clustered when several
+customers asked the same thing:
   "3 customers asked about hail damage this week"
-  "2 asked whether panels can be moved if they shift house"
-  "1 asked about a specific bank's loan"
-Each shows how many asked, when, and (on tap) the calls it came from.
+  "2 asked whether panels move if they shift house"
+Each shows how many asked and when. One tap opens a place to write the
+answer in his words; saving adds it to the right knowledge section (6.2)
+and the agent uses it next time. He can dismiss ones not worth answering.
 
-ANSWERING is the point: one tap opens a place to write the answer in the
-owner's words; saving adds it to the right knowledge section (6.4) and the
-agent uses it next time. Dismiss a question that isn't worth answering.
-
-Make it feel like progress, not a chore — the list should shrink as he
-answers, and it should be reachable from the performance screen too.
+Make it feel like progress — the list shrinks as he answers.
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
-separate static frames); the answer editor is a sheet, not a chip state:
+separate static frames); the answer editor is a sheet:
 - several clustered questions waiting
-- the answer editor open for one question
-- one answered → it leaves the list, confirmation that the agent now knows
-- empty — nothing outstanding, the agent is fully briefed (a good state,
-  not a blank screen)
+- the answer editor open for one
+- one answered → it leaves the list, confirmed
+- empty — nothing outstanding (a good state, not a blank screen)
 
 WIRE THESE — real prototype:
-- reached from 6.4, from 6.8 Agent performance, and from a notification
-- answering a question → writes to 6.4 and confirms
-- tapping the source calls → 6.7 Call result
+- reached from 6.2, from 6.7 Agent performance, and from a notification
+- answering → writes to 6.2 and confirms
+- the source calls → 6.6 Call result
 
-VIEWPORTS — build both, one design. This one is genuinely used on MOBILE
-too (an owner clears these from his phone), so make mobile first-class;
-DESKTOP 1440px keeps the sidebar. Nested flow, no bottom nav on mobile
-(back ‹). Side by side, mobile left, desktop right; desktop is not a
-stretched phone.
+VIEWPORTS — build both, one design. Genuinely used on MOBILE too (an owner
+clears these from his phone), so make mobile first-class; DESKTOP 1440px
+keeps the sidebar. Nested, no bottom nav on mobile (back ‹). Side by side,
+mobile left, desktop right; desktop is not a stretched phone.
 ```
 
 ---
 
-# 6.6 · Agent queue & call eligibility
+# 6.5 · Who the agent will call
 
 ```
-Design the AGENT QUEUE and CALL ELIGIBILITY screen. Use the selected
-design system; no colours or token names — you decide the layout.
+Design "Who the agent will call" — the owner's view of upcoming automated
+calls, and easy control over them. Use the selected design system; no
+colours or token names — you decide the layout.
 
-WHO: the owner or manager, seeing who the agent is about to call, when,
-and why — and being sure it is allowed to.
-GOAL: full visibility and control over automated calls before they happen.
+WHO: the owner or manager, seeing who's about to be called and why, and
+staying in control.
+GOAL: full visibility and one-tap control — nothing calls that shouldn't.
 
-THE QUEUE — who is scheduled, each row showing: customer, when the call is
-planned, and WHY it was queued (the trigger):
+THE LIST — who is scheduled, each row: customer, when, and WHY it was
+queued:
 - proposal unopened for 3 days
-- a rep's follow-up task overdue 2 days
+- a rep's follow-up overdue 2 days
 - 3 failed manual attempts
 - handed to the agent on demand by a rep (D17)
-Anyone can be removed from the queue.
+Anyone can be removed, and the "why" is always visible.
 
-CALL ELIGIBILITY — per customer, shown before the agent may dial, because
-the agent CANNOT call without this being clear:
-- consent captured?
-- DND-listed?
-- a do-not-call flag a rep or the customer set?
-- inside the calling window?
-A customer who is not clearly eligible is shown as blocked from calling,
-with the reason.
-
-🔒 LOCKED, shown as fixed: the agent will not dial a DND / do-not-call
-number or one outside 9am–9pm, whatever the queue says. A "stop calling"
-flag is irreversible without the customer's say-so.
+PER-CUSTOMER STATUS shown simply, as information, so the owner understands
+what will happen — not a blocking wall:
+- will call at [time] · on do-not-call (won't be called) · outside calling
+  hours (waits until the window)
+These reflect the owner's own settings from 6.1; a customer who asked to
+stop is shown as do-not-call and isn't called.
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
 separate static frames):
-- a normal queue with several scheduled calls
-- a customer blocked (DND / do-not-call) — visibly not callable, reason shown
-- empty queue — nobody scheduled, explained (not a blank screen)
-- a call in progress right now
-- removing someone from the queue (confirmation)
+- a normal list of scheduled calls
+- a customer on do-not-call — shown plainly as won't-be-called
+- empty — nobody scheduled, explained (not a blank screen)
+- a call happening right now
+- removing someone (quick confirm)
 
 WIRE THESE — real prototype:
 - reached from Settings / the agent area, and from My Day
-- a queued row → 6.7 Call result once the call happens
-- "Remove from queue" → confirmation → row leaves
-- a blocked row → the lead, to fix consent / flags
+- a scheduled row → 6.6 Call result once the call happens
+- "Remove" → quick confirm → row leaves
+- a row → the lead
 
-TOUCHES A BUILT SCREEN: the on-demand trigger comes from the lead-detail
-"Hand to the agent" action (added in this phase) — a lead handed over
-appears here.
+TOUCHES A BUILT SCREEN: the on-demand entries come from the lead-detail
+"Hand to the agent" action added in this phase.
 
 VIEWPORTS — build both, one design: DESKTOP 1440px primary (sidebar
 stays), MOBILE 375px companion, nested flow, no bottom nav on mobile (back
@@ -409,7 +318,7 @@ phone.
 
 ---
 
-# 6.7 · Call result + transcript
+# 6.6 · Call result + transcript
 
 ```
 Design the CALL RESULT and TRANSCRIPT — what a rep sees after the agent
@@ -421,97 +330,84 @@ GOAL: understand the call in seconds, trust it, and correct it if wrong.
 
 THIS EXPANDS AN ALREADY-BUILT SCREEN. On the lead-detail timeline (Phase 2)
 an agent call already appears as a 🤖 entry with a [Transcript] link, and
-it appears in My Day's "Agent activity" block. This screen is what opens
-when either is tapped. Do NOT redesign the timeline or My Day — this is the
-detail they open into.
+in My Day's "Agent activity" block. This screen opens when either is
+tapped. Do NOT redesign the timeline or My Day — this is their detail view.
 
-THE CALL RESULT shows (D18):
+THE RESULT shows (D18):
 - outcome — interested · not interested · callback requested · no answer ·
   asked to stop
-- a one-line summary in plain language ("asked about the subsidy timeline,
-  wants a callback Thursday 4pm")
-- interest signal, and any action the agent took (booked a callback / site
-  visit)
-- which config version answered (so a dispute is answerable)
+- a plain one-line summary ("asked about the subsidy timeline, wants a
+  callback Thursday 4pm")
+- interest signal, and any action taken (booked a callback / site visit)
 - date, duration, language spoken
 
-THE TRANSCRIPT & RECORDING on tap: the full turn-by-turn transcript and an
-audio player. If the customer declined recording, say so plainly — no
-recording, but the outcome still stands.
+THE TRANSCRIPT & RECORDING on tap: full turn-by-turn transcript and audio.
+If the customer declined recording, say so plainly — outcome still stands.
 
-THE REP CAN CORRECT IT: the rep's read always wins (they can change the
-outcome); a correction is logged and trains nothing automatically without
-review.
+THE REP CAN CORRECT IT: the rep's read always wins; they can change the
+outcome, and the change is logged.
 
-ESCALATION: if this call was handed to a human (e.g. a price question), the
-reason is shown clearly, and the rep sees it was routed to them.
+HANDED TO A HUMAN: if the agent handed this call over (per the owner's
+settings), the reason is shown and the rep sees it was routed to them.
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
-separate static frames); the transcript and audio are overlays, not chip
-states:
+separate static frames); transcript and audio are overlays:
 - a normal result (interested, callback booked)
-- an escalated call — handed to a human, reason shown ("asked for a
-  discount")
-- no answer — nothing said, next attempt noted
-- customer asked to stop — do-not-call set, shown as irreversible
-- recording declined — transcript only, or a plain "no recording" note
+- a handed-over call — reason shown ("asked about a discount")
+- no answer — next attempt noted
+- customer asked to stop — shown as do-not-call going forward
+- recording declined — transcript only / plain "no recording" note
 - the rep correcting the outcome (overlay)
 
 WIRE THESE — real prototype:
-- reached FROM the lead-detail timeline [Transcript] and from My Day's
-  agent-activity rows
+- reached FROM the lead-detail [Transcript] link and My Day's agent rows
 - "Play recording" / "Read transcript" → overlays that close back
 - "Correct the outcome" → editor → saved to the lead
 - "Call the customer" → hand to the OS
-- an escalation → links to the rep's notification (Phase 9 placeholder)
+- a hand-over → the rep's notification (Phase 9 placeholder)
 
-VIEWPORTS — build both, one design. MOBILE 375px is primary (a rep reads
-this on their phone), DESKTOP 1440px shows it beside the lead. Nested, no
-bottom nav on mobile (back ‹ to the lead). Side by side, mobile left,
-desktop right; desktop is not a stretched phone.
+VIEWPORTS — build both, one design. MOBILE 375px primary (a rep reads this
+on their phone), DESKTOP 1440px shows it beside the lead. Nested, no bottom
+nav on mobile (back ‹ to the lead). Side by side, mobile left, desktop
+right; desktop is not a stretched phone.
 ```
 
 ---
 
-# 6.8 · Agent performance
+# 6.7 · Agent performance
 
 ```
-Design the AGENT PERFORMANCE screen — the reason an owner keeps paying for
-the agent. Use the selected design system; no colours or token names — you
-decide the layout.
+Design "Agent performance" — the reason an owner keeps the agent. Use the
+selected design system; no colours or token names — you decide the layout.
 
 WHO: the owner, a month in, deciding whether the automated calling was
 worth it.
 GOAL: show honestly what the agent did — enough to justify it, never
 inflated.
 
-HEADLINE NUMBERS, this month vs last:
-- calls attempted, connected (with connect rate), callbacks booked, site
-  visits booked, handed to a human, questions it couldn't answer
-OUTCOMES as a simple breakdown: interested · not interested · callback
-requested · no answer · asked to stop.
-WHAT IT SAVED YOU: conversations the team didn't have to start, and rough
-hours of calling time.
+HEADLINE NUMBERS, this month vs last: calls attempted, connected (with
+rate), callbacks booked, site visits booked, handed to a human, questions
+it couldn't answer.
+OUTCOMES breakdown: interested · not interested · callback · no answer ·
+asked to stop.
+WHAT IT SAVED YOU: conversations the team didn't have to start, rough hours
+of calling time.
 
-DEALS IT TOUCHED — and THE HONESTY RULE THIS MUST FOLLOW: this is
-correlation, NOT attribution, and the screen must SAY SO on the screen, not
-in a tooltip:
+DEALS IT TOUCHED — and THE HONESTY RULE: this is correlation, NOT
+attribution, and the screen must SAY SO on the screen, not in a tooltip:
   "The agent called and the customer responded within 3 days. We cannot
    prove the call caused it."
-Never claim the agent "generated ₹X". State the limit — it is the whole
-point of this product's honesty.
+Never claim the agent "generated ₹X".
 
-SUPPORTING VIEWS (as states/sections on this page):
-- Call log — every call: customer, duration, outcome, language, config
-  version, transcript, recording; filterable
-- Unanswered questions — the 6.5 list, linked
-- Cost — calls made, minutes used, against the plan (placeholder numbers,
-  pricing not set — D26)
-- Per-rep view — which reps lean on the agent, whose leads it rescued
-  (manager-only)
+SUPPORTING VIEWS (as states on this page):
+- Call log — every call: customer, duration, outcome, language,
+  transcript, recording; filterable
+- Unanswered questions — the 6.4 list, linked
+- Cost — calls made, minutes used (placeholder numbers; pricing not set, D26)
+- Per-rep view — which reps lean on the agent (manager-only)
 
 WARN, don't hide: if the connect rate collapses, surface it with the likely
-cause; if the agent escalates almost everything, link straight to 6.5.
+cause; if it escalates almost everything, link straight to 6.4.
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
 separate static frames):
@@ -519,13 +415,13 @@ separate static frames):
 - call log view
 - per-rep view (manager-only)
 - cost view (placeholder pricing)
-- a warning state — connect rate dropped, cause shown
+- a warning — connect rate dropped, cause shown
 - empty / first month — not enough data yet, explained honestly
 
 WIRE THESE — real prototype:
 - reached from the agent area / Reports
-- "Review unanswered" → 6.5
-- a call-log row → 6.7 Call result
+- "Review unanswered" → 6.4
+- a call-log row → 6.6 Call result
 - filters change the log in place
 
 VIEWPORTS — build both, one design: DESKTOP 1440px primary (an owner reads
@@ -539,18 +435,17 @@ side, mobile left, desktop right; desktop is not a stretched phone.
 
 Run the nine-point review gate in `build-plan.md`, plus these specific to this phase:
 
-- Is the **AI self-disclosure** visibly locked everywhere it appears, and is **"talk to a
-  person"** present on every call surface?
-- Does the owner configure **without ever seeing a prompt box** (D24)?
-- Is the **price/discount escalation** locked ON, and does the agent visibly refuse discounts
-  in the test (6.3)?
-- Is **call eligibility** (consent, DND, do-not-call, hours) shown *before* a dial, and is a
-  blocked customer genuinely un-callable?
-- Does the **unanswered-questions loop** actually write back to the knowledge base and shrink?
+- Could a non-technical owner set up the agent in a few minutes, **accepting the defaults**
+  without touching a thing?
+- Is **everything editable** — script, hand-over rules, calling hours, what it may discuss —
+  with nothing presented as a locked wall (D36)?
+- Is the "India's calling rules are the defaults, change them if you like" note **a single
+  calm line**, not a warning?
+- Does the **unanswered-questions loop** write back to the knowledge base and shrink?
 - Does **Agent performance** state "deals it touched" as **correlation, not attribution**, on
   the screen itself?
-- **Backward compatibility:** does the call result (6.7) open cleanly from the existing lead
+- **Backward compatibility:** does the call result (6.6) open cleanly from the existing lead
   timeline and My Day without redesigning them, and does the lead now carry a working "Hand to
   the agent" action?
 
-Then bring all eight back before Phase 7.
+Then bring all seven back before Phase 7.
