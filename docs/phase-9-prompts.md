@@ -93,10 +93,13 @@ totals sit quietly below):
 
 1. WHAT NEEDS YOU — the honest attention list, first and prominent. Each
    row deep-links to the real thing:
-   - deals stuck / aging (days-in-stage) — "Anand Traders · Negotiating ·
-     18 days"
+   - deals going cold — a lead with an overdue next action or no activity
+     for a while ("Anand Traders · Negotiating · no activity 18 days").
+     (Pre-Won deals: this is "no recent activity / overdue follow-up", not
+     project days-in-stage.)
    - proposals sent, not opened — "Priya Sharma · shared 4 days ago"
-   - projects blocked — "Deshmukh Textiles · waiting on DISCOM · 34 days"
+   - projects blocked — "Deshmukh Textiles · waiting on DISCOM · 34 days
+     in stage" (post-Won projects DO track days-in-stage, Phase 7)
    - payments overdue — "Kavita Joshi · ₹70,369 due since 20 Aug"
 
 2. CASH — collected vs due this month (from the project tranches, Phase 7),
@@ -105,13 +108,17 @@ totals sit quietly below):
 3. PIPELINE — value and count by stage (New → … → Won).
 
 4. THIS PERIOD — WON (signed) value vs last period, and vs target IF one is
-   set. Won means signed only — never mixed with forecast.
+   set. Won means signed only — never mixed with forecast. A target is
+   OPTIONAL and set INLINE here (a small "set target" action) — there is no
+   separate targets settings screen in v1; the dashboard works fine without
+   one and never nags.
 
 5. FORECAST — weighted pipeline (value × how likely each stage is), clearly
    labelled "expected, not promised". Never in the same figure as won.
 
-6. WIN / LOSS — win rate this period and the loss-reason breakdown; links
-   to the funnel detail (9.3).
+6. WIN / LOSS — win rate this period and the loss-reason breakdown (BOTH
+   the early "disqualified" reasons and the late "lost" reasons — see 9.3);
+   links to the funnel detail (9.3).
 
 7. AGENT — a compact card linking to Agent performance (Phase 6). Do NOT
    restate its numbers or claim revenue; it is correlation, not attribution.
@@ -211,18 +218,25 @@ WHO: the owner or manager, asking "where and why do we lose deals?"
 GOAL: see the leaks in the pipeline and the honest reasons behind losses.
 
 THE FUNNEL — the stages a deal moves through, with count and value at each
-and the CONVERSION between them, so the leak points are obvious:
-  New → Contacted → Qualified → Survey → Design → Proposal → Negotiating →
-  Won
+and the CONVERSION between them, so the leak points are obvious. Use the
+lead pipeline's ACTUAL stages as built in the leads list (2.2):
+  New lead → Contacted → Qualified → Survey → Designing → Proposal sent →
+  Negotiating → Won
 Highlight the biggest drop-off (e.g. "half the deals stall between Proposal
 and Negotiating"). Also show TIME-IN-STAGE — where deals sit longest.
 
-WIN / LOSS REASONS — by count AND value, because a few high-value losses
-matter more than many small ones:
+WIN / LOSS REASONS — by count AND value (a few high-value losses matter
+more than many small ones). THERE ARE TWO reason lists in the app, and the
+journey calls BOTH the most valuable analytics — show both, kept distinct,
+because they teach different lessons:
+- LOST LATE — a quoted deal that fell through (Mark lost, Phase 7):
   price · chose a competitor · postponed · not reachable · roof unsuitable ·
   financing failed
-This loss-reason list is the most valuable data in the product — treat it
-as the centre of the screen, not a footnote.
+- DISQUALIFIED EARLY — a lead ruled out before a quote (Disqualify on the
+  lead, Phase 2): renting · budget · not interested · unreachable ·
+  already installed · wrong number
+Losing a warm, quoted deal to a competitor is a different problem from
+disqualifying a renter on day one — don't merge them into one list.
 
 Filterable by period and by rep (manager/owner scope, D20).
 
@@ -269,10 +283,13 @@ the thing that changed:
   time-sensitive
 - a follow-up is due / overdue
 - a survey was submitted (to the designer)
-- a design was returned by the engineer
+- a design was returned by the engineer — NOTE: the design / engineer
+  sign-off screens are Phase 10 (the studio, deferred — D23). Link this
+  one notification to a labelled placeholder until Phase 10 is built.
 - a payment is due
 Group by time and/or type, show read / unread, and let the user act (open,
-mark read, snooze) without leaving.
+mark read, snooze) without leaving. Every other notification deep-links to
+a screen that already exists.
 
 Opened from a bell in the top bar / nav (wire into the existing nav — do
 not invent a second notification surface).

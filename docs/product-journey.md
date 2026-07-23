@@ -1553,7 +1553,7 @@ answering "what do I do about this?"** If a number doesn't change a decision, it
 |---|---|---|
 | **Owner dashboard** | Owner (+ manager, team-scoped) | Sections, in priority order: **What needs you** — the honest attention list (deals stuck/aging, proposals sent-not-opened, projects blocked, payments overdue), each linking straight to the thing · **Cash** — collected vs due this month from the project tranches, and the overdue total · **Pipeline** — value and count by stage · **This period** — won (signed) value vs last period and vs target if set · **Forecast** — weighted pipeline, marked a projection · **Win/loss** — win rate and the loss-reason breakdown · **Agent** — a compact card linking to Agent performance. |
 | **Rep dashboard** | Sales rep | "How am I doing", secondary to My Day: my pipeline value, my win rate, my proposals out / opened / accepted, my follow-up load, my target if set. A rep's daily driver stays My Day; this is the step-back view, their own data only. |
-| **Pipeline funnel + win/loss** | Owner, manager | The funnel (New → Contacted → Qualified → Survey → Design → Proposal → Negotiating → Won) with conversion between stages and **where deals leak**, plus win/loss reasons by count and value, and time-in-stage. Answers "where and why do we lose deals" — **the loss-reason list is the most valuable data in the product** (Stage 7). |
+| **Pipeline funnel + win/loss** | Owner, manager | The funnel (New → Contacted → Qualified → Survey → Design → Proposal → Negotiating → Won) with conversion between stages and **where deals leak**, plus win/loss reasons by count and value, and time-in-stage. **Show BOTH reason lists, kept distinct** — the early *Disqualify* reasons (Stage 3: renting · budget · not interested · unreachable · already installed · wrong number) and the late *Mark lost* reasons (Stage 7: price · competitor · postponed · not reachable · roof unsuitable · financing failed). Both are called the most valuable analytics in the product; losing a quoted deal is a different lesson from disqualifying a renter on day one. |
 | **Notifications + global search** | Everyone | The notification centre (proposal opened · agent escalation · follow-up due · survey submitted · design returned · payment due — push + in-app, grouped, each actionable) and one global search field that finds leads, customers, sites, quotes and projects by name, phone or city. *(The "settings hub" is the Phase 8 Settings home — reached from here, not rebuilt.)* |
 
 ### These screens READ; they never create
@@ -1566,7 +1566,9 @@ project.
 - **Brand-new company, no data** → teach what will appear and why, never a broken empty chart
 - **One ₹92L C&I deal skews the averages** → show medians or flag the outlier; don't let one
   deal make the pipeline look healthier than it is
-- **No target set** → the dashboard works without one; targets are optional, never a nag
+- **No target set** → the dashboard works without one; targets are optional, never a nag. A
+  target, if used, is set **inline on the dashboard** — there is no separate targets settings
+  screen in v1
 - **Mid-month** → "so far this month" is honest; never project a partial month as if it were
   the full actual
 - **A rep games a metric** (marks everything "interested") → the numbers are descriptive, not
