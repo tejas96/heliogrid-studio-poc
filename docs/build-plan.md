@@ -287,26 +287,38 @@ link over money?
 
 ---
 
-## PHASE 8 · Admin & settings  ▸ 5 screens
+## PHASE 8 · Admin & settings  ▸ 8 screens
+
+**Goal: where a company makes the product theirs.** Almost every value a proposal shows is a
+tenant default configured here and pre-filled into the builder — plus team, billing, and each
+user's own preferences.
+
+📄 **Prompt: `docs/phase-8-prompts.md`** — self-contained blocks (copy one, paste, done), the
+"connect, don't duplicate" line baked into each. Includes a **proposal-defaults map** tying
+every builder step to its config home.
 
 | # | Screen | Journey ref |
 |---|---|---|
-| 8.1 | **Team** + assign roles (stackable) | Roles |
-| 8.2 | **Duplicate a proposal** — pick an earlier one as the starting point | Stage 6B |
-| 8.3 | **Catalog & price book** | Tenant config C |
-| 8.4 | **Billing** (mock) — plans, usage, states | Billing |
-| 8.5 | **Profile & preferences** — language, name, photo, notifications | D25 / Multilingual |
+| 8.1 | **Settings home** — the hub; lead sources; links to the built agent screens | Tenant config |
+| 8.2 | **Business profile & branding** — identity + story (feeds proposal 1 & 2) | Tenant config C / D4 |
+| 8.3 | **Catalog & price book** — what they sell + rates, versioned (step 8) | Tenant config C |
+| 8.4 | **Proposal defaults & templates** — timeline, payment terms, T&C, bank, financial (steps 3/5/6/7/9/10/11) | Tenant config C |
+| 8.5 | **Message templates** — WhatsApp proposal / follow-up / reminder | Tenant config C |
+| 8.6 | **Team & roles** — six stackable presets | Roles |
+| 8.7 | **Billing** (mock) — plans, usage, the six states | Billing / D26 |
+| 8.8 | **Profile & preferences** — per-user language, name, notifications | D25 / Multilingual |
 
-*(Signup and first-run moved to Phase 1.)*
+⚠️ **Language is PER-USER (D25), not owner-only** — it lives in 8.8, reachable by everyone;
+8.1–8.7 are owner-only company settings.
+⚠️ **Roles resolution (ops/installer gap):** coordinator work = the **Manager** preset; a
+dedicated **Installer** preset is **deferred** (D29) — the coordinator runs the install
+checklist in v1. Six presets stand; no custom-role builder in v1 (D27).
+🔗 **Connects to built work:** the agent screens (Phase 6) are linked from the Settings home;
+every config value feeds the proposal builder (Phase 3). *(The old "Duplicate a proposal"
+screen was dropped — it's the Phase 3.1 duplicate route, already built.)*
 
-⚠️ **Language is a PER-USER setting (D25), not owner-only.** The switch lives in 8.5 Profile &
-preferences, reachable by everyone from More → Profile (mobile) and the sidebar (desktop). The
-picker shows each language in its own script — English · हिंदी · मराठी — defaults to the device
-locale, and re-renders the app immediately. This is distinct from the company/admin settings
-(8.1–8.4), which are owner-only.
-
-**Review focus:** Can a new company reach their first proposal without opening settings? Can a
-Marathi-speaking user switch the app to their language in two taps, from anywhere?
+**Review focus:** Can a company send a proposal without opening settings? Does every builder
+default have a home here? Does billing never lock anyone out? Is the language switch per-user?
 
 ---
 
@@ -357,11 +369,11 @@ unmanageable. This document stays the index and the tracker.
 | 5 · Survey | 10 | ✅ built | ✅ |
 | 6 · Voice agent | 7 | ✅ built | ✅ |
 | 7 · Project management | 7 | ✅ built | ✅ |
-| 8 · Admin & settings | 5 | ⬜ next | — |
+| 8 · Admin & settings | 8 | ⬜ next | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~60 screens, mobile + desktop each.** Phases 1–7 built and reviewed (47 screens).
+**~63 screens, mobile + desktop each.** Phases 1–7 built and reviewed (47 screens).
 
 ---
 
@@ -371,26 +383,27 @@ unmanageable. This document stays the index and the tracker.
 |---|---|
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
-| **Ops & installer roles missing from the six presets (D27)** — Stage 8 needs a Coordinator/ops and Installer/crew actor; neither exists in the role matrix. Add presets, or map to existing, when building the roles screen | Phase 8 |
-| **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Primary home is 8.5; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
-| Prompt files exist for Phases 1–7; **write 8–10 as each phase begins** | Phase 8 onward |
+| ~~Ops & installer roles missing from the six presets~~ — **RESOLVED (Phase 8, 8.6):** coordinator = Manager; a dedicated Installer preset is deferred (D29), the coordinator runs the install checklist in v1. Six presets stand. | — |
+| **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Home is now 8.8; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
+| Prompt files exist for Phases 1–8; **write 9–10 as each phase begins** | Phase 9 onward |
 
 ---
 
 ## Where we are
 
-**Phases 1–7 are built and reviewed** (47 screens). Next is **Phase 8 — admin & settings**.
+**Phases 1–7 are built and reviewed** (47 screens). Next is **Phase 8 — admin & settings**,
+and its prompts are ready: **`docs/phase-8-prompts.md`** — eight self-contained screens.
 
-📄 **Prompt: `docs/phase-8-prompts.md`** — *not written yet.* When it is, it follows the same
-pattern: self-contained per-screen prompts with the "connect, don't duplicate" awareness line
-baked into each block, states via header chip, working prototype.
+Phase 8 is the settings surface, and it's where the proposal builder's defaults finally get a
+home: a Settings hub, Business profile & branding (feeds proposal 1 & 2), Catalog & price book
+(step 8), Proposal defaults & templates (timeline, payment terms, T&C, bank, financial —
+steps 3/5/6/7/9/10/11), Message templates, Team & roles (six stackable presets), Billing
+(mock), and per-user Profile & preferences (language, D25). It links to the built agent
+screens (Phase 6) and feeds the built proposal builder (Phase 3) rather than duplicating them.
 
-Phase 8 is the settings surface: **Team + assign roles** (stackable presets), **Duplicate a
-proposal**, **Catalog & price book**, **Billing** (mock — D26), and **Profile & preferences**
-(per-user language, D25). Two things to resolve here, both already logged in Known gaps:
-- the **ops/installer roles gap** — Stage 8 needs Coordinator/ops and Installer/crew actors
-  that aren't in the six presets (D27); the roles screen (8.1) is where that's settled.
-- the **language picker** belongs in Profile & preferences (8.5) and, eventually, onboarding.
+Resolved while writing: the ops/installer roles gap (coordinator = Manager, Installer
+deferred). **Build the eight one at a time, then bring them back for the review gate** before
+Phase 9.
 
 ---
 

@@ -911,8 +911,8 @@ pack sent → closed.
 | Role | Can |
 |---|---|
 | **Owner** | Everything. Sees all projects, all money, all blockers. |
-| **Coordinator / ops** | Move stages, upload documents, request payments, set blockers. |
-| **Installer / crew** | The installation checklist only. Ticks steps. Nothing financial. |
+| **Coordinator / ops** | Move stages, upload documents, request payments, set blockers. **= the Manager preset** — there is no separate coordinator role (D27). |
+| **Installer / crew** | The installation checklist only. Ticks steps. Nothing financial. **A dedicated Installer preset is DEFERRED (D29)** — in v1 the coordinator (Manager/Owner) runs the checklist. |
 | **Sales rep** | Read-only on their own won deals — so they can answer a customer without asking ops. |
 | **Customer** | The progress link. No login. |
 
