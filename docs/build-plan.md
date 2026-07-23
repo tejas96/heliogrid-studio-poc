@@ -252,7 +252,7 @@ make money owed obvious?
 
 ---
 
-## PHASE 8 · Admin & settings  ▸ 4 screens
+## PHASE 8 · Admin & settings  ▸ 5 screens
 
 | # | Screen | Journey ref |
 |---|---|---|
@@ -260,10 +260,18 @@ make money owed obvious?
 | 8.2 | **Duplicate a proposal** — pick an earlier one as the starting point | Stage 6B |
 | 8.3 | **Catalog & price book** | Tenant config C |
 | 8.4 | **Billing** (mock) — plans, usage, states | Billing |
+| 8.5 | **Profile & preferences** — language, name, photo, notifications | D25 / Multilingual |
 
 *(Signup and first-run moved to Phase 1.)*
 
-**Review focus:** Can a new company reach their first proposal without opening settings?
+⚠️ **Language is a PER-USER setting (D25), not owner-only.** The switch lives in 8.5 Profile &
+preferences, reachable by everyone from More → Profile (mobile) and the sidebar (desktop). The
+picker shows each language in its own script — English · हिंदी · मराठी — defaults to the device
+locale, and re-renders the app immediately. This is distinct from the company/admin settings
+(8.1–8.4), which are owner-only.
+
+**Review focus:** Can a new company reach their first proposal without opening settings? Can a
+Marathi-speaking user switch the app to their language in two taps, from anywhere?
 
 ---
 
@@ -314,11 +322,11 @@ unmanageable. This document stays the index and the tracker.
 | 5 · Survey | 10 | ⬜ next | — |
 | 6 · Voice agent | 4 | ⬜ | — |
 | 7 · Project management | 4 | ⬜ | — |
-| 8 · Admin & settings | 4 | ⬜ | — |
+| 8 · Admin & settings | 5 | ⬜ | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~53 screens, mobile + desktop each.** Phases 1–4 built and reviewed (23 screens).
+**~54 screens, mobile + desktop each.** Phases 1–4 built and reviewed (23 screens).
 
 ---
 
@@ -328,6 +336,7 @@ unmanageable. This document stays the index and the tracker.
 |---|---|
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
+| **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Primary home is 8.5; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
 | Prompt files exist for Phases 1–5; **write 6–10 as each phase begins** | Phase 6 onward |
 
 ---

@@ -1395,7 +1395,7 @@ its sizes; line heights get a per-script adjustment.
 ### Screens
 | Screen | Contains |
 |---|---|
-| **Language picker** | In onboarding and in profile. Shows each language *in its own script* — English · हिंदी · मराठी — never translated names. |
+| **Language picker** | In onboarding (first run) and in **Profile & preferences**, reachable by every user from More → Profile (mobile) and the sidebar (desktop). Shows each language *in its own script* — English · हिंदी · मराठी — never translated names. Defaults to the device locale; changing it re-renders the whole app immediately, no reload. |
 | **Per-user, not per-tenant** | One company can have an English-speaking owner and a Marathi-speaking surveyor. Language is a user setting. |
 
 ### What goes wrong
