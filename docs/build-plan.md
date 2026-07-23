@@ -322,25 +322,30 @@ default have a home here? Does billing never lock anyone out? Is the language sw
 
 ---
 
-## PHASE 9 · Dashboards & the rest  ▸ 4 screens
+## PHASE 9 · Dashboards & the rest  ▸ 5 screens
 
 **Goal: the owner's honest, decision-oriented view — not a KPI wall (D37).** The daily driver
-stays My Day (tasks); this is where an owner steps back weekly/monthly. Now specced in the
-journey ("Dashboards & reports").
+stays My Day (tasks); this is where an owner steps back weekly/monthly.
+
+📄 **Prompt: `docs/phase-9-prompts.md`** — self-contained blocks (copy one, paste, done), the
+"connect, don't duplicate" line baked into each. Notifications and search are split into their
+own prompts so neither is under-specced.
 
 | # | Screen | Journey ref |
 |---|---|---|
-| 9.1 | **Owner dashboard** — *what needs you* + cash first; pipeline, forecast, win/loss | Dashboards |
+| 9.1 | **Owner dashboard** — *what needs you* + cash first; pipeline, forecast, win/loss, agent, team | Dashboards |
 | 9.2 | **Rep dashboard** — my pipeline & conversion (secondary to My Day) | Dashboards |
 | 9.3 | **Pipeline funnel + win/loss reasons** — where and why deals leak | Dashboards / Stage 7 |
-| 9.4 | **Notifications + global search** *(settings hub = the built Phase 8 home)* | Cross-cutting |
+| 9.4 | **Notifications centre** — grouped, actionable, deep-links | Cross-cutting |
+| 9.5 | **Global search** — app-wide, additive to the leads filter (2.2) | Cross-cutting |
 
 💡 **Honesty rules (D37):** forecast is a projection not revenue · won = signed · cancelled-
 after-won stops counting · agent = correlation not attribution (link, don't re-claim) · reps
 see their own, managers their team, owner all (D20).
 🔗 **These screens READ, never create** — they surface and deep-link into built data (leads,
-proposals, projects/payments, agent). 9.4's search spans all of it; the settings hub is
-Phase 8's Settings home, not a rebuild.
+proposals, projects/payments, agent). Charts use the **data colours, never the accent** (gate
+#4). The settings hub is Phase 8's Settings home; My Day stays the rep's task home — not
+rebuilt.
 
 ---
 
@@ -378,11 +383,11 @@ unmanageable. This document stays the index and the tracker.
 | 5 · Survey | 10 | ✅ built | ✅ |
 | 6 · Voice agent | 7 | ✅ built | ✅ |
 | 7 · Project management | 7 | ✅ built | ✅ |
-| 8 · Admin & settings | 8 | ⬜ next | — |
-| 9 · Dashboards | 4 | ⬜ | — |
+| 8 · Admin & settings | 8 | ✅ built | ✅ |
+| 9 · Dashboards | 5 | ⬜ next | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~63 screens, mobile + desktop each.** Phases 1–7 built and reviewed (47 screens).
+**~64 screens, mobile + desktop each.** Phases 1–8 built and reviewed (55 screens).
 
 ---
 
@@ -394,25 +399,23 @@ unmanageable. This document stays the index and the tracker.
 | ~~Dashboards not specced~~ — **SPECCED 2026-07-23** in the journey ("Dashboards & reports", D37). Phase 9 prompts still to write when the phase begins. | — |
 | ~~Ops & installer roles missing from the six presets~~ — **RESOLVED (Phase 8, 8.6):** coordinator = Manager; a dedicated Installer preset is deferred (D29), the coordinator runs the install checklist in v1. Six presets stand. | — |
 | **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Home is now 8.8; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
-| Prompt files exist for Phases 1–8; **write 9–10 as each phase begins** | Phase 9 onward |
+| Prompt files exist for Phases 1–9; **write 10 (studio) when it begins** | Phase 10 |
 
 ---
 
 ## Where we are
 
-**Phases 1–7 are built and reviewed** (47 screens). Next is **Phase 8 — admin & settings**,
-and its prompts are ready: **`docs/phase-8-prompts.md`** — eight self-contained screens.
+**Phases 1–8 are built and reviewed** (55 screens). Next is **Phase 9 — dashboards & the rest**,
+and its prompts are ready: **`docs/phase-9-prompts.md`** — five self-contained screens.
 
-Phase 8 is the settings surface, and it's where the proposal builder's defaults finally get a
-home: a Settings hub, Business profile & branding (feeds proposal 1 & 2), Catalog & price book
-(step 8), Proposal defaults & templates (timeline, payment terms, T&C, bank, financial —
-steps 3/5/6/7/9/10/11), Message templates, Team & roles (six stackable presets), Billing
-(mock), and per-user Profile & preferences (language, D25). It links to the built agent
-screens (Phase 6) and feeds the built proposal builder (Phase 3) rather than duplicating them.
+Phase 9 is the owner's honest step-back view (D37) plus two cross-cutting utilities: owner
+dashboard (what-needs-you + cash lead), rep dashboard (secondary to My Day), pipeline funnel +
+win/loss, notifications centre, and app-wide global search. Every screen READS and deep-links
+into built data — it never creates — and charts use the data colours, never the accent.
 
-Resolved while writing: the ops/installer roles gap (coordinator = Manager, Installer
-deferred). **Build the eight one at a time, then bring them back for the review gate** before
-Phase 9.
+**Build the five one at a time, then bring them back for the review gate** before **Phase 10 —
+the studio (LAST, D23)**, which connects the existing 3D/BOM code rather than designing anew.
+After Phase 9, the only prompt file left to write is Phase 10.
 
 ---
 
