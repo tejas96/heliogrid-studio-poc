@@ -22,6 +22,8 @@ Baked into every block so you needn't remember it:
   Design decides the layout.
 - One page per screen, states swapped by a header chip (not separate static frames).
 - It must be a working prototype — actions wired, sheets open and close, no dead ends.
+- **Connect, don't duplicate** — if a screen, action or nav already exists in the project,
+  wire into it and extend it; never build a second copy.
 
 ---
 
@@ -81,6 +83,12 @@ MEASURE
 ```
 Design "Set up your agent" for a solar company owner. Use the selected
 design system; no colours or token names — you decide the layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: Rajesh Patil, owner of Suryodaya Solar, Nashik. Not technical. He
 should feel like he's answering a few easy questions, not operating a
@@ -143,6 +151,12 @@ Design "Business knowledge" — what the agent knows about this company. Use
 the selected design system; no colours or token names — you decide the
 layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: the owner, teaching the agent his business in his own words.
 GOAL: a simple, editable set of answers — filled in already, so it works
 day one and he only tweaks what he cares about.
@@ -193,6 +207,12 @@ Design "Test your agent" — where the owner hears exactly what a customer
 will hear, before anyone else does. Use the selected design system; no
 colours or token names — you decide the layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: the owner, about to let an automated voice represent his company.
 GOAL: try it, trust it, and fix anything that sounds off — in one place.
 
@@ -232,6 +252,12 @@ mobile left, desktop right; desktop is not a stretched phone.
 Design "Unanswered questions" — the simple loop that keeps the agent
 improving. Use the selected design system; no colours or token names —
 you decide the layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: the owner (or a manager), turning real gaps into knowledge.
 GOAL: answer, in one tap, what customers actually asked that the agent
@@ -273,6 +299,12 @@ mobile left, desktop right; desktop is not a stretched phone.
 Design "Who the agent will call" — the owner's view of upcoming automated
 calls, and easy control over them. Use the selected design system; no
 colours or token names — you decide the layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: the owner or manager, seeing who's about to be called and why, and
 staying in control.
@@ -324,6 +356,12 @@ phone.
 Design the CALL RESULT and TRANSCRIPT — what a rep sees after the agent
 talks to their customer. Use the selected design system; no colours or
 token names — you decide the layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: a rep, opening what the agent did on their behalf.
 GOAL: understand the call in seconds, trust it, and correct it if wrong.
@@ -379,6 +417,12 @@ right; desktop is not a stretched phone.
 ```
 Design "Agent performance" — the reason an owner keeps the agent. Use the
 selected design system; no colours or token names — you decide the layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: the owner, a month in, deciding whether the automated calling was
 worth it.

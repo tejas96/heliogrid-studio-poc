@@ -25,6 +25,8 @@ Baked into every block:
 - No colours, hex or token names — the design system carries the look; you decide the layout.
 - One page per screen, states swapped by a header chip (not separate static frames).
 - A working prototype — actions wired, sheets open and close, no dead ends.
+- **Connect, don't duplicate** — if a screen, action or nav already exists in the project,
+  wire into it and extend it; never build a second copy.
 
 ---
 
@@ -85,6 +87,12 @@ actor and keep the installation checklist financial-free (crew ticks steps, sees
 Design "Mark won" and the project it creates. Use the selected design
 system; no colours or token names — you decide the layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: a sales rep or owner, on a lead whose customer just said yes.
 GOAL: record the win in seconds and land in a live project — with no
 "create a project" busywork.
@@ -130,6 +138,12 @@ Side by side, mobile left, desktop right; desktop is not a stretched phone.
 ```
 Design the PROJECTS BOARD — every won deal in execution, by stage. Use the
 selected design system; no colours or token names — you decide the layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: the owner and the operations coordinator, seeing what's moving and
 what's stuck.
@@ -187,6 +201,12 @@ Side by side, mobile left, desktop right; desktop is not a stretched phone.
 Design PROJECT DETAIL — the one screen the coordinator lives in. Use the
 selected design system; no colours or token names — you decide the layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: the operations coordinator (and owner), running one project.
 GOAL: everything about this project in one place, and the next thing to do
 obvious.
@@ -243,6 +263,12 @@ Design PAYMENTS — collecting the money against the proposal's tranches.
 Use the selected design system; no colours or token names — you decide the
 layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: the coordinator, chasing and recording payment.
 GOAL: see what's owed the moment a milestone passes, and record what came
 in — with a ready-to-send request in one tap.
@@ -295,6 +321,12 @@ desktop right; desktop is not a stretched phone.
 Design the DOCUMENT CHECKLIST for a project. Use the selected design
 system; no colours or token names — you decide the layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: the coordinator, gathering every document a solar project needs.
 GOAL: at a glance, what's collected, what's missing, and what's verified.
 
@@ -342,6 +374,12 @@ stretched phone.
 Design BLOCKERS — why a project is stuck, and who is waiting. Use the
 selected design system; no colours or token names — you decide the layout.
 
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
+
 WHO: the coordinator and owner, recording and reading delays honestly.
 GOAL: make every delay attributable, so the EPC stops absorbing blame for
 a utility's or a customer's timeline.
@@ -388,6 +426,12 @@ mobile left, desktop right; desktop is not a stretched phone.
 Design HANDOVER — closing the project and handing the customer their pack.
 Use the selected design system; no colours or token names — you decide the
 layout.
+
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wherever this prompt refers to a
+screen, action or nav that already exists, wire into it and extend it —
+do not create a duplicate, a second copy, or a new isolated page. Claude
+Design tends to add pages; here, connect first.
 
 WHO: the rep or coordinator, finishing a project.
 GOAL: give the customer everything they need and close the project cleanly.
