@@ -41,25 +41,52 @@ wander off mid-survey, which they cannot.
 |---|---|
 | **5.6 My visits today** (a destination) | Everything else in Phase 5 |
 
-### 2 · DO NOT CREATE A NEW PAGE FOR EVERY PROMPT
+### 2 · STATES ARE SWITCHED BY A HEADER CHIP — NOT DRAWN AS SEPARATE FRAMES
 
-Claude Design tends to add a page each time. Most of what follows is a **state of an existing
-screen**, not a new screen. One page per screen; every state is a frame on that same page.
+The mistake to avoid: drawing empty, filled, loading, error and offline each as its own
+static frame lined up across the page. That is a wall of mockups, not a screen.
+
+Instead — **one page per screen, one mobile + desktop frame pair, and a switcher above the
+pair** (a header chip / segmented control) that swaps which state the pair shows. This is a
+pattern already built in this app: the **lead-detail screen** switches "Rich lead · New lead ·
+Snoozed" from pills at the top of the same screen. Reuse it.
+
+- The switcher lists this screen's mutually-exclusive states; picking one changes what the
+  pair shows. States stay directly comparable and the page stays readable.
+- Do NOT create a new page per state, and do NOT duplicate the frame pair per state.
+- **Sheets, dialogs and the inline camera are NOT states** — they are overlays. Each is a
+  frame reached by wiring the control that opens it, with a working Cancel / ✕ back. Keep
+  them off the state switcher.
 
 Put this at the top of every prompt:
 
 ```
-Create ONE page for this screen. All states below are frames on that
-same page, side by side. Do NOT create a separate page per state, and
-do not create pages for sheets, errors or variants.
+ONE page for this screen: a single mobile + desktop frame pair, with a
+header chip / segmented switcher above the pair that swaps between the
+states listed below — the same way the lead-detail screen switches
+Rich lead / New lead / Snoozed. Do NOT draw each state as its own static
+frame, and do NOT make a new page per state. Sheets and the camera are
+overlays reached by tapping their trigger, not entries on the switcher.
 ```
 
 And when a prompt extends something already built:
 
 ```
 This MODIFIES the existing "[page name]" page. Do not create a new page.
-Add these frames beside the existing ones.
+Add to the existing frame pair and its state switcher.
 ```
+
+### 3 · IT MUST BE A WORKING PROTOTYPE, NOT STATIC MOCKUPS
+
+Wire it. This is clickable, not a picture of a screen.
+
+- The **state switcher actually switches** the visible state when tapped.
+- Every button, row, chip and sheet-opener under "WIRE THESE" is **connected** — the happy
+  path clicks through the flow (5.1 → 5.2 → 5.3 → … → submit) as a real prototype.
+- Every sheet or dialog **opens from its trigger and closes back** to where it came from. No
+  dead ends anywhere.
+- Where an action leads to another screen in this phase, link to that screen's page so the
+  whole survey is traversable end to end.
 
 ---
 
@@ -212,7 +239,9 @@ After booking, produce a ready-to-paste confirmation message for the
 customer. The app does NOT send it — the rep pastes it into WhatsApp
 themselves (this is the same rule as sharing a proposal).
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - the choice, before anything is picked
 - physical branch: the booking form, empty and filled
 - booked — a confirmation with the ready-to-paste message
@@ -225,7 +254,7 @@ WHAT GOES WRONG:
 - the customer wants a visit but no surveyor is free in the window → allow
   booking unassigned, flagged for someone to pick up
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Survey remotely now"     → 5.2 Locate the building
 - "Book a physical visit"   → the booking form → booked confirmation
 - booked confirmation       → back to the lead, now showing a scheduled
@@ -257,7 +286,9 @@ THE CRITICAL BEHAVIOUR: the address often resolves to the wrong building
 or the wrong side of a plot. Correcting the pin must be effortless and
 obvious, because everything downstream is measured off this footprint.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - searching / typing, before a building is chosen
 - a building located, pin on it, ready to detect
 - pin being corrected to a neighbouring building
@@ -271,7 +302,7 @@ WHAT GOES WRONG:
 - imagery is visibly old (construction that no longer matches) → let them
   proceed but this feeds the "imagery may be out of date" caveat later
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Detect the roof"   → 5.3 Detect and review
 - "No imagery here"   → 5.4 Coverage failure
 - back                → 5.1
@@ -308,7 +339,9 @@ EACH DETECTION IS ACCEPT / ADJUST / REJECT. Nothing is committed until the
 person says so. Adjusting the outline or moving an obstruction updates the
 area and the estimate live.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - detecting, in progress
 - detecting failed → retry, or fall through to 5.4
 - detection returned, high confidence, little to change
@@ -325,7 +358,7 @@ WHAT GOES WRONG:
   and the reviewer can correct the outline or escalate to a physical visit
 - the roof is split across levels the detection merged → editable
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Accept and continue"  → 5.5 Gaps remote cannot fill
 - "Draw it myself"       → the manual outline path (shared with 5.4)
 - "This needs a visit"   → 5.1 booking, pre-filled
@@ -359,14 +392,16 @@ THE HAND-DRAWN RESULT still flows into the same gaps step (5.5) and carries
 its provenance honestly — it must never look as trustworthy as a clean
 detection or a site measurement.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - the coverage-failure message with the two choices
 - manual outline in progress
 - manual outline complete, marked lower-confidence
 - imagery so poor even a hand outline is guesswork → steer firmly toward a
   physical visit
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Draw the roof"        → manual outline → 5.5
 - "Book a visit"         → 5.1 booking, pre-filled
 - back                   → 5.2
@@ -402,7 +437,9 @@ THE HONESTY LABEL — shown clearly, and carried onto the design and proposal:
  dimensions, shading and electrical access."
 This must read as confidence, not as a disclaimer to hide.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - gaps freshly listed, nothing resolved
 - some gaps answered by the customer, some deferred to a visit
 - all gaps deferred — the survey still completes; the design just inherits
@@ -416,7 +453,7 @@ WHAT GOES WRONG:
 - a deferred gap is critical (no meter info at all) → flagged so the
   designer sees it before sizing
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Finish remote survey" → back to the lead, survey saved, designer
                            notified; provenance label attached
 - "Book a visit for the rest" → 5.1 booking, pre-filled
@@ -445,7 +482,9 @@ Also reachable: visits later this week, and anything overdue or missed.
 A visit is where the survey is actually executed — opening one begins the
 guided capture (5.7).
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - a normal day with several visits
 - empty — nothing assigned yet: say what will appear here and who assigns
   it, do not show a blank screen
@@ -463,7 +502,7 @@ STRUCTURAL NOTE ON NAVIGATION: this is a top-level destination for a
 surveyor — treat it as a home screen, not a nested flow. The starting of
 a survey is the surveyor's primary action.
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - tap a visit          → 5.7 Guided capture
 - navigate / call      → hand to the OS
 - a finished survey    → its 5.9 review, read-only
@@ -504,7 +543,9 @@ flagged as missing:
 A clear sense of progress through the groups. What is done, what is
 skipped, what is left.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - a fresh capture, nothing done
 - partway through, some groups done, some skipped
 - the inline camera open, taking a photo
@@ -526,7 +567,7 @@ WHAT GOES WRONG:
   constraint the designer will see, not a failure
 - wrong address → corrected here, and it updates the site record
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - the shading step        → 5.8 Shading capture
 - "Review before submit"  → 5.9 Review and submit
 - "Could not complete"    → reason → reschedule flow → back to 5.6
@@ -555,7 +596,9 @@ HOLDS:
 - heights are estimated and labelled as estimates, not precise
 - add as many as needed
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - no obstructions added yet
 - several placed on the sketch, each with a photo and a rough height
 - an obstruction being placed and sized
@@ -568,7 +611,7 @@ WHAT GOES WRONG:
 - an obstruction only shades in winter (low sun) → let the surveyor note
   that; it matters to the designer
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Done"        → back to 5.7 with the shading step marked complete
 - add photo     → the inline camera (never the OS camera app)
 
@@ -603,7 +646,9 @@ a validation wall — but every gap that remains is carried forward EXPLICITLY
 so the designer sees exactly what is missing and who to ask. A forced-perfect
 form that will not submit is worse than an honest, incomplete one.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - everything captured, nothing missing — ready and clean
 - meter photo (or another critical item) missing — flagged prominently
   with the consequence spelled out
@@ -618,7 +663,7 @@ WHAT GOES WRONG:
   designer inherits the explicit gap
 - submit tapped with no signal → it queues; it does not fail or lose data
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - "Fix" on any gap   → back to that group in 5.7 / 5.8
 - "Submit"           → confirmation → designer notified → back to 5.6
 - offline submit     → queued; see 5.10 for the sync picture
@@ -642,7 +687,9 @@ HOLDS a calm, honest picture of what is local and what has synced:
 captured / uploading / uploaded. A manual "upload now" is available but
 never required — sync is a background fact, not a task.
 
-STATES:
+STATES — switch the alternatives from a header chip on ONE frame pair
+(never separate static frames); sheets, the camera and next steps are
+reached by wiring, not the chip:
 - everything synced — quiet, nothing to do
 - several surveys and photos pending, offline — reassuring, not alarming
 - uploading in progress, on Wi-Fi
@@ -655,7 +702,7 @@ THE TONE RULE: pending sync is normal life for a field surveyor in India.
 This screen must reassure, never scold. It is visible when wanted and
 silent when not — it must never block starting or finishing a survey.
 
-WIRE THESE:
+WIRE THESE — make them work in the prototype:
 - reachable from        → 5.6 (a small, non-blocking indicator) and 5.9
 - "Upload now"          → starts a sync, still non-blocking
 
