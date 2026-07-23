@@ -257,17 +257,33 @@ limit honestly?
 
 ---
 
-## PHASE 7 · Project management  ▸ 4 screens
+## PHASE 7 · Project management (light)  ▸ 7 screens
+
+**Goal: collect the money and show honest status after Won.** A status + documents + money
+tracker, **not** PM software — replace the notebook, not sell MS Project.
+
+📄 **Prompt: `docs/phase-7-prompts.md`** — sent to Claude Design ONE screen at a time.
+Self-contained blocks (copy one, paste, done), same as Phase 6.
 
 | # | Screen | Journey ref |
 |---|---|---|
-| 7.1 | **Projects board** — stages, days-in-stage, blockers | Stage 8 |
-| 7.2 | **Project detail** | Stage 8 |
-| 7.3 | **Payments** — tranches, copy a request message | Stage 8 |
-| 7.4 | **Document checklist** + blockers | Stage 8 |
+| 7.1 | **Mark won → project created** (modifies the lead) | Stage 7 / Stage 8 |
+| 7.2 | **Projects board** — stages, days-in-stage, money owed | Stage 8 |
+| 7.3 | **Project detail** — the screen ops lives in | Stage 8 |
+| 7.4 | **Payments** — collect against the tranches, copy a request | Stage 8 |
+| 7.5 | **Document checklist** | Stage 8 |
+| 7.6 | **Blockers** — name who is waiting | Stage 8 |
+| 7.7 | **Handover** — pack out, project closed | Stage 8 / C12 |
+
+💡 **Days-in-stage is the only board metric.** Money owed against a passed milestone is the
+leak this phase plugs — the tranches are the proposal builder's (Phase 3.4), reused verbatim.
+🔗 **Touches / reuses built work — flag, don't rebuild:** "Mark won" is a new action on the
+lead (2.3); the customer link (Phase 4 States E/F) is *fed*, not rebuilt; the Installation
+stage reuses the existing **InstallationSheet** code component.
 
 **Review focus:** Can the owner see what's stuck in three seconds? Does the payment schedule
-make money owed obvious?
+make money owed obvious? Does every blocker name who's waiting, and never block the customer
+link over money?
 
 ---
 
@@ -340,12 +356,12 @@ unmanageable. This document stays the index and the tracker.
 | 4 · Customer side | 3 lives, one page | ✅ built | ✅ |
 | 5 · Survey | 10 | ✅ built | ✅ |
 | 6 · Voice agent | 7 | ✅ built | ✅ |
-| 7 · Project management | 4 | ⬜ next | — |
+| 7 · Project management | 7 | ⬜ next | — |
 | 8 · Admin & settings | 5 | ⬜ | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~57 screens, mobile + desktop each.** Phases 1–6 built and reviewed (40 screens).
+**~60 screens, mobile + desktop each.** Phases 1–6 built and reviewed (40 screens).
 
 ---
 
@@ -355,24 +371,25 @@ unmanageable. This document stays the index and the tracker.
 |---|---|
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
+| **Ops & installer roles missing from the six presets (D27)** — Stage 8 needs a Coordinator/ops and Installer/crew actor; neither exists in the role matrix. Add presets, or map to existing, when building the roles screen | Phase 8 |
 | **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Primary home is 8.5; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
-| Prompt files exist for Phases 1–6; **write 7–10 as each phase begins** | Phase 7 onward |
+| Prompt files exist for Phases 1–7; **write 8–10 as each phase begins** | Phase 8 onward |
 
 ---
 
 ## Where we are
 
-**Phases 1–6 are built and reviewed** (40 screens). Next is **Phase 7 — project management**.
+**Phases 1–6 are built and reviewed** (40 screens). Next is **Phase 7 — project management**,
+and its prompts are ready: **`docs/phase-7-prompts.md`** — seven self-contained screens.
 
-📄 **Prompt: `docs/phase-7-prompts.md`** — *not written yet.* When it is, it follows the same
-pattern: self-contained per-screen prompts (copy one block, paste, done), states switched by a
-header chip, working prototype, and every screen wired back into what's already built.
+Phase 7 is what happens **after a deal is won**: Mark won creates the project automatically,
+then a projects board (days-in-stage, money owed), project detail, payment collection against
+the proposal's tranches, a document checklist, blockers that name who's waiting, and handover.
+It reuses the existing InstallationSheet and *feeds* the Phase 4 customer link rather than
+rebuilding it.
 
-Phase 7 covers what happens **after a deal is won** — the project goes into execution: a
-projects board (stages, days-in-stage, blockers), project detail, payment collection against
-the tranches from the proposal, and a document checklist. It's the far side of "Mark won"
-(Stage 8 in the journey) and it wires into the lead → won handoff and the payment tranches set
-back in the proposal builder.
+**Build the seven one at a time, then bring them back for the review gate** before Phase 8.
+Flag for Phase 8: the ops/installer roles gap (see Known gaps).
 
 ---
 
