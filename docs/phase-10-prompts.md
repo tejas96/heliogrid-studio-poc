@@ -82,6 +82,34 @@ steps are dark canvas; the form steps are light.
 
 ---
 
+## ⤴ GO BACK AND WIRE THESE ALREADY-BUILT SCREENS — only if the connection is missing
+
+Building the studio makes a few **already-built screens** need a small connecting change. For
+each item below: **open that existing screen, and add ONLY the named connection if it isn't
+already there. If the built screen already does it, leave it exactly as it is. Never redesign a
+built screen** — this is a wiring pass, not a rebuild. Paste this instruction with the relevant
+prompt, or run it as a short follow-up on each screen.
+
+```
+For the existing screen named below, check whether it already does the
+connection described. If it does, change NOTHING. If it does not, add only
+that one connection — do not restyle or restructure the screen.
+```
+
+| Built screen | The connection to add *(only if missing)* |
+|---|---|
+| **Lead detail (Phase 2)** | "Create design" opens the studio (10.1); the lead shows its **design variants** list (size / generation / price / payback, one "recommended"). |
+| **Proposal builder — Path A "From a design" (Phase 3)** | Pre-fills from THIS studio design: capacity, PVGIS generation & savings, components from the BOM, and the roof/3D image from the captures. The BOM uses the **same money path** — numbers must match. |
+| **Proposal preview + BOM detail (Phase 3.5 / 3.6)** | The "include the SLD / technical page" toggle and the BOM detail come from the studio's SLD + BOM. |
+| **Customer link — State A "your roof" (Phase 4)** | "View in 3D" opens the studio's **read-only 3D share** view. |
+| **Notifications centre (Phase 9.4)** | The "design returned by engineer" notification (a placeholder until now) points at the engineer sign-off / the returned design (10.11). |
+| **Survey hand-off (Phase 5.9)** | "Submit → designer notified" leads into starting a design in the studio, pre-filled from the survey + its photos. |
+
+Everything else the studio touches (the catalog/price book it reads, the InstallationSheet it
+reuses) needs **no change** to the existing screen — the studio reads/reuses them.
+
+---
+
 ## The screens, in order (mirrors the real wizard)
 
 ```

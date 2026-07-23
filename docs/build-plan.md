@@ -384,6 +384,10 @@ modelling only, never a safety verdict** — engineer sign-off is human.
 survey + its photos (5, D35); pickers/rates from the catalog (8); feeds the proposal Path A
 (3) and the customer 3D link (4); reuses the InstallationSheet (7); engineer sign-off ties to
 roles (8) + the design-returned notification (9).
+⤴ **Go-back pass:** the prompt file has a "GO BACK AND WIRE THESE ALREADY-BUILT SCREENS"
+section — small connecting changes to the lead's "Create design", the proposal Path A, the
+customer "view in 3D", and the design-returned notification — to apply **only if missing, else
+leave the built screen untouched** (never a rebuild).
 
 **Review focus:** Is **every** codebase tool present? Does it work on a phone (pinch-zoom,
 tap-then-big-handles, mode buttons not shortcuts)? Are provenance labels intact and structure
