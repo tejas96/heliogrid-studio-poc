@@ -349,17 +349,43 @@ rebuilt.
 
 ---
 
-## PHASE 10 · Studio & 3D  🔻 LAST (D23)
+## PHASE 10 · The design studio  🔻 LAST (D23)  ▸ 11 screens
 
-Only after everything above ships. These screens **already exist and work in code** —
-connect the codebase and improve one at a time. Do not reinvent.
+**The studio already works in code** — real satellite imagery, AI roof detection, PVGIS
+energy, shading sim, auto-layout, structure, SLD, BOM. **Redesign the UX (touch-first,
+simple); keep every tool and every computed output.** The source of truth is the codebase
+(`src/features/solar-studio/`), enumerated exhaustively via a four-pass exploration.
 
-| # | Screen |
-|---|---|
-| 10.1 | **BOM screen for mobile** — the 286-control problem, progressive disclosure |
-| 10.2 | Roof drawing — touch model |
-| 10.3 | Panel layout — touch model |
-| 10.4 | 3D scene + captures |
+📄 **Prompt: `docs/phase-10-prompts.md`** — 11 self-contained screens mirroring the real
+wizard. Bigger than the 4 originally sketched because the real studio is a 10-step wizard +
+3D + captures + SLD + BOM + engineer sign-off, and nothing may be dropped.
+
+| # | Screen | Codebase |
+|---|---|---|
+| 10.1 | **Studio shell + design list + Design Health** | Wizard, Dashboard |
+| 10.2 | **Step 1 · Project setup & location** (+ PVGIS data, Google Site Intelligence) | Step1Setup |
+| 10.3 | **Step 2 · Roof setup** — AI detect + touch-first tracing/editing | Step2Roof |
+| 10.4 | **Step 3 · Obstructions** | Step3Obstructions |
+| 10.5 | **Step 4 · Components** — panel · capacity · inverter · compare | Step4Components |
+| 10.6 | **Steps 5–6 · Panel layout** — auto-fill + manual editor + structure | Step6Editor |
+| 10.7 | **The 3D view** — camera · sun/shadow · layers · edit · energy report | Scene3D |
+| 10.8 | **Step 7 · Proposal captures & readiness** | Step7Proposal |
+| 10.9 | **Step 8 · SLD & drawings** | Step8Sld |
+| 10.10 | **Step 9 · BOM & pricing** — the ~286-control screen, made simple | Step9Bom |
+| 10.11 | **Step 10 · Done + engineer sign-off** | Step10Done, Stage 5 |
+
+🔑 **Corrects assumptions:** energy is **PVGIS** (Google Solar API is a separate *enhancement*
+— Building Insights); AI roof = Google dataLayers + Gemini fallback; **structure is material
+modelling only, never a safety verdict** — engineer sign-off is human.
+🔗 **Wires into every phase:** entered from a lead's "Create design" (2); pre-filled by the
+survey + its photos (5, D35); pickers/rates from the catalog (8); feeds the proposal Path A
+(3) and the customer 3D link (4); reuses the InstallationSheet (7); engineer sign-off ties to
+roles (8) + the design-returned notification (9).
+
+**Review focus:** Is **every** codebase tool present? Does it work on a phone (pinch-zoom,
+tap-then-big-handles, mode buttons not shortcuts)? Are provenance labels intact and structure
+never a safety verdict? Does the hard electrical gate survive? Does it feed the proposal/BOM/
+customer-link rather than duplicating them?
 
 ⚠️ **The studio consumes the survey.** Roof data and the photos captured in Phase 5 (roof,
 obstructions, surroundings) are the designer's reference here — D35. Wire the Phase 5 hand-off
@@ -384,10 +410,10 @@ unmanageable. This document stays the index and the tracker.
 | 6 · Voice agent | 7 | ✅ built | ✅ |
 | 7 · Project management | 7 | ✅ built | ✅ |
 | 8 · Admin & settings | 8 | ✅ built | ✅ |
-| 9 · Dashboards | 5 | ⬜ next | — |
-| 10 · Studio 🔻 | 4 | ⬜ | — |
+| 9 · Dashboards | 5 | ✅ built | ✅ |
+| 10 · Studio 🔻 | 11 | ⬜ next | — |
 
-**~64 screens, mobile + desktop each.** Phases 1–8 built and reviewed (55 screens).
+**~71 screens, mobile + desktop each.** Phases 1–9 built and reviewed (60 screens).
 
 ---
 
@@ -399,23 +425,25 @@ unmanageable. This document stays the index and the tracker.
 | ~~Dashboards not specced~~ — **SPECCED 2026-07-23** in the journey ("Dashboards & reports", D37). Phase 9 prompts still to write when the phase begins. | — |
 | ~~Ops & installer roles missing from the six presets~~ — **RESOLVED (Phase 8, 8.6):** coordinator = Manager; a dedicated Installer preset is deferred (D29), the coordinator runs the install checklist in v1. Six presets stand. | — |
 | **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Home is now 8.8; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
-| Prompt files exist for Phases 1–9; **write 10 (studio) when it begins** | Phase 10 |
+| ~~Prompt files~~ — **ALL WRITTEN (1–10).** Phase 10 built from a four-pass exploration of the real studio codebase. | — |
 
 ---
 
 ## Where we are
 
-**Phases 1–8 are built and reviewed** (55 screens). Next is **Phase 9 — dashboards & the rest**,
-and its prompts are ready: **`docs/phase-9-prompts.md`** — five self-contained screens.
+**Phases 1–9 are built and reviewed** (60 screens). Next — and **last** — is **Phase 10, the
+design studio**, and its prompts are ready: **`docs/phase-10-prompts.md`** — 11 self-contained
+screens redesigning the existing studio codebase touch-first, keeping every tool.
 
-Phase 9 is the owner's honest step-back view (D37) plus two cross-cutting utilities: owner
-dashboard (what-needs-you + cash lead), rep dashboard (secondary to My Day), pipeline funnel +
-win/loss, notifications centre, and app-wide global search. Every screen READS and deep-links
-into built data — it never creates — and charts use the data colours, never the accent.
+Phase 10 is the biggest surface: the 10-step wizard (setup → roof → obstructions → components →
+layout → 3D → captures → SLD → BOM → done) plus the engineer sign-off. It was built from a
+four-pass exploration of `src/features/solar-studio/` so no tool is lost, and it corrects the
+key assumption that energy is **PVGIS** (Google Solar API is a separate enhancement). It wires
+into every built phase (lead entry, survey pre-fill, catalog, proposal Path A, customer 3D
+link, InstallationSheet, engineer sign-off).
 
-**Build the five one at a time, then bring them back for the review gate** before **Phase 10 —
-the studio (LAST, D23)**, which connects the existing 3D/BOM code rather than designing anew.
-After Phase 9, the only prompt file left to write is Phase 10.
+**Build the 11 one at a time, then the review gate. When Phase 10 is built and reviewed, the
+product is complete end to end** — all prompt files are written.
 
 ---
 
