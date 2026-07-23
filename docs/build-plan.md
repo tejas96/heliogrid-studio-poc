@@ -224,17 +224,35 @@ review-and-submit state a gap as a consequence without trapping the surveyor?
 
 ---
 
-## PHASE 6 · Voice agent  ▸ 4 screens
+## PHASE 6 · Voice agent  ▸ 8 screens
+
+**Goal: an automated caller an owner trusts.** The most compliance-loaded surface — TRAI/DND,
+9am–9pm, AI self-disclosure, no discount authority, human escape hatch.
+
+📄 **Prompt: `docs/phase-6-prompts.md`** — sent to Claude Design ONE screen at a time. **These
+prompts are SELF-CONTAINED** — each fenced block has its own context, states, wiring, viewport
+and rules baked in; nothing to splice (the change from Phase 5's `[+ block]` placeholders).
 
 | # | Screen | Journey ref |
 |---|---|---|
-| 6.1 | **Agent setup** — the 6 guided steps | Tenant config A |
-| 6.2 | **Business knowledge** + unanswered questions | Tenant config B |
-| 6.3 | **Call result on the timeline** + transcript | Stage 7 |
-| 6.4 | **Agent performance** | Agent performance |
+| 6.1 | **Agent setup** — the guided 6 steps + opening line | Tenant config A |
+| 6.2 | **Escalation rules & calling window** | Tenant config A / constraints |
+| 6.3 | **Test the agent** — call yourself / typed sim | Tenant config A |
+| 6.4 | **Business knowledge** — structured, seeded | Tenant config B |
+| 6.5 | **Unanswered questions** — the improvement loop | Tenant config B / D24 |
+| 6.6 | **Agent queue & call eligibility** | Stage 7 |
+| 6.7 | **Call result + transcript** — expands the lead timeline | Stage 7 / D18 |
+| 6.8 | **Agent performance** — correlation-not-attribution caveat | Agent performance |
 
-**Review focus:** Could a non-technical owner configure this without help? Is the locked-vs-
-editable distinction visible? Does "deals it touched" state its limit honestly?
+🔒 **Platform locks (never tenant-editable):** AI self-disclosure · "talk to a person" always ·
+no discount talk (D10) · 9am–9pm + DND · recording consent · guided config, never a prompt box (D24).
+🔗 **Touches built screens — flag, don't rebuild:** My Day's agent-activity block and the
+lead-detail timeline (both Phase 2) wire into 6.7; the lead gains a new **"Hand to the agent"**
+action + agent-status line. Does not touch the Phase 5 survey screens.
+
+**Review focus:** Could a non-technical owner configure this without a prompt box? Is the
+locked-vs-editable line visible? Is a DND customer genuinely un-callable? Does "deals it
+touched" state its limit honestly?
 
 ---
 
@@ -319,14 +337,14 @@ unmanageable. This document stays the index and the tracker.
 | 2 · Pattern foundation | 4 | ✅ built | ✅ |
 | 3 · Money path | 10 | ✅ built | ✅ |
 | 4 · Customer side | 3 lives, one page | ✅ built | ✅ |
-| 5 · Survey | 10 | ⬜ next | — |
-| 6 · Voice agent | 4 | ⬜ | — |
+| 5 · Survey | 10 | ✅ built | ✅ |
+| 6 · Voice agent | 8 | ⬜ next | — |
 | 7 · Project management | 4 | ⬜ | — |
 | 8 · Admin & settings | 5 | ⬜ | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~54 screens, mobile + desktop each.** Phases 1–4 built and reviewed (23 screens).
+**~58 screens, mobile + desktop each.** Phases 1–5 built and reviewed (33 screens).
 
 ---
 
@@ -337,23 +355,25 @@ unmanageable. This document stays the index and the tracker.
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
 | **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Primary home is 8.5; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
-| Prompt files exist for Phases 1–5; **write 6–10 as each phase begins** | Phase 6 onward |
+| Prompt files exist for Phases 1–6; **write 7–10 as each phase begins** | Phase 7 onward |
 
 ---
 
 ## Where we are
 
-**Phases 1–4 are built and reviewed.** Next is **Phase 5 — the site survey**.
+**Phases 1–5 are built and reviewed.** Next is **Phase 6 — the voice agent**.
 
-📄 **Prompt: `docs/phase-5-prompts.md`** — ten screens, sent to Claude Design ONE at a time,
-on the Phase 3 pattern (standing rules + a viewport block per prompt). Two modes: remote
-(a rep at a desk reads satellite imagery) and physical (a surveyor on a roof, offline).
+📄 **Prompt: `docs/phase-6-prompts.md`** — eight screens, sent to Claude Design ONE at a time.
+Each prompt is **self-contained** (context, states, wiring, viewport and rules baked in — copy
+one block, paste, done; nothing to splice).
 
-⚠️ **Provenance travels** — remote is *derived from imagery*, physical is *measured on site*.
-⚠️ **Offline is the normal case** for physical capture; the review-and-submit screen is the
-one to get right.
+🔒 **Everything safety/honesty/compliance is locked by the platform** — AI self-disclosure,
+"talk to a person", no discount talk, 9am–9pm + DND, guided config (never a prompt box).
+🔗 **It wires into built screens** — My Day's agent-activity block and the lead timeline
+(Phase 2) link to the call result; the lead gains a "Hand to the agent" action. Flag these in
+the prompts; do not rebuild those screens.
 
-**Build them one at a time, then bring all ten back for the review gate** before Phase 6.
+**Build them one at a time, then bring all eight back for the review gate** before Phase 7.
 
 ---
 
