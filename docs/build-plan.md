@@ -324,14 +324,23 @@ default have a home here? Does billing never lock anyone out? Is the language sw
 
 ## PHASE 9 · Dashboards & the rest  ▸ 4 screens
 
-| # | Screen |
-|---|---|
-| 9.1 | **Owner dashboard** — pipeline, forecast, stuck deals |
-| 9.2 | **Rep dashboard** — my pipeline, my conversion |
-| 9.3 | **Pipeline funnel + win/loss reasons** |
-| 9.4 | **Notifications · global search · settings hub** |
+**Goal: the owner's honest, decision-oriented view — not a KPI wall (D37).** The daily driver
+stays My Day (tasks); this is where an owner steps back weekly/monthly. Now specced in the
+journey ("Dashboards & reports").
 
-> ⚠️ Dashboards are **not yet specced** in the journey doc. Spec them before this phase.
+| # | Screen | Journey ref |
+|---|---|---|
+| 9.1 | **Owner dashboard** — *what needs you* + cash first; pipeline, forecast, win/loss | Dashboards |
+| 9.2 | **Rep dashboard** — my pipeline & conversion (secondary to My Day) | Dashboards |
+| 9.3 | **Pipeline funnel + win/loss reasons** — where and why deals leak | Dashboards / Stage 7 |
+| 9.4 | **Notifications + global search** *(settings hub = the built Phase 8 home)* | Cross-cutting |
+
+💡 **Honesty rules (D37):** forecast is a projection not revenue · won = signed · cancelled-
+after-won stops counting · agent = correlation not attribution (link, don't re-claim) · reps
+see their own, managers their team, owner all (D20).
+🔗 **These screens READ, never create** — they surface and deep-link into built data (leads,
+proposals, projects/payments, agent). 9.4's search spans all of it; the settings hub is
+Phase 8's Settings home, not a rebuild.
 
 ---
 
@@ -382,7 +391,7 @@ unmanageable. This document stays the index and the tracker.
 | Gap | Needed by |
 |---|---|
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
-| Dashboards not specced | Phase 9 |
+| ~~Dashboards not specced~~ — **SPECCED 2026-07-23** in the journey ("Dashboards & reports", D37). Phase 9 prompts still to write when the phase begins. | — |
 | ~~Ops & installer roles missing from the six presets~~ — **RESOLVED (Phase 8, 8.6):** coordinator = Manager; a dedicated Installer preset is deferred (D29), the coordinator runs the install checklist in v1. Six presets stand. | — |
 | **Language picker not in onboarding** — Phase 1's profile (1.5) was built with name + photo only. The journey (D25) says it belongs in onboarding *and* profile. Home is now 8.8; add it to first-run when Phase 1 is revisited | Phase 1 retrofit |
 | Prompt files exist for Phases 1–8; **write 9–10 as each phase begins** | Phase 9 onward |

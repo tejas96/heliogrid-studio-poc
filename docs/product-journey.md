@@ -22,6 +22,7 @@ Companions (already done, do not duplicate here):
 | D2 | Full mobile parity — every screen works at 375px, including the design studio | 2026-07-20 |
 | D3 | Brand: "Instrument" — warm graphite + brass, ink label on brass fills | 2026-07-20 |
 | D4 | ~~WhatsApp is the primary customer channel; email secondary~~ **SUPERSEDED by D32.** | 2026-07-20 |
+| D37 | **Dashboards are the owner's periodic decision tool, deliberately separate from the task-driven daily screens.** My Day and the lists stay *tasks, not KPIs* (2.1) — a rep never opens a chart to know who to call. Dashboards are honest and action-oriented, not a vanity wall: every tile answers "what do I do about this?"; **forecast is a projection, never revenue** (weighted pipeline, labelled expected-not-promised); **won means signed**, and a deal cancelled after Won never silently keeps counting as revenue; **agent contribution is correlation, not attribution** (links to Agent performance, does not re-claim credit); reps see their own, managers their team, owner all (D20). No new metric is added unless it changes a decision. See "Dashboards & reports". | 2026-07-23 |
 | D36 | **The voice agent is FULLY tenant-configurable — nothing is locked by the platform.** Supersedes the "compliance locked by the platform" half of D24. The owner sets and can change everything: name, voice, tone, languages, opening line, what it may discuss (including price), its whole knowledge, its hand-over rules, and its calling schedule. The app **ships India's calling rules as the starting defaults** — DND respected, 9am–9pm, and the agent disclosing it's automated — but the owner can change or switch off any of them. **The tenant owns compliance** (TRAI/DND and the rest); we provide safe defaults and one honest line, not a wall. Config stays simple: everything pre-filled, plain questions, plus a free-text box so the owner is never boxed in. **Accepted risk:** a tenant can configure calls that break local rules; that is their responsibility, surfaced once, plainly, not enforced. | 2026-07-23 |
 | D35 | **Survey photos are reference for the design, not measurement.** The survey captures and attaches photos of the roof, its obstructions and everything around the building — however taken: phone on site, customer-sent on WhatsApp, or a drone / other shot uploaded. Every photo is tagged and travels with the survey to the designer, who uses them when building the 3D proposal. What stays out of v1 is *deriving numbers* from photos (LiDAR, auto roof measurement, AR height) — a person still enters every dimension. This refines the earlier "drone out of scope" note: drone-as-imagery is fine; drone-as-automatic-measurement is not. | 2026-07-23 |
 | D34 | **No discount approval in this release** — supersedes D19. Anyone with permission to create a proposal can apply a discount and share it immediately. No request sheet, no approval queue, no "Pending approval" status. The only guard is arithmetic: a discount driving the client-payable figure to ₹0 or below is warned about and blocks Generate. Rationale: the approval hop was a known bottleneck and the permission to build a proposal already implies the commercial trust. Revisit if a tenant asks for per-rep discount ceilings. | 2026-07-22 |
@@ -1526,6 +1527,57 @@ rather than guessing at a checkbox editor nobody fills in.
    today's visits shown inside it, not on two competing home screens.
 3. **Never delete a person — deactivate.** Their leads and activity stay attributed and get
    reassigned. Deleting a user orphans a year of history.
+
+---
+
+## DASHBOARDS & REPORTS — the honest view of the business (D37)
+
+**The daily driver is My Day (tasks); this is where an owner steps back.** Weekly or monthly,
+not every morning. The whole product refuses vanity metrics — My Day is a list of what to do,
+not a wall of numbers — and the dashboards keep that promise: **every tile earns its place by
+answering "what do I do about this?"** If a number doesn't change a decision, it isn't here.
+
+### The governing rules
+- **Forecast is a projection, never revenue.** Weighted pipeline (value × how likely a stage
+  is to close), labelled *expected, not promised*. It never sits in the same total as won.
+- **Won means signed.** A deal cancelled after Won stops counting as revenue immediately —
+  reporting must not quietly keep it (Stage 8).
+- **Money never renders stale as final** — the existing rule holds on every figure here.
+- **Agent contribution is correlation, not attribution.** The owner dashboard links to Agent
+  performance; it does not re-claim credit for revenue.
+- **Visibility follows role (D20):** a rep sees only their own, a manager their team, the
+  owner everything. The same screen, scoped.
+
+### The screens
+| Screen | Who | Contains |
+|---|---|---|
+| **Owner dashboard** | Owner (+ manager, team-scoped) | Sections, in priority order: **What needs you** — the honest attention list (deals stuck/aging, proposals sent-not-opened, projects blocked, payments overdue), each linking straight to the thing · **Cash** — collected vs due this month from the project tranches, and the overdue total · **Pipeline** — value and count by stage · **This period** — won (signed) value vs last period and vs target if set · **Forecast** — weighted pipeline, marked a projection · **Win/loss** — win rate and the loss-reason breakdown · **Agent** — a compact card linking to Agent performance. |
+| **Rep dashboard** | Sales rep | "How am I doing", secondary to My Day: my pipeline value, my win rate, my proposals out / opened / accepted, my follow-up load, my target if set. A rep's daily driver stays My Day; this is the step-back view, their own data only. |
+| **Pipeline funnel + win/loss** | Owner, manager | The funnel (New → Contacted → Qualified → Survey → Design → Proposal → Negotiating → Won) with conversion between stages and **where deals leak**, plus win/loss reasons by count and value, and time-in-stage. Answers "where and why do we lose deals" — **the loss-reason list is the most valuable data in the product** (Stage 7). |
+| **Notifications + global search** | Everyone | The notification centre (proposal opened · agent escalation · follow-up due · survey submitted · design returned · payment due — push + in-app, grouped, each actionable) and one global search field that finds leads, customers, sites, quotes and projects by name, phone or city. *(The "settings hub" is the Phase 8 Settings home — reached from here, not rebuilt.)* |
+
+### These screens READ; they never create
+Everything on them comes from data already captured — leads (Stage 2/3), proposals (Stage 6),
+projects and payments (Stage 8), the agent (Stage 7). A dashboard surfaces and links; it is
+never a place you enter data. Every attention item deep-links to the real lead, proposal or
+project.
+
+### What goes wrong
+- **Brand-new company, no data** → teach what will appear and why, never a broken empty chart
+- **One ₹92L C&I deal skews the averages** → show medians or flag the outlier; don't let one
+  deal make the pipeline look healthier than it is
+- **No target set** → the dashboard works without one; targets are optional, never a nag
+- **Mid-month** → "so far this month" is honest; never project a partial month as if it were
+  the full actual
+- **A rep games a metric** (marks everything "interested") → the numbers are descriptive, not
+  a leaderboard to win; win/loss on *closed* deals is what counts
+- **Owner never opens it** → push a short monthly summary in-app, where they actually read
+  things (same fix as Agent performance)
+
+### Recommendation
+**The two panels that matter are "what needs you" and cash.** Pipeline totals and win rate are
+context; the attention list and money-owed are what an owner acts on. Lead with those, and let
+the vanity totals sit quietly below.
 
 ---
 
