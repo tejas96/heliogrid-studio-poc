@@ -169,6 +169,7 @@ page.
 | D | Accept → confirm → confirmed | C8 |
 | E | **Project progress** — the DISCOM waiting line | C10 / Stage 8 |
 | F | Handover complete | C12 |
+| — | **Roof section** — 4 states: static · 3D open · 3D loading · 3D unavailable | C5 / D23 |
 | — | 7 edge states: loading, expired, invalid, superseded, already accepted, declined, slow | — |
 | — | State A in Hindi | D25 |
 
@@ -275,8 +276,8 @@ unmanageable. This document stays the index and the tracker.
 |---|---|---|---|
 | 1 · Entry & onboarding | 6 | ✅ built | ✅ |
 | 2 · Pattern foundation | 4 | ✅ built | ✅ |
-| 3 · Money path | 6 | ⬜ next | — |
-| 4 · Customer side | 3 | ⬜ | — |
+| 3 · Money path | 10 | ✅ built | ✅ |
+| 4 · Customer side | 3 lives, one page | ⬜ next | — |
 | 5 · Survey | 4 | ⬜ | — |
 | 6 · Voice agent | 4 | ⬜ | — |
 | 7 · Project management | 4 | ⬜ | — |
@@ -284,7 +285,7 @@ unmanageable. This document stays the index and the tracker.
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**42 screens, mobile + desktop each.**
+**~47 screens, mobile + desktop each.** Phases 1–3 built and reviewed (20 screens).
 
 ---
 
@@ -294,16 +295,23 @@ unmanageable. This document stays the index and the tracker.
 |---|---|
 | ~~Component kits~~ — **removed 2026-07-21**, duplicate-a-proposal covers it | — |
 | Dashboards not specced | Phase 9 |
-| Only 2 worked example prompts exist | Phase 1 onward — write them as you go |
+| Prompt files exist for Phases 1–4; **write 5–10 as each phase begins** | Phase 5 onward |
 
 ---
 
-## Start here
+## Where we are
 
-**Phase 1, screen 1.1 — My Day, mobile.** The ready-to-paste prompt is at the bottom of
-`product-journey.md`. Build it, then the desktop version, then 1.2.
+**Phases 1–3 are built and reviewed.** Next is **Phase 4 — the customer's side**.
 
-**Stop after 1.4 and bring all four back for review.** Do not start Phase 2 first.
+📄 **Prompt: `docs/phase-4-prompts.md`** — ONE end-to-end prompt, not screen-by-screen like
+Phase 3. The customer page is genuinely one page with lifecycle states (proposal → progress
+→ handover), so it is sent to Claude Design as a single prompt with every state as a frame.
+
+⚠️ **No app navigation** — this is a public web page, not the app.
+⚠️ **The EPC's branding** (*Suryodaya Solar*), not HelioGrid's.
+
+**Build the page, then bring it back for the nine-point review gate** before starting
+Phase 5. Do not start Phase 5 first.
 
 ---
 
