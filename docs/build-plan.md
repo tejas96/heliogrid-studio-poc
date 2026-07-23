@@ -187,9 +187,10 @@ feel like one thing?
 **Goal: an honest roof.** Remote reads satellite imagery from a desk; physical is a surveyor
 on the roof, offline. The mode decides whether a number is *derived* or *measured*.
 
-📄 **Prompt: `docs/phase-5-prompts.md`** — sent to Claude Design ONE screen at a time.
-⚠️ **These prompts deliberately give NO visual direction** — they state what each screen must
-do, hold and handle, and leave layout entirely to Claude Design.
+📄 **Prompt: `docs/phase-5-prompts.md`** — sent to Claude Design ONE screen at a time,
+following the Phase 3 pattern: two standing rules, a **viewport block on every prompt**, and
+bodies that state what each screen must do and handle (no hex, no tokens — the design system
+carries the look).
 
 | # | Screen | Journey ref |
 |---|---|---|
@@ -323,12 +324,10 @@ unmanageable. This document stays the index and the tracker.
 
 **Phases 1–4 are built and reviewed.** Next is **Phase 5 — the site survey**.
 
-📄 **Prompt: `docs/phase-5-prompts.md`** — ten screens, sent to Claude Design ONE at a time.
-Two modes: remote (a rep at a desk reads satellite imagery) and physical (a surveyor on a
-roof, offline).
+📄 **Prompt: `docs/phase-5-prompts.md`** — ten screens, sent to Claude Design ONE at a time,
+on the Phase 3 pattern (two standing rules + a viewport block per prompt). Two modes: remote
+(a rep at a desk reads satellite imagery) and physical (a surveyor on a roof, offline).
 
-⚠️ **These prompts give NO visual direction** — they state what each screen must do and
-handle, and leave the layout to Claude Design. This is a deliberate change from Phases 3–4.
 ⚠️ **Provenance travels** — remote is *derived from imagery*, physical is *measured on site*.
 ⚠️ **Offline is the normal case** for physical capture; the review-and-submit screen is the
 one to get right.

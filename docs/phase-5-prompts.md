@@ -1,7 +1,7 @@
 # Phase 5 — Site survey, both modes  ▸ 10 screens
 
-**The survey decides whether a quote is honest.** There are two ways to do it, and they are
-run by different people in different places:
+**The survey decides whether a quote is honest.** There are two ways to do it, run by
+different people in different places:
 
 ```
 REMOTE  · a rep or designer at a desk, minutes after the lead arrives.
@@ -18,32 +18,104 @@ Reference: `product-journey.md` Stage 4 (both modes, every edge case), decisions
 **D31** (arc nav; a surveyor's centre button reads "Start survey").
 Worklist and review gate: `build-plan.md`.
 
+> **Pattern:** this file follows `phase-3-prompts.md` — one prompt per screen, the two
+> standing rules below, and a **viewport block attached to every prompt**. Each prompt says
+> only WHAT a screen must do, hold and handle; colours, tokens and the fine visual detail
+> come from the design system in the dropdown. Never put hex or token names in a prompt.
+
 ---
 
-## ⚠️ HOW THESE PROMPTS ARE DIFFERENT FROM PHASE 3 AND 4
+## ⚠️ TWO RULES FOR THIS WHOLE PHASE
 
-**Do not describe how any screen should look.** No layouts, no "cards vs table", no column
-counts, no positioning, no component choices, no styling. Claude Design owns all of that,
-and the design system in the dropdown carries the brand.
+### 1 · One screen keeps the bottom navigation — the rest do not
 
-Each prompt below states only:
+**My visits today (5.6) is the surveyor's HOME** — a top-level destination. It keeps the arc
+bottom nav on mobile (the centre button reads "Start survey") and the sidebar on desktop.
 
-- **who** uses the screen and **where** they physically are
-- **what** it must let them do (the goal)
-- **what content and data** it holds
-- **what states** must exist
-- **what goes wrong** and how the screen must handle it
-- **where each action leads**
+**Every other survey screen is a NESTED flow** — remote screens are started from a lead,
+physical screens are started from a booked visit. On mobile they are full-screen with a
+close ✕ or back ‹ in the header and no bottom nav. Showing the tab bar implies the user can
+wander off mid-survey, which they cannot.
 
-If a prompt ever tempts you to say "put this at the bottom" or "show these as cards",
-delete that sentence. State the requirement, not the appearance.
+| Bottom arc nav appears | Bottom arc nav does NOT appear |
+|---|---|
+| **5.6 My visits today** (a destination) | Everything else in Phase 5 |
 
-Put this line at the top of every prompt you send:
+### 2 · DO NOT CREATE A NEW PAGE FOR EVERY PROMPT
+
+Claude Design tends to add a page each time. Most of what follows is a **state of an existing
+screen**, not a new screen. One page per screen; every state is a frame on that same page.
+
+Put this at the top of every prompt:
 
 ```
-Design this screen for a solar EPC's field app. I describe WHAT it must
-do and hold; YOU decide the layout, hierarchy and components. Use the
-selected design system. Do not ask me how it should look.
+Create ONE page for this screen. All states below are frames on that
+same page, side by side. Do NOT create a separate page per state, and
+do not create pages for sheets, errors or variants.
+```
+
+And when a prompt extends something already built:
+
+```
+This MODIFIES the existing "[page name]" page. Do not create a new page.
+Add these frames beside the existing ones.
+```
+
+---
+
+## The viewport blocks — attach ONE to every prompt in this phase
+
+Most Phase 5 screens are nested flows and use the **NESTED block**. Only 5.6 uses the **APP
+block**. Which one each prompt takes is named at its foot.
+
+### NESTED VIEWPORT BLOCK — for the survey flows (all except 5.6)
+
+```
+BOTH VIEWPORTS, one design, genuinely different layouts:
+
+· MOBILE 375px — NO bottom navigation (this is a nested survey flow).
+  Full screen, close ✕ or back ‹ in the header, any step or progress
+  footer pinned at the bottom. Single column, content as cards, secondary
+  panels and pickers open as bottom sheets.
+
+· DESKTOP 1440px — the 240px left sidebar stays visible but the survey
+  occupies the main content area. Multiple columns. Denser rows, not
+  cards. Secondary panels open beside the content, not over it.
+
+Same data and copy in both. Desktop is not a stretched phone — if the two
+layouts look alike, the desktop one is wrong.
+
+Place them side by side on one canvas, mobile left, desktop right, aligned
+to the same top edge.
+```
+
+**Emphasis per mode — add the one line that fits:**
+
+- **Remote screens (5.1–5.5):** the rep works at a desk with imagery and a map, so
+  *desktop is a first-class working surface, not an afterthought.*
+- **Physical screens (5.7–5.10):** the surveyor works on a phone on a roof, so *mobile 375px
+  is the working device — design it first; the desktop view is the office read-back where a
+  designer or owner reviews a submitted survey.*
+
+### APP VIEWPORT BLOCK — for 5.6 only
+
+```
+BOTH VIEWPORTS, one design, genuinely different layouts:
+
+· MOBILE 375px — bottom arc nav; a surveyor's centre button reads "Start
+  survey". Single column, content as cards, primary action within thumb
+  reach, a visit opens full screen.
+
+· DESKTOP 1440px — NO bottom nav. A 240px left sidebar with icons and text
+  labels instead. Multiple columns. Denser rows, not cards. A visit opens
+  in a right-hand panel with the list still visible beside it. Rows have
+  hover states.
+
+Same data and copy in both. Desktop is not a stretched phone — if the two
+layouts look alike, the desktop one is wrong.
+
+Place them side by side on one canvas, mobile left, desktop right, aligned
+to the same top edge.
 ```
 
 ---
@@ -91,7 +163,7 @@ surveyor's home screen sits alongside My Day in the app.
 START
   5.1  Start a survey — choose remote or physical; book a physical visit
 
-REMOTE  (rep / designer, at a desk — desktop and mobile both real)
+REMOTE  (rep / designer, at a desk — desktop is a first-class surface)
   5.2  Locate the building
   5.3  Detect and review the roof         ← the star of the remote mode
   5.4  Coverage failure → manual outline or book a visit
@@ -105,15 +177,12 @@ PHYSICAL  (surveyor, on a roof, on a phone — mobile is the product)
   5.10 Sync and offline status
 ```
 
-One page per screen. Every state below is a frame on that same page, never a new page.
-
 ---
 
 # 5.1 · Start a survey — choose the mode, book a visit
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a rep or designer on a lead's detail screen, deciding how this roof
 gets surveyed.
@@ -163,6 +232,8 @@ WIRE THESE:
                               visit; it also appears in the surveyor's
                               "My visits today" (5.6)
 - "View existing survey"    → the relevant review screen
+
+[+ NESTED VIEWPORT BLOCK — remote/desk emphasis]
 ```
 
 ---
@@ -170,8 +241,7 @@ WIRE THESE:
 # 5.2 · Locate the building  *(remote)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a rep or designer at a desk, starting a remote survey.
 GOAL: land on the exact building whose roof we are about to detect — the
@@ -205,6 +275,8 @@ WIRE THESE:
 - "Detect the roof"   → 5.3 Detect and review
 - "No imagery here"   → 5.4 Coverage failure
 - back                → 5.1
+
+[+ NESTED VIEWPORT BLOCK — remote/desk emphasis]
 ```
 
 ---
@@ -212,8 +284,7 @@ WIRE THESE:
 # 5.3 · Detect and review the roof  *(remote — the star of this mode)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a rep or designer, seconds after confirming the building.
 GOAL: turn satellite imagery into a roof they trust enough to design on —
@@ -259,6 +330,8 @@ WIRE THESE:
 - "Draw it myself"       → the manual outline path (shared with 5.4)
 - "This needs a visit"   → 5.1 booking, pre-filled
 - back                   → 5.2
+
+[+ NESTED VIEWPORT BLOCK — remote/desk emphasis]
 ```
 
 ---
@@ -266,8 +339,7 @@ WIRE THESE:
 # 5.4 · Coverage failure → manual outline or book a visit  *(remote)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a rep or designer whose address returned no detailed roof data —
 which is real in parts of India.
@@ -298,6 +370,8 @@ WIRE THESE:
 - "Draw the roof"        → manual outline → 5.5
 - "Book a visit"         → 5.1 booking, pre-filled
 - back                   → 5.2
+
+[+ NESTED VIEWPORT BLOCK — remote/desk emphasis]
 ```
 
 ---
@@ -305,8 +379,7 @@ WIRE THESE:
 # 5.5 · Gaps remote cannot fill + the honesty label  *(remote)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a rep or designer finishing a remote survey.
 GOAL: be honest about what imagery could NOT determine, and capture what
@@ -348,6 +421,8 @@ WIRE THESE:
                            notified; provenance label attached
 - "Book a visit for the rest" → 5.1 booking, pre-filled
 - back                   → 5.3
+
+[+ NESTED VIEWPORT BLOCK — remote/desk emphasis]
 ```
 
 ---
@@ -355,8 +430,7 @@ WIRE THESE:
 # 5.6 · My visits today — the surveyor's home  *(physical)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a surveyor (or a rep wearing the surveyor hat) starting their day.
 This is their home screen, the equivalent of My Day for a seller.
@@ -393,6 +467,8 @@ WIRE THESE:
 - tap a visit          → 5.7 Guided capture
 - navigate / call      → hand to the OS
 - a finished survey    → its 5.9 review, read-only
+
+[+ APP VIEWPORT BLOCK]
 ```
 
 ---
@@ -400,8 +476,7 @@ WIRE THESE:
 # 5.7 · Guided capture  *(physical — offline is the normal case)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a surveyor on the roof — in the sun, one hand free, often with one
 bar of signal or none.
@@ -456,6 +531,8 @@ WIRE THESE:
 - "Review before submit"  → 5.9 Review and submit
 - "Could not complete"    → reason → reschedule flow → back to 5.6
 - exit mid-way            → draft saved to the visit, resumable from 5.6
+
+[+ NESTED VIEWPORT BLOCK — physical/mobile emphasis]
 ```
 
 ---
@@ -463,8 +540,7 @@ WIRE THESE:
 # 5.8 · Shading capture  *(physical)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: the surveyor, still on the roof, recording what will cast shadows.
 GOAL: capture every tall thing near the roof and roughly how tall it is,
@@ -495,6 +571,8 @@ WHAT GOES WRONG:
 WIRE THESE:
 - "Done"        → back to 5.7 with the shading step marked complete
 - add photo     → the inline camera (never the OS camera app)
+
+[+ NESTED VIEWPORT BLOCK — physical/mobile emphasis]
 ```
 
 ---
@@ -502,8 +580,7 @@ WIRE THESE:
 # 5.9 · Review and submit  *(physical — the star of this mode)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: the surveyor, about to hand off to the designer.
 GOAL: catch the one forgotten item that would cost a second trip — BEFORE
@@ -545,6 +622,8 @@ WIRE THESE:
 - "Fix" on any gap   → back to that group in 5.7 / 5.8
 - "Submit"           → confirmation → designer notified → back to 5.6
 - offline submit     → queued; see 5.10 for the sync picture
+
+[+ NESTED VIEWPORT BLOCK — physical/mobile emphasis]
 ```
 
 ---
@@ -552,8 +631,7 @@ WIRE THESE:
 # 5.10 · Sync and offline status  *(physical)*
 
 ```
-[+ standing "how it must do" line]
-[+ EVERY-SCREEN block]
+[+ EVERY-SURVEY-SCREEN block]
 
 WHO: a surveyor who has done several visits, some captured with no signal.
 GOAL: reassure that nothing is lost and show what is still waiting to
@@ -580,6 +658,8 @@ silent when not — it must never block starting or finishing a survey.
 WIRE THESE:
 - reachable from        → 5.6 (a small, non-blocking indicator) and 5.9
 - "Upload now"          → starts a sync, still non-blocking
+
+[+ NESTED VIEWPORT BLOCK — physical/mobile emphasis]
 ```
 
 ---
