@@ -447,7 +447,8 @@ SUPPORTING VIEWS (as states on this page):
 - Call log — every call: customer, duration, outcome, language,
   transcript, recording; filterable
 - Unanswered questions — the 6.4 list, linked
-- Cost — calls made, minutes used (placeholder numbers; pricing not set, D26)
+- Usage — calls made and minutes used this period, as a plain activity stat
+  (no plan cap or limit — billing is deferred, D38)
 - Per-rep view — which reps lean on the agent (manager-only)
 
 WARN, don't hide: if the connect rate collapses, surface it with the likely
@@ -458,7 +459,7 @@ separate static frames):
 - the normal dashboard
 - call log view
 - per-rep view (manager-only)
-- cost view (placeholder pricing)
+- usage view (activity only, no plan cap)
 - a warning — connect rate dropped, cause shown
 - empty / first month — not enough data yet, explained honestly
 

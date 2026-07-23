@@ -3,11 +3,12 @@
 **Where a company makes the product theirs.** Almost everything a proposal shows — the logo,
 the story, the components, the payment stages, the timeline, the terms, the bank details — is
 a **tenant default configured here** and pre-filled into the proposal builder. This phase is
-the home for all of it, plus the team, billing and each person's own preferences.
+the home for all of it, plus the team and each person's own preferences. *(Billing &
+subscription are deferred and planned separately — D38 — so there is no billing screen here.)*
 
 Reference: `product-journey.md` — Tenant Configuration (A already built as the agent in
-Phase 6; B & C here), Roles & Permissions, Billing & Subscription, Multilingual; decisions
-**D24, D25, D26, D27, D34**. Worklist and review gate: `build-plan.md`.
+Phase 6; B & C here), Roles & Permissions, Multilingual; decisions **D24, D25, D27, D34, D38**
+(D38 defers billing entirely). Worklist and review gate: `build-plan.md`.
 
 ---
 
@@ -39,7 +40,7 @@ Baked into every block:
   once and used by the proposal, the agent's script, the customer link and the invoice.
 
 **Who sees what:** the company settings (8.1–8.7) are **owner-only** (Manage catalog / team /
-billing are Owner capabilities). **Profile & preferences (8.8) is every user's own.**
+catalog / team are Owner capabilities). **Profile & preferences (8.7) is every user's own.**
 
 ---
 
@@ -77,9 +78,10 @@ Profile / Settings** nav already exists.
   8.4  Proposal defaults & templates ← the one that pre-fills the builder
   8.5  Message templates          (WhatsApp proposal / follow-up / reminder)
   8.6  Team & roles               (six stackable presets)
-  8.7  Billing                    (mock — shape only, D26)
-  8.8  Profile & preferences      (per-user: language, name, notifications)
+  8.7  Profile & preferences      (per-user: language, name, notifications)
 ```
+*(Billing is DEFERRED — planned separately, D38. No billing screen and no subscription
+restrictions anywhere in the plan.)*
 
 ---
 
@@ -110,7 +112,7 @@ opens its screen:
 - YOUR AGENT — Agent setup, knowledge, performance → these ALREADY EXIST
   (Phase 6). Link to them; do not rebuild.
 - TEAM — Team & roles (8.6)
-- ACCOUNT — Billing (8.7) · Profile & preferences (8.8)
+- ACCOUNT — Profile & preferences (8.7)  *(no Billing — deferred, D38)*
 
 LEAD SOURCES is small enough to live here as an inline section: which
 channels are live (manual quick-add, CSV import, inbound call via the
@@ -121,7 +123,7 @@ owner knows what they've personalised. Nothing here is required — the
 defaults already work.
 
 ACCESS: this hub is owner-only for the company areas. A non-owner who
-opens Settings sees only Profile & preferences (8.8).
+opens Settings sees only Profile & preferences (8.7).
 
 STATES — switch from a header chip on ONE mobile+desktop frame pair (never
 separate static frames):
@@ -131,7 +133,7 @@ separate static frames):
 - lead-sources section expanded
 
 WIRE THESE — make them work in the prototype:
-- each area row → its screen (8.2–8.8)
+- each area row → its screen (8.2–8.7)
 - the agent rows → the existing Phase 6 agent screens (connect)
 - reached from More → Settings and the desktop sidebar
 
@@ -433,71 +435,7 @@ phone.
 
 ---
 
-# 8.7 · Billing (mock — shape only)
-
-```
-Design BILLING & SUBSCRIPTION — mock, shape only. Use the selected design
-system; no colours or token names — you decide the layout.
-
-EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
-built screens and shared navigation. Wherever this prompt refers to a
-screen, action or nav that already exists, wire into it and extend it —
-do not create a duplicate, a second copy, or a new isolated page. Claude
-Design tends to add pages; here, connect first.
-
-WHO: the owner, managing the subscription.
-GOAL: the flows exist and feel right, so real pricing drops in later
-without a redesign.
-
-PRICING IS UNDECIDED (D26) — use OBVIOUSLY-FAKE placeholder numbers so
-nobody mistakes them for real. It holds:
-- Plans — three placeholder tiers; whatever the axis becomes (users,
-  proposals, agent minutes), the card shape holds
-- Current plan & usage — what they're on, used this cycle, renewal date,
-  usage bars
-- Upgrade / change plan — compare, pick, confirm, with the prorated price
-  difference shown
-- Payment method — Card · UPI · netbanking (UPI is first-class in India,
-  not an afterthought)
-- Invoices — list and download a GST invoice (needed for input tax credit)
-- Trial status — a quiet "12 days left" that grows prominent in the last
-  3 days and never blocks work
-
-THE STATES THAT MATTER — build each:
-- Trial active — everything works, quiet countdown
-- Trial ending (≤3 days) — persistent but dismissible banner, one-tap
-  upgrade
-- Trial expired — READ-ONLY: see and export everything, cannot create
-- Payment failed — 7-day grace with full access, clear banner, retry (not
-  instant lockout)
-- Suspended — READ-ONLY, never locked out; data visible and exportable
-- Cancelled — an export window, then archive, with the deletion date
-  stated
-
-THE RULE: never hold a customer's data hostage — a suspended tenant keeps
-read access and full export of their own leads and quotes.
-
-STATES — switch from a header chip on ONE mobile+desktop frame pair (never
-separate static frames):
-- current plan & usage (trial active)
-- the plans / upgrade comparison
-- trial ending banner · payment failed grace · suspended read-only
-- invoices list
-
-WIRE THESE — make them work in the prototype:
-- reached from 8.1
-- "Upgrade" → compare → confirm (prorated) → back to current plan
-- "Download invoice" → success
-- read-only states still allow "Export"
-
-VIEWPORTS — build both, one design: DESKTOP 1440px primary (sidebar
-stays), MOBILE 375px companion; nested, no bottom nav (back ‹). Side by
-side, mobile left, desktop right; desktop is not a stretched phone.
-```
-
----
-
-# 8.8 · Profile & preferences (per-user)
+# 8.7 · Profile & preferences (per-user)
 
 ```
 Design PROFILE & PREFERENCES — each user's own settings. Use the selected
@@ -561,7 +499,8 @@ Run the nine-point review gate in `build-plan.md`, plus these specific to this p
   product keep it on drafts that used it?
 - Do **roles use the six stackable presets** with the live plain-English line — and is the
   ops/installer question resolved (coordinator = Manager; installer deferred)?
-- Does **billing never lock anyone out** — suspended/expired stay read-only and exportable?
+- Is there **no subscription gating anywhere** — no plan limits, trial locks or upgrade prompts
+  (billing is deferred, D38)?
 - Is the **language switch per-user**, reachable by everyone, and does it re-render the app
   (including a Hindi frame that proves the layout holds)?
 

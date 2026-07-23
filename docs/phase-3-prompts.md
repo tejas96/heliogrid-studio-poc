@@ -714,7 +714,7 @@ Locked fields must look deliberately locked — not disabled-and-broken.
 → After Next on this step, a PROPOSAL TYPE sheet appears:
    "Choose proposal type"
    · CAPEX — purchase outright
-   · OPEX / PPA — per-unit billing  [PRO badge]
+   · OPEX / PPA — per-unit billing to the customer  (no PRO/tier gate — D38)
    Back · Continue
 
 ── STEP 2 · ACHIEVEMENTS (optional) ──

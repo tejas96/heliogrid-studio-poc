@@ -287,7 +287,7 @@ link over money?
 
 ---
 
-## PHASE 8 · Admin & settings  ▸ 8 screens
+## PHASE 8 · Admin & settings  ▸ 7 screens
 
 **Goal: where a company makes the product theirs.** Almost every value a proposal shows is a
 tenant default configured here and pre-filled into the builder — plus team, billing, and each
@@ -305,20 +305,23 @@ every builder step to its config home.
 | 8.4 | **Proposal defaults & templates** — timeline, payment terms, T&C, bank, financial (steps 3/5/6/7/9/10/11) | Tenant config C |
 | 8.5 | **Message templates** — WhatsApp proposal / follow-up / reminder | Tenant config C |
 | 8.6 | **Team & roles** — six stackable presets | Roles |
-| 8.7 | **Billing** (mock) — plans, usage, the six states | Billing / D26 |
-| 8.8 | **Profile & preferences** — per-user language, name, notifications | D25 / Multilingual |
+| 8.7 | **Profile & preferences** — per-user language, name, notifications | D25 / Multilingual |
 
-⚠️ **Language is PER-USER (D25), not owner-only** — it lives in 8.8, reachable by everyone;
-8.1–8.7 are owner-only company settings.
+⚠️ **Language is PER-USER (D25), not owner-only** — it lives in 8.7, reachable by everyone;
+8.1–8.6 are owner-only company settings.
 ⚠️ **Roles resolution (ops/installer gap):** coordinator work = the **Manager** preset; a
 dedicated **Installer** preset is **deferred** (D29) — the coordinator runs the install
 checklist in v1. Six presets stand; no custom-role builder in v1 (D27).
+⚠️ **Billing is DEFERRED — planned separately (D38).** No billing screen, and **no subscription
+restriction gates any feature** anywhere in the plan (no plan limits, trials, seat caps or
+PRO-tier locks).
 🔗 **Connects to built work:** the agent screens (Phase 6) are linked from the Settings home;
 every config value feeds the proposal builder (Phase 3). *(The old "Duplicate a proposal"
 screen was dropped — it's the Phase 3.1 duplicate route, already built.)*
 
 **Review focus:** Can a company send a proposal without opening settings? Does every builder
-default have a home here? Does billing never lock anyone out? Is the language switch per-user?
+default have a home here? Is there no subscription gating anywhere (D38)? Is the language
+switch per-user?
 
 ---
 
@@ -409,11 +412,12 @@ unmanageable. This document stays the index and the tracker.
 | 5 · Survey | 10 | ✅ built | ✅ |
 | 6 · Voice agent | 7 | ✅ built | ✅ |
 | 7 · Project management | 7 | ✅ built | ✅ |
-| 8 · Admin & settings | 8 | ✅ built | ✅ |
+| 8 · Admin & settings | 7 | ✅ built | ✅ |
 | 9 · Dashboards | 5 | ✅ built | ✅ |
 | 10 · Studio 🔻 | 11 | ⬜ next | — |
 
-**~71 screens, mobile + desktop each.** Phases 1–9 built and reviewed (60 screens).
+**~70 screens, mobile + desktop each.** Phases 1–9 built and reviewed (59 screens).
+Billing is deferred and planned separately (D38) — not counted here.
 
 ---
 

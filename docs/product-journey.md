@@ -22,6 +22,7 @@ Companions (already done, do not duplicate here):
 | D2 | Full mobile parity — every screen works at 375px, including the design studio | 2026-07-20 |
 | D3 | Brand: "Instrument" — warm graphite + brass, ink label on brass fills | 2026-07-20 |
 | D4 | ~~WhatsApp is the primary customer channel; email secondary~~ **SUPERSEDED by D32.** | 2026-07-20 |
+| D38 | **Billing & subscription are DEFERRED and planned separately — and no subscription restriction gates any feature in this plan.** Supersedes D26. There is no billing screen in the current build; every plan/usage limit, trial-expiry, suspension, seat cap, PRO-tier lock and "upgrade" prompt is removed. Every user can use every built feature freely. The pricing model and billing surface are a separate planning effort; the only pre-committed rule for it is "never hold a customer's data hostage" (read + export always work). | 2026-07-24 |
 | D37 | **Dashboards are the owner's periodic decision tool, deliberately separate from the task-driven daily screens.** My Day and the lists stay *tasks, not KPIs* (2.1) — a rep never opens a chart to know who to call. Dashboards are honest and action-oriented, not a vanity wall: every tile answers "what do I do about this?"; **forecast is a projection, never revenue** (weighted pipeline, labelled expected-not-promised); **won means signed**, and a deal cancelled after Won never silently keeps counting as revenue; **agent contribution is correlation, not attribution** (links to Agent performance, does not re-claim credit); reps see their own, managers their team, owner all (D20). No new metric is added unless it changes a decision. See "Dashboards & reports". | 2026-07-23 |
 | D36 | **The voice agent is FULLY tenant-configurable — nothing is locked by the platform.** Supersedes the "compliance locked by the platform" half of D24. The owner sets and can change everything: name, voice, tone, languages, opening line, what it may discuss (including price), its whole knowledge, its hand-over rules, and its calling schedule. The app **ships India's calling rules as the starting defaults** — DND respected, 9am–9pm, and the agent disclosing it's automated — but the owner can change or switch off any of them. **The tenant owns compliance** (TRAI/DND and the rest); we provide safe defaults and one honest line, not a wall. Config stays simple: everything pre-filled, plain questions, plus a free-text box so the owner is never boxed in. **Accepted risk:** a tenant can configure calls that break local rules; that is their responsibility, surfaced once, plainly, not enforced. | 2026-07-23 |
 | D35 | **Survey photos are reference for the design, not measurement.** The survey captures and attaches photos of the roof, its obstructions and everything around the building — however taken: phone on site, customer-sent on WhatsApp, or a drone / other shot uploaded. Every photo is tagged and travels with the survey to the designer, who uses them when building the 3D proposal. What stays out of v1 is *deriving numbers* from photos (LiDAR, auto roof measurement, AR height) — a person still enters every dimension. This refines the earlier "drone out of scope" note: drone-as-imagery is fine; drone-as-automatic-measurement is not. | 2026-07-23 |
@@ -34,7 +35,7 @@ Companions (already done, do not duplicate here):
 | D8 | A **voice agent** calls customers for follow-ups and answers inbound questions | 2026-07-21 |
 | D9 | v1 = **Sell + light project tracking**. Won deal → Ordered → Installed → Commissioned → Handed over, plus a document checklist and customer-visible progress. **No** inventory, POs, scheduling engine or O&M. | 2026-07-21 |
 | D10 | Voice agent's **default** behaviour: follow up, answer FAQ, book callbacks/visits, gauge interest; by default it offers a human for price/discount rather than negotiating. ~~It may never discuss discounts or negotiate.~~ **The "never" is SUPERSEDED by D36** — discount/negotiation are now owner-configurable defaults, not hard rules. (Actual deal *acceptance* still happens when the customer taps Accept on the proposal link — C8 — not by a verbal agent agreement.) Every call is transcribed onto the lead timeline. | 2026-07-21 |
-| D11 | **Self-serve signup**, free trial. Billing prompted later, not at signup. | 2026-07-21 |
+| D11 | **Self-serve signup.** ~~Free trial; billing prompted later.~~ Billing is DEFERRED (D38) — signup asks only for the company + the owner; there is no trial gate or billing prompt anywhere in the current plan. | 2026-07-21 |
 | D12 | App UI **English**. Voice agent speaks **Hindi, Marathi, Gujarati, Tamil, Telugu + English**, chosen per customer. | 2026-07-21 |
 
 ## India's calling rules — shipped as defaults, owned by the tenant (D36)
@@ -65,7 +66,7 @@ not enforced as locks.
 | D28 | **No per-person permission exceptions, ever.** To know what someone can do, you look at their roles — one source of truth. Exceptions are how permission systems become unauditable. | 2026-07-21 |
 | D29 | **Custom roles deferred to v2.** Ship the six, watch which combinations companies actually ask for, then add the presets they wanted — rather than guessing at a checkbox editor nobody fills in. | 2026-07-21 |
 | D25 | **The app UI is multilingual: English, Hindi, Marathi.** Supersedes the English-only half of D12. Voice agent languages stay configurable per tenant, defaulting to the same three. Devanagari support is a design-system change, not just a translation task — see "Multilingual". | 2026-07-21 |
-| D26 | **Billing screens are MOCK for now.** Pricing, tiers and limits are not decided. Design the shape — plans, usage, upgrade, payment failure, suspension — with placeholder numbers, so the flows exist and the real pricing drops in later. | 2026-07-21 |
+| D26 | ~~Billing screens are MOCK for now.~~ **SUPERSEDED by D38** — billing is deferred entirely and planned separately; no billing screen and no subscription restrictions in the current plan. | 2026-07-21 |
 | D24 | **The agent is configured through guided questions and a structured knowledge base, kept simple** — with a free-text box so the owner is never boxed in. Unanswered questions from real calls feed back as one-tap additions. ~~Everything about safety, honesty and compliance is locked by the platform.~~ **The "locked by platform" half is SUPERSEDED by D36** — the agent is fully tenant-configurable; the app ships safe defaults, the owner owns compliance. See "Tenant configuration". | 2026-07-21 |
 | D23 | **The design studio (Stage 5) and all 3D screens are LOW PRIORITY — design them last.** Everything else ships first: onboarding, CRM, survey, proposal builder, voice agent, close, project tracking. The studio already works in code; redesigning it is an improvement, not a blocker. | 2026-07-21 |
 | D22 | **Components are MANDATORY on every proposal.** No lump-sum quotes. All 5 categories (Panel · Inverter · Cable · Electrical · Structure, + Battery when added) must be selected before Generate. **Component kits were considered and REMOVED (2026-07-21)** — speed comes instead from *duplicate an earlier proposal*, which carries its components, and from Path A filling them straight off the BOM. | 2026-07-21 |
@@ -125,8 +126,8 @@ teaches → create the first lead in under a minute.
   "request to join" instead of creating a second workspace
 
 ### Deliberately not in v1
-Payment/plan selection during signup (free trial first, billing when they invite a
-3rd user), SSO, custom domains.
+Payment/plan selection during signup — **all billing & subscription is deferred and planned
+separately (D38)**, with no trial or plan gating anywhere. Also not in v1: SSO, custom domains.
 
 ### Recommendation
 **A demo project pre-loaded with a real Pune rooftop.** New users understand the product
@@ -594,7 +595,7 @@ compares the final numbers to the promise.
 
 → **Proposal Type modal** (bottom sheet, fires after Company → Next): drag handle,
 "Choose proposal type", two radio cards — **CAPEX** (purchase outright) / **OPEX / PPA**
-(PRO badge, per-unit billing). Actions: Back · Continue ›
+(per-unit billing to the customer — no PRO/tier gate, D38). Actions: Back · Continue ›
 
 #### 2 · Achievements *(optional, skippable)*
 - About your company (textarea — "shown on proposal cover")
@@ -1319,7 +1320,7 @@ here (N7, D21).
 |---|---|
 | **Call log** | Every call: customer, duration, outcome, language, which config version, transcript, recording. Filterable. |
 | **Unanswered questions** | The list from D24 — what customers asked that the agent could not handle. One tap to answer. **This is where the dashboard turns into improvement.** |
-| **Cost** | Calls made, minutes used, against whatever the plan allows. Placeholder until pricing exists (D26). |
+| **Usage** | Calls made and minutes used this period — a plain activity stat, **no plan cap or limit** (billing deferred, D38). |
 | **Per-rep view** | Which reps lean on the agent, whose leads it rescued. Manager-only. |
 
 ### What goes wrong
@@ -1334,42 +1335,14 @@ here (N7, D21).
 
 ---
 
-## BILLING & SUBSCRIPTION — mock, shape only (D26)
+## BILLING & SUBSCRIPTION — DEFERRED, planned separately (D38)
 
-**Pricing is undecided.** Design the flows with placeholder numbers so the screens exist
-and the real model drops in later without a redesign.
-
-| Screen | Contains |
-|---|---|
-| **Plans** | Three placeholder tiers. Whatever the axis turns out to be — users, proposals, agent minutes, system size — the card shape holds. Use obviously-fake numbers so nobody mistakes them for real. |
-| **Current plan & usage** | What they are on, what they have used this cycle, when it renews. Usage bars for whichever limits end up mattering. |
-| **Upgrade / change plan** | Compare, pick, confirm. Show the price difference clearly, prorated. |
-| **Payment method** | Card / UPI / netbanking — India needs UPI as a first-class option, not an afterthought. |
-| **Invoices** | List, download GST invoice. Indian businesses need this for input tax credit. |
-| **Trial status** | A quiet banner: "12 days left in your trial." It grows more prominent in the last 3 days, and never blocks work. |
-
-### The states that actually matter
-| State | What the user sees |
-|---|---|
-| **Trial active** | Everything works. Quiet countdown. |
-| **Trial ending (≤3 days)** | Persistent but dismissible banner, one-tap upgrade. |
-| **Trial expired** | **Read-only.** They can see and export everything; they cannot create. |
-| **Payment failed** | 7-day grace with full access, clear banner, one-tap retry. Not instant lockout — cards fail for boring reasons. |
-| **Suspended** | **Read-only, never locked out.** Data stays visible and exportable. |
-| **Cancelled** | Export window, then archive. Tell them exactly when data is deleted. |
-
-### The rule I would not bend
-**Never hold a customer's data hostage.** A suspended tenant keeps read access and full
-export of their own leads and quotes. It is the right thing to do, it is likely required
-under DPDP anyway, and practically — an owner locked out of their pipeline turns into a
-public complaint, while one who can still see it usually just pays.
-
-### What goes wrong
-- **Card fails silently** → grace period, banner, WhatsApp reminder, then read-only
-- **Owner upgrades mid-cycle** → prorate, show the maths
-- **Team exceeds the seat limit** → block *new* invites, never disable working users
-- **Limit hit mid-proposal** → let them finish and send it; enforce on the next one
-- **The current app's dead "Upgrade" button** → this is what replaces it (audit finding)
+**Billing and subscription are OUT of the current plan.** No billing screen, and — the point —
+**no subscription restriction gates any feature**: no plan/usage limits, no trial-expiry or
+suspension read-only, no seat caps, no PRO-tier locks, no "upgrade" prompts. Every user can use
+every built feature. The pricing model and the whole billing/subscription surface will be
+designed in a **separate plan** (D38); when that lands, one principle is pre-committed:
+**never hold a customer's data hostage** (read + export always work, likely required under DPDP).
 
 ---
 
@@ -1467,7 +1440,7 @@ definition of the presets, and it becomes the checkbox list when custom roles ar
 | See agent performance | ✓ | ✓ | — | — | — | — |
 | Manage team and roles | ✓ | — | — | — | — | — |
 | Manage catalog and price book | ✓ | — | — | — | — | — |
-| Manage billing | ✓ | — | — | — | — | — |
+| ~~Manage billing~~ *(deferred — D38)* | — | — | — | — | — | — |
 | See company reports | ✓ | ✓ | — | — | — | — |
 
 **Discounting is not a separate permission** (D34). It rides with *Create and edit

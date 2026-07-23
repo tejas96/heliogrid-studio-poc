@@ -312,7 +312,7 @@ STEP 1 · COMPANY
   Company logo          file          PNG or JPG, max 5 MB; shows a swatch
                                       of the current logo + "Change logo"
 → After Next, a PROPOSAL TYPE sheet: CAPEX (purchase outright) or
-  OPEX / PPA (per-unit billing, PRO badge). Back · Continue.
+  OPEX / PPA (per-unit billing to the customer — no PRO/tier gate, D38). Back · Continue.
 Validation: company name required; an oversized logo states the ACTUAL
 file size; wrong format says which formats are accepted.
 Locked fields must look deliberately locked, not disabled-and-broken.

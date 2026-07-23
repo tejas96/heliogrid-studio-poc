@@ -186,8 +186,8 @@ FIELDS:
 - Sanctioned load (kW) · Electricity tariff (₹/kWh, auto-filled, editable)
 - Average monthly bill (₹) — feeds the Step-4 size suggestion
 - Company logo upload (max 5 MB, PNG/JPG)
-- Ground-mount / open-access project — a clearly-marked PRO/BETA option
-  (can stay disabled, as in code)
+- Ground-mount / open-access project — a normal option (no PRO/tier gate,
+  D38); if not yet functional, mark it "coming soon", not "upgrade"
 
 LOCATION:
 - Choose method: search address (autocomplete) OR enter coordinates.
@@ -470,8 +470,10 @@ VALIDATION & STATUS (keep all — this is what makes the design real):
 - A status pill: enabled panel count, kWp / target (over-limit flagged),
   string colour dots, DC cable metres (routed vs estimated).
 - The irradiance heatmap with a legend and a month scrubber (Jan–Dec).
-- A plan-limit banner if kWp exceeds the plan.
 - A 3D button → the shadow view (10.7).
+  (No subscription/plan-limit banner — billing is deferred, D38. The status
+  pill still flags kWp over the design TARGET, which is a design cue, not a
+  plan gate.)
 
 STATES — one frame pair, switch via header chip:
 - the auto-fill choice (arrival, 0 panels)
