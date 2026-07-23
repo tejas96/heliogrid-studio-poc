@@ -356,12 +356,12 @@ unmanageable. This document stays the index and the tracker.
 | 4 · Customer side | 3 lives, one page | ✅ built | ✅ |
 | 5 · Survey | 10 | ✅ built | ✅ |
 | 6 · Voice agent | 7 | ✅ built | ✅ |
-| 7 · Project management | 7 | ⬜ next | — |
-| 8 · Admin & settings | 5 | ⬜ | — |
+| 7 · Project management | 7 | ✅ built | ✅ |
+| 8 · Admin & settings | 5 | ⬜ next | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~60 screens, mobile + desktop each.** Phases 1–6 built and reviewed (40 screens).
+**~60 screens, mobile + desktop each.** Phases 1–7 built and reviewed (47 screens).
 
 ---
 
@@ -379,17 +379,18 @@ unmanageable. This document stays the index and the tracker.
 
 ## Where we are
 
-**Phases 1–6 are built and reviewed** (40 screens). Next is **Phase 7 — project management**,
-and its prompts are ready: **`docs/phase-7-prompts.md`** — seven self-contained screens.
+**Phases 1–7 are built and reviewed** (47 screens). Next is **Phase 8 — admin & settings**.
 
-Phase 7 is what happens **after a deal is won**: Mark won creates the project automatically,
-then a projects board (days-in-stage, money owed), project detail, payment collection against
-the proposal's tranches, a document checklist, blockers that name who's waiting, and handover.
-It reuses the existing InstallationSheet and *feeds* the Phase 4 customer link rather than
-rebuilding it.
+📄 **Prompt: `docs/phase-8-prompts.md`** — *not written yet.* When it is, it follows the same
+pattern: self-contained per-screen prompts with the "connect, don't duplicate" awareness line
+baked into each block, states via header chip, working prototype.
 
-**Build the seven one at a time, then bring them back for the review gate** before Phase 8.
-Flag for Phase 8: the ops/installer roles gap (see Known gaps).
+Phase 8 is the settings surface: **Team + assign roles** (stackable presets), **Duplicate a
+proposal**, **Catalog & price book**, **Billing** (mock — D26), and **Profile & preferences**
+(per-user language, D25). Two things to resolve here, both already logged in Known gaps:
+- the **ops/installer roles gap** — Stage 8 needs Coordinator/ops and Installer/crew actors
+  that aren't in the six presets (D27); the roles screen (8.1) is where that's settled.
+- the **language picker** belongs in Profile & preferences (8.5) and, eventually, onboarding.
 
 ---
 
