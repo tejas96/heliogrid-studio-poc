@@ -182,17 +182,37 @@ feel like one thing?
 
 ---
 
-## PHASE 5 · Survey — both modes  ▸ 4 screens
+## PHASE 5 · Survey — both modes  ▸ 10 screens
+
+**Goal: an honest roof.** Remote reads satellite imagery from a desk; physical is a surveyor
+on the roof, offline. The mode decides whether a number is *derived* or *measured*.
+
+📄 **Prompt: `docs/phase-5-prompts.md`** — sent to Claude Design ONE screen at a time.
+⚠️ **These prompts deliberately give NO visual direction** — they state what each screen must
+do, hold and handle, and leave layout entirely to Claude Design.
 
 | # | Screen | Journey ref |
 |---|---|---|
-| 5.1 | **Remote survey** — address → detecting → review detection | Stage 4 Mode A |
-| 5.2 | **Coverage failure** → manual outline or book a visit | Stage 4 Mode A |
-| 5.3 | **My visits today** (surveyor home) | Stage 4 Mode B |
-| 5.4 | **Guided capture** + review & submit + sync status | Stage 4 Mode B |
+| 5.1 | **Start a survey** — mode choice + book a physical visit | Stage 4 / D30 |
+| 5.2 | **Locate the building** — address / pin, right rooftop | Stage 4 Mode A |
+| 5.3 | **Detect & review the roof** — accept / adjust / reject, confidence | Stage 4 Mode A |
+| 5.4 | **Coverage failure** → manual outline or book a visit | Stage 4 Mode A |
+| 5.5 | **Gaps remote can't fill** + the honesty label | Stage 4 Mode A |
+| 5.6 | **My visits today** — the surveyor's home | Stage 4 Mode B |
+| 5.7 | **Guided capture** — offline-first, inline camera | Stage 4 Mode B |
+| 5.8 | **Shading capture** — obstructions, rough heights | Stage 4 Mode B |
+| 5.9 | **Review & submit** — flags the forgotten item | Stage 4 Mode B |
+| 5.10 | **Sync & offline status** — reassure, never block | Stage 4 Mode B |
 
-**Review focus:** Is the remote/physical choice obvious? Does the accept-or-adjust review
-feel controllable? Does offline status reassure without nagging?
+⚠️ **Remote data is *derived from imagery*; physical is *measured on site*** — the provenance
+label travels onto the design and proposal (N7, D30).
+⚠️ **Offline is the normal case for physical capture** — local-first, background sync, camera
+inline, never the OS camera app.
+⚠️ **Structural notes are observations, never a safety verdict** (engineer-led).
+
+**Review focus:** Is the remote/physical choice honest and obvious? Is nothing in the
+detection applied silently? Does the whole physical flow work with the network off? Does
+review-and-submit state a gap as a consequence without trapping the surveyor?
 
 ---
 
@@ -277,15 +297,15 @@ unmanageable. This document stays the index and the tracker.
 | 1 · Entry & onboarding | 6 | ✅ built | ✅ |
 | 2 · Pattern foundation | 4 | ✅ built | ✅ |
 | 3 · Money path | 10 | ✅ built | ✅ |
-| 4 · Customer side | 3 lives, one page | ⬜ next | — |
-| 5 · Survey | 4 | ⬜ | — |
+| 4 · Customer side | 3 lives, one page | ✅ built | ✅ |
+| 5 · Survey | 10 | ⬜ next | — |
 | 6 · Voice agent | 4 | ⬜ | — |
 | 7 · Project management | 4 | ⬜ | — |
 | 8 · Admin & settings | 4 | ⬜ | — |
 | 9 · Dashboards | 4 | ⬜ | — |
 | 10 · Studio 🔻 | 4 | ⬜ | — |
 
-**~47 screens, mobile + desktop each.** Phases 1–3 built and reviewed (20 screens).
+**~53 screens, mobile + desktop each.** Phases 1–4 built and reviewed (23 screens).
 
 ---
 
@@ -301,17 +321,19 @@ unmanageable. This document stays the index and the tracker.
 
 ## Where we are
 
-**Phases 1–3 are built and reviewed.** Next is **Phase 4 — the customer's side**.
+**Phases 1–4 are built and reviewed.** Next is **Phase 5 — the site survey**.
 
-📄 **Prompt: `docs/phase-4-prompts.md`** — ONE end-to-end prompt, not screen-by-screen like
-Phase 3. The customer page is genuinely one page with lifecycle states (proposal → progress
-→ handover), so it is sent to Claude Design as a single prompt with every state as a frame.
+📄 **Prompt: `docs/phase-5-prompts.md`** — ten screens, sent to Claude Design ONE at a time.
+Two modes: remote (a rep at a desk reads satellite imagery) and physical (a surveyor on a
+roof, offline).
 
-⚠️ **No app navigation** — this is a public web page, not the app.
-⚠️ **The EPC's branding** (*Suryodaya Solar*), not HelioGrid's.
+⚠️ **These prompts give NO visual direction** — they state what each screen must do and
+handle, and leave the layout to Claude Design. This is a deliberate change from Phases 3–4.
+⚠️ **Provenance travels** — remote is *derived from imagery*, physical is *measured on site*.
+⚠️ **Offline is the normal case** for physical capture; the review-and-submit screen is the
+one to get right.
 
-**Build the page, then bring it back for the nine-point review gate** before starting
-Phase 5. Do not start Phase 5 first.
+**Build them one at a time, then bring all ten back for the review gate** before Phase 6.
 
 ---
 
