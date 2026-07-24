@@ -341,41 +341,199 @@ shortcuts as a bonus. Side by side, mobile left.
 # 10.4 · Step 3 · Obstructions
 
 ```
-Design STEP 3 — OBSTRUCTIONS. Touch-first, every tool kept. Use the design
-system; no colours or token names.
+Design STEP 3 — OBSTRUCTIONS of a solar design studio. Use the selected
+design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: wire into what already exists.
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains built
+screens and shared navigation. Wherever this prompt refers to a screen,
+action or nav that already exists, wire into it and extend it — do not
+create a duplicate or a new isolated page.
 
-WHO: the designer, placing rooftop objects panels must avoid or bridge over.
-GOAL: every shading/keep-out object on the roof, sized and configured.
+WHO: a designer marking every rooftop object that blocks or shades panels.
+GOAL: place each object, size it, and set how it affects panel placement.
 
-TOOLS: Add obstruction · show/hide obstructions · show measurements ·
-measure · view in 3D. Roofs show as a read-only backdrop.
+BELOW IS THE COMPLETE LIST OF WHAT THIS STEP CONTAINS — every tool, what
+happens when it is used, and every option it reveals. Nothing here is
+optional; include all of it. HOW it is laid out on mobile and desktop is
+YOUR decision — this prompt describes function, not form.
 
-ADD sheet — 11 types, each with a default size: Tank · Dish · Chimney ·
-Tree · Elevated · Building · Solar water heater · Ladder (BETA) · Windmill ·
-Turbine vent · Other. Pick one, then tap the canvas to place it.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · ALWAYS ON SCREEN (the canvas and its context)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· A satellite canvas showing the roofs drawn in Step 2 as a READ-ONLY
+  backdrop — they cannot be edited here. Each roof shows its fill and its
+  red dashed setback inset (the panel-free border).
+· Every placed obstruction, drawn to scale, with a small ID CHIP above it
+  (a type code + number, e.g. "WT1", "TR2"). The chip stays the same size
+  on screen at any zoom.
+· A red dashed SETBACK RING around every object that blocks panel
+  placement — this is the area panels may not enter.
+· A north indicator and a graphic scale bar.
+· Zoom controls: zoom in, zoom out, a live zoom % readout, and "fit view"
+  (resets the view to show everything).
+· The canvas pans and zooms freely EXCEPT while placing an object or
+  mid-drag.
+· Undo and redo. One gesture = one undo step (a whole drag undoes at once).
+· A units setting (m / ft) applies to every length shown here.
 
-EDIT (tap to select → big handles + a context sheet, not tiny drags):
-- rotate (with a 15°-snap control) · resize (corners) · resize diameter
-  (circle) · move · duplicate · lock · delete.
-- Shape sheet: Rectangle (length × width) or Circle (diameter).
-- Size sheet: dimensions + height + rotation (in the current unit).
-- Settings sheet: setback (panel-free buffer) · casts shadow · blocks
-  placement → if blocking, a "panels may bridge above" option → "must stay
-  open to sky" → clearance, with the engineer-confirmation flag when
-  bridged · "convert to rooftop platform (mount panels on top)" · a height
-  info card (which roof, base height, top-from-ground).
-- Precise placement via +/− and arrow-nudge as on-screen steppers.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · THE FIVE TOOLS — and exactly what each does
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. ADD OBSTRUCTION — carries a badge with the current obstruction count.
+   Activating it opens the TYPE PICKER (section 3). Stays visibly active
+   while placing.
+2. SHOW / HIDE OBSTRUCTIONS — hides every placed object so the bare roof
+   can be read; toggling it also clears the current selection. Toggle back
+   to show them again.
+3. SHOW ALL MEASUREMENTS — turns on the length label of every roof edge in
+   the backdrop (and rectangular obstruction edges). Toggle off to hide.
+4. MEASURE DISTANCE — a ruler. First point sets the anchor, second point
+   ends it, and the distance is shown on the line. Starting again clears
+   the previous measurement. Turning the tool off clears it.
+5. OPEN 3D VIEW — opens the full 3D scene to see these objects and their
+   shadows in context, and returns to this step on close.
 
-STATES — one frame pair, switch via header chip:
-- empty · placing · selected (handles + context) · settings sheet (with the
-  bridging path shown) · locked · all-hidden · 3D preview.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · THE TYPE PICKER — what opens after "Add obstruction"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ELEVEN object types. Each shows its own icon, its name, and the default
+size it will be created at (length × width × height, metres):
+   Tank            WT   2 × 1.5 × 1.2
+   Dish            DS   1 × 1 × 1.2
+   Chimney         CH   0.8 × 0.8 × 2
+   Tree            TR   3 × 3 × 5
+   Elevated        EL   3 × 2.5 × 2.6
+   Building        BL   8 × 6 × 9
+   Solar WH        SW   2 × 1.2 × 1.5
+   Ladder          LD   0.6 × 1.5 × 3      ← carries a BETA marker
+   Windmill        WM   1.8 × 1.8 × 3.5
+   Turbine Vent    TV   0.4 × 0.4 × 0.5
+   Other           OB   1.5 × 1.5 × 1
 
-WIRE THESE: Add → place; select → context; view in 3D → 10.7; Next → Step 4.
+CHOOSING A TYPE closes the picker and enters PLACEMENT MODE:
+· A guidance message appears: "Click to place {type} · Esc to cancel".
+· The next tap on the canvas drops the object there at its default size.
+· The app works out by itself WHICH ROOF the object sits on (or "on
+  ground" if it is not over a roof) and records that.
+· It is auto-named from its type code plus the next free number (WT1, WT2…).
+· Placement mode can be cancelled without placing anything.
 
-VIEWPORTS: MOBILE 375px — canvas + add sheet + context sheet, pinch-zoom,
-big handles. DESKTOP 1440px — canvas + side panel. Side by side, mobile left.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4 · SELECTING AN OBJECT — what appears
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tapping an object selects it. Tapping empty canvas clears the selection.
+A selected object shows BOTH:
+
+(a) DIRECT MANIPULATION on the object itself:
+    · MOVE — drag the object body; it keeps the grab point under the
+      finger/cursor, and on release the app re-checks which roof it now
+      sits on.
+    · RESIZE, rectangle objects — four corner handles change length and
+      width.
+    · RESIZE, circular objects — a single handle changes the diameter.
+    · ROTATE — a handle on a short stem above the object spins it. There is
+      a 15° snap option; free rotation otherwise.
+    · No dimension may go below 0.3 m.
+    · A locked object cannot be moved, resized or rotated.
+
+(b) A CONTEXT ACTION SET for that object, labelled with its type and ID,
+    containing exactly these seven actions:
+    1. DUPLICATE — makes a copy offset slightly from the original and
+       works out which roof the copy lands on.
+    2. SHAPE — opens the Shape options (section 5). Unavailable while
+       locked.
+    3. SIZE & ROTATION — opens the Size options (section 6). Unavailable
+       while locked.
+    4. SETTINGS — opens the Settings options (section 7).
+    5. LOCK / UNLOCK — freezes or frees the object's geometry. While
+       locked, shape, size and delete are unavailable and say so
+       ("Unlock to delete").
+    6. DELETE — removes the object. Unavailable while locked.
+    7. DESELECT — clears the selection.
+
+PRECISE POSITIONING must be possible without a mouse: nudge the selected
+object in small steps (a fine step and a larger step), and rotate in exact
+degrees. Provide on-screen equivalents for anything that is keyboard- or
+modifier-key-only.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 · SHAPE OPTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Two choices, switchable at any time:
+· RECTANGLE — described by length and width.
+· CIRCLE — described by diameter.
+Switching shape changes which size fields (section 6) apply.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6 · SIZE & ROTATION OPTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Values are typed exactly, in the current unit (m / ft), with the unit
+switch available here:
+· Rectangle: LENGTH, WIDTH, HEIGHT.
+· Circle: DIAMETER, HEIGHT.
+· ROTATION: 0–359°, in 1° steps.
+Height matters everywhere — it drives the shadow and the bridging maths.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7 · SETTINGS OPTIONS — how the object affects the design
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· SETBACK — 0 to 3 m, in 0.1 m steps. Explained as "buffer zone where
+  panels cannot be placed". This is what draws the red ring on the canvas.
+· CASTS SHADOW — on/off. Whether it is included in the shading simulation.
+· BLOCKS PANEL PLACEMENT — on/off. When switched ON it reveals a nested
+  BRIDGING group, which is the important part:
+    → PANELS MAY BRIDGE ABOVE — on/off. When ON it reveals:
+        → MUST REMAIN OPEN TO SKY — on/off.
+            → When that is OFF, it reveals CLEARANCE ABOVE IT — 0 to 1 m
+              in 0.05 m steps, shown with a live calculated explanation:
+              "Bridgeable when the array structure clears X m (its Y m +
+              margin)", where Y is this object's height.
+            → A warning states that bridging over this object is flagged
+              for engineer confirmation.
+  Show this nested chain in full — it is frequently missed.
+· CONVERT TO ROOFTOP PLATFORM (mount panels on top) — a one-tap action
+  that REPLACES the obstruction with a new roof surface named
+  "{label} platform", sitting at (its roof's height + its own height), so
+  panels can then be placed on top of it like any other roof. It states
+  that the platform's structural adequacy needs engineer verification.
+  When the object's top is too small to stand on, the action is
+  unavailable and the reason is shown.
+· HEIGHT INFORMATION — read-only, three facts:
+    – PLACEMENT: the name of the roof it sits on, or "On ground".
+    – BASE SURFACE: the height of the surface it stands on.
+    – TOP FROM GROUND: its total height from the ground (the number that
+      decides shading).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8 · WHAT UPDATES LIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The roof an object belongs to (re-checked every time it moves), its base
+and top heights, the required bridging clearance, the setback ring size,
+and the total obstruction count.
+
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); the picker and option groups are overlays
+reached by their trigger, not chip states:
+· empty — no obstructions yet
+· type picker open
+· placement mode (guidance showing, waiting for a tap)
+· an object selected (handles + its context actions)
+· settings open WITH the full bridging chain revealed
+· a locked object (edit actions unavailable, reasons shown)
+· all obstructions hidden
+· measuring
+· 3D view open
+
+WIRE THESE — make them work in the prototype:
+· Add obstruction → type picker → placement → object appears selected
+· select → context actions → each opens its option group and closes back
+· convert to platform → the new platform surface exists and can hold panels
+· open 3D → 10.7, and back to this step
+· Back → Step 2 · Next → Step 4
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px, side by side,
+mobile left. This is used on a phone in the field and on a desktop at a
+desk; every tool above must be reachable in both. The layout is yours.
 ```
 
 ---
