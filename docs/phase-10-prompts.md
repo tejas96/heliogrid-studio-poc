@@ -183,9 +183,16 @@ WIRE THESE:
 - Save & exit → back to the lead (the design saved on it)
 - health chip → health sheet
 
-VIEWPORTS: MOBILE 375px — the shell must fully work; step indicator compact,
-health chip visible. DESKTOP 1440px — step rail + more header room. Side by
-side, mobile left, desktop right.
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows.
+
+VIEWPORTS: build BOTH — MOBILE 375px (the shell must fully work; compact
+step indicator, health visible) and DESKTOP 1440px (step rail, more header
+room). Place them SIDE BY SIDE on ONE HORIZONTAL ROW — mobile on the LEFT,
+desktop on the RIGHT, aligned to the same top edge. Do NOT stack them
+vertically and do not put one below the other.
 ```
 
 ---
@@ -247,8 +254,16 @@ WIRE THESE:
 - survey data (Phase 5) pre-fills these fields
 - Next → Step 2 (roof)
 
-VIEWPORTS: MOBILE 375px — a clean form + a good-sized map, actions in reach.
-DESKTOP 1440px — form left, map right. Side by side, mobile left.
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows.
+
+VIEWPORTS: build BOTH — MOBILE 375px (a clean form and a good-sized map,
+actions in reach) and DESKTOP 1440px. Place them SIDE BY SIDE on ONE
+HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT, aligned to the
+same top edge. Do NOT stack them vertically and do not put one below the
+other.
 ```
 
 ---
@@ -330,10 +345,16 @@ WIRE THESE:
 - Next → Step 3
 - (pre-filled from the survey's detected roof, Phase 5, where present)
 
-VIEWPORTS: MOBILE 375px — a big canvas, a mode toolbar within thumb reach,
-sheets for properties, PINCH-ZOOM and two-finger pan (the code lacks these
-— add them). DESKTOP 1440px — canvas + a side properties panel, keyboard
-shortcuts as a bonus. Side by side, mobile left.
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows.
+
+VIEWPORTS: build BOTH — MOBILE 375px (a big canvas, tools within thumb
+reach, PINCH-ZOOM and two-finger pan — the original lacks these, add them)
+and DESKTOP 1440px. Place them SIDE BY SIDE on ONE HORIZONTAL ROW — mobile
+on the LEFT, desktop on the RIGHT, aligned to the same top edge. Do NOT
+stack them vertically and do not put one below the other.
 ```
 
 ---
@@ -531,9 +552,17 @@ WIRE THESE — make them work in the prototype:
 · open 3D → 10.7, and back to this step
 · Back → Step 2 · Next → Step 4
 
-VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px, side by side,
-mobile left. This is used on a phone in the field and on a desktop at a
-desk; every tool above must be reachable in both. The layout is yours.
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically and do not put
+one below the other. Every tool above must be reachable in both. The layout
+inside each frame is your decision.
 ```
 
 ---
@@ -541,54 +570,142 @@ desk; every tool above must be reachable in both. The layout is yours.
 # 10.5 · Step 4 · Components
 
 ```
-Design STEP 4 — COMPONENTS: pick the panel and inverter, set capacity, and
-compare options. Use the design system; no colours or token names.
+Design STEP 4 — COMPONENTS of a solar design studio. Use the selected
+design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: the panel/inverter lists come from
-the tenant CATALOG (Phase 8) — read from it, don't invent a new catalog.
+EXISTING APP — CONNECT, DON'T DUPLICATE: the panel and inverter lists come
+from the tenant CATALOG & PRICE BOOK (Phase 8) — read from it; do not
+invent a second catalog or a new isolated page.
 
-WHO: the designer, choosing hardware and target size.
+WHO: a designer choosing the hardware and the target system size.
 GOAL: the right panel + inverter + capacity, with an honest comparison.
 
-PANEL: a searchable, filterable list (min/max watt; technology chips —
-Mono PERC / TOPCon / Bifacial / Poly / HJT; DCR; ALMM). Each row shows
-brand, model, watt, tech, dimensions, and ALMM / DCR badges. A selected-
-panel summary (Voc/Vmp/Isc, watt). ("Enter specs manually" / "upload
-datasheet" can stay as marked-future.)
+BELOW IS THE COMPLETE LIST OF WHAT THIS STEP CONTAINS — every control, what
+happens when it is used, and every option it reveals. Include all of it.
+HOW it is laid out on mobile and desktop is YOUR decision.
 
-CAPACITY: target kWp; an "Auto" that fills to the maximum the drawn roof
-holds after setbacks/obstructions; a Google Solar cross-check line
-("Google estimates max N panels"); a bill-based suggestion ("from your
-₹X/month bill we recommend ~Y kWp — tap to apply").
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · THE STEP IS THREE PARTS, IN ORDER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PANEL → CAPACITY → INVERTER. Each part shows whether it is done and what is
+currently chosen, and can be reopened at any time. Completing one moves the
+user to the next.
 
-INVERTER: a recommended banner (tap to apply); a searchable list with a
-RECOMMENDED badge; a selected-inverter summary with **number of inverters**
-and a live **DC/AC ratio** health read-out (high = clipping / low =
-oversized / healthy 0.90–1.35). Then DC topology (String inverters /
-Central + combiners) and MLPE (None / DC optimisers), each with a one-line
-explanation.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · PANEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· SELECTED PANEL SUMMARY (once chosen): brand, model, physical dimensions,
+  the electrical figures Voc / Vmp / Isc, and the wattage shown large.
+· SEARCH — filters the list as you type.
+· FILTER — opens a set of filters:
+    – MIN WATT and MAX WATT (numbers)
+    – TECHNOLOGY, pick one: All Types · Mono PERC · TOPCon · Bifacial ·
+      Poly · HJT
+    – DCR (domestic content) on/off
+    – ALMM (approved list) on/off
+· A RESULT COUNT ("N panels") that reflects search + filters.
+· THE LIST — each row: brand mark, brand + model, then "watt · technology ·
+  dimensions", plus ALMM and DCR badges where they apply. Choosing a row
+  selects that panel and moves on to Capacity.
+· Two secondary routes, shown as available-later: "enter specs manually"
+  and "upload datasheet (PDF extraction)".
 
-COMPARE sheet — a decision aid, kept: a matrix of candidate options with
-fits (panels × watt, kWp), module efficiency, annual kWh (PVGIS vs
-estimate noted), net cost + subsidy, payback, 25-yr savings + ROI,
-warranty, install complexity; plus plain-language decision cards and the
-fixed-assumptions footnote. "Apply" sets panel + inverter + count; if
-panels are already placed with a different panel, keep the "replace panel?"
-confirm.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · CAPACITY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· TARGET CAPACITY — a number in kWp (0.1 steps).
+· AUTO — one tap fills in the MAXIMUM capacity the drawn roof can hold
+  after setbacks and obstructions. Explained as "Auto = maximum fit".
+  Unavailable until a panel is chosen and a roof exists, with the reason.
+· GOOGLE SOLAR CROSS-CHECK — a line reading "Google Solar estimates max N
+  panels (~X kWp)" when that data exists for the site. Information only.
+· BILL-BASED SUGGESTION — a tappable line: "From your ₹X/month bill we
+  recommend ~Y kWp" — tapping applies it. (X comes from Step 1.)
+· CONTINUE — moves to Inverter; unavailable while capacity is 0.
 
-STATES — one frame pair, switch via header chip:
-- panel not chosen / chosen · filter open · capacity (auto vs bill-based) ·
-  inverter recommended vs chosen (DC/AC health) · compare matrix · the
-  replace-panel confirm · no roof yet (Auto/Compare disabled, explained).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4 · INVERTER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· RECOMMENDED LINE (before anything is chosen) — "Recommended: {brand}
+  {model} ({kW} × {count}, {phase}) → DC/AC ratio X" — tapping applies it.
+· SELECTED INVERTER SUMMARY: brand, model, number of MPPTs, voltage range,
+  phases, efficiency, and the kW rating shown large.
+· NUMBER OF INVERTERS — a number, 1 to 10.
+· DC/AC RATIO — a live read-out that states its own health:
+    – above 1.35 → "high (clipping risk)"
+    – below 0.90 → "low (oversized)"
+    – between   → "healthy (0.90–1.35)"
+· SEARCH, a RESULT COUNT, and THE LIST — each row: brand mark, brand +
+  model, then "kW · phase · MPPT count · voltage range", with a RECOMMENDED
+  badge on the suggested one.
 
-WIRE THESE:
-- catalog (Phase 8) → the lists
-- Auto → fills from the drawn roof; Compare → the matrix → Apply
-- Next → the layout (10.6)
+ONCE AN INVERTER IS CHOSEN, two more choices appear, each with a one-line
+explanation of what it means:
+· DC COLLECTION TOPOLOGY — "String inverters" or "Central + combiners".
+· MODULE-LEVEL ELECTRONICS (MLPE) — "None" or "DC optimisers".
 
-VIEWPORTS: MOBILE 375px — accordions for panel/capacity/inverter, the
-compare matrix as a horizontally-scrollable card set (not a cramped table).
-DESKTOP 1440px — the full matrix. Side by side, mobile left.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 · COMPARE OPTIONS — energy, cost & payback
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A "Compare options" action (unavailable with no roof drawn, with the reason
+shown) opens a comparison of candidate panel/inverter combinations. It
+contains:
+· A plain statement of the BASIS — target vs maximum fill, whether the
+  energy figures come from real PVGIS irradiance or the built-in estimate,
+  and the catalog version used. Plus any warnings.
+· A COMPARISON of each candidate showing, per option:
+    OPTION (panel, with RECOMMENDED / CURRENT markers and any on-order or
+    DCR note) · INVERTER (with its DC/AC ratio) · FITS (panels × watt →
+    kWp) · MODULE EFFICIENCY · ANNUAL GENERATION (kWh) · NET COST (with the
+    subsidy shown separately) · PAYBACK · 25-YEAR SAVINGS (with ROI %) ·
+    WARRANTY (panel / inverter years) · INSTALL (complexity + array weight)
+    · and an action: APPLY, or a "selected" / feasibility note.
+· DECISION CARDS below it — plain language: the topic, the choice made, the
+  reason, and the inputs behind it.
+· A FIXED-ASSUMPTIONS footnote (tariff escalation per year, 25-year
+  horizon, margin, and the PM Surya Ghar subsidy).
+· APPLY sets the panel, the inverter and the inverter count together in one
+  undoable action.
+· If panels are ALREADY PLACED and the chosen option uses a different
+  panel, a confirmation appears first — keep the current panel, or replace
+  it and accept that the placed layout is now outdated.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6 · WHAT UPDATES LIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Module efficiency, annual kWh, net cost, subsidy, payback, 25-year savings,
+ROI %, DC/AC ratio, array weight, install complexity, whether a valid
+string length exists for the pair, the recommended inverter and count, the
+effective kWp the roofs can actually hold, and the bill-based suggestion.
+
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); the filters and the comparison are overlays
+reached by their trigger, not chip states:
+· no panel chosen yet · panel chosen · filters open
+· capacity empty · capacity set by Auto · the bill-based suggestion showing
+· inverter recommended (not yet chosen) · inverter chosen, DC/AC healthy
+· inverter chosen, DC/AC high (clipping) and low (oversized)
+· the comparison open · the replace-panel confirmation
+· no roof drawn yet — Auto and Compare unavailable with the reason shown
+
+WIRE THESE — make them work in the prototype:
+· the catalog (Phase 8) feeds both lists
+· Auto → fills capacity from the drawn roof
+· the bill line and the recommended line → apply on tap
+· Compare → the comparison → Apply → (if needed) the replace confirm
+· Back → Step 3 · Next → the panel layout (10.6)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically and do not put
+one below the other. Every control above must be reachable in both. The
+layout inside each frame is your decision.
 ```
 
 ---
@@ -596,91 +713,216 @@ DESKTOP 1440px — the full matrix. Side by side, mobile left.
 # 10.6 · Steps 5–6 · Panel layout (auto-fill + the manual editor + structure)
 
 ```
-Design the PANEL LAYOUT editor — the core design surface. This is the
-biggest, most tool-dense screen in the product; redesign it TOUCH-FIRST and
-SIMPLE while keeping EVERY tool. Use the design system; no colours/tokens.
+Design the PANEL LAYOUT editor (studio Steps 5–6) — the core design
+surface and the most tool-dense screen in the product. Use the selected
+design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: wire into what already exists.
+EXISTING APP — CONNECT, DON'T DUPLICATE: this project already contains
+built screens and shared navigation. Wire into what already exists; do not
+create a duplicate or a new isolated page.
 
-WHO: the designer, placing and tuning the array.
-GOAL: a valid, optimised panel layout with structure and wiring.
+WHO: a designer placing and tuning the array, its safety objects and its
+wiring.
+GOAL: a valid, buildable panel layout with structure and electrical design.
 
-AUTO-PLACEMENT FIRST (Step 5): on arrival with no panels, offer — place
-manually · auto-fill to the target kWp · use maximum roof capacity.
+BELOW IS THE COMPLETE LIST OF WHAT THIS SCREEN CONTAINS — every tool, what
+happens when it is used, and every option it reveals. Nothing here is
+optional. HOW it is laid out on mobile and desktop is YOUR decision.
 
-MODE-BASED TOOLBAR (replace the letter shortcuts with visible, grouped
-tools; each build/safety tool shows a live count):
-- VIEW: irradiance heatmap · show strings · "why this layout?" (the design
-  decision log + Copilot suggestions) · measure.
-- BUILD: Select · Panels (tap = one panel, drag = fill a table) · Erase.
-- SAFETY: Walkway (width 600 / 800 / 1000 mm + custom) · No-build zone ·
-  Safety rail · Lightning arrester.
-- ELECTRICAL: Mount inverter (inverter snaps to a wall / meter as a free
-  point) · Stringing · String connections (read-only list).
-- Undo · Redo · Lock layout · Clear all panels.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · ON ARRIVAL WITH NO PANELS (this is studio "Step 5")
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Three choices are offered before anything is placed:
+· PLACE MANUALLY — start with an empty roof.
+· AUTO-FILL PANELS — fill to the target capacity set in Step 4.
+· USE MAXIMUM ROOF CAPACITY — fill everything the roof can hold.
 
-CANVAS (touch-first): pinch-zoom + two-finger pan (code lacks these — add).
-Tap a panel to select; a marquee mode for multi-select (replace Shift-drag);
-drag a selected panel/set to move with a live landing ghost (green fits /
-red conflicts); routed-cable corners are draggable to re-route (marks the
-run manual). Draw gestures for walkway / rail / keepout / table-fill.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · THE TOOLS — four groups. Each build/safety tool shows a live count.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VIEW
+ · IRRADIANCE HEATMAP — overlays how much sun each part of the roof gets.
+   Turning it on reveals a LEGEND (a scale from Poor to Excellent, with
+   0 / 50 / 100%) and a MONTH SCRUBBER (Jan–Dec) that recolours instantly,
+   plus the current month's average access %, average sun-hours/day, and
+   the kWh/m² received that month. While it computes it shows progress
+   ("Computing solar access… X%").
+ · SHOW STRINGS — shows/hides the wiring: the series path through each
+   string and the routed home-run cables.
+ · WHY THIS LAYOUT? — opens the DESIGN DECISION LOG (what the auto-design
+   chose and why) together with improvement suggestions, each of which can
+   be accepted or ignored.
+ · MEASURE DISTANCE — a two-point ruler, same as the earlier steps.
 
-SELECTION CONTEXT (a sheet/bar when panels are selected — big controls):
-- count · Group into a table · Grow a row / a column (+ a "more" option:
-  axis, count 1–20, which side, live ghost) · Rotate 90° · Tilt ±5° ·
-  Table settings · Enable/Disable (toggle production without deleting) ·
-  Delete · Clear selection.
+BUILD
+ · SELECT — the default. Used for selecting, multi-selecting, moving
+   panels, and editing cable-route corners.
+ · PANELS — TAP places ONE panel snapped to the grid; DRAG fills a
+   rectangle with a whole table of panels, automatically avoiding
+   obstructions and setbacks. A live preview shows where panels will land
+   and whether they fit or conflict.
+ · ERASE — removes whatever is under the pointer: a panel, a walkway, a
+   safety rail, a lightning arrester, an inverter or the meter. The target
+   is highlighted before it is removed.
 
-TABLE SETTINGS sheet (the parametric "table"):
-- structure preset (Flush / Standard 10° / Walk-under 2.2 m, with preview
-  thumbnails) · ground foundation (driven pile / ballasted) · racking
-  (Flush / Fixed tilt / Dual tilt) · panel tilt 0–35° · inter-row shading
-  (recommended shadow-free row pitch, GCR, "apply shadow-free spacing") ·
-  azimuth (±5°, Due S, roof-slope presets, with a compass read-out) ·
-  structure profile chips · a member model (legs / rafters / purlins counts
-  + steel kg, leg spacing, clearance, anchored/ballasted) with DRC warnings
-  and the STRUCTURE DISCLAIMER (material only, not a safety check) ·
-  duplicate / delete table.
+SAFETY (each with a running count)
+ · WALKWAY — drag along the roof to draw a walking lane. Its WIDTH is
+   chosen from 600 / 800 / 1000 mm, or a custom width (100–3000 mm).
+ · NO-BUILD ZONE (keep-out) — drag a rectangle panels must avoid; tapping
+   an existing zone removes it.
+ · SAFETY RAIL — drag along a roof edge.
+ · LIGHTNING ARRESTER — tap to place one on a roof.
 
-STRINGING sheet: Auto string (MPPT-validated + auto-routes DC & AC) · Manual
-string (tap panels in order, with a live cold-Voc voltage counter and a
-min–max range, over-limit / below-MPPT warnings, save/cancel) · Clear
-strings.
+ELECTRICAL (each with a running count)
+ · MOUNT INVERTER — has two sub-modes, chosen from a toggle:
+     – INVERTER: snaps to the nearest wall edge within ~4 m.
+     – METER / SERVICE ENTRY: placed as a free point.
+   Each sub-mode shows its own instruction while active.
+ · STRINGING — opens the stringing options (section 5).
+ · STRING CONNECTIONS — a read-only list of every string and the exact
+   chain of panels in it.
 
-VALIDATION & STATUS (keep all — this is what makes the design real):
-- A DRC / validation banner → a "system validation" sheet listing every
-  error/warning (voc_high, vmp_low, imp_high, dc/ac ratio, unstrung,
-  mppt_overflow, empty string window), each TAP-TO-LOCATE (selects the
-  offending panels), with an inline "auto-string now" where relevant.
-- The HARD ELECTRICAL GATE: an invalid string design blocks "Next".
-- A status pill: enabled panel count, kWp / target (over-limit flagged),
-  string colour dots, DC cable metres (routed vs estimated).
-- The irradiance heatmap with a legend and a month scrubber (Jan–Dec).
-- A 3D button → the shadow view (10.7).
-  (No subscription/plan-limit banner — billing is deferred, D38. The status
-  pill still flags kWp over the design TARGET, which is a design cue, not a
-  plan gate.)
+ALWAYS AVAILABLE
+ · UNDO and REDO (one gesture = one step).
+ · LOCK / UNLOCK LAYOUT — while locked, every tool that would change the
+   design is unavailable and says so.
+ · CLEAR ALL PANELS — asks for confirmation first; unavailable when locked
+   or when there are no panels.
 
-STATES — one frame pair, switch via header chip:
-- the auto-fill choice (arrival, 0 panels)
-- a placed layout, Select mode
-- panels selected, context controls shown
-- table settings sheet (structure) open
-- stringing (auto vs manual mid-wiring with the voltage counter)
-- the validation sheet with errors, Next blocked
-- heatmap on, month scrubber
-- layout locked
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · WORKING ON THE CANVAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· Pan and zoom the plan (available in Select mode; suspended mid-gesture).
+· TAP a panel to select it. Add or remove panels from the selection.
+· A MARQUEE selection — drag a box to select every panel inside it, and a
+  way to add that box to an existing selection.
+· MOVE — drag a selected panel (or the whole selection); a live outline
+  shows where it will land, and a refused move explains why.
+· CABLE-ROUTE EDITING — a routed run's corner points can be dragged to
+  re-route it, and a new corner can be created by pulling on a straight
+  segment. Doing this marks that run as MANUAL so auto-routing will not
+  overwrite it. The two ends (panel and inverter) stay fixed.
+· Every draw tool (walkway, rail, keep-out, panel-fill) previews live while
+  the gesture is in progress.
 
-WIRE THESE:
-- auto-fill choices → a layout
-- validation "auto-string now" / tap-to-locate → fixes/selects
-- 3D → 10.7; Next → Step 7 (blocked until electrical is valid)
-- panel/inverter come from Step 4; catalog/price feed the BOM (10.10)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4 · WHEN PANELS ARE SELECTED — the actions offered
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Shows how many panels are selected, then:
+· GROUP — combines loose panels into one parametric TABLE (needs 2+ on the
+  same roof, not already grouped).
+· GROW A ROW / GROW A COLUMN — one tap adds a row or column on whichever
+  side has space; when there is no room it says so.
+· MORE GROW OPTIONS — choose the axis (row or column), a COUNT from 1 to
+  20, and which side to grow from, with a live preview of the panels that
+  would be added, then "Add N".
+· ROTATE — turn 90° each way, with the current azimuth shown (or "mixed").
+· TILT — decrease/increase in 5° steps, with the current tilt shown.
+· TABLE SETTINGS — opens section 6 (only when a table is selected).
+· ENABLE / DISABLE — stops a panel producing without deleting it.
+· DELETE — removes the selected panels.
+· CLEAR SELECTION.
+All of these are unavailable while the layout is locked, and say why.
 
-VIEWPORTS: MOBILE 375px — a full-bleed canvas, a bottom mode toolbar, a
-selection sheet, pinch-zoom, big handles; advanced settings in sheets.
-DESKTOP 1440px — canvas + left tool rail + right context/table panel +
-keyboard shortcuts as a bonus. Side by side, mobile left.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 · STRINGING OPTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· AUTO STRING — groups the panels into valid strings for the inverter's
+  MPPTs and automatically routes the DC and AC cable runs.
+· MANUAL STRING — a tap-to-wire mode: tap panels in the order they should
+  be connected. While wiring it shows a live counter "N of min–max panels",
+  the running cold-weather string VOLTAGE (coloured for over-limit, under
+  the MPPT floor, or fine), warnings when the string is too long or too
+  short, and Save / Cancel. It refuses panels already used or disabled and
+  explains why.
+· CLEAR STRINGS — removes all wiring (only offered when strings exist).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6 · TABLE SETTINGS — the parametric array and its structure
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Header shows the table's name, its rows × columns, panel count and kWp.
+· STRUCTURE PRESET, each with a small cross-section preview: FLUSH ·
+  STANDARD 10° · WALK-UNDER 2.2 m. Shows "custom" when none matches.
+· GROUND FOUNDATION (ground-mounted arrays only): DRIVEN PILE · BALLASTED,
+  with a note that a soil survey is required.
+· RACKING: FLUSH · FIXED TILT · DUAL TILT.
+· PANEL TILT (when not flush): step down/up plus a 0–35° range control.
+· INTER-ROW SHADING (when not flush): the recommended winter shadow-free
+  ROW PITCH in metres, the resulting GCR, and a one-tap "APPLY SHADOW-FREE
+  SPACING".
+· AZIMUTH (which way the panels face): step ±5°, a DUE SOUTH preset, a
+  ROOF SLOPE preset, and a live degrees + compass direction read-out.
+· STRUCTURE PROFILE — pick the steel section; each shows its weight per
+  metre.
+· STRUCTURE MEMBER MODEL — a preview plus the counted bill of the
+  structure: legs, rafters, purlins and braces (count and total metres) and
+  total steel kg. Editable: LEG SPACING (0.5–4 m) and CLEARANCE (0–3 m),
+  and an ANCHORED / BALLASTED choice. Shows any structural warnings.
+· THE STRUCTURE DISCLAIMER, always: this is a MATERIAL estimate and a
+  visual model — it is not a wind, uplift or roof-capacity check, and needs
+  engineer verification.
+· DUPLICATE TABLE and DELETE TABLE.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7 · VALIDATION & STATUS — this is what makes the design real
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· A VALIDATION SUMMARY showing the first problem and "+N more", opening a
+  full list of every error and warning: string voltage too high in cold,
+  voltage below the MPPT window, panel current above the MPPT input,
+  DC/AC ratio too high or too low, panels left unstrung, more strings than
+  MPPT inputs, and "no valid string length exists for this panel/inverter
+  pair". EVERY entry can be tapped to LOCATE it — it centres and selects
+  the panels at fault. Where relevant it offers "AUTO-STRING NOW" inline.
+· A HARD GATE: while the electrical design is invalid, moving to the next
+  step is blocked, and the reason is stated.
+· A STATUS READ-OUT: enabled panel count, kWp against the target, the
+  string colour key, and the DC cable length (marked whether it is routed
+  or still an estimate).
+· A 3D button that opens the shadow view.
+· NO subscription or plan-capacity limit anywhere (billing is out of scope,
+  D38). Flagging kWp over the design TARGET is a design cue and stays.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8 · WHAT UPDATES LIVE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Enabled panel count, kWp vs target, per-string voltages, live cold-weather
+voltage while wiring, DC cable metres, row pitch and GCR, structure member
+counts and steel kg, solar-access % per month, the validation list, the
+decision log and the suggestions.
+
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); sheets and pickers are overlays reached by
+their trigger, not chip states:
+· arrival with 0 panels (the three auto-fill choices)
+· a placed layout in Select mode
+· panels selected with their actions showing
+· table settings open (structure + inter-row shading)
+· stringing — auto, and manual mid-wiring with the live voltage counter
+· the validation list with errors, next step blocked
+· the heatmap on, with its legend and month scrubber
+· a walkway/keep-out/rail being drawn
+· the layout locked
+
+WIRE THESE — make them work in the prototype:
+· the three arrival choices → a placed layout
+· each tool → its own mode, options and live preview
+· validation "locate" → selects those panels; "auto-string now" → strings
+· table settings → changes the array and its structure figures
+· 3D → 10.7 and back · Back → Step 4 · Next → Step 7 (blocked while the
+  electrical design is invalid)
+· the panel and inverter come from Step 4; this layout feeds the BOM (10.10)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically and do not put
+one below the other. Every tool above must be reachable in both. The layout
+inside each frame is your decision.
 ```
 
 ---
@@ -688,69 +930,161 @@ keyboard shortcuts as a bonus. Side by side, mobile left.
 # 10.7 · The 3D view (camera · sun/shadow · layers · edit · energy)
 
 ```
-Design the 3D VIEW — the shadow/solar-access scene used from the roof,
-layout and proposal steps. Keep every control; make the desktop-only bits
-touch-first. Use the design system; no colours or token names.
+Design the 3D VIEW of a solar design studio — the shadow and solar-access
+scene, opened from the roof, layout and proposal steps. Use the selected
+design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: this opens over the editor steps;
-it is one shared surface, not a new page per step.
+EXISTING APP — CONNECT, DON'T DUPLICATE: this is ONE shared surface opened
+over the editor steps — not a new page per step. Wire into what exists.
 
-WHO: the designer (and, read-only, the customer via the share link).
-GOAL: see real shadows and per-panel solar access, tune structure in 3D,
-and read the energy report.
+WHO: a designer; and, in a read-only form, the customer via a share link.
+GOAL: see real shadows and per-panel solar access, tune the structure in
+3D, and read the energy report.
 
-CAMERA: orbit / pan / pinch-zoom (touch already works) + on-screen view
-presets Top / Isometric / Front. Replace the keyboard-only dolly/orbit/close
-with visible controls (the code's arrow/+/−/1-2-3/Esc become on-screen
-buttons).
+BELOW IS THE COMPLETE LIST OF WHAT THIS SCREEN CONTAINS — every control,
+what happens when it is used, and every option it reveals. Include all of
+it. HOW it is laid out on mobile and desktop is YOUR decision.
 
-SUN & SHADOW (map view): season chips (Winter / Summer / Equinox / Today),
-a date picker, Play/Pause sun animation, a time-of-day slider (5 AM–7 PM)
-with sunrise/sunset read-out, and a sun-position compass (Az / Alt). Shadows
-follow the sun. A sun-path arc toggle.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · CAMERA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· Orbit (rotate around the building), pan, and zoom in/out.
+· The camera never goes below the horizon.
+· THREE VIEW PRESETS, each one tap: TOP · ISOMETRIC · FRONT.
+· A way to close and return to the 2D editor.
+· Everything that is keyboard-only in the original (orbit by arrows, zoom
+  by + / −, the numbered presets, escape-to-close) must have a visible
+  on-screen equivalent.
 
-LAYERS: back to 2D · irradiance heatmap (forces top-down, disables rotate —
-keep) · per-panel solar-access tint · energy report · Map ⇄ Mesh (product
-render) · neighbour buildings (context; they don't shade — real neighbours
-are "building" obstructions) · sun path · copy customer share link.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · SUN & SHADOW (the point of the screen)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· SEASON PRESETS, one tap each: WINTER · SUMMER · EQUINOX · TODAY.
+· A DATE PICKER for any other day.
+· PLAY / PAUSE — animates the sun across the day; shadows move with it.
+· A TIME-OF-DAY control from 5 AM to 7 PM, with the current time shown.
+· SUNRISE and SUNSET times for that date.
+· A SUN POSITION read-out: a compass showing where the sun is, with its
+  azimuth and altitude in degrees.
+· A SUN PATH toggle — draws the arc the sun travels that day with the hours
+  marked along it.
+· Shadows are cast by roofs, parapets, obstructions, structure and panels.
 
-EDIT IN 3D: tap a panel or a structure member → a structure edit card:
-- THIS PANEL: solar-access % + "sun lost to — tap to look" blockers (tap
-  orbits the camera to the culprit).
-- Structure presets (Flush / Std 10° / Walk 2.2 m) · module show/ghost/hide
-  (view only) · tables all/isolate · structure profile picker (cross-section
-  glyphs) · foundation picker (PCC pedestal / chemical anchor / ballast /
-  driven pile, taller-than-clearance disabled) · shuttering (square /
-  circular) · tilt ±5° · clearance ±0.3 m · customise MMS (purlins/row,
-  rafter density, end overhang, bracing) · "edit legs (2D)" → a plan editor
-  to add / move (big targets, +/− nudge) / reset / delete legs.
-- Carry the foundation honesty note (nominal/assumed; roof capacity not
-  checked).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · LAYERS & VIEW MODES — what each does when switched on
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· IRRADIANCE HEATMAP — colours the roof by how much sun each area gets.
+  Switching it on moves to a top-down view and stops rotation (pan and zoom
+  still work). It reveals a LEGEND (Poor → Moderate → Good → Excellent,
+  with 0 / 50 / 100%) and a MONTH TRACK (Jan–Dec) that recolours instantly,
+  showing that month's average access %, average sun-hours per day, and the
+  kWh/m² received — that last figure carries a "Real · PVGIS" marker,
+  because it is the only climate-measured number here. The geometric access
+  numbers deliberately carry no such marker. While computing it shows
+  progress.
+· SOLAR-ACCESS VIEW — tints every panel by how much sun it actually gets.
+· ENERGY REPORT — opens the report (section 6).
+· MAP ⇄ MESH — MAP shows the model on the satellite image in context; MESH
+  is an isolated product render on a plain studio background.
+· NEIGHBOUR BUILDINGS — decorative context only. State plainly that these
+  do NOT cast shadows; a real neighbour must be added as a "building"
+  obstruction in Step 3 to affect the shading.
+· COPY CUSTOMER SHARE LINK — copies the read-only 3D link the customer
+  opens. Hidden in read-only mode.
+· BACK TO THE 2D EDITOR.
 
-HEATMAP HUD: a legend (Poor → Excellent), a month track, and the PVGIS
-"kWh/m²·mo received · Real · PVGIS" badge (the only climate-measured number
-here — the geometric access numbers carry no such badge, deliberately).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4 · EDITING IN 3D — tap a panel or a structure member
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tapping a module or any structure member (leg, rafter, purlin, brace, rail)
+opens an edit card for that table. It closes on an outside tap or a close
+action, and disappears if its table is deleted. It contains:
 
-ENERGY REPORT sheet: system summary (kWp, panels, roof area); annual
-generation hero (MWh, specific yield, performance ratio, POA) with the
-PVGIS-vs-estimate provenance line; a 12-month bar chart (monsoon months
-distinct); a loss breakdown (temperature, soiling, inverter, mismatch, DC
-wiring, shading — with total %); average solar access %; 25-year projection;
-and finance (net cost, yearly savings, payback) + financing options. Charts
-use DATA colours, never the accent.
+· THIS PANEL (when a module was tapped): its solar-access %, its share of
+  the annual kWh, and "SUN LOST TO — tap to look": a short list of what is
+  blocking it. Tapping a blocker swings the camera round to look at it. If
+  nothing blocks it, it says so.
+· STRUCTURE PRESETS: FLUSH · STANDARD 10° · WALK-UNDER 2.2 m, each with a
+  cross-section preview; the active one is marked.
+· MODULE VISIBILITY — SHOW / GHOST / HIDE. A view aid only; never saved.
+· TABLE SCOPE — ALL TABLES / ISOLATE THIS ONE. A view aid only.
+· STRUCTURE PROFILE — pick the steel section; each shows its cross-section
+  shape, its section size in mm and its weight per metre.
+· FOUNDATION — PCC PEDESTAL · CHEMICAL ANCHOR · BALLAST BLOCK · DRIVEN
+  PILE. Options taller than the table's clearance are unavailable with the
+  reason shown. Only offered where the surface allows it.
+· SHUTTERING FORM (cast pedestals only) — SQUARE or CIRCULAR, noting the
+  circular form uses about a fifth less concrete.
+· A FOUNDATION HONESTY NOTE: the size is nominal and assumed, it adds
+  weight to the roof, and the roof's capacity is NOT checked.
+· TILT — step down/up in 5°, within 0–35°.
+· CLEARANCE — step down/up in 0.3 m, within 0–3 m.
+· CUSTOMISE THE MOUNTING STRUCTURE: PURLINS PER ROW (1–6) · RAFTER DENSITY
+  (1–3×, half steps) · END OVERHANG (0–1 m) · BRACING on/off. With the note
+  that rafter density is a MATERIAL allowance, not a safety factor.
+· EDIT LEGS (2D) — opens a small top-down plan of that table showing where
+  each leg lands, with: an AUTO / CUSTOM marker and the leg count, ADD LEG,
+  RESET TO AUTO, and each leg draggable to move, nudgeable in small steps,
+  and removable. Legs may not leave the buildable area, and every action or
+  refusal is announced.
 
-STATES — one frame pair, switch via header chip:
-- map view with shadows · a preset view · heatmap on (month scrub) ·
-  per-panel access tint · mesh (product) view · a structure edit card open ·
-  the energy report sheet · read-only (customer share) — no edit controls.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 · THE ENERGY REPORT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Opened from the layers. In this order:
+· A freshness note when the shading is still recalculating (the figures are
+  provisional).
+· SYSTEM SUMMARY — capacity kWp, panel count and per-panel watts, roof area.
+· ANNUAL GENERATION — the annual MWh shown large, plus specific yield
+  (kWh/kWp), performance ratio %, and the plane-of-array factor. With a
+  PROVENANCE LINE that says either "Real irradiance — PVGIS ({database},
+  {N}-year record)" or "Built-in irradiance model (latitude fit, ±10%)".
+· MONTHLY GENERATION — twelve months, with the monsoon months visually
+  distinct and each month's exact kWh available.
+· LOSSES BREAKDOWN — each loss with its %: temperature, soiling, inverter,
+  mismatch, DC wiring, and the measured shading loss; plus the total.
+· SOLAR ACCESS — the average %, noted as the same metric as the heatmap.
+· 25-YEAR PROJECTION — lifetime MWh and year-25 output with its % of year 1.
+· FINANCIALS — net cost after subsidy, yearly savings at the tariff, and
+  payback in years.
+· FINANCING OPTIONS — a card per option with its headline and monthly
+  figure, noted as representative terms.
+· Actions: CUSTOMIZE PROPOSAL (→ Step 7) and QUICK GENERATE (→ the
+  proposal). Hidden in read-only mode.
+· Charts use the design system's DATA colours, never the brass accent.
 
-WIRE THESE: opened from 10.3 / 10.6 / 10.8; edit card → structure changes;
-energy report → customize (→ Step 7) / quick-generate (→ proposal); copy
-share link → the customer's 3D view (Phase 4).
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); the edit card and the energy report are
+overlays reached by their trigger, not chip states:
+· map view with shadows at a chosen time
+· a view preset applied
+· the heatmap on, with legend and month track
+· the per-panel solar-access tint on
+· mesh (product render) view
+· a structure edit card open, including the "sun lost to" list
+· the leg plan editor open
+· the energy report open
+· READ-ONLY (the customer's share link) — no edit controls, no share button
 
-VIEWPORTS: MOBILE 375px — full-screen 3D, a bottom control bar, sheets for
-layers/energy/edit; touch orbit + pinch. DESKTOP 1440px — 3D + side rails.
-Side by side, mobile left.
+WIRE THESE — make them work in the prototype:
+· opened from the roof step (10.3), the layout (10.6) and captures (10.8),
+  and returns to wherever it was opened from
+· tapping a blocker → the camera looks at it
+· the edit card → changes the structure and its figures
+· energy report → Customize Proposal (Step 7) / Quick Generate (proposal)
+· copy share link → the customer's read-only 3D view (Phase 4)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically and do not put
+one below the other. Every control above must be reachable in both. The
+layout inside each frame is your decision.
 ```
 
 ---
@@ -758,42 +1092,100 @@ Side by side, mobile left.
 # 10.8 · Step 7 · Proposal captures & readiness
 
 ```
-Design STEP 7 — PROPOSAL CAPTURES & READINESS. Use the design system; no
-colours or token names.
+Design STEP 7 — PROPOSAL CAPTURES & READINESS of a solar design studio.
+Use the selected design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: this feeds the built proposal
-builder (Phase 3) and the customer link (Phase 4) — it does not rebuild them.
+EXISTING APP — CONNECT, DON'T DUPLICATE: this FEEDS the built proposal
+builder (Phase 3) and the customer link (Phase 4) — it does not rebuild
+either of them.
 
-WHO: the designer, finishing the visual + readiness before a proposal.
-GOAL: capture the shadow images, confirm the design is ready, pick a cover.
+WHO: a designer finishing the visuals and the readiness check before a
+proposal goes out.
+GOAL: capture the shadow images, confirm the design is actually ready, and
+choose the cover image.
 
-CAPTURE STUDIO: the 3D scene in capture mode shoots four fixed views —
-Summer Morning (9:00) · Summer Noon (12:00) · Solar Access Summer (12:00) ·
-Solar Access Winter (12:00). A checklist "captures N/4", numbered preset
-buttons (green tick when done, tap to jump), auto-advance to the next, a
-"skip to review", and an honest save-error state (storage full / private
-mode).
+BELOW IS THE COMPLETE LIST OF WHAT THIS STEP CONTAINS — every control, what
+happens when it is used, and every option it reveals. Include all of it.
+HOW it is laid out on mobile and desktop is YOUR decision.
 
-REVIEW: a "before you issue" readiness card — overall (Not ready / Ready
-with caveats / Ready to issue) with per-item status and a "go to step N"
-jump for anything unmet. A cover preview. A 2×2 shadow grid (each tile:
-image or "not captured", an "outdated — retake" when the design changed
-after capture, and "cover" badge / "set as cover"). A system summary
-(capacity, panels, solar access %, annual generation).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · THE STEP HAS TWO PHASES: CAPTURE, THEN REVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-FOOTER: Edit photos (back to capture) · Generate proposal → hands to the
-proposal builder (Phase 3, Path A) with the design's numbers + captures.
+━━━ PHASE A · THE CAPTURE STUDIO ━━━
+The 3D scene is shown set up for a specific shot, and the user takes the
+picture from it. There are FOUR fixed shots to take:
+   1. Summer Morning — 9:00
+   2. Summer Noon — 12:00
+   3. Solar Access (Summer) — 12:00
+   4. Solar Access (Winter) — 12:00
+Each shot states its own name, date and hour.
 
-STATES — one frame pair, switch via header chip:
-- capture studio (2/4 done) · a save error · review: ready to issue ·
-  review: blocked with caveats + jumps · a stale capture (retake) · no
-  cover yet.
+Controls:
+· A CAPTURE action that takes the picture from the current 3D view.
+· A PROGRESS COUNTER: "Shadow captures: N of 4".
+· FOUR NUMBERED SHOT BUTTONS — each shows a tick once captured, and tapping
+  one jumps straight to that shot to take or retake it.
+· After each capture it automatically moves to the next shot not yet taken.
+· The FIRST capture automatically becomes the cover image.
+· SKIP TO REVIEW — go to phase B without finishing all four.
+· A SAVE-ERROR state, stated honestly, when the image cannot be stored
+  (storage full, or a private browsing mode), with what to do about it.
 
-WIRE THESE: capture presets → shots; "generate proposal" → the proposal
-builder (Path A); captures + 3D link → the customer link (Phase 4).
+━━━ PHASE B · REVIEW ━━━
+· "BEFORE YOU ISSUE" READINESS CARD — an overall verdict, one of:
+  NOT READY · READY WITH CAVEATS · READY TO ISSUE. Under it, each thing
+  that was checked with its own status (ready / needs attention /
+  blocking), what it means, and — for anything unmet — a JUMP BUTTON that
+  goes to the exact step that fixes it.
+· COVER IMAGE — a preview of the chosen cover, or a clear "no cover
+  captured yet".
+· THE SHADOW SET — the four captures shown together. Each one shows:
+  the image (or "Not captured"), its name and its date/hour, an
+  "OUTDATED — RETAKE" action when the design has changed since that image
+  was taken, and either a "COVER IMAGE" marker or a "SET AS COVER" action.
+· SYSTEM SUMMARY — capacity kWp, panel count × watts, average solar access
+  %, and annual generation.
+· EDIT PHOTOS — returns to the capture studio.
+· GENERATE PROPOSAL — marks the design proposal-ready and hands it to the
+  proposal builder with the design's numbers and these captures.
 
-VIEWPORTS: MOBILE 375px — capture over 3D, review as stacked cards + a 2×2
-grid. DESKTOP 1440px — capture + review side by side. Mobile left.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · WHAT MATTERS HERE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A capture taken BEFORE a design change is stale and must say so rather than
+quietly showing an out-of-date picture to a customer.
+
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames):
+· capture studio, 0 of 4 taken
+· capture studio, 2 of 4 taken (two ticked)
+· a save error
+· review — ready to issue
+· review — not ready, with the blocking items and their jump buttons
+· review — a stale capture flagged "outdated, retake"
+· review — no cover chosen yet
+
+WIRE THESE — make them work in the prototype:
+· each numbered shot → sets up that view → capture → it appears taken
+· "set as cover" → that image becomes the cover
+· a readiness jump button → the step that fixes it
+· Edit photos → phase A · Generate proposal → the proposal builder
+  (Phase 3, Path A) pre-filled from this design
+· the captures and the 3D link also feed the customer link (Phase 4)
+· Back → the layout (10.6) · Next → Step 8 (10.9)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically and do not put
+one below the other. Every control above must be reachable in both. The
+layout inside each frame is your decision.
 ```
 
 ---
@@ -801,52 +1193,112 @@ grid. DESKTOP 1440px — capture + review side by side. Mobile left.
 # 10.9 · Step 8 · SLD & drawings
 
 ```
-Design STEP 8 — SLD & DRAWINGS. A technical drawing surface; keep every
-tab, control and export. Use the design system; no colours or token names.
+Design STEP 8 — SLD & DRAWINGS of a solar design studio: the technical
+drawing sheets. Use the selected design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: wire into what already exists.
+EXISTING APP — CONNECT, DON'T DUPLICATE: wire into what already exists; do
+not create a duplicate or a new isolated page.
 
-WHO: the designer / engineer, producing the electrical + layout drawings.
-GOAL: correct, exportable drawings and an honest voltage-compliance check.
+WHO: the designer or engineer producing the electrical and layout drawings.
+GOAL: correct, exportable drawings, and an honest voltage-compliance check.
 
-TABS: SLD · PV Layout · String Route · Structure.
+BELOW IS THE COMPLETE LIST OF WHAT THIS STEP CONTAINS — every control, what
+happens when it is used, and every option it reveals. Include all of it.
+HOW it is laid out on mobile and desktop is YOUR decision.
 
-SLD tab: the single-line diagram — strings (panel counts, voltages),
-optional string combiner boxes (central topology), DCDB (fuse / SPD /
-isolator), inverter (kW / phase / MPPT / ×units), ACDB (MCCB / SPD /
-isolator), generation + net meters + grid, earthing pits, a string/MPPT
-schedule, a plant-details table, and a title block. A "3-line" toggle
-(every conductor vs single-line). A **MAX SYSTEM VOLTAGE** compliance box —
-longest string cold-Voc vs inverter max DC — green within limit / red over
-("shorten the string"). This is what a CEIG inspector checks; keep it.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · FOUR DRAWING TABS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· SLD (single-line diagram) · PV LAYOUT · STRING ROUTE · STRUCTURE.
+Each shows a proper drawing sheet that can be zoomed and panned within its
+own area, and each sheet carries a TITLE BLOCK (project, client, date,
+sheet name) and the note that it is not to scale.
 
-Other tabs: PV Layout (roof polygons + dimensions, panels, obstruction
-buffers, north arrow, legend, title block); String Route (per-string dashed
-routes + schedule); Structure (the structural drawing).
+WHAT EACH TAB SHOWS
+· SLD — the electrical single line, containing: each string with its panel
+  count and voltage; STRING COMBINER BOXES when the central topology is
+  used; the DCDB with its fuse, SPD and isolator; the INVERTER with its
+  label, kW, phase, MPPT range and unit count; the ACDB with its MCCB, SPD
+  and isolator; the generation and net METERS and the grid; the EARTHING
+  pits; a STRING / MPPT SCHEDULE table; a PLANT DETAILS table; and the
+  structural disclaimer note.
+· PV LAYOUT — the roofs with their edge dimensions, every panel, the
+  obstruction buffers, a north arrow, a legend, a detail of the array table,
+  and the title block.
+· STRING ROUTE — the roof outlines with each string's cable route drawn and
+  labelled, plus the string schedule. When nothing is strung it says so.
+· STRUCTURE — the structural drawing of the mounting system.
 
-CONTROLS:
-- Edit ratings (SLD): a dialog to override inverter name/rating, DC side
-  (cable mm² / fuse A / SPD / isolator), AC side (cable mm² / type / MCCB /
-  SPD / isolator), and the standard (IS/IEC/NEC) — with "reset to auto" and
-  an edited-count badge.
-- Structural verification toggle: "Pending verification" ⇄ "Engineer
-  approved" — a HUMAN sign-off; the app never computes structural adequacy.
-- HIGH WIND badge (state-derived, display only).
-- Exports: SVG (CAD) · PNG · DXF (layout) · Print / Save PDF.
-- When there are no strings: an "auto-string now" / "string in the editor"
-  empty state.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · THE COMPLIANCE CHECK THAT MATTERS (on the SLD)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A MAXIMUM SYSTEM VOLTAGE box comparing the longest string's cold-weather
+voltage against the inverter's maximum DC voltage. Within the limit it
+reads as passing; over the limit it reads as a fault and says what to do
+("shorten the string"). This is the figure an electrical inspector checks —
+it must be prominent, never buried.
 
-STATES — one frame pair, switch via header chip:
-- SLD (within voltage limit) · SLD over-voltage (red compliance) · PV Layout
-  · String Route · Structure · edit-ratings dialog · unstrung empty state ·
-  pending vs engineer-approved.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · CONTROLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· THREE-LINE TOGGLE (SLD only) — draw every conductor (line, neutral,
+  earth) instead of the single-line shorthand.
+· EDIT RATINGS (SLD only) — carries a count of how many ratings have been
+  overridden. Opens a form with:
+    – INVERTER: name / model (text), AC rating in kW (number)
+    – DC SIDE: cable size mm² (2.5 / 4 / 6 / 10) · fuse A (15 / 20 / 25 /
+      32) · SPD type (Type-I / Type-II / Type-I+II) · isolator A (25 / 32 /
+      40 / 63)
+    – AC SIDE: cable size mm² (4 up to 95) · cable type (PVC copper / XLPE
+      copper / XLPE aluminium) · MCCB rating A (which also sets the
+      isolator) · SPD type
+    – GRID & STANDARDS: which standard the drawing follows (IS / IEC 62548
+      · CEA, IEC 60364-7-712, or NEC 690)
+    – RESET TO AUTO (unavailable when nothing is overridden), CANCEL, and
+      SAVE. Only values that differ from the derived defaults are kept.
+· STRUCTURAL VERIFICATION — a two-state control: PENDING VERIFICATION ⇄
+  ENGINEER APPROVED. This is a HUMAN sign-off. State plainly that the app
+  never computes structural adequacy.
+· A HIGH WIND marker derived from the site's state — display only, with the
+  note that engineer verification is mandatory in a high-wind zone.
+· EXPORTS: SVG (CAD) · PNG · DXF (layout) · and PRINT / SAVE AS PDF.
+· WHEN NOTHING IS STRUNG (SLD and String Route): an empty state offering
+  AUTO-STRING NOW (unavailable until a panel, an inverter and at least one
+  placed panel exist, with the reason) and STRING MANUALLY IN THE EDITOR.
+· A first-visit explanation of the drawing's colour legend (DC / inverter /
+  AC / earthing) that can be dismissed.
 
-WIRE THESE: "string in the editor" → 10.6; approved toggle → the design's
-sign-off (visible to the engineer queue, 10.11); exports → files.
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); the ratings form and the legend explainer
+are overlays reached by their trigger, not chip states:
+· SLD, voltage within the limit
+· SLD, voltage OVER the limit (the fault state)
+· SLD in three-line mode
+· PV Layout · String Route · Structure
+· the edit-ratings form open, with some values overridden
+· nothing strung yet (the empty state with its two ways out)
+· pending verification vs engineer approved
 
-VIEWPORTS: MOBILE 375px — tabs + a pan/pinch-zoom drawing viewport +
-export sheet; the drawing scrolls in its own container. DESKTOP 1440px —
-the full sheet. Side by side, mobile left.
+WIRE THESE — make them work in the prototype:
+· the four tabs switch the drawing
+· "string manually in the editor" → the layout (10.6); "auto-string now" →
+  strings the design and the drawing fills in
+· the verification toggle → the design's sign-off status, which the
+  engineer queue (10.11) reads
+· each export → produces its file; print → a PDF
+· Back → Step 7 · Next → Step 9 (10.10)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically. A drawing sheet
+must stay readable on the phone (it may scroll and zoom inside its own area,
+but the page itself must never scroll sideways). The layout is your decision.
 ```
 
 ---
@@ -854,69 +1306,140 @@ the full sheet. Side by side, mobile left.
 # 10.10 · Step 9 · BOM & pricing (the ~286-control screen, made simple)
 
 ```
-Design STEP 9 — BILL OF MATERIALS & PRICING. In code this shows ~286
-controls in an 11-column table — the redesign's job is to make it SIMPLE and
-mobile-first WITHOUT dropping a single field or capability. Use the design
-system; no colours or token names.
+Design STEP 9 — BILL OF MATERIALS & PRICING of a solar design studio. Use
+the selected design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: this shares the money path with the
-built proposal (Phase 3) and reads rates from the price book (Phase 8) —
-numbers must not disagree. Do not rebuild the proposal's pricing.
+EXISTING APP — CONNECT, DON'T DUPLICATE: this shares the money path with
+the built proposal (Phase 3) and reads its rates from the price book
+(Phase 8) — the numbers must never disagree. Do not rebuild the proposal's
+pricing, and do not create a second catalog.
 
-WHO: the designer / owner, reviewing the auto-derived procurement quote.
-GOAL: an accurate, editable quote with honest provenance — reviewed fast.
+WHO: the designer or owner reviewing the auto-derived procurement quote.
+GOAL: an accurate, editable quote with honest provenance, reviewed fast.
 
-THE SIMPLIFICATION: on mobile, NEVER a wide table. Each line is a CARD
-(item name, quantity, total, a confidence dot); tapping it opens an EDIT
-SHEET with the full fields. On desktop a table is fine. Progressive
-disclosure everywhere.
+THE PROBLEM TO SOLVE: in the original this is one 11-column table holding
+roughly 286 controls. Keep EVERY field and capability below — the job is to
+make it readable, not to drop anything. On a phone it must not be a wide
+table. HOW you achieve that is YOUR decision.
 
-SUMMARY (a compact strip / header): system kWp · cost (pre-margin) ·
-**margin %** (editable) · **discount** (value + % / ₹) · taxable (with the
-"−₹X off" line) · GST (with the per-rate breakdown when mixed) · **quote
-total** · ₹/Wp · subsidy (with the reason when ₹0). This is the same money
-math as the proposal.
+BELOW IS THE COMPLETE LIST OF WHAT THIS STEP CONTAINS.
 
-SIX CATEGORIES (in order, each only if it has lines): Modules · Inverter ·
-Electrical BOS · Mechanical BOS · Safety · Civil & Misc. Each section: "N of
-M included", a section total, and "refresh from design" when edited. The
-Electrical BOS section also has survey inputs (average DC run, average AC
-run) that size the cable.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · THE MONEY SUMMARY — nine figures, two of them editable
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· SYSTEM kWp
+· COST before margin
+· MARGIN % — EDITABLE, 0 to 60
+· DISCOUNT — EDITABLE: a value plus a choice of % or ₹
+· TAXABLE — with a "−₹X off" line when a discount applies
+· GST — with the per-rate breakdown when the lines carry mixed rates
+· QUOTE TOTAL
+· ₹ PER Wp
+· SUBSIDY — and when it is ₹0, the reason why
+This is the SAME arithmetic the proposal uses; it cannot produce a
+different total.
 
-PER LINE — every field kept (this is the "286"): include toggle · a
-CONFIDENCE dot (measured / derived / estimated / assumed) · item name
-(editable on custom lines) · spec · brand · quantity · waste % · order qty
-(computed) · rate ₹ · amount (computed) · GST % · GST ₹ (computed) · total
-(computed) · a derivation-formula info button · remove (custom lines) · a
-per-field "reset ↻" that appears when you've overridden a value.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · SIX CATEGORIES, in this order (each shown only if it has lines)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MODULES · INVERTER · ELECTRICAL BOS · MECHANICAL BOS · SAFETY ·
+CIVIL & MISC.
+Each category shows its name, "N of M included", its own total, and a
+REFRESH FROM DESIGN action that appears once anything in it was hand-edited.
 
-RECONCILIATION (keep — this is what keeps the quote honest):
-- an ORPHAN banner (a saved edit whose line no longer exists → keep as
-  custom / discard),
-- a STALE banner per section ("yours X · design now Y — take Y", plus a bulk
-  refresh),
-- a below-cost warning (discount sells under cost),
-- a PRELIMINARY banner (counts of assumed/estimated lines needing
-  verification),
-- the structure engineering disclaimer.
+ELECTRICAL BOS additionally holds two SURVEY INPUTS that size the cable:
+AVERAGE DC RUN (array → inverter) and AVERAGE AC RUN (inverter → LT panel).
+When the design already has real routed cable geometry, these are locked
+with a note saying the routed length is being used instead.
 
-PAGE ACTIONS: add a custom line · re-sync all (discard hand-edits, with a
-confirm) · export CSV. And a DISCOM COMPLIANCE checklist (net-metering +
-sanctioned load, SLD sign-off, ALMM/BIS listing, earthing/LA certificates,
-PM Surya Ghar subsidy eligibility with the DCR-module caveat).
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · EVERY LINE ITEM — all of these fields, none dropped
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· INCLUDE — a switch. Excluding a line keeps it but drops it from the
+  totals and visibly dims it; it is never deleted.
+· A CONFIDENCE INDICATOR — one of MEASURED · DERIVED · ESTIMATED ·
+  ASSUMED, meaning: counted from the design, computed from the geometry, a
+  labelled fallback, or dependent on something only a surveyor/engineer can
+  confirm. This must be readable, not decorative.
+· ITEM NAME — editable on custom lines, fixed on derived ones.
+· SPEC · BRAND — text.
+· QUANTITY — number.
+· UNIT — chosen from: nos · set · pairs · kit · lot · plate · panel-set ·
+  day · m · m² · kg · kW.
+· WASTE % — 0 to 100.
+· ORDER QUANTITY — calculated (quantity + waste, rounded up for anything
+  counted in whole units). Read-only.
+· RATE ₹ — number.
+· AMOUNT ₹ — calculated, read-only.
+· GST % — 0 to 40.
+· GST ₹ and TOTAL ₹ — calculated, read-only.
+· A DERIVATION EXPLANATION — opens the formula behind that line, in words,
+  so the number can be defended.
+· REMOVE — custom lines only.
+· A PER-FIELD RESET that appears next to any value you have overridden, to
+  put it back to what the design says. It changes appearance when the
+  design has since moved on (see below).
 
-STATES — one frame pair, switch via header chip:
-- the normal BOM (cards on mobile) · a line's edit sheet open · an edited/
-  stale line with reset · the orphan banner · below-cost warning ·
-  preliminary banner · the re-sync confirm · the DISCOM checklist.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4 · RECONCILIATION — what keeps the quote honest
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· A STALE NOTICE per category when the design changed under a value you had
+  overridden: it shows "yours X · design now Y" for each drifted field with
+  a one-tap "TAKE Y", plus a bulk "REFRESH THESE", and "and N more" when
+  the list is long.
+· An ORPHAN NOTICE — a saved edit whose line no longer exists in the
+  design. Per orphan: KEEP AS A CUSTOM LINE or DISCARD.
+· A BELOW-COST WARNING when the discount sells the job under cost.
+· A PRELIMINARY QUOTE NOTICE — how many lines are assumed or estimated, and
+  which figures still need site verification.
+· THE STRUCTURE ENGINEERING DISCLAIMER, with the site's wind zone: the
+  structure figures are a material estimate, not a safety check.
 
-WIRE THESE: rates ← price book (Phase 8); totals = the proposal's money path
-(Phase 3); a line's confidence + the preliminary state travel onto the
-proposal's honesty labelling; export CSV → file.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 · PAGE-LEVEL ACTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+· ADD A CUSTOM LINE — a fully editable line of your own.
+· RE-SYNC ALL — discards every hand-edit and takes the design's values.
+  Asks for confirmation first and states how many edits will be lost;
+  unavailable when nothing is edited.
+· EXPORT CSV.
+· A DISCOM COMPLIANCE CHECKLIST: net metering against the sanctioned load ·
+  the SLD sign-off · whether the chosen module is ALMM / BIS listed ·
+  earthing and lightning-arrester certificates · PM Surya Ghar subsidy
+  eligibility, including the domestic-content (DCR) caveat.
 
-VIEWPORTS: MOBILE 375px — a card list + edit sheet (NOT the 11-column
-table), the summary as a compact block. DESKTOP 1440px — the full table is
-fine. Side by side, mobile left.
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); a line's full editor and the confirmations
+are overlays reached by their trigger, not chip states:
+· the quote as derived, nothing edited
+· a single line being edited, with all its fields
+· a line overridden, with its reset showing
+· a line gone stale ("yours X · design now Y")
+· the orphan notice
+· the below-cost warning
+· the preliminary-quote notice (assumed / estimated counts)
+· the re-sync confirmation
+· the DISCOM compliance checklist
+
+WIRE THESE — make them work in the prototype:
+· rates come from the price book (Phase 8)
+· the totals ARE the proposal's money path (Phase 3) — same figures
+· each line's confidence and the preliminary state travel onto the
+  proposal's honesty labelling
+· "take Y" / "refresh these" / "re-sync all" → values return to the design
+· export CSV → a file · Back → Step 8 · Next → Step 10 (10.11)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically. On the phone
+this must NOT become a wide sideways-scrolling table — every field above
+still has to be reachable there. The layout is your decision.
 ```
 
 ---
@@ -924,47 +1447,109 @@ fine. Side by side, mobile left.
 # 10.11 · Step 10 · Done + engineer sign-off
 
 ```
-Design STEP 10 — DONE, plus the ENGINEER SIGN-OFF queue and return flow
-(the new Stage-5 screens). Use the design system; no colours or token names.
+Design STEP 10 — DONE, plus the ENGINEER SIGN-OFF queue and the return
+flow. Use the selected design system; no colours or token names.
 
-EXISTING APP — CONNECT, DON'T DUPLICATE: wire into the proposal (Phase 3),
-the customer 3D link (Phase 4), the InstallationSheet (Phase 7, reuse — do
-not rebuild), the engineer role (Phase 8) and the design-returned
-notification (Phase 9).
+EXISTING APP — CONNECT, DON'T DUPLICATE: wire into the proposal builder
+(Phase 3), the customer 3D link (Phase 4), the INSTALLATION SHEET (Phase 7
+— REUSE the existing one, do not rebuild it), the engineer role (Phase 8)
+and the design-returned notification (Phase 9).
 
-WHO: the designer finishing, and the engineer reviewing.
-GOAL: hand the finished design onward, and let an engineer sign it off.
+WHO: the designer finishing a design, and the engineer reviewing it.
+GOAL: hand the finished design onward, and let an engineer sign it off or
+send it back.
 
-DONE screen: the design is complete — next actions: View proposal (→ the
-proposal builder / preview) · BOM & pricing (→ 10.10) · Installation plan
-(opens the existing InstallationSheet) · Copy 3D share link (the customer's
-view, Phase 4) · Done (back to the lead's design list). Show the design name
-and "return to edit anytime".
+BELOW IS THE COMPLETE LIST OF WHAT THIS CONTAINS — every control, what
+happens when it is used, and every option it reveals. Include all of it.
+HOW it is laid out on mobile and desktop is YOUR decision.
 
-ENGINEER SIGN-OFF (the Stage-5 additions):
-- A sign-off QUEUE for the engineer: designs awaiting review, oldest first,
-  each with size, customer, who designed it.
-- A sign-off / RETURN screen: the engineer reviews and either APPROVES
-  (sets the structural verification to "engineer approved", flows to the
-  proposal) or RETURNS with comments pinned to what's wrong — which sends it
-  back to the designer (the design-returned notification, Phase 9) and the
-  customer never sees an unapproved design.
-- Keep the honesty rule: the app never computes structural adequacy; this is
-  a human decision, recorded.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1 · THE DONE SCREEN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+States that the design is complete, shows the design/project name, and
+reassures that it can be reopened and edited at any time. Five next
+actions:
+· VIEW PROPOSAL — opens the proposal built from this design.
+· BOM & PRICING — back to Step 9 (10.10).
+· INSTALLATION PLAN — opens the existing INSTALLATION SHEET (section 2).
+· COPY 3D SHARE LINK — copies the customer's read-only 3D link.
+· DONE — returns to the lead's design list.
 
-STATES — one frame pair, switch via header chip:
-- the done screen (next actions) · the install plan open (InstallationSheet)
-· the engineer queue (several waiting) · a sign-off/return review · approved
-· returned with comments.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2 · THE INSTALLATION PLAN (reuse — do not redesign it from scratch)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A crew work-order derived from the design, ordered by how it is actually
+built, grouped into phases. It contains:
+· A PROGRESS INDICATOR and a "done of total steps" count.
+· EACH STEP as a tick-off item: its number, its title, its detail, and the
+  materials that step needs. Tapping marks it done or not done, and that
+  state is remembered.
+· PHASE HEADINGS grouping the steps.
+· A PRINT action.
+· An EMPTY STATE when there is nothing to install yet ("place modules and
+  string the array first").
+The crew sees NO money on this — it is a work order, not a quote.
 
-WIRE THESE:
-- View proposal → the proposal builder (Phase 3); Install plan → the
-  InstallationSheet (Phase 7); Copy 3D link → the customer link (Phase 4)
-- engineer approve → structural verification approved; return → designer +
-  the Phase 9 notification
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3 · THE ENGINEER SIGN-OFF QUEUE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For whoever holds the Engineer role: the designs waiting for review, OLDEST
+FIRST (the one that has waited longest is the one that matters). Each entry
+shows the customer, the system size, who designed it, and how long it has
+been waiting. Opening one starts the review.
 
-VIEWPORTS: MOBILE 375px — done actions as a list, the queue as cards, the
-review full-screen. DESKTOP 1440px — queue + review side by side. Mobile left.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4 · THE REVIEW — approve or return
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The engineer sees the design and its drawings, then chooses ONE of:
+· APPROVE — records the structural verification as ENGINEER APPROVED. The
+  design can now go to the customer.
+· RETURN WITH COMMENTS — the engineer writes what is wrong, and each
+  comment is PINNED TO THE THING it refers to rather than left as a loose
+  note. The design goes back to the designer and a notification tells them.
+
+THE RULE THAT DOES NOT BEND: the app NEVER computes structural adequacy.
+This is a human decision that is recorded, with who decided and when.
+A design that has not been approved is never shown to the customer.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5 · THE DESIGN LIST FOR A LEAD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A lead can hold several design VARIANTS. Show them together for comparison
+— system size, annual generation, price and payback for each — with one
+marked as RECOMMENDED, and a way to open, duplicate or start a new variant.
+
+STATES — one mobile + desktop frame pair, switched from a header chip
+(never separate static frames); the installation sheet and the review are
+overlays/screens reached by their trigger, not chip states:
+· the done screen with its five actions
+· the installation plan open, partly ticked off
+· the installation plan empty (nothing to install yet)
+· the engineer queue with several designs waiting
+· a review in progress
+· approved — the verification now reads engineer approved
+· returned with comments pinned to what is wrong
+· the design list for a lead, several variants with one recommended
+
+WIRE THESE — make them work in the prototype:
+· View proposal → the proposal builder (Phase 3)
+· Installation plan → the EXISTING installation sheet (Phase 7)
+· Copy 3D link → the customer's read-only 3D view (Phase 4)
+· Done → the lead's design list
+· Approve → the structural verification shown on the drawings (10.9)
+· Return → the designer, and the design-returned notification (Phase 9)
+
+PAGE TITLE & DETAILS — you usually leave these out; include them. Give the
+page a clear TITLE (the screen name) and a short DETAILS line under it
+saying who uses it and what it is for. Label every frame with what it is
+("Mobile" / "Desktop") and which state it shows, so the page reads on its
+own without me explaining it.
+
+VIEWPORTS: build BOTH — MOBILE 375px and DESKTOP 1440px. Place them SIDE BY
+SIDE on ONE HORIZONTAL ROW — mobile on the LEFT, desktop on the RIGHT,
+aligned to the same top edge. Do NOT stack them vertically and do not put
+one below the other. Every control above must be reachable in both. The
+layout inside each frame is your decision.
 ```
 
 ---
