@@ -1,10 +1,23 @@
 # Phase 10 — The Design Studio  🔻 LAST (D23)  ▸ 11 screens
 
+> ## ⛔ SUPERSEDED — DO NOT BUILD THESE IN CLAUDE DESIGN (D39, 2026-07-24)
+>
+> **We are no longer redesigning the studio's UX.** The existing studio is KEPT and instead
+> **refactored to the design system and hardened to production** in the new product build —
+> its geometry, engineering logic and code carry over as-is. Nothing in this file gets built
+> as a fresh Claude Design screen.
+>
+> **This file is still valuable, and stays** — it is the most complete written inventory of
+> every tool, state and computed output in the studio. Use it as the **refactor checklist**
+> (nothing may be lost when the studio is restyled) and as **input to the new product's
+> architecture and database schema**.
+>
+> See `docs/NEW-PRODUCT-PLANNING-PROMPT.md` for the hand-off that starts that work.
+
 **This studio already exists and works in code.** Real satellite imagery, AI roof detection,
 PVGIS energy, shading simulation, auto-layout, structural material modelling, string sizing,
-SLD, and a bill of materials. **We are redesigning the UX — not the engine.** Keep **every
-tool and every computed output**; make it **simple and touch-first** instead of a desktop CAD
-tool with tiny handles, hover tooltips and keyboard shortcuts.
+SLD, and a bill of materials. Keep **every tool and every computed output** through the
+refactor; the touch-first notes below remain the target for the production studio.
 
 **The source of truth is the CODEBASE**, `src/features/solar-studio/`. This file is the
 distilled inventory; if a tool here seems minor, it still ships — do not drop it.

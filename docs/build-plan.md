@@ -352,12 +352,15 @@ rebuilt.
 
 ---
 
-## PHASE 10 · The design studio  🔻 LAST (D23)  ▸ 11 screens
+## PHASE 10 · The design studio  ⛔ NOT BEING DESIGNED (D39)
 
-**The studio already works in code** — real satellite imagery, AI roof detection, PVGIS
-energy, shading sim, auto-layout, structure, SLD, BOM. **Redesign the UX (touch-first,
-simple); keep every tool and every computed output.** The source of truth is the codebase
-(`src/features/solar-studio/`), enumerated exhaustively via a four-pass exploration.
+**Superseded 2026-07-24.** We are **not** redesigning the studio's UX in Claude Design. The
+existing studio is **kept and refactored** to the design system and hardened to production in
+the new product build — its geometry, engineering logic and code carry over as-is.
+
+`docs/phase-10-prompts.md` stays as the **refactor checklist** (the complete inventory of every
+tool, state and computed output, so nothing is lost when it is restyled) and as input to the
+new product's architecture and DB schema. Hand-off: `docs/NEW-PRODUCT-PLANNING-PROMPT.md`.
 
 📄 **Prompt: `docs/phase-10-prompts.md`** — 11 self-contained screens mirroring the real
 wizard. Bigger than the 4 originally sketched because the real studio is a 10-step wizard +
