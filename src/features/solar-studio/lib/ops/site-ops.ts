@@ -66,6 +66,62 @@ export const keepoutRemove = defineOp<{ id: string }>({
   apply: (p, a) => ({ keepouts: p.keepouts.filter((k) => k.id !== a.id) }),
 });
 
-for (const op of [arresterAdd, arresterRemove, walkwayAdd, walkwayRemove, railAdd, railRemove, keepoutAdd, keepoutRemove]) {
+// ── obstructions (the 3D scene's on-object actions; Step 3 keeps its own tools) ──
+
+export const obstructionRemove = defineOp<{ id: string }>({
+  id: 'obstruction.remove',
+  layer: 'geometry',
+  label: (a) => `Remove obstruction`,
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) => ({ obstructions: p.obstructions.filter((o) => o.id !== a.id) }),
+});
+
+export const obstructionRotate = defineOp<{ id: string; deltaDeg: number }>({
+  id: 'obstruction.rotate',
+  layer: 'geometry',
+  label: (a) => `Rotate obstruction ${Math.round(a.deltaDeg)}°`,
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) => ({
+    obstructions: p.obstructions.map((o) =>
+      o.id === a.id ? { ...o, rotationDeg: (((o.rotationDeg + a.deltaDeg) % 360) + 360) % 360 } : o,
+    ),
+  }),
+});
+
+export const obstructionMove = defineOp<{ id: string; center: XY; roofId?: string | null }>({
+  id: 'obstruction.move',
+  layer: 'geometry',
+  label: () => 'Move obstruction',
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) => ({
+    obstructions: p.obstructions.map((o) =>
+      o.id === a.id ? { ...o, center: a.center, ...(a.roofId !== undefined ? { roofId: a.roofId } : {}) } : o,
+    ),
+  }),
+});
+
+export const obstructionSetCastsShadow = defineOp<{ id: string; castsShadow: boolean }>({
+  id: 'obstruction.setCastsShadow',
+  layer: 'geometry',
+  label: (a) => (a.castsShadow ? 'Obstruction casts shadow' : 'Obstruction casts no shadow'),
+  apply: (p, a) => ({
+    obstructions: p.obstructions.map((o) => (o.id === a.id ? { ...o, castsShadow: a.castsShadow } : o)),
+  }),
+});
+
+for (const op of [
+  arresterAdd,
+  arresterRemove,
+  walkwayAdd,
+  walkwayRemove,
+  railAdd,
+  railRemove,
+  keepoutAdd,
+  keepoutRemove,
+  obstructionRemove,
+  obstructionRotate,
+  obstructionMove,
+  obstructionSetCastsShadow,
+]) {
   registerOp(op);
 }

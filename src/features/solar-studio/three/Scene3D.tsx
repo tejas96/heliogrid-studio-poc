@@ -13,6 +13,34 @@ import {
 import * as THREE from 'three';
 import { designBounds, type SceneBounds } from './scene-bounds';
 import { ScenePost } from './ScenePost';
+import { EntityLabel } from './EntityLabel';
+import { HOVER_COLOR, PICK_COLOR, PickHalo } from './PickHalo';
+import { useOps } from '../store/useOps';
+import type { DesignOp } from '../lib/ops/types';
+import type { OpPreview } from '../lib/ops/run';
+import { inverterRemove } from '../lib/ops/electrical-ops';
+import { obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
+import { castsAnalyticalShadow } from '../lib/capabilities';
+import { polygonArea } from '../lib/geo';
+import type { ObstructionType } from '../types';
+
+/** What the scene can pick besides modules (modules use the shared selection). */
+export type ScenePick = { kind: 'obstruction' | 'inverter' | 'roof'; id: string };
+type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
+
+const OBSTRUCTION_NAME: Record<ObstructionType, string> = {
+  tank: 'Water tank',
+  dish: 'Dish antenna',
+  chimney: 'Chimney',
+  tree: 'Tree',
+  elevated: 'Elevated structure',
+  building: 'Building',
+  solar_wh: 'Solar water heater',
+  ladder: 'Ladder',
+  windmill: 'Windmill',
+  turbine_vent: 'Turbine vent',
+  other: 'Obstruction',
+};
 import {
   ArrowDown,
   Axis3d,
@@ -156,6 +184,11 @@ export function Scene3D({
   const project = projectOverride ?? storeProject!;
   const loc = project.location!;
   const patchProject = useProjectPatch();
+  const ops = useOps();
+  // non-module picks (obstruction / inverter / roof) — view state, never persisted
+  const [pick, setPick] = useState<ScenePick | null>(null);
+  const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
+  const runOp: RunOp = (op, args) => ops.run(op, args);
   // Resolved HERE, outside <Canvas>. Anything inside the Canvas lives in the
   // react-three-fiber reconciler, which is a separate React root: store
   // context does not cross into it and `useStore()` throws there. Hooks stay
@@ -187,7 +220,12 @@ export function Scene3D({
     if (!seg || !roof || mine.length === 0) return;
     const cx = mine.reduce((a, pp) => a + pp.center.x, 0) / mine.length;
     const cy = mine.reduce((a, pp) => a + pp.center.y, 0) / mine.length;
+    setPick(null); // one card at a time
     setStructEdit({ segId, anchor: [cx, roof.heightM + 2.2, -cy], panelId });
+  };
+  const pickEntity = (p: ScenePick | null) => {
+    if (p) setStructEdit(null);
+    setPick(p);
   };
   const closeStructEdit = () => setStructEdit(null);
   /** Click-to-focus from the inspector: orbit to whatever is taking the sun,
@@ -221,12 +259,15 @@ export function Scene3D({
     if (r) patchProject(r, true); // ONE undoable patch
   };
   useEffect(() => {
-    if (!structEdit) return;
+    if (!structEdit && !pick) return;
     const inCard = (t: EventTarget | null) =>
-      t instanceof Element && !!t.closest('[data-struct-edit-card]');
+      t instanceof Element && !!t.closest('[data-struct-edit-card],[data-entity-label]');
     let down: { x: number; y: number; inCard: boolean } | null = null;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeStructEdit();
+      if (e.key === 'Escape') {
+        closeStructEdit();
+        setPick(null);
+      }
     };
     // close ONLY on a true outside CLICK: R3F's onPointerMissed fires even
     // for clicks on the DOM card (the "steppers close the panel" bug), and a
@@ -238,7 +279,10 @@ export function Scene3D({
     const onUp = (e: PointerEvent) => {
       if (!down) return;
       const dragged = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6;
-      if (!dragged && !down.inCard && !inCard(e.target)) closeStructEdit();
+      if (!dragged && !down.inCard && !inCard(e.target)) {
+        closeStructEdit();
+        setPick(null);
+      }
       down = null;
     };
     window.addEventListener('keydown', onKey);
@@ -250,7 +294,7 @@ export function Scene3D({
       document.removeEventListener('pointerup', onUp, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structEdit]);
+  }, [structEdit, pick]);
   // the edited table can vanish under us (undo, delete in the 2D tab)
   useEffect(() => {
     if (structEdit && !project.segments.some((sg) => sg.id === structEdit.segId)) {
@@ -441,7 +485,7 @@ export function Scene3D({
     }
     // Escape peels one layer at a time: an open card closes first (its own
     // listener does that); only a bare scene leaves the 3D view
-    if (e.key === 'Escape' && onClose && !structEdit) {
+    if (e.key === 'Escape' && onClose && !structEdit && !pick) {
       e.preventDefault();
       onClose();
     }
@@ -529,6 +573,11 @@ export function Scene3D({
           bounds={bounds}
           selectedIds={selectedSet}
           onSelectPanels={onSelectPanels}
+          pick={structInteractive ? pick : null}
+          hoverPick={structInteractive ? hoverPick : null}
+          onPick={structInteractive ? pickEntity : () => {}}
+          onHoverPick={structInteractive ? setHoverPick : () => {}}
+          runOp={runOp}
         />
         {/* Camera director: smooth, damped, touch-native (one finger pans, two
             fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
@@ -1074,11 +1123,21 @@ function SceneContent({
   bounds,
   selectedIds,
   onSelectPanels,
+  pick,
+  hoverPick,
+  onPick,
+  onHoverPick,
+  runOp,
 }: {
   project: Project;
   bounds: SceneBounds;
   selectedIds: ReadonlySet<string>;
   onSelectPanels?: (ids: string[], additive: boolean) => void;
+  pick: ScenePick | null;
+  hoverPick: ScenePick | null;
+  onPick: (p: ScenePick | null) => void;
+  onHoverPick: (p: ScenePick | null) => void;
+  runOp: RunOp;
   sunAltitude: number;
   sunAzimuth: number;
   solarAccessView: boolean;
@@ -1406,19 +1465,50 @@ function SceneContent({
       )}
 
       <group position={originShift}>
-      {/* roofs */}
-      {shownRoofs.map((r) => (
-        <RoofMesh
-          key={r.id}
-          roof={r}
-          allRoofs={project.roofs}
-          eaveProj={eaveRefs.get(r.id)}
-          photoreal={!meshMode}
-        />
-      ))}
+      {/* roofs — pickable: the deck's outline lights up, a click names it */}
+      {shownRoofs.map((r) => {
+        const picked = pick?.kind === 'roof' && pick.id === r.id;
+        const hovered = !picked && hoverPick?.kind === 'roof' && hoverPick.id === r.id;
+        const c = polygonCentroid(r.polygon);
+        return (
+          <group
+            key={r.id}
+            onClick={(e) => {
+              if (e.delta > 4) return;
+              e.stopPropagation();
+              onPick({ kind: 'roof', id: r.id });
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              onHoverPick({ kind: 'roof', id: r.id });
+            }}
+            onPointerOut={() => onHoverPick(null)}
+          >
+            <RoofMesh
+              roof={r}
+              allRoofs={project.roofs}
+              eaveProj={eaveRefs.get(r.id)}
+              photoreal={!meshMode}
+              outline={picked ? PICK_COLOR : hovered ? HOVER_COLOR : undefined}
+            />
+            {picked && (
+              <EntityLabel
+                position={[c.x, r.heightM + 1.2, -c.y]}
+                title={r.name}
+                lines={[
+                  `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave`,
+                  `${r.pitchDeg > 0 ? `${r.pitchDeg}° pitch facing ${Math.round(r.slopeAzimuthDeg)}°` : 'flat'} · ${r.roofType.replace('_', ' ')} · ${r.provenance?.source ?? 'traced by hand'}`,
+                  `${project.panels.filter((p) => p.roofId === r.id && p.enabled).length} modules`,
+                ]}
+                onClose={() => onPick(null)}
+              />
+            )}
+          </group>
+        );
+      })}
 
-      {/* obstructions */}
-      {project.obstructions.filter((o) => inScope(o.roofId)).map((o) => (
+      {/* obstructions — pickable: hover halo, click → label with quick actions */}
+      {project.obstructions.filter((o) => inScope(o.roofId)).map((o) => {
         // Resolved from the obstruction's POSITION, not from `o.roofId` alone.
         // A stored anchor can be stale — it used to be captured at placement
         // and left behind by every drag — and `surfaceHeightAt` extrapolates
@@ -1426,8 +1516,68 @@ function SceneContent({
         // roof's plane at the new spot instead of failing. That is what left
         // turbine vents hanging over a pitched roof. `obstructionBaseY` still
         // honours an explicit `roofId: null` as "stands on grade".
-        <ObstructionMesh key={o.id} o={o} baseY={obstructionBaseY(o, project.roofs, eaveRefs)} />
-      ))}
+        const baseY = obstructionBaseY(o, project.roofs, eaveRefs);
+        const picked = pick?.kind === 'obstruction' && pick.id === o.id;
+        const hovered = !picked && hoverPick?.kind === 'obstruction' && hoverPick.id === o.id;
+        const sx = o.shape === 'circle' ? o.diameterM : o.lengthM;
+        const sz = o.shape === 'circle' ? o.diameterM : o.widthM;
+        const casts = castsAnalyticalShadow(o);
+        const dims =
+          o.shape === 'circle'
+            ? `Ø ${fmtLen(o.diameterM, 1)} · ${fmtLen(o.heightM, 1)} tall`
+            : `${fmtLen(o.lengthM, 1)} × ${fmtLen(o.widthM, 1)} · ${fmtLen(o.heightM, 1)} tall`;
+        return (
+          <group
+            key={o.id}
+            onClick={(e) => {
+              if (e.delta > 4) return;
+              e.stopPropagation();
+              onPick({ kind: 'obstruction', id: o.id });
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              onHoverPick({ kind: 'obstruction', id: o.id });
+            }}
+            onPointerOut={() => onHoverPick(null)}
+          >
+            <ObstructionMesh o={o} baseY={baseY} />
+            {(picked || hovered) && (
+              <PickHalo
+                center={[o.center.x, baseY + o.heightM / 2, -o.center.y]}
+                rotationY={(-o.rotationDeg * Math.PI) / 180}
+                size={[sx + 0.3, o.heightM + 0.2, sz + 0.3]}
+                picked={picked}
+              />
+            )}
+            {picked && (
+              <EntityLabel
+                position={[o.center.x, baseY + o.heightM + 0.7, -o.center.y]}
+                title={`${o.label} · ${OBSTRUCTION_NAME[o.type]}`}
+                lines={[
+                  dims,
+                  `${casts ? 'Casts shadow' : 'No shadow'} · ${o.blocksPlacement ? 'blocks modules' : 'modules may span it'} · ${o.provenance?.source ?? 'manual'}`,
+                ]}
+                onClose={() => onPick(null)}
+                actions={[
+                  { label: 'Rotate 90°', onClick: () => runOp(obstructionRotate, { id: o.id, deltaDeg: 90 }) },
+                  {
+                    label: casts ? 'Stop casting' : 'Cast shadow',
+                    onClick: () => runOp(obstructionSetCastsShadow, { id: o.id, castsShadow: !casts }),
+                  },
+                  {
+                    label: 'Remove',
+                    danger: true,
+                    onClick: () => {
+                      runOp(obstructionRemove, { id: o.id });
+                      onPick(null);
+                    },
+                  },
+                ]}
+              />
+            )}
+          </group>
+        );
+      })}
 
       {/* panels — instanced: draw calls no longer scale with system size */}
       {spec && (
@@ -1551,8 +1701,8 @@ function SceneContent({
         );
       })}
 
-      {/* wall inverters */}
-      {project.inverterPlacements.filter((ip) => inScope(ip.roofId)).map((ip) => {
+      {/* wall inverters — pickable */}
+      {project.inverterPlacements.filter((ip) => inScope(ip.roofId)).map((ip, idx) => {
         const roof = project.roofs.find((r) => r.id === ip.roofId);
         if (!roof) return null;
         const a = roof.polygon[ip.edgeIndex];
@@ -1560,8 +1710,47 @@ function SceneContent({
         const px = a.x + (b.x - a.x) * ip.t;
         const py = a.y + (b.y - a.y) * ip.t;
         const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
+        const picked = pick?.kind === 'inverter' && pick.id === ip.id;
+        const hovered = !picked && hoverPick?.kind === 'inverter' && hoverPick.id === ip.id;
+        const inv = project.components.inverter;
         return (
-          <group key={ip.id} position={[px, ip.heightM, -py]} rotation={[0, -wallAng, 0]}>
+          <group
+            key={ip.id}
+            position={[px, ip.heightM, -py]}
+            rotation={[0, -wallAng, 0]}
+            onClick={(e) => {
+              if (e.delta > 4) return;
+              e.stopPropagation();
+              onPick({ kind: 'inverter', id: ip.id });
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              onHoverPick({ kind: 'inverter', id: ip.id });
+            }}
+            onPointerOut={() => onHoverPick(null)}
+          >
+            {(picked || hovered) && <PickHalo center={[0, 0, 0]} size={[0.68, 0.86, 0.4]} picked={picked} />}
+            {picked && (
+              <EntityLabel
+                position={[0, 0.75, 0]}
+                title={`Inverter ${idx + 1}`}
+                lines={[
+                  inv ? `${inv.brand} ${inv.model} · ${inv.acKw} kW` : 'No inverter selected',
+                  `${fmtLen(ip.heightM, 1)} up the wall · strings route here`,
+                ]}
+                onClose={() => onPick(null)}
+                actions={[
+                  {
+                    label: 'Remove',
+                    danger: true,
+                    onClick: () => {
+                      runOp(inverterRemove, { id: ip.id });
+                      onPick(null);
+                    },
+                  },
+                ]}
+              />
+            )}
             <mesh userData={{ shadowCaster: false }}>
               <boxGeometry args={[0.48, 0.66, 0.2]} />
               <meshStandardMaterial color="#d64545" roughness={0.45} metalness={0.2} />
@@ -1619,11 +1808,14 @@ function RoofMesh({
   allRoofs,
   eaveProj,
   photoreal,
+  outline,
 }: {
   roof: Project['roofs'][number];
   allRoofs: Project['roofs'];
   eaveProj?: number;
   photoreal: boolean;
+  /** pick/hover colour for the deck outline; undefined = the quiet default */
+  outline?: string;
 }) {
   const geom = useMemo(
     () => buildRoofSolidGeometry(roof, eaveProj),
@@ -1678,8 +1870,8 @@ function RoofMesh({
           side={THREE.DoubleSide}
         />
       </mesh>
-      <lineLoop geometry={topRing}>
-        <lineBasicMaterial color="#8f8a82" />
+      <lineLoop geometry={topRing} raycast={() => null}>
+        <lineBasicMaterial color={outline ?? '#8f8a82'} toneMapped={!outline} />
       </lineLoop>
       {parapetGeoms.map((g, i) => (
         <mesh key={i} geometry={g} castShadow receiveShadow userData={{ shadowCaster: true }}>
