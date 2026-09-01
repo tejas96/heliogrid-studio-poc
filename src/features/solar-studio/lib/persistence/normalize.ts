@@ -16,6 +16,8 @@ import type {
 import { isValidSiteWeather } from '../pvgis';
 import { deriveSldDefaults, diffSldOverrides } from '../sld';
 import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
+import { makeSiteFrame } from '../site/frame';
+import type { SiteFrame } from '../site/types';
 
 /**
  * Validate persisted weather before it can drive energy numbers. A corrupt /
@@ -125,6 +127,49 @@ function normalizePricing(p: Project): PricingSettings {
   } satisfies Exhaustive<PricingSettings>;
 }
 
+/**
+ * Additive migration: projects saved before lib/site existed get a frame built
+ * from their confirmed location, seeded with their calibration. Geometry is NOT
+ * touched (spec decision A8). A stored frame whose origin disagrees with the
+ * location is rebuilt — the location is authoritative.
+ */
+function normalizeSiteFrame(p: {
+  location?: { latLng?: { lat?: unknown; lng?: unknown } } | null;
+  calibration?: { scaleFactor?: unknown; northOffsetDeg?: unknown } | null;
+  siteFrame?: unknown;
+}): SiteFrame | null {
+  const ll = p.location?.latLng;
+  if (typeof ll?.lat !== 'number' || typeof ll?.lng !== 'number') return null;
+  if (!Number.isFinite(ll.lat) || !Number.isFinite(ll.lng)) return null;
+
+  const scaleFactor =
+    typeof p.calibration?.scaleFactor === 'number' &&
+    Number.isFinite(p.calibration.scaleFactor) &&
+    p.calibration.scaleFactor > 0
+      ? p.calibration.scaleFactor
+      : 1;
+  const northOffsetDeg =
+    typeof p.calibration?.northOffsetDeg === 'number' &&
+    Number.isFinite(p.calibration.northOffsetDeg)
+      ? p.calibration.northOffsetDeg
+      : 0;
+
+  const stored = p.siteFrame as SiteFrame | undefined;
+  if (
+    stored &&
+    typeof stored.origin?.lat === 'number' &&
+    typeof stored.origin?.lng === 'number' &&
+    stored.origin.lat === ll.lat &&
+    stored.origin.lng === ll.lng &&
+    typeof stored.utmZone === 'number' &&
+    typeof stored.northOffsetDeg === 'number' &&
+    typeof stored.scaleFactor === 'number'
+  ) {
+    return stored;
+  }
+  return makeSiteFrame({ lat: ll.lat, lng: ll.lng }, { scaleFactor, northOffsetDeg });
+}
+
 export function normalizeProject(p: Project): Project {
   return {
     ...p,
@@ -178,6 +223,7 @@ export function normalizeProject(p: Project): Project {
           : 0,
       reference: p.calibration?.reference ?? null,
     } satisfies Exhaustive<Calibration>,
+    siteFrame: normalizeSiteFrame(p),
     segments: Array.isArray(p.segments)
       ? p.segments.filter(isValidSegment).map(sanitizeLegPlan)
       : [],

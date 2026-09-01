@@ -17,6 +17,7 @@ import { useActiveProject, useProjectPatch } from '../store/store';
 import { Seg } from '../components/ui';
 import { INDIAN_STATES, discomsForState, tariffFor } from '../data/discoms';
 import { loadGoogleMaps } from '../lib/maps';
+import { makeSiteFrame } from '../lib/site/frame';
 import { latLngNear, mockIrradiance } from '../lib/solar';
 import { fetchBuildingInsights } from '../lib/solarApi';
 import { fetchWeather } from '../lib/weatherApi';
@@ -428,6 +429,7 @@ function LocationSection() {
           derived: { solarAccessFp: null, sldOverrides: null, sldIntroSeen: false, healthSnapshot: null },
           // new location = new imagery — the old imagery calibration is void
           calibration: { scaleFactor: 1, northOffsetDeg: 0, reference: null },
+          siteFrame: null,
           wizardStep: 1,
         }
       : {};
@@ -444,6 +446,10 @@ function LocationSection() {
           peakSunHours: irr,
           dataSource: 'Built-in irradiance model (latitude fit, ±10%) — verify with site data',
         },
+        siteFrame: makeSiteFrame({ lat, lng }, {
+          scaleFactor: moved ? 1 : project.calibration.scaleFactor,
+          northOffsetDeg: moved ? 0 : project.calibration.northOffsetDeg,
+        }),
       },
       moved,
     );

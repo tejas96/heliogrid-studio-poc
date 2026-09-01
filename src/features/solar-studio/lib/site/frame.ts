@@ -119,3 +119,28 @@ export function fromUtm(frame: SiteFrame, p: { e: number; n: number }): XY {
   const ll = utmToLatLng(p.e, p.n, frame.utmZone, frame.utmNorth);
   return toEN(frame, ll);
 }
+
+/**
+ * The frame for a project, or null when no location is confirmed. The single
+ * accessor every consumer uses — never read `project.siteFrame` directly, so
+ * the location stays authoritative if the two ever drift.
+ */
+export function frameFor(project: {
+  location: { latLng: LatLng } | null;
+  calibration: { scaleFactor: number; northOffsetDeg: number };
+  siteFrame: SiteFrame | null;
+}): SiteFrame | null {
+  if (!project.location) return null;
+  const f = project.siteFrame;
+  if (
+    f &&
+    f.origin.lat === project.location.latLng.lat &&
+    f.origin.lng === project.location.latLng.lng
+  ) {
+    return f;
+  }
+  return makeSiteFrame(project.location.latLng, {
+    scaleFactor: project.calibration.scaleFactor,
+    northOffsetDeg: project.calibration.northOffsetDeg,
+  });
+}
