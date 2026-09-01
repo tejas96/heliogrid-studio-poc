@@ -21,6 +21,9 @@ import type { OpPreview } from '../lib/ops/run';
 import { inverterRemove } from '../lib/ops/electrical-ops';
 import { segmentDelete } from '../lib/ops/layout-ops';
 import { batteryRemove } from '../lib/ops/battery-ops';
+import { TableGizmo, WallGizmo } from './Gizmos';
+import { wallOutward } from '../lib/battery';
+import type { PanelInstance } from './PanelsInstanced';
 
 /** the first selected module of a table, so "Edit table" opens on the module the user picked */
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
@@ -596,6 +599,9 @@ export function Scene3D({
           maxDistance={600}
           maxPolarAngle={Math.PI / 2.05}
           dollyToCursor
+          // one wheel notch used to swallow a third of the distance; a 100 m
+          // site went from overview to inside-the-wall in four notches
+          dollySpeed={0.35}
           smoothTime={0.2}
           draggingSmoothTime={0.06}
           azimuthRotateSpeed={heatmap ? 0 : 1}
@@ -1684,6 +1690,47 @@ function SceneContent({
           );
         })()}
 
+      {/* gizmos — direct manipulation of the picked thing through the ops kernel */}
+      {!meshMode &&
+        spec &&
+        pick?.kind === 'table' &&
+        (() => {
+          const seg = project.segments.find((s) => s.id === pick.id);
+          const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
+          if (!seg || !roof) return null;
+          return (
+            <TableGizmo
+              project={project}
+              seg={seg}
+              roof={roof}
+              spec={spec}
+              runOp={runOp}
+              ghostItemsFor={(next, segId) =>
+                next.panels
+                  .filter((p) => p.segmentId === segId && p.enabled)
+                  .map((p): PanelInstance => {
+                    const r = next.roofs.find((x) => x.id === p.roofId);
+                    const pose = panelPose(next, p, spec, r, surfAt(p.roofId, p.center));
+                    return {
+                      id: p.id,
+                      position: pose.position,
+                      yawRad: pose.yawRad,
+                      tiltRad: pose.tiltRad,
+                      w: pose.w,
+                      d: pose.d,
+                      flush: pose.flush,
+                      legs: pose.structured ? false : undefined,
+                      access: 1,
+                    };
+                  })
+              }
+            />
+          );
+        })()}
+      {!meshMode && pick && (pick.kind === 'inverter' || pick.kind === 'battery') && (
+        <WallGizmo project={project} kind={pick.kind} id={pick.id} runOp={runOp} />
+      )}
+
       {/* walkways */}
       {project.walkways.filter((w) => inScope(w.roofId)).map((w) => {
         const roof = project.roofs.find((r) => r.id === w.roofId);
@@ -1761,10 +1808,12 @@ function SceneContent({
         const picked = pick?.kind === 'inverter' && pick.id === ip.id;
         const hovered = !picked && hoverPick?.kind === 'inverter' && hoverPick.id === ip.id;
         const inv = project.components.inverter;
+        // hangs on the OUTSIDE face of the wall, not straddling the wall line
+        const out = wallOutward(roof, ip.edgeIndex);
         return (
           <group
             key={ip.id}
-            position={[px, ip.heightM, -py]}
+            position={[px + out.x * 0.12, ip.heightM, -(py + out.y * 0.12)]}
             rotation={[0, -wallAng, 0]}
             onClick={(e) => {
               if (e.delta > 4) return;
@@ -1843,10 +1892,13 @@ function SceneContent({
         const picked = pick?.kind === 'battery' && pick.id === bp.id;
         const hovered = !picked && hoverPick?.kind === 'battery' && hoverPick.id === bp.id;
         const coupling = project.components.batteryCoupling ?? 'dc_hybrid';
+        // stands against the OUTSIDE face of the wall
+        const out = wallOutward(roof, bp.edgeIndex);
+        const off = d / 2 + 0.03;
         return (
           <group
             key={bp.id}
-            position={[px, bp.heightM + h / 2, -py]}
+            position={[px + out.x * off, bp.heightM + h / 2, -(py + out.y * off)]}
             rotation={[0, -wallAng, 0]}
             onClick={(e) => {
               if (e.delta > 4) return;

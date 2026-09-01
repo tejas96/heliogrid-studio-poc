@@ -3,6 +3,31 @@ import type { BatteryPlacement, Project, XY } from '../types';
 import { inverterWorldPos } from './routing';
 import { resolveRules } from '../data/rules/india';
 
+/**
+ * Unit vector pointing OUT of the building from roof edge `edgeIndex` (plan
+ * frame). Wall-mounted units hang on the OUTSIDE face, so the 3D box is pushed
+ * half its depth along this vector instead of straddling the wall line.
+ */
+export function wallOutward(roof: { polygon: XY[] }, edgeIndex: number): XY {
+  const n = roof.polygon.length;
+  const a = roof.polygon[edgeIndex];
+  const b = roof.polygon[(edgeIndex + 1) % n];
+  if (!a || !b) return { x: 0, y: 0 };
+  const ex = b.x - a.x;
+  const ey = b.y - a.y;
+  const len = Math.hypot(ex, ey) || 1;
+  let nx = ey / len;
+  let ny = -ex / len;
+  const c = roof.polygon.reduce((s, p) => ({ x: s.x + p.x / n, y: s.y + p.y / n }), { x: 0, y: 0 });
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  if ((mx - c.x) * nx + (my - c.y) * ny < 0) {
+    nx = -nx;
+    ny = -ny;
+  }
+  return { x: nx, y: ny };
+}
+
 /** Plan position of a cabinet: the point on its wall edge (same frame as inverters). */
 export function batteryWorldPos(project: Project, bp: BatteryPlacement): XY | null {
   const roof = project.roofs.find((r) => r.id === bp.roofId);
