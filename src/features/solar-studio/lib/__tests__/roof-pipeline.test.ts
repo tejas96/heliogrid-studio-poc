@@ -57,11 +57,20 @@ describe('coordinate alignment gate (≤ 0.5 m)', () => {
 
   it('UTM distances survive the utm→latLng→frame chain within 0.1 m over 50 m', async () => {
     // This gate previously ACCEPTED a +0.63% north stretch, with a comment
-    // claiming "the north-axis scale is shared by the imagery mapping itself".
-    // It is not: the canvas uses the Web Mercator ground resolution, which is
-    // the SAME in both axes, while makeProjector used the equatorial radius for
-    // latitude only. That is why AI roofs and hand-traced roofs disagreed
-    // north-south but not east-west. The frame (lib/site/frame.ts) removes it.
+    // saying "the north-axis scale is shared by the imagery mapping itself".
+    // That comment was RIGHT about the imagery, and the correction that first
+    // replaced it was wrong: the canvas (metersPerStaticMap in lib/maps.ts,
+    // 156543.03392 = 2π·6378137/256) and makeProjector (EARTH_R = 6378137)
+    // were the SAME spherical model. Web Mercator is conformal on the sphere,
+    // so it is isotropic in MAP units — which is anisotropic in ground metres
+    // on the ellipsoid by exactly the projector's factors: a/M = 1.005720
+    // north-south and a/N = 0.999662 east-west at Pune. The two legacy rulers
+    // therefore AGREED with each other (~1 cm over 50 m); what was wrong was
+    // the ABSOLUTE scale — both over-read true ground north-south, and the
+    // BOM prices rail and cable by the metre. The frame (lib/site/frame.ts)
+    // makes THIS path exact; the imagery path stays spherical until slice 2,
+    // so detected and traced geometry now differ by a/M − 1 = 0.572%
+    // north-south — the known gap pinned by imagery-scale-parity.test.ts.
     //
     // One systematic remains, and is correct: the UTM point scale factor at
     // Pune (~113 km west of the 75°E central meridian) makes 50 m of UTM
@@ -144,6 +153,15 @@ describe('detectRoofArtifact — dense fixture (building present)', () => {
     //   - any OTHER drift: the vectorizer (traceBoundary / simplifyDP /
     //     orthogonalizeGated) changed on purpose. Re-measure and re-baseline this
     //     golden value deliberately.
+    //
+    // What the value MEANS (corrected in the final review): 17.2439 m is TRUE
+    // ground metres. The canvas this roof is drawn over is still spherical
+    // (metersPerStaticMap), so a hand trace of the same edge reads
+    // 17.2439 × 1.005720 ≈ 17.34 m today — the same figure a reverted projector
+    // would produce here. The legacy canvas and projector agreed with each
+    // other; this branch made the detection path exact and left the imagery,
+    // so that 0.572% is a known gap (imagery-scale-parity.test.ts), closed by
+    // slice 2 correcting the imagery scale — never by moving this golden value.
     const artifact = await run();
     const validated = validateArtifact(artifact, DENSE_PIN);
     expect(validated.ok).toBe(true);

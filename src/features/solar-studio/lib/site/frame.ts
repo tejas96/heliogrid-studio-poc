@@ -1,7 +1,14 @@
 // ─── The ruler: lat/lng <-> local metres, geodetically exact at site scale ──
-// Replaces lib/geo.ts `makeProjector`, which used the EQUATORIAL radius for
-// latitude and so stretched every lat/lng-derived shape +0.57% north-south.
-// See lib/__tests__/site-frame.test.ts for the regression gate.
+// Replaces lib/geo.ts `makeProjector`, which used the EQUATORIAL radius
+// (6378137 m) and so stretched every lat/lng-derived shape +0.57% north-south
+// against true ground. The canvas ruler, metersPerStaticMap in lib/maps.ts
+// (156543.03392 = 2π·6378137/256), is the SAME spherical model, so the two
+// legacy rulers agreed with each other and were both wrong: a/M = 1.005720
+// north-south, a/N = 0.999662 east-west at Pune. This frame makes the geodetic
+// path exact and leaves the imagery spherical (slice 2 owns metres-per-pixel),
+// so until then detected and traced geometry disagree by a/M − 1 = 0.572%
+// north-south. lib/__tests__/site-frame.test.ts is the regression gate;
+// lib/__tests__/imagery-scale-parity.test.ts pins the size of that gap.
 //
 // Model: first-order local ENU using the true radii of curvature at the origin
 // latitude. Round-trip error is under 1 mm at 300 m and under 1 cm at 1 km,

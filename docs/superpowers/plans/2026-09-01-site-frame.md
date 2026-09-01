@@ -3,14 +3,30 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `lib/site/frame.ts` the single, geodetically correct source of every
-lat/lng ↔ local-metre conversion in the studio, removing the 0.57% north–south stretch
-that currently affects every AI-detected shape.
+lat/lng ↔ local-metre conversion in the studio. Every lat/lng-derived shape (AI-detected
+roofs, Google Solar segments) was 0.57% too long north–south **against true ground**
+because `makeProjector` used the equatorial radius.
+
+> **Corrected record (final review).** This plan originally said the stretch "affects
+> every AI-detected shape" while hand-traced shapes were correct, so the two disagreed.
+> That was false. The canvas ruler `metersPerStaticMap` (lib/maps.ts) is the *same*
+> spherical model — 156543.03392 = 2π·6378137/256 — so hand-traced roofs carried the
+> identical stretch and the two legacy paths *agreed* with each other (~1 cm over 50 m).
+> Verified numerically: canvas/true = 1.005720 north–south and 0.999662 east–west at
+> Pune, identical to `makeProjector`'s a/M and a/N. This slice therefore does not close a
+> disagreement; it makes the geodetic path exact and leaves the imagery path spherical,
+> which **opens** a known a/M − 1 = 0.572% north–south gap between detected and traced
+> geometry until slice 2 corrects the imagery scale (spec §3.3 blocking precondition;
+> pinned by `lib/__tests__/imagery-scale-parity.test.ts`). The maths stays: stored EN must
+> be true ground metres because the BOM prices steel by the metre.
 
 **Architecture:** A new `lib/site/` module holds a `SiteFrame` — a local ENU frame on the
 WGS84 ellipsoid anchored at the project pin, plus UTM interchange for files that leave
 the app. `SiteFrame` is stored on `Project`, defaulted for existing saved projects
 without touching their geometry. `makeProjector` in `lib/geo.ts` is deleted and its three
-callers move to the frame.
+callers move to the frame. The imagery scale — `metersPerStaticMap`, consumed by
+`SatCanvas.tsx:99`, `Scene3D.tsx:1161` and `gemini-client.ts:54` — is deliberately **not**
+touched here; slice 2 owns metres-per-pixel.
 
 **Tech Stack:** TypeScript, React 19, Next.js, three.js, Vitest (node environment, jsdom
 opt-in per file), Zustand-style store in `store/store.tsx`, localStorage + IndexedDB
@@ -356,9 +372,17 @@ Create `src/features/solar-studio/lib/__tests__/site-frame.test.ts`:
 // (6378137 m), giving 111,320 m per degree. The true meridian arc at Pune
 // (18.52°N) is 110,686 m. Every shape that entered the app as lat/lng — every
 // AI-detected roof, every Google Solar segment — was therefore stretched
-// +0.57% north-south: 23 cm on a 40 m shed, 1.1 m on a 200 m factory roof.
-// Hand-traced roofs came from the canvas, whose Web Mercator resolution is
-// isotropic and correct, so the two disagreed with each other.
+// +0.57% north-south against true ground: 23 cm on a 40 m shed, 1.1 m on a
+// 200 m factory roof.
+//
+// Hand-traced roofs came from the canvas, whose ruler (metersPerStaticMap,
+// 156543.03392 = 2π·6378137/256) is the SAME spherical model, so the two legacy
+// rulers AGREED with each other and were both wrong against the ground (a/M =
+// 1.005720 north-south, a/N = 0.999662 east-west at Pune). This frame makes the
+// geodetic path exact and leaves the imagery spherical, so they now disagree by
+// 0.572% north-south until slice 2 — imagery-scale-parity.test.ts pins that gap.
+// [Corrected in the final review: the header first said the canvas was
+// "isotropic and correct, so the two disagreed" — false.]
 //
 // roof-pipeline.test.ts previously encoded the stretch as expected behaviour
 // ("north: spherical projector vs ellipsoid meridian → 50.31 m"). That
@@ -853,11 +877,15 @@ Create `src/features/solar-studio/lib/__tests__/site-migration.test.ts`:
 
 ```ts
 // ─── Saved projects gain a site frame WITHOUT their geometry moving ─────────
-// Spec decision A8. Stored local metres came from two sources: hand-traced (from
-// the canvas, already true metres) and AI-detected (through the buggy projector,
-// stretched 0.57%). There is no single correct inverse, so silently moving a
-// user's traced roof would be worse than leaving it. The frame is added; the
-// numbers are untouched. Re-running detection is what corrects an old design.
+// Spec decision A8. Stored local metres are spherical-consistent throughout:
+// hand-traced roofs came through the canvas ruler (metersPerStaticMap) and
+// AI-detected roofs through makeProjector, and both used the same spherical
+// earth radius, so they AGREED with each other to ~1 cm over 50 m. Re-projecting
+// stored EN onto the exact frame would desynchronise it from the imagery it was
+// traced on (still spherical until slice 2), and silently moving a user's traced
+// roof is worse than leaving it. The frame is added; the numbers are untouched.
+// [Corrected in the final review: this header first said "hand-traced = already
+// true metres, AI = stretched" — false; both carried the same stretch.]
 import { describe, expect, it } from 'vitest';
 import { normalizeProject } from '../persistence/normalize';
 import { frameFor, makeSiteFrame } from '../site/frame';
@@ -1147,12 +1175,27 @@ unchanged (spec decision A8) — there is no correct inverse for the old stretch
 and re-running detection is what fixes an old design."
 ```
 
+> **Correction (final review):** committed as `947bdb1`. A8 stands, but for a better
+> reason than "no correct inverse": stored EN is spherical-consistent throughout — traced
+> and detected alike — and re-projecting it would desynchronise it from the
+> still-spherical imagery. Re-running detection puts a roof on true ground metres, which
+> until slice 2 means 0.572% short north–south of the imagery it is drawn over.
+
 ---
 
 ### Task 5: Switch roof detection to the frame — the visible correction
 
-Where the 0.57% actually disappears. The existing gate test currently **encodes** the
-bug; this task corrects that expectation, and the corrected numbers are the proof.
+Where the 0.57% actually disappears from the detection path. The existing gate test
+currently **encodes** the bug; this task corrects that expectation, and the corrected
+numbers are the proof.
+
+> **Corrected record (final review).** The rationale below and the commit message in
+> Step 5 originally claimed the canvas was "identical in both axes" so AI and traced roofs
+> disagreed. False — see the Goal. The old gate comment ("the north-axis scale is shared
+> by the imagery mapping itself") was *right* about the imagery: both rulers were the
+> same spherical model. Making this path exact is still correct (stored EN must be true
+> ground metres), but it opens the 0.572% gap against the still-spherical imagery that
+> slice 2 must close.
 
 **Files:**
 - Modify: `src/features/solar-studio/lib/roof-ai/pipeline.ts:11,65`
@@ -1188,11 +1231,18 @@ with:
 ```ts
   it('UTM distances survive the utm→latLng→frame chain within 0.1 m over 50 m', () => {
     // This gate previously ACCEPTED a +0.63% north stretch, with a comment
-    // claiming "the north-axis scale is shared by the imagery mapping itself".
-    // It is not: the canvas uses the Web Mercator ground resolution, which is
-    // the SAME in both axes, while makeProjector used the equatorial radius for
-    // latitude only. That is why AI roofs and hand-traced roofs disagreed
-    // north-south but not east-west. The frame (lib/site/frame.ts) removes it.
+    // saying "the north-axis scale is shared by the imagery mapping itself".
+    // That comment was RIGHT about the imagery: the canvas (metersPerStaticMap,
+    // 156543.03392 = 2π·6378137/256) and makeProjector (EARTH_R = 6378137) were
+    // the SAME spherical model — isotropic in map units, anisotropic in ground
+    // metres by a/M = 1.005720 north-south and a/N = 0.999662 east-west at
+    // Pune — so the two legacy rulers agreed with each other. What was wrong
+    // was the ABSOLUTE scale; the BOM prices rail and cable by the metre. The
+    // frame (lib/site/frame.ts) makes THIS path exact; the imagery stays
+    // spherical until slice 2, so detected and traced geometry now differ by
+    // 0.572% north-south — pinned by imagery-scale-parity.test.ts.
+    // [Corrected in the final review; the first version of this comment said
+    // the canvas was "the SAME in both axes" in ground metres — false.]
     //
     // One systematic remains, and is correct: the UTM point scale factor at
     // Pune (~113 km west of the 75°E central meridian) makes 50 m of UTM
@@ -1271,9 +1321,17 @@ Expected: PASS. The north figure should now read close to 50.00.
 **Do not thread the frame through `detect-client.ts` in this slice.** The worker payload
 in `detect-client.ts` (`worker.postMessage({ maskBuffer, dsmBuffer, pin, ... })`) sends
 only the pin, and `makeSiteFrame(pin)` inside the pipeline produces an identical frame
-whenever `northOffsetDeg` is 0 and `scaleFactor` is unused by `toEN` — which is every
-project today. The optional `frame` field exists so slice 5 can pass a rotated frame from
-an imported underlay. Adding the plumbing now would be untestable churn.
+whenever `northOffsetDeg` is 0 (`scaleFactor` is unused by `toEN`). The optional `frame`
+field exists so a later slice can pass a rotated frame. Adding the plumbing now would be
+untestable churn.
+
+> **Correction (final review):** this paragraph originally ended "— which is every
+> project today". Wrong: `northOffsetDeg` is user-settable *today* through
+> `CalibrateDialog`, so a project with a non-zero offset gets roofs detected at 0°
+> rotation while shading, the scene and the north badge use the offset. This is
+> pre-existing (`makeProjector` never applied the offset either), not a regression; the
+> deferral stands, and `pipeline.ts`'s comment on `DetectInput.frame` now says so plainly.
+> Wiring the frame through `detect-client` and the worker payload is what closes it.
 
 - [ ] **Step 5: Run both gates and commit**
 
@@ -1289,6 +1347,12 @@ that the imagery shared the same scale. It does not — the canvas uses the Web
 Mercator ground resolution, identical in both axes. A 50 m north-south span now
 measures 50.00 m instead of 50.31 m."
 ```
+
+> **Correction (final review):** this message was committed as `a1c41c9` and its second
+> sentence is false — the imagery *does* share the same spherical scale: identical in both
+> axes in map units, which is the same anisotropic error in ground metres that
+> `makeProjector` had. The 50.00 m figure is right; the reason given for it is not. See
+> the Goal.
 
 ---
 
@@ -1385,8 +1449,11 @@ stale HMR after many edits produces blank studio routes.
    before this branch, with the same areas.
 3. Create a new project, confirm a Pune location, run **Detect roofs (AI)** in Step 2.
    Confirm the ghost outlines sit on the building in the satellite image.
-4. Trace one roof edge by hand alongside a detected edge and confirm they agree — this
-   is the disagreement the slice exists to remove.
+4. Trace one roof edge by hand alongside a detected edge. **They will not agree exactly**
+   *(corrected in the final review)*: the detected edge is true ground metres and the
+   canvas is still spherical, so they differ by 0.572% north–south — 5.7 cm on a 10 m
+   edge, under one screen pixel. Agreement by eye proves nothing here either way; the
+   numeric pin is `lib/__tests__/imagery-scale-parity.test.ts`.
 5. Check the console for errors.
 
 - [ ] **Step 7: Commit**
@@ -1407,6 +1474,14 @@ site frame is now the only one, and a guard test fails if a second returns."
 - `grep -rn "makeProjector" src/` returns nothing.
 - `roof-pipeline.test.ts` asserts a 50 m north–south span measures 49.95–50.05 m.
 - An existing saved project opens with its geometry unchanged.
-- A freshly detected roof and a hand-traced roof of the same edge agree in the browser.
+- ~~A freshly detected roof and a hand-traced roof of the same edge agree in the browser.~~
+  **Restated (final review):** by construction they no longer do. A freshly detected roof
+  is true ground metres; a hand-traced roof comes off the still-spherical canvas, so the
+  two differ by a known a/M − 1 = 0.572% north–south (1.005720 at Pune). On a 10 m edge
+  that is 5.7 cm — under one screen pixel — so it cannot be verified by eye either way.
+  The gap is pinned numerically by `lib/__tests__/imagery-scale-parity.test.ts` and is
+  closed by slice 2 correcting the imagery scale (spec §3.3 blocking precondition).
 
-Slice 2 (imagery and the mosaic) is the next plan.
+Slice 2 (imagery and the mosaic) is the next plan, and it is **blocked** on that
+precondition: no `ImageryLayer` may be persisted before the imagery ground scale is
+anisotropic or explicitly reprojected.

@@ -3,9 +3,19 @@
 // (6378137 m), giving 111,320 m per degree. The true meridian arc at Pune
 // (18.52°N) is 110,686 m. Every shape that entered the app as lat/lng — every
 // AI-detected roof, every Google Solar segment — was therefore stretched
-// +0.57% north-south: 23 cm on a 40 m shed, 1.1 m on a 200 m factory roof.
-// Hand-traced roofs came from the canvas, whose Web Mercator resolution is
-// isotropic and correct, so the two disagreed with each other.
+// +0.57% north-south against true ground: 23 cm on a 40 m shed, 1.1 m on a
+// 200 m factory roof.
+//
+// Hand-traced roofs came from the canvas, whose ruler (metersPerStaticMap,
+// 156543.03392 = 2π·6378137/256) is the SAME spherical model: Web Mercator is
+// isotropic in map units, which is anisotropic in ground metres by exactly the
+// projector's factors — a/M = 1.005720 north-south, a/N = 0.999662 east-west
+// at Pune. So the two legacy rulers AGREED with each other and were both wrong
+// against the ground. (An earlier version of this header said the canvas was
+// "isotropic and correct, so the two disagreed"; that was false.) This frame
+// makes the geodetic path exact and leaves the imagery spherical, so they now
+// disagree by a/M − 1 = 0.572% north-south until slice 2 corrects the imagery
+// scale — imagery-scale-parity.test.ts pins that gap.
 //
 // roof-pipeline.test.ts previously encoded the stretch as expected behaviour
 // ("north: spherical projector vs ellipsoid meridian → 50.31 m"). That

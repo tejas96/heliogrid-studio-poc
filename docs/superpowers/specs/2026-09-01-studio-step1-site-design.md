@@ -31,7 +31,7 @@ bill — is untouched and folds into a drawer.
 
 | # | Defect | Location | Effect |
 |---|---|---|---|
-| D1 | `makeProjector` uses the **equatorial** radius for latitude: `mPerDegLat = π/180 × 6378137` = 111,320 m/°. The true meridional degree at 18.5°N is **110,684 m**. | [lib/geo.ts:8](../../../src/features/solar-studio/lib/geo.ts) | Every lat/lng→metre conversion is stretched **0.57% north–south**. AI-detected roofs disagree with hand-traced ones: 23 cm on a 40 m shed, **1.1 m on a 200 m roof**. |
+| D1 | `makeProjector` uses the **equatorial** radius for latitude: `mPerDegLat = π/180 × 6378137` = 111,320 m/°. The true meridional degree at 18.5°N is **110,684 m**. The canvas ruler `metersPerStaticMap` is the **same spherical model** — its constant 156543.03392 = 2π·6378137/256 — so the two legacy rulers agreed with each other. | [lib/geo.ts:8](../../../src/features/solar-studio/lib/geo.ts), [lib/maps.ts:43](../../../src/features/solar-studio/lib/maps.ts) | Every lat/lng→metre conversion is stretched **0.57% north–south against true ground** (canvas/true = a/M = 1.005720 at Pune; east–west a/N = 0.999662): 23 cm on a 40 m shed, **1.1 m on a 200 m roof**. Hand-traced roofs carry the *same* stretch, so AI and traced geometry did **not** disagree — both were wrong together, and the BOM priced rail and cable off stretched metres. *Corrected in the final review of slice 1: the earlier claim here that AI roofs "disagree with hand-traced ones" was false. Slice 1 makes the geodetic path exact and leaves the imagery spherical, so the two now disagree by a/M − 1 = **0.572 %** north–south until slice 2 corrects the imagery scale (§3.3).* |
 | D2 | The Google Solar `dataLayers` call returns **DSM + building mask + RGB aerial**. The RGB URL is relayed to the client and never read. | [route.ts:89](../../../src/app/api/solar/data-layers/route.ts), [detect-client.ts:21](../../../src/features/solar-studio/lib/roof-ai/detect-client.ts) | We draw on a 0.14 m/px Static Map instead of the 0.1 m/px georeferenced aerial we already paid for. |
 | D3 | The canvas world is **one 640 px Static Map tile at zoom 20** = 90.6 m across at Pune. | [SatCanvas.tsx:39,99](../../../src/features/solar-studio/components/SatCanvas.tsx) | A C&I roof wider than ~90 m runs off the imagery. A 1.13 m panel is **8 px** — a 0.23 m parapet is 1.6 px. |
 | D4 | Confirming a location more than **25 m** from the previous one wipes roofs, obstructions, panels, segments, keepouts, walkways, rails, arresters, inverters, strings, captures, SLD params and BOM overrides. | [Step1Setup.tsx](../../../src/features/solar-studio/screens/Step1Setup.tsx) `confirmLocation` | One map nudge destroys a full design. It is undoable, but it is still a cliff. |
@@ -52,7 +52,7 @@ bill — is untouched and folds into a drawer.
 | A5 | Build the `lib/site/` module **first**, then the screen on top of it. | The production port lifts one module rather than re-deriving geometry. |
 | A6 | **DXF in v1; DWG deferred.** The UI tells the user to "Save As DXF" in AutoCAD. | DWG is a closed format. A licensed converter (ODA) or a patchy GPL one (LibreDWG) is not worth it against a 5-second user step. Reversible later. |
 | A7 | Surround solids are a **separate layer**, not obstructions. | Obstructions sit on the roof and block panel placement. Surround solids sit off-site and only cast shade. Different rules, different lifecycle. |
-| A8 | **Migration does not move existing geometry.** | Stored local metres came from two sources (hand-traced = already correct; AI = stretched). There is no single correct inverse. Silently moving a user's traced roof is worse than leaving it. Re-running detection fixes an old design. |
+| A8 | **Migration does not move existing geometry.** | Stored local metres are **spherical-consistent throughout**: hand-traced (canvas, `metersPerStaticMap`) and AI-detected (`makeProjector`) came through the same spherical earth radius and agreed with each other to ~1 cm over 50 m. Re-projecting stored EN onto the exact frame would desynchronise it from the imagery it was traced on, which stays spherical until slice 2 — and silently moving a user's traced roof is worse than leaving it. Re-running detection puts a roof on true ground metres; until slice 2 that roof sits 0.572 % short north–south against the imagery and any traced roof beside it. *Corrected in the final review of slice 1: the earlier rationale "hand-traced = already correct; AI = stretched" was false.* |
 
 ---
 
@@ -169,6 +169,13 @@ export interface ImageryLayer {
 }
 ```
 
+> **Blocking precondition — see §3.3.** `metersPerPixel` as a single scalar is a
+> placeholder that this slice must replace. The ground scale of a Web Mercator source is
+> **anisotropic** on the ellipsoid — north–south `r·M(φ)/a`, east–west `r·N(φ)/a` — and
+> slice 1 opened a 0.572 % north–south gap between the exact site frame and the
+> still-spherical imagery. No `ImageryLayer` may be persisted until §3.3's precondition
+> is resolved.
+
 **Source ladder**, resolved by `resolveImagery(frame, siteRadiusM)`:
 
 1. **`solar-rgb`** — decoded with the existing `lib/roof-ai/geotiff-decode.ts`. Its own
@@ -199,6 +206,38 @@ r(z, φ) = 156543.03392 · cos φ / 2^z        metres per pixel (scale 1)
 
 With `scale=2` the tile returns 1280×1280 px for the same 640-px ground span, so the
 effective resolution is `r/2`.
+
+> ⚠️ **BLOCKING PRECONDITION — added by the final review of slice 1.**
+>
+> The formula above is the **spherical** Web Mercator ground resolution: 156543.03392 =
+> 2π·6378137/256, the same equatorial radius the deleted `makeProjector` used. It is
+> isotropic in *map* units, which is **anisotropic in ground metres** on the WGS84
+> ellipsoid. Persisting it as a single `metersPerPixel` would bake permanently into
+> `ImageryLayer` the exact error slice 1 removed from the frame. Verified numerically at
+> Pune (18.5202 °N), zoom 20, 640 px:
+>
+> | | span | canvas / true |
+> |---|---|---|
+> | canvas assumes, both axes | 90.5981 m | — |
+> | true east–west (`r·N(φ)/a`) | 90.6287 m | **0.999662** = a/N |
+> | true north–south (`r·M(φ)/a`) | 90.0829 m | **1.005720** = a/M |
+>
+> **This is the gap slice 1 opened.** The site frame is now exact while
+> `metersPerStaticMap` — consumed by `SatCanvas.tsx:99`, `Scene3D.tsx:1161` (the 3D
+> ground texture) and `gemini-client.ts:54` — is still spherical, so a hand-traced roof
+> and an AI-detected roof of the same building differ by a/M − 1 = **0.572 %**
+> north–south today (17 cm on a 30 m shed; 5.7 cm on a 10 m edge, under one screen pixel).
+> Before slice 1 the two rulers were the same spherical model and agreed with each other.
+>
+> **Before any `ImageryLayer` is persisted, the imagery layer must either**
+> **(a) carry an anisotropic ground scale** — `metersPerPixelNS = r·M(φ)/a`,
+> `metersPerPixelEW = r·N(φ)/a` — **or (b) explicitly reproject the raster into the site
+> frame.** All three `metersPerStaticMap` consumers move to it in the same change.
+> `lib/__tests__/imagery-scale-parity.test.ts` pins the 1.005720 / 0.999662 ratios as a
+> tripwire: correcting the scale turns both to 1, and that test must be updated in the
+> same change. The worked examples below are unaffected in zoom and grid choice; their
+> "effective m/px" column is the isotropic map-unit figure and must be read with the
+> factors above.
 
 **Zoom selection.** Choose the highest `z ≤ 21` such that the tile grid needed to cover
 `2 × siteRadiusM` is at most **4 × 4**. Floor at `z = 18`. Hard cap **16 tile requests**
@@ -424,9 +463,15 @@ On load, a project with no `siteFrame` gets one built from `location.latLng`, se
 its existing `calibration.scaleFactor` and `northOffsetDeg`. Stored EN values are copied
 through **unchanged**. Only future lat/lng ↔ EN conversions use the corrected maths.
 
-Consequence, stated plainly in the release note: a design whose roofs were AI-detected
-before this change keeps its 0.57% stretch until detection is re-run. Re-running
-detection corrects it.
+Consequence, stated plainly in the release note *(corrected in the final review of
+slice 1)*: a design saved before this change keeps the spherical 0.57 % north–south
+stretch in **all** of its stored geometry — hand-traced and AI-detected alike, since both
+came through the same spherical model (§1 D1) — and stays consistent with the imagery it
+was drawn on. Re-running detection puts that roof on true ground metres, which until
+slice 2 corrects the imagery scale (§3.3) means it will sit 0.572 % short north–south
+against the imagery and against any hand-traced roof beside it. Nothing regresses in
+absolute accuracy; the inconsistency is new, and it is disclosed here rather than
+discovered.
 
 Schema work lives in `lib/persistence/schema.ts` and `normalize.ts`, following the
 existing versioned-normalise pattern.

@@ -1,9 +1,16 @@
 // ─── Saved projects gain a site frame WITHOUT their geometry moving ─────────
-// Spec decision A8. Stored local metres came from two sources: hand-traced (from
-// the canvas, already true metres) and AI-detected (through the buggy projector,
-// stretched 0.57%). There is no single correct inverse, so silently moving a
-// user's traced roof would be worse than leaving it. The frame is added; the
-// numbers are untouched. Re-running detection is what corrects an old design.
+// Spec decision A8. Stored local metres are spherical-consistent throughout:
+// hand-traced roofs came through the canvas ruler (metersPerStaticMap) and
+// AI-detected roofs through makeProjector, and both used the same spherical
+// earth radius, so they AGREED with each other to ~1 cm over 50 m. (An earlier
+// version of this header said "hand-traced = already true metres, AI =
+// stretched"; that was false — both carried the same 0.57% north-south
+// stretch against true ground.) Re-projecting stored EN onto the exact frame
+// would desynchronise it from the imagery it was traced on, which stays
+// spherical until slice 2, and silently moving a user's traced roof is worse
+// than leaving it. The frame is added; the numbers are untouched. Re-running
+// detection puts a roof on true ground metres — 0.572% short north-south of
+// the imagery and of any traced roof beside it, until slice 2.
 import { describe, expect, it } from 'vitest';
 import { normalizeProject } from '../persistence/normalize';
 import { frameFor, makeSiteFrame, toEN } from '../site/frame';
