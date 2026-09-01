@@ -18,6 +18,7 @@ import { deriveSldDefaults, diffSldOverrides } from '../sld';
 import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
 import { makeSiteFrame } from '../site/frame';
 import type { SiteFrame } from '../site/types';
+import { routesInputFp, stringsInputFp } from '../derive/freshness';
 
 /**
  * Validate persisted weather before it can drive energy numbers. A corrupt /
@@ -206,7 +207,7 @@ function normalizeSiteFrame(p: {
 }
 
 export function normalizeProject(p: Project): Project {
-  return {
+  const out: Project = {
     ...p,
     // pricing was added after launch — default it (and repair NaN/out-of-range).
     //
@@ -225,6 +226,8 @@ export function normalizeProject(p: Project): Project {
     // live-derived; only real edits survive as overrides.
     derived: {
       solarAccessFp: typeof p.derived?.solarAccessFp === 'string' ? p.derived.solarAccessFp : null,
+      stringsFp: typeof p.derived?.stringsFp === 'string' ? p.derived.stringsFp : null,
+      routesFp: typeof p.derived?.routesFp === 'string' ? p.derived.routesFp : null,
       sldOverrides:
         p.derived?.sldOverrides ??
         (p.sldParams ? diffSldOverrides(p.sldParams, deriveSldDefaults(p)) : null),
@@ -300,6 +303,18 @@ export function normalizeProject(p: Project): Project {
       },
     })),
   };
+  // One-time upgrade, A8 discipline (never rewrite stored design data on load):
+  // a project saved before the stamps existed keeps its strings/routes and is
+  // stamped CURRENT — the next real edit re-derives. A project that carries the
+  // field, even as null, is left alone: null means "re-derive", which is what
+  // it asked for. `undefined` (absent) is the only case that migrates.
+  if (p.derived?.stringsFp === undefined && out.strings.length > 0) {
+    out.derived.stringsFp = stringsInputFp(out);
+  }
+  if (p.derived?.routesFp === undefined && (out.cableRoutes?.length ?? 0) > 0) {
+    out.derived.routesFp = routesInputFp(out);
+  }
+  return out;
 }
 
 /**

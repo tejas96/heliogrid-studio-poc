@@ -593,6 +593,13 @@ export interface StringDef {
   mpptIndex: number;
   panelIds: string[];
   color: string;
+  /**
+   * The user authored this string by hand. Absent = derived by the planner
+   * (re-derived whenever `stringsInputFp` drifts). A manual string survives
+   * re-derivation: it is pruned of modules that no longer exist or are
+   * disabled, and the planner strings the remaining modules AROUND it.
+   */
+  manual?: true;
 }
 
 // ─── Step 7: Proposal captures ──────────────────────────────────────────────
@@ -889,6 +896,14 @@ export interface DerivedState {
    * (recompute in flight); null = never computed (legacy project / fresh edit).
    */
   solarAccessFp: string | null;
+  /**
+   * lib/derive/freshness `stringsInputFp` of the inputs the persisted
+   * `strings[]` were derived for. Mismatch ⇒ strings are provisional and
+   * `useElectricalSync` re-derives them; null = never derived.
+   */
+  stringsFp: string | null;
+  /** same contract for `cableRoutes[]`, keyed on `routesInputFp`. */
+  routesFp: string | null;
   /**
    * User edits on top of the DERIVED SLD parameters (only the fields the user
    * actually changed — same pattern as bomOverrides over the auto BOM). null =
