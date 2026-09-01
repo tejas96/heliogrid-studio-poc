@@ -107,10 +107,10 @@ import { cascadeDeletePanels } from '../lib/cascade';
 import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
 import { estimateDcCableM, stringSizing, validateSystem, vocAtTemp } from '../lib/stringing';
-import { autoRouteAc, autoRouteStrings, dcCableFromRoutes, routeIssues } from '../lib/routing';
+import { dcCableFromRoutes, routeIssues } from '../lib/routing';
 import { autoDesign } from '../lib/auto-design';
 import { resolveDesignTemps } from '../lib/electrical/temps';
-import { autoStringPlan } from '../lib/electrical/autostring';
+import { resetStringsToAuto } from '../lib/derive/electrical-sync';
 import { applyStructChoice, reconcileBridgedPanels, type StructChoice } from '../lib/structure-edit';
 import {
   buildStructure,
@@ -414,7 +414,6 @@ export function Step6Editor() {
       {
         panels: result.panels,
         segments: result.segments,
-        strings: [],
         designLog: result.decisions,
       },
       true,
@@ -437,7 +436,6 @@ export function Step6Editor() {
         panels: project.panels.map((p) =>
           selectedIds.includes(p.id) ? { ...p, enabled: enable } : p,
         ),
-        strings: [],
       },
       true,
     );
@@ -558,7 +556,6 @@ export function Step6Editor() {
       {
         panels: [...others, ...res.panels],
         segments: [...project.segments, res.segment],
-        strings: [],
       },
       true,
     );
@@ -588,7 +585,6 @@ export function Step6Editor() {
       {
         panels: [...others, ...res.panels],
         segments: project.segments.map((s) => (s.id === seg.id ? res.segment : s)),
-        strings: [],
       },
       true,
     );
@@ -624,7 +620,7 @@ export function Step6Editor() {
     // panels bridging obstructions valid in the same undoable patch
     const panels =
       reconcileBridgedPanels(project, { segments, panels: update.panels }) ?? update.panels;
-    patch({ panels, segments, strings: [] }, true);
+    patch({ panels, segments }, true);
   }
   function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt') {
     if (locked) return flashLock();
@@ -686,7 +682,6 @@ export function Step6Editor() {
       {
         panels: [...project.panels, ...dup.panels],
         segments: [...project.segments, dup.segment],
-        strings: [],
       },
       true,
     );
@@ -915,27 +910,16 @@ export function Step6Editor() {
   // ── stringing ──────────────────────────────────────────────────────────────
 
   function doAutoString() {
-    // the planner reports WHY it couldn't do better; those issues surface in
-    // the live banner via validateSystem, which re-derives them from the result
-    const plan = autoStringPlan(
-      project,
-      spec,
-      inverter,
-      project.components.inverterCount,
-      resolveDesignTemps(project),
-    );
-    // routes follow the strings they serve: one undoable patch, so undo puts
-    // BOTH back rather than leaving copper for strings that no longer exist
-    const routed = { ...project, strings: plan.strings };
-    patch(
-      {
-        strings: plan.strings,
-        cableRoutes: [...autoRouteStrings(routed), ...autoRouteAc(routed)],
-      },
-      true,
-    );
+    // "Auto string" is now a RESET: hand-built strings are released and the
+    // whole array re-derives. Everyday re-derivation no longer needs a button —
+    // useElectricalSync does it whenever the layout moves.
+    const r = resetStringsToAuto(project);
+    patch(r.patch, true);
     setStringSheet(false);
     setShowStrings(true);
+    for (const c of r.report.plan?.manualChanges ?? []) {
+      flash('info', `${c.name}: ${c.change === 'dropped' ? 'removed' : `${c.removedPanelIds.length} module(s) released`}`);
+    }
   }
 
   /**
@@ -1011,6 +995,7 @@ export function Step6Editor() {
       mpptIndex: idx % inverter.mppt.count,
       panelIds: manualString,
       color: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7'][idx % 5],
+      manual: true,
     };
     patch({ strings: [...project.strings, s] }, true);
     setManualString(null);
@@ -1279,7 +1264,6 @@ export function Step6Editor() {
                           enabled: true,
                         },
                       ],
-                      strings: [],
                     },
                     true,
                   );
@@ -1314,7 +1298,6 @@ export function Step6Editor() {
                   {
                     panels: [...project.panels, ...re.panels],
                     segments: [...project.segments, re.segment],
-                    strings: [],
                   },
                   true,
                 );
@@ -2396,7 +2379,7 @@ export function Step6Editor() {
               className="btn btn-danger btn-block"
               style={{ marginTop: 6 }}
               onClick={() => {
-                patch({ strings: [] }, true);
+                patch(resetStringsToAuto(project).patch, true);
                 setStringSheet(false);
               }}
             >
