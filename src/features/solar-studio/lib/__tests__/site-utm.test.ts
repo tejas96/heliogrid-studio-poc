@@ -28,15 +28,23 @@ describe('utmZoneForLatLng', () => {
   });
 
   it('applies the Norway 32V exception', () => {
-    // 58°N 7°E would fall in zone 31 by the plain formula; the exception widens 32.
-    expect(utmZoneForLatLng(58, 7).zone).toBe(32);
+    // 58°N 5°E: plain formula gives 31, exception extends 32 to cover 3°E–12°E
+    expect(utmZoneForLatLng(58, 5).zone).toBe(32);
   });
 
   it('applies the Svalbard exceptions', () => {
-    expect(utmZoneForLatLng(78, 5).zone).toBe(31);
-    expect(utmZoneForLatLng(78, 15).zone).toBe(33);
-    expect(utmZoneForLatLng(78, 25).zone).toBe(35);
-    expect(utmZoneForLatLng(78, 38).zone).toBe(37);
+    // 78°N 7°E: plain gives 32, exception moves to 31
+    expect(utmZoneForLatLng(78, 7).zone).toBe(31);
+    // 78°N 10°E: plain gives 32, exception moves to 33
+    expect(utmZoneForLatLng(78, 10).zone).toBe(33);
+    // 78°N 20°E: plain gives 34, exception keeps as 33
+    expect(utmZoneForLatLng(78, 20).zone).toBe(33);
+    // 78°N 22°E: plain gives 34, exception moves to 35
+    expect(utmZoneForLatLng(78, 22).zone).toBe(35);
+    // 78°N 32°E: plain gives 36, exception keeps as 35
+    expect(utmZoneForLatLng(78, 32).zone).toBe(35);
+    // 78°N 35°E: plain gives 36, exception moves to 37
+    expect(utmZoneForLatLng(78, 35).zone).toBe(37);
   });
 });
 
