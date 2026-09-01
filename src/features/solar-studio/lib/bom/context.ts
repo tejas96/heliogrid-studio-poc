@@ -139,7 +139,16 @@ export function buildContext(project: Project): BomContext | null {
               2 *
               (1 + rules.cable.slackPct),
           )
-        : Math.max(30, estimateDcCableM(project.strings, project.panels));
+        : Math.max(
+            30,
+            estimateDcCableM(
+              project.strings,
+              project.panels,
+              15,
+              rules.cable.moduleLeadReachM,
+              rules.cable.slackPct,
+            ),
+          );
 
   const routedAc = acCableFromRoutes(project);
   const acSource: CableSource = routedAc.routed

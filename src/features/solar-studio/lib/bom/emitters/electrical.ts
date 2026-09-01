@@ -82,7 +82,7 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
             ` (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop/run)`
           : dcSource === 'input'
             ? `YOUR SURVEYED RUN — ${project.bom!.inputs!.avgDcRunM} m average × ${Math.max(1, project.strings.length)} string(s) × 2 conductors, +${Math.round(rules.cable.slackPct * 100)}% slack. Routing the runs in Step 6 would replace this with measured geometry.`
-            : `ESTIMATE — ${project.strings.length} strings × module-to-module + 15 m home run × 2 conductors, floored at 30 m (reads HIGH: it charges for module links the panel leads already cover). ` +
+            : `ESTIMATE — ${project.strings.length} strings × (2 × 15 m home runs + hops beyond the ${rules.cable.moduleLeadReachM} m module leads), +${Math.round(rules.cable.slackPct * 100)}% slack, floored at 30 m. ` +
               (project.inverterPlacements.length === 0
                 ? 'Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.'
                 : 'Run Auto string to route the real runs.'),

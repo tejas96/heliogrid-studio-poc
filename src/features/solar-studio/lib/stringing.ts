@@ -162,23 +162,36 @@ export function validateSystem(
 }
 
 /** Approximate DC cable run: serpentine within strings + home-run, meters. */
+/**
+ * DC conductor metres BEFORE the runs are routed (no inverter on a wall yet).
+ * Same method as the router bills once the runs exist: two home runs per
+ * string (+ and −) plus only the module-to-module hops the modules' own leads
+ * cannot bridge, then the market slack. The old estimate charged every hop in
+ * full and read about twice the routed figure — a number that then had to be
+ * explained away in the BOM.
+ */
 export function estimateDcCableM(
   strings: StringDef[],
   panels: PlacedPanel[],
   homeRunM = 15,
+  leadReachM = 1.4,
+  slackPct = 0.1,
 ): number {
   const byId = new Map(panels.map((p) => [p.id, p]));
   let total = 0;
   for (const s of strings) {
     let prev: PlacedPanel | undefined;
+    let extra = 0;
     for (const id of s.panelIds) {
       const p = byId.get(id);
       if (!p) continue;
-      if (prev)
-        total += Math.hypot(p.center.x - prev.center.x, p.center.y - prev.center.y);
+      if (prev) {
+        const d = Math.hypot(p.center.x - prev.center.x, p.center.y - prev.center.y);
+        if (d > leadReachM) extra += d - leadReachM;
+      }
       prev = p;
     }
-    total += homeRunM; // + and − home runs averaged
+    total += 2 * homeRunM + extra;
   }
-  return Math.round(total * 2); // pair of conductors
+  return Math.round(total * (1 + slackPct));
 }

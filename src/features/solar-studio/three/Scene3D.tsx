@@ -19,13 +19,19 @@ import { useOps } from '../store/useOps';
 import type { DesignOp } from '../lib/ops/types';
 import type { OpPreview } from '../lib/ops/run';
 import { inverterRemove } from '../lib/ops/electrical-ops';
+import { segmentDelete } from '../lib/ops/layout-ops';
+
+/** the first selected module of a table, so "Edit table" opens on the module the user picked */
+function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
+  return mine.find((p) => selected.has(p.id))?.id;
+}
 import { obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
 import { castsAnalyticalShadow } from '../lib/capabilities';
 import { polygonArea } from '../lib/geo';
 import type { ObstructionType } from '../types';
 
 /** What the scene can pick besides modules (modules use the shared selection). */
-export type ScenePick = { kind: 'obstruction' | 'inverter' | 'roof'; id: string };
+export type ScenePick = { kind: 'obstruction' | 'inverter' | 'roof' | 'table'; id: string };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
 
 const OBSTRUCTION_NAME: Record<ObstructionType, string> = {
@@ -1197,14 +1203,18 @@ function SceneContent({
   // to click, and must stay re-elevatable from 3D. Shift/ctrl adds to the
   // selection without opening anything, like the 2D editor.
   const [hoverId, setHoverId] = useState<string | null>(null);
+  // Click = select, nothing more (on-object select-only UX). A plain click on a
+  // table's module also opens the table's small chip; the structure card is a
+  // second, deliberate step from that chip. It used to open the full card on
+  // every click, which turned "pick a module" into "a form pops up".
   const onPanelClickToEdit = useCallback(
     (panelId: string, additive: boolean) => {
       onSelectPanels?.([panelId], additive);
       if (additive) return;
       const pp = project.panels.find((x) => x.id === panelId);
-      if (pp?.segmentId) onStructOpen(pp.segmentId, pp.id);
+      onPick(pp?.segmentId ? { kind: 'table', id: pp.segmentId } : null);
     },
-    [project.panels, onStructOpen, onSelectPanels],
+    [project.panels, onPick, onSelectPanels],
   );
 
 
@@ -1635,6 +1645,43 @@ function SceneContent({
           )}
         </>
       )}
+
+      {/* table chip — the picked table's two numbers and its two actions */}
+      {pick?.kind === 'table' &&
+        (() => {
+          const seg = project.segments.find((s) => s.id === pick.id);
+          const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
+          const mine = seg ? project.panels.filter((p) => p.segmentId === seg.id && p.enabled) : [];
+          if (!seg || !roof || mine.length === 0) return null;
+          const cx = mine.reduce((a, pp) => a + pp.center.x, 0) / mine.length;
+          const cy = mine.reduce((a, pp) => a + pp.center.y, 0) / mine.length;
+          const watt = project.components.panel?.watt ?? 0;
+          const kwp = (mine.length * watt) / 1000;
+          const tilt = seg.racking.kind === 'flush' ? 'flush on the roof' : `${seg.racking.tiltDeg}° tilt`;
+          return (
+            <EntityLabel
+              position={[cx, roof.heightM + 2.2, -cy]}
+              title={`Table ${seg.label}`}
+              lines={[
+                `${mine.length} modules · ${kwp.toFixed(1)} kWp · ${seg.rows}×${seg.cols}`,
+                `${tilt} · facing ${Math.round(seg.azimuthDeg)}° · ${seg.orientation}`,
+              ]}
+              onClose={() => onPick(null)}
+              actions={[
+                { label: 'Edit table', onClick: () => onStructOpen(seg.id, selectedPanelOf(mine, selectedIds)) },
+                {
+                  label: 'Remove table',
+                  danger: true,
+                  onClick: () => {
+                    runOp(segmentDelete, { segmentId: seg.id });
+                    onSelectPanels?.([], false);
+                    onPick(null);
+                  },
+                },
+              ]}
+            />
+          );
+        })()}
 
       {/* walkways */}
       {project.walkways.filter((w) => inScope(w.roofId)).map((w) => {

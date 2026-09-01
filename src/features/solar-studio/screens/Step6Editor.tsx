@@ -721,7 +721,11 @@ export function Step6Editor() {
               heightM: 1.5,
             }),
           );
-          setTool('select');
+          // stay in the tool until every inverter in the design hangs on a
+          // wall — a 3-inverter design used to drop back to Select after the
+          // first one, which read as "only one inverter allowed"
+          const wanted = Math.max(1, project.components.inverterCount);
+          if (project.inverterPlacements.length + 1 >= wanted) setTool('select');
         }
         return;
       }
@@ -1600,7 +1604,14 @@ export function Step6Editor() {
           ))}
           <span style={{ opacity: 0.85 }}>
             {placeKind === 'inverter'
-              ? 'Tap a roof edge to hang the inverter'
+              ? (() => {
+                  const wanted = Math.max(1, project.components.inverterCount);
+                  const placed = project.inverterPlacements.length;
+                  if (wanted === 1) return 'Tap a roof edge to hang the inverter';
+                  return placed < wanted
+                    ? `Tap a roof edge to hang inverter ${placed + 1} of ${wanted}`
+                    : `All ${wanted} inverters mounted · tap an edge to move the oldest one`;
+                })()
               : project.gridConnection
                 ? 'Tap to move the meter / service entry'
                 : 'Tap the meter / service entry — optional, but it makes the AC cable a measured length'}
