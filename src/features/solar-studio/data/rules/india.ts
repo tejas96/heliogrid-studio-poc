@@ -464,6 +464,8 @@ export const INDIA_RULES: MarketRules = {
       // a footing in a walkway / obstruction is a build blocker
       foundation_clash: 25,
       foundation_too_tall: 20,
+      // a stringing-topology defect, same tier as unstrung_panels/mppt_capacity
+      panel_in_two_strings: 30,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },
