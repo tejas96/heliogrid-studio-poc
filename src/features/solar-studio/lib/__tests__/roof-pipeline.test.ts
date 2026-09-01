@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { decodeGeoTiff, detectRoofArtifact } from '../roof-ai/pipeline';
 import { validateArtifact } from '../roof-ai/artifact';
 import { utmToLatLng } from '../site/utm';
-import { makeProjector, polygonArea } from '../geo';
+import { polygonArea } from '../geo';
+import { makeSiteFrame, toEN } from '../site/frame';
 import { sanitizeRoofPolygon } from '../roof-factory';
 
 const FIXTURES = join(__dirname, 'fixtures');
@@ -44,31 +45,34 @@ describe('coordinate alignment gate (≤ 0.5 m)', () => {
     const mask = await decodeGeoTiff(await buf('datalayers-pune-dense', 'mask.tif'));
     const center = mask.pixelToLatLng(mask.width / 2, mask.height / 2);
     // AOI is centered on the pin — sub-pixel agreement expected
-    const project = makeProjector(DENSE_PIN);
-    const en = project.toXY(center);
+    const frame = makeSiteFrame(DENSE_PIN);
+    const en = toEN(frame, center);
     expect(Math.hypot(en.x, en.y)).toBeLessThan(5); // meters off the pin
   });
 
-  it('UTM distances survive the utm→latLng→projector chain within 0.5 m over 50 m', async () => {
-    // The gate measures consistency with the APP's frame (the spherical
-    // makeProjector every hand-traced roof uses), not raw UTM ground truth.
-    // Two understood systematics, both inside the 0.5 m budget at 50 m:
-    //   east:  UTM k-factor at Pune → 49.994 m (−0.012%)
-    //   north: spherical projector vs ellipsoid meridian → 50.31 m (+0.63%)
-    // The north-axis scale is shared by the imagery mapping itself, and any
-    // residual is exactly what the known-distance CALIBRATION corrects.
+  it('UTM distances survive the utm→latLng→frame chain within 0.1 m over 50 m', async () => {
+    // This gate previously ACCEPTED a +0.63% north stretch, with a comment
+    // claiming "the north-axis scale is shared by the imagery mapping itself".
+    // It is not: the canvas uses the Web Mercator ground resolution, which is
+    // the SAME in both axes, while makeProjector used the equatorial radius for
+    // latitude only. That is why AI roofs and hand-traced roofs disagreed
+    // north-south but not east-west. The frame (lib/site/frame.ts) removes it.
+    //
+    // One systematic remains, and is correct: the UTM point scale factor at
+    // Pune (~113 km west of the 75°E central meridian) makes 50 m of UTM
+    // easting about 49.99 m on the ground.
     const mask = await decodeGeoTiff(await buf('datalayers-pune-dense', 'mask.tif'));
-    const project = makeProjector(DENSE_PIN);
-    const enOf = (col: number, row: number) => project.toXY(mask.pixelToLatLng(col, row));
+    const frame = makeSiteFrame(DENSE_PIN);
+    const enOf = (col: number, row: number) => toEN(frame, mask.pixelToLatLng(col, row));
     const a = enOf(50, 50);
     const b = enOf(550, 50); // 500 px = 50 m east
     const c = enOf(50, 550); // 500 px = 50 m south
-    expect(Math.abs(Math.hypot(b.x - a.x, b.y - a.y) - 50)).toBeLessThan(0.5);
-    expect(Math.abs(Math.hypot(c.x - a.x, c.y - a.y) - 50)).toBeLessThan(0.5);
-    // and the tight per-axis expectations for the KNOWN values
+    expect(Math.abs(Math.hypot(b.x - a.x, b.y - a.y) - 50)).toBeLessThan(0.1);
+    expect(Math.abs(Math.hypot(c.x - a.x, c.y - a.y) - 50)).toBeLessThan(0.1);
+    // per-axis: both now land on true ground metres
     expect(b.x - a.x).toBeCloseTo(49.99, 1);
-    expect(a.y - c.y).toBeGreaterThan(50.2); // meridian scale, documented above
-    expect(a.y - c.y).toBeLessThan(50.45);
+    expect(a.y - c.y).toBeGreaterThan(49.95);
+    expect(a.y - c.y).toBeLessThan(50.05); // was 50.2-50.45 before the fix
     // orientation: east really is +x, south really is −y (convergence ≤ 0.4°)
     expect(Math.abs(b.y - a.y)).toBeLessThan(0.5);
     expect(Math.abs(c.x - a.x)).toBeLessThan(0.5);
