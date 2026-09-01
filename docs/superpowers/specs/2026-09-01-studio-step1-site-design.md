@@ -108,8 +108,25 @@ the site latitude** instead of the equatorial radius for both axes.
 | Function | Contract |
 |---|---|
 | `makeSiteFrame(origin: LatLng): SiteFrame` | Pure. Computes UTM zone, UTM origin and convergence. |
-| `toEN(frame, p: LatLng): XY` | Applies `scaleFactor` and `northOffsetDeg`. |
+| `toEN(frame, p: LatLng): XY` | Geodetic only, then rotated by `northOffsetDeg` into the image-aligned axes. **Does not apply `scaleFactor`.** |
 | `toLatLng(frame, p: XY): LatLng` | Exact inverse of `toEN`. |
+
+**Why `toEN` must not apply `scaleFactor`.** The two scales in play are different
+things. `scaleFactor` corrects the **imagery** (pixels → metres); the geodetic
+conversion is fixed by physics. `applyKnownDistance` in `lib/calibration.ts` already
+rescales stored geometry once at calibration time, so **stored EN is true metres**.
+Applying `scaleFactor` again inside `toEN` would double-count it.
+
+This also confirms the two AI detection paths are correct as they stand and need no
+change here: Gemini works in **image space**, so `gemini-client.ts` rightly multiplies by
+`scaleFactor`; the dataLayers pipeline works in **geo space** via a georeferenced
+GeoTIFF, so it rightly does not.
+
+`northOffsetDeg` **is** applied, because the project's EN axes are aligned to the
+**image**, not to true north (`types.ts` `Calibration.northOffsetDeg`: "degrees TRUE
+north lies clockwise of the image's up axis"). `makeProjector` never applied it. The
+default is 0 and Google tiles are north-up, so this changes nothing in practice today,
+but it becomes load-bearing for a rotated imported underlay.
 | `toUtm(frame, p: XY): { e, n }` | For export. Offset + rotation by `convergenceDeg`. |
 | `fromUtm(frame, p: { e, n }): XY` | For import. |
 | `reanchor(frame, newOrigin): { frame, deltaEN }` | Returns the new frame and the shift to apply to geometry. |
@@ -119,9 +136,10 @@ northing 0 (N) / 10,000,000 (S). `zone = floor((lng + 180) / 6) + 1`, with the N
 (32V) and Svalbard exceptions implemented for correctness even though India never hits
 them.
 
-`makeProjector` in `lib/geo.ts` is deleted. Every caller moves to `frame.toEN` /
-`frame.toLatLng`. Current callers: `lib/roof-ai/pipeline.ts`,
-`lib/roof-ai/gemini-client.ts`.
+`makeProjector` in `lib/geo.ts` is deleted, along with its `EARTH_R` constant, which
+nothing else uses. Verified callers, and the only ones: `lib/roof-ai/pipeline.ts:65` and
+`screens/Step2Roof.tsx:270`. `lib/roof-ai/gemini-client.ts` does **not** call it — it
+works in image space and converts through the canvas scale instead.
 
 ### 3.2 `imagery.ts` — what we draw on
 
@@ -415,13 +433,26 @@ Every failure keeps the user moving.
 
 Unit tests are the gate; none of these are visual checks.
 
-**`frame.test.ts`**
-- ENU round-trip error **< 1 mm at 300 m**, **< 1 cm at 1 km**, in all four quadrants.
-- UTM conversion against three published survey control points.
-- **Regression pinning D1:** one degree of latitude at 18.5°N resolves to 110,684 m ± 1 m.
-  This test fails if the equatorial-radius bug is ever reintroduced.
-- `reanchor` round-trip: move the origin, apply `deltaEN`, geometry lands back on the same
-  lat/lng within 1 mm.
+**`site-frame.test.ts`**
+- ENU round-trip error **< 1 mm at 300 m**, **< 1 cm at 1 km**, in all four quadrants,
+  and in the southern hemisphere.
+- **Regression pinning D1:** 0.001° of latitude at 18.52°N resolves to **110.686 m**, and
+  a hard floor asserts it is under 111.0 m. The buggy value was 111.320 m, so this test
+  fails loudly if the equatorial radius is ever reintroduced.
+- `northOffsetDeg` rotation, including the invariant that `scaleFactor` never affects
+  `toEN`.
+- `reanchor` round-trip: move the origin, subtract `deltaEN`, geometry lands back on the
+  same lat/lng within 1 mm.
+- A guard asserting `lib/geo.ts` no longer exports `makeProjector` — two disagreeing
+  lat/lng paths is how D1 survived.
+
+**`site-utm.test.ts`**
+- Forward ↔ inverse round-trip to **1 mm** in both hemispheres.
+- The central-meridian invariant: a point on the zone's central meridian must have
+  easting exactly 500,000. This catches a wrong zone or a dropped false easting without
+  needing an external control-point citation.
+- Zone selection, including the Norway 32V and Svalbard exceptions.
+- Grid convergence is zero on the central meridian and small-negative west of it.
 
 **`mosaic.test.ts`**
 - The zoom/grid selection table in §3.3 is asserted row by row.
