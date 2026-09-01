@@ -91,10 +91,13 @@ function cutoutPlanes(project: Project, marginM = 0.6): THREE.Plane[] {
 export function RealSurround({
   project,
   onStatus,
+  onAttribution,
 }: {
   project: Project;
   /** 'loading' → 'ready' once the ground under the pin is measured; 'none' if nothing loads */
   onStatus?: (s: 'loading' | 'ready' | 'none') => void;
+  /** Google's required data attribution for the tiles on screen (changes as tiles stream) */
+  onAttribution?: (text: string) => void;
 }) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '';
   const loc = project.location;
@@ -158,7 +161,7 @@ export function RealSurround({
         recenter: true,
       });
       tiles.registerPlugin(reorient);
-      tiles.errorTarget = 12;
+      tiles.errorTarget = 8;
       if (probing) tiles.maxDepth = probeDepth;
       tiles.setCamera(camera);
       tiles.setResolutionFromRenderer(camera, gl);
@@ -204,6 +207,12 @@ export function RealSurround({
       let measured = 0;
       const ray = new THREE.Raycaster();
       const onLoadEnd = () => {
+        // Google's terms: show the data attribution of what is on screen
+        const attr = t
+          .getAttributions()
+          .map((a) => String(a.value ?? ''))
+          .filter(Boolean);
+        onAttribution?.(attr.join(' · '));
         if (measured >= 8) return;
         ray.set(new THREE.Vector3(0, 3000, 0), new THREE.Vector3(0, -1, 0));
         const hits = ray.intersectObject(t.group, true);

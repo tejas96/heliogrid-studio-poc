@@ -198,6 +198,8 @@ export function Scene3D({
   // non-module picks (obstruction / inverter / roof) — view state, never persisted
   const [pick, setPick] = useState<ScenePick | null>(null);
   const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
+  // Google's data attribution for the streamed surroundings (terms of use)
+  const [surroundAttribution, setSurroundAttribution] = useState('');
   const runOp: RunOp = (op, args) => ops.run(op, args);
   // Resolved HERE, outside <Canvas>. Anything inside the Canvas lives in the
   // react-three-fiber reconciler, which is a separate React root: store
@@ -589,6 +591,7 @@ export function Scene3D({
           onPick={structInteractive ? pickEntity : () => {}}
           onHoverPick={structInteractive ? setHoverPick : () => {}}
           runOp={runOp}
+          onSurroundAttribution={setSurroundAttribution}
         />
         {/* Camera director: smooth, damped, touch-native (one finger pans, two
             fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
@@ -784,6 +787,31 @@ export function Scene3D({
           {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(hour)}
         </div>
       </div>
+      )}
+
+      {/* ── Google attribution for the real surroundings (required) ── */}
+      {showBuildings && !meshMode && !heatmap && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 12,
+            bottom: 104,
+            zIndex: 12,
+            fontSize: 9.5,
+            lineHeight: 1.3,
+            color: 'rgba(255,255,255,0.78)',
+            background: 'rgba(10,13,18,0.55)',
+            padding: '2px 7px',
+            borderRadius: 4,
+            pointerEvents: 'none',
+            maxWidth: 300,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          3D surroundings © Google{surroundAttribution ? ` · ${surroundAttribution}` : ''}
+        </div>
       )}
 
       {/* ── solar access legend ── */}
@@ -1142,6 +1170,7 @@ function SceneContent({
   onPick,
   onHoverPick,
   runOp,
+  onSurroundAttribution,
 }: {
   project: Project;
   bounds: SceneBounds;
@@ -1152,6 +1181,7 @@ function SceneContent({
   onPick: (p: ScenePick | null) => void;
   onHoverPick: (p: ScenePick | null) => void;
   runOp: RunOp;
+  onSurroundAttribution?: (text: string) => void;
   sunAltitude: number;
   sunAzimuth: number;
   solarAccessView: boolean;
@@ -1970,7 +2000,9 @@ function SceneContent({
       })}
 
       {/* the real neighbourhood — Google's photogrammetry, never invented boxes */}
-      {!meshMode && showBuildings && <RealSurround project={project} />}
+      {!meshMode && showBuildings && (
+        <RealSurround project={project} onAttribution={onSurroundAttribution} />
+      )}
 
       {!meshMode && showSunPath && (
         <SunPath
