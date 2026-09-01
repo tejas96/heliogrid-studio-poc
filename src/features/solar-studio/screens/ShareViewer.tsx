@@ -1,6 +1,7 @@
 import { SearchX } from 'lucide-react';
 import { useStore } from '../store/store';
 import { Scene3D } from '../three/Scene3D';
+import { FreshnessBanner } from '../components/FreshnessBanner';
 
 /** Public read-only 3D viewer (the QR/share link target). */
 export function ShareViewer({ shareId }: { shareId: string }) {
@@ -32,6 +33,12 @@ export function ShareViewer({ shareId }: { shareId: string }) {
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       <Scene3D readOnly projectOverride={project} />
+      {/* Scene3D fills the viewport and its own HUD reaches zIndex 50 — this
+          overlay needs the same absolute + zIndex treatment as the label
+          below it, or the banner paints underneath the canvas and is never seen. */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 60 }}>
+        <FreshnessBanner project={project} />
+      </div>
       <div
         style={{
           position: 'absolute',

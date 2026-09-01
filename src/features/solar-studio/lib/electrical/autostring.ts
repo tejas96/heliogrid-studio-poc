@@ -17,7 +17,7 @@ import type {
   StringDef,
   ValidationIssue,
 } from '../../types';
-import { genId } from '../geo';
+import { stringIdFor } from '../hash';
 import { groupPanels, orderGroup, type PanelGroup } from './grouping';
 import type { DesignTemps } from './temps';
 import { stringSizing, STRING_COLORS } from './window';
@@ -164,6 +164,13 @@ export function splitGroup(
   return { chunks, tail: rest.length >= minPanels ? [] : rest };
 }
 
+export interface AutoStringOptions {
+  /** MPPT inputs already taken (by manual strings) — never planned onto */
+  reservedSlots?: { inverterIndex: number; mpptIndex: number }[];
+  /** first auto string is named `String ${nameOffset + 1}` */
+  nameOffset?: number;
+}
+
 /**
  * Plan the strings for a project. Pure: returns what SHOULD exist plus every
  * reason it could not do better. Callers commit `strings` as one patch.
@@ -174,6 +181,7 @@ export function autoStringPlan(
   inverter: InverterSpec,
   inverterCount: number,
   temps: DesignTemps,
+  opts: AutoStringOptions = {},
 ): AutoStringResult {
   const issues: ValidationIssue[] = [];
   const enabled = project.panels.filter((p) => p.enabled);
@@ -232,8 +240,10 @@ export function autoStringPlan(
 
   // ── fit them into the MPPT inputs we actually have ───────────────────────
   const slots: Array<{ inverterIndex: number; mpptIndex: number; strings: string[][]; groupKey?: string }> = [];
+  const reserved = new Set((opts.reservedSlots ?? []).map((s) => `${s.inverterIndex}/${s.mpptIndex}`));
   for (let inv = 0; inv < inverterCount; inv++) {
     for (let m = 0; m < inverter.mppt.count; m++) {
+      if (reserved.has(`${inv}/${m}`)) continue;
       slots.push({ inverterIndex: inv, mpptIndex: m, strings: [] });
     }
   }
@@ -256,13 +266,14 @@ export function autoStringPlan(
     }
     slot.groupKey = item.group.key;
     slot.strings.push(item.ids);
+    const ordinal = (opts.nameOffset ?? 0) + strings.length;
     strings.push({
-      id: genId('str'),
-      name: `String ${strings.length + 1}`,
+      id: stringIdFor(item.ids),
+      name: `String ${ordinal + 1}`,
       inverterIndex: slot.inverterIndex,
       mpptIndex: slot.mpptIndex,
       panelIds: item.ids,
-      color: STRING_COLORS[strings.length % STRING_COLORS.length],
+      color: STRING_COLORS[ordinal % STRING_COLORS.length],
     });
   }
 

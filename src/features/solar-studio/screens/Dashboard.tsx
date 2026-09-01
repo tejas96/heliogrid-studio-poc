@@ -20,7 +20,7 @@ import { navigate } from '../router';
 import { Dialog, EmptyState } from '../components/ui';
 import type { Project } from '../types';
 import { staticSatelliteUrl } from '../lib/maps';
-import { computeEnergyReport } from '../lib/solar';
+import { deriveEnergy, designFreshness } from '../lib/derive';
 
 type Filter = 'all' | 'in_progress' | 'proposal_ready';
 
@@ -264,7 +264,8 @@ export function Dashboard() {
             }}
           >
             {projects.map((p) => {
-              const report = computeEnergyReport(p);
+              const report = deriveEnergy(p);
+              const fresh = designFreshness(p).all;
               const thumb = p.location
                 ? staticSatelliteUrl(
                     p.location.latLng.lat,
@@ -450,7 +451,9 @@ export function Dashboard() {
                       <div>
                         CAPACITY
                         <div style={{ color: 'var(--ink)', fontWeight: 700, fontSize: 12.5 }}>
-                          {report.capacityKwp > 0 ? `${report.capacityKwp} kWp` : '—'}
+                          {report.capacityKwp > 0
+                            ? `${report.capacityKwp} kWp${fresh ? '' : ' (provisional)'}`
+                            : '—'}
                         </div>
                       </div>
                       <div>

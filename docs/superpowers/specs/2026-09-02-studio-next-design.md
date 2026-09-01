@@ -380,8 +380,12 @@ precondition. **Done when:** `main` contains the exact frame, suite green.
 - Money/energy freshness returned from the selectors and rendered as provisional everywhere
   money appears, print included. Undo reachable on every step (thumb-reachable on mobile).
 - Master plan §10 defects #2, #3, #12, #16 and #17 closed here (same code paths).
-**Done when:** the propagation test file is green, and moving an inverter in the browser
-changes the DC cable metres in the BOM without any button press.
+**Done — 2026-09-02 (branch `studio-next`, 1580210..70f091f):** the propagation matrix is green
+(`lib/__tests__/propagation.test.ts`, 6 rows); in the browser, moving the inverter changed the
+Step 9 DC cable line with no button press, disabling a module re-strung the array in ~1 s, and
+every Step 6 edit shows its computed impact (e.g. "Delete 1 module · −0.54 kWp · kWh −0.7% ·
+steel −8 kg · ₹ −17,512") with a labelled Undo in the header on every step. Suite: 130 files /
+1764 tests, tsc clean. Owner directives during execution: minimal tests, no reviews.
 
 ### Phase 2 · The persistent 3D workspace · L
 - `Scene3D` stops being a modal: mounted once per project. Default is full-bleed 3D with the

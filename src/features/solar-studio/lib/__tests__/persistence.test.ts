@@ -264,6 +264,8 @@ describe('multi-tab last-writer-wins (reducer)', () => {
       externalConflictAt: null,
       undoStack: [p],
       redoStack: [],
+      undoLabels: ['Edit'],
+      redoLabels: [],
     };
   }
 

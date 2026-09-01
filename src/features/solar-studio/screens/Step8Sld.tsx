@@ -9,10 +9,10 @@ import type { Project, SldParams } from '../types';
 import { deriveSldDefaults, diffSldOverrides, effectiveSld, acConductorLabels } from '../lib/sld';
 import { combinerPlan } from '../lib/electrical/combiner';
 import { resolveRules } from '../data/rules/india';
-import { computeEnergyReport } from '../lib/solar';
+import { deriveEnergy } from '../lib/derive';
 import { panelCornersOnRoof } from '../lib/layout';
 import { resolveDesignTemps } from '../lib/electrical/temps';
-import { autoString } from '../lib/stringing';
+import { resetStringsToAuto } from '../lib/derive/electrical-sync';
 import { layoutToDxf, dxfFileName } from '../lib/export-dxf';
 import { navigate } from '../router';
 
@@ -276,7 +276,7 @@ export function Step8Sld() {
 function UnstrungState() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
-  const { panel, inverter, inverterCount } = project.components;
+  const { panel, inverter } = project.components;
   const enabledCount = project.panels.filter((p) => p.enabled).length;
   const canAutoString = !!panel && !!inverter && enabledCount > 0;
 
@@ -295,8 +295,7 @@ function UnstrungState() {
       <Cable size={30} aria-hidden style={{ color: 'var(--ink-3)' }} />
       <h3 style={{ margin: '12px 0 6px', fontSize: 17 }}>No strings configured yet</h3>
       <p style={{ fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.6 }}>
-        The single line diagram is drawn from your actual string configuration. Group the panels
-        into strings first — automatically, or by hand in the editor.
+        No string can be built with this panel + inverter — see the issues in Step 6.
       </p>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16 }}>
         <button
@@ -304,17 +303,10 @@ function UnstrungState() {
           disabled={!canAutoString}
           onClick={() => {
             if (!panel || !inverter) return;
-            const strings = autoString(
-              project.panels,
-              panel,
-              inverter,
-              inverterCount,
-              resolveDesignTemps(project),
-            );
-            patch({ strings }, true);
+            patch(resetStringsToAuto(project).patch, true);
           }}
         >
-          <Sparkles size={15} aria-hidden /> Auto-string now
+          <Sparkles size={15} aria-hidden /> Try again
         </button>
         <button className="btn btn-secondary" onClick={() => navigate('/wizard/6')}>
           String manually in the editor
@@ -379,7 +371,7 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
   // an unstrung design renders the UnstrungState instead of a fabricated
   // (electrically impossible) all-panels series string.
   const strings = project.strings;
-  const r = computeEnergyReport(project);
+  const r = deriveEnergy(project);
 
   const H = 640;
   const W = 980;
@@ -632,7 +624,7 @@ function LayoutSheet() {
   const project = useActiveProject()!;
   const spec = project.components.panel!;
   const t = useLayoutTransform();
-  const r = computeEnergyReport(project);
+  const r = deriveEnergy(project);
   if (!t) return null;
 
   return (

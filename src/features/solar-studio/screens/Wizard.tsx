@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronRight, CircleHelp, HeartPulse, Home, Save } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, CircleHelp, HeartPulse, Home, Redo2, Save, Undo2 } from 'lucide-react';
 import { navigate } from '../router';
-import { useActiveProject, useProjectPatch } from '../store/store';
+import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../lib/units';
 import { UnitToggle, Sheet } from '../components/ui';
 import { bandOf, describeHealthCode, explainDelta, healthKey, memoizedHealth, type HealthResult } from '../lib/health';
@@ -12,6 +12,7 @@ import { Step1Setup } from './Step1Setup';
 import { Step2Roof } from './Step2Roof';
 import { Step3Obstructions } from './Step3Obstructions';
 import { Step4Components } from './Step4Components';
+import { Step5AutoDesign } from './Step5AutoDesign';
 import { Step6Editor } from './Step6Editor';
 import { Step7Proposal } from './Step7Proposal';
 import { Step8Sld } from './Step8Sld';
@@ -23,7 +24,7 @@ export const STEP_NAMES = [
   'Roof Setup',
   'Obstructions',
   'Components',
-  'Panel Placement',
+  'Auto Design',
   'Manual Edit',
   'Proposal',
   'SLD & Drawings',
@@ -138,9 +139,54 @@ function nextBlocker(step: number, p: NonNullable<ReturnType<typeof useActivePro
   }
 }
 
+/**
+ * Undo/redo for EVERY step (design-system N8: a stray tap must never cost a
+ * design). The labels come from the ops kernel, so the tooltip says what will
+ * be undone — "Tilt 15°", not "Undo".
+ */
+export function WizardUndoControls({
+  undoLabels,
+  redoLabels,
+  onUndo,
+  onRedo,
+}: {
+  undoLabels: string[];
+  redoLabels: string[];
+  onUndo: () => void;
+  onRedo: () => void;
+}) {
+  const u = undoLabels[undoLabels.length - 1];
+  const r = redoLabels[redoLabels.length - 1];
+  return (
+    <>
+      <button
+        className="btn-ghost"
+        aria-label={u ? `Undo: ${u}` : 'Undo'}
+        data-tip={u ? `Undo ${u}` : 'Nothing to undo'}
+        data-tip-left=""
+        disabled={!u}
+        onClick={onUndo}
+      >
+        <Undo2 size={16} />
+      </button>
+      <button
+        className="btn-ghost"
+        aria-label={r ? `Redo: ${r}` : 'Redo'}
+        data-tip={r ? `Redo ${r}` : 'Nothing to redo'}
+        data-tip-left=""
+        disabled={!r}
+        onClick={onRedo}
+      >
+        <Redo2 size={16} />
+      </button>
+    </>
+  );
+}
+
 export function Wizard({ step }: { step: number }) {
   const project = useActiveProject();
   const patch = useProjectPatch();
+  const { state, dispatch } = useStore();
   const { units, setUnits } = useUnits();
   const [toast, setToast] = useState<string | null>(null);
   const [healthSheet, setHealthSheet] = useState(false);
@@ -170,6 +216,26 @@ export function Wizard({ step }: { step: number }) {
     if (project && step > allowedStep) navigate(`/wizard/${allowedStep}`);
   }, [project, step, allowedStep]);
 
+  // Cmd/Ctrl+Z (Shift = redo) on the steps that have no editor of their own.
+  // Steps 2 and 6 own their keys already; inputs and open dialogs keep theirs.
+  useEffect(() => {
+    if (step === 2 || step === 6) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)
+      )
+        return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [step, dispatch]);
+
   if (!project) return null;
   if (step > allowedStep) return null;
 
@@ -186,12 +252,11 @@ export function Wizard({ step }: { step: number }) {
       setTimeout(() => setToast(null), 2600);
       return;
     }
-    // steps 4→6: auto-placement (step 5) happens inside the editor mount
-    go(step === 4 ? 6 : step + 1);
+    go(step + 1);
   }
 
   function onBack() {
-    go(step === 6 ? 4 : step - 1);
+    go(step - 1);
   }
 
   const dark = step === 2 || step === 3 || step === 6;
@@ -202,7 +267,7 @@ export function Wizard({ step }: { step: number }) {
     case 2: body = <Step2Roof />; break;
     case 3: body = <Step3Obstructions />; break;
     case 4: body = <Step4Components />; break;
-    case 5:
+    case 5: body = <Step5AutoDesign />; break;
     case 6: body = <Step6Editor />; break;
     case 7: body = <Step7Proposal />; break;
     case 8: body = <Step8Sld />; break;
@@ -246,6 +311,12 @@ export function Wizard({ step }: { step: number }) {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <WizardUndoControls
+            undoLabels={state.undoLabels}
+            redoLabels={state.redoLabels}
+            onUndo={() => dispatch({ type: 'undo' })}
+            onRedo={() => dispatch({ type: 'redo' })}
+          />
           {chipTotal !== null && (
             <button
               className="chip"

@@ -262,6 +262,23 @@ export function buildShadowCasters(
     meshes.push(mesh);
   }
 
+  // Lightning arresters are real masts on the roof: the scene has always cast
+  // their shadow, the engine never did (master plan defect #12). A 50 mm square
+  // section at the mast height, grounded on the surface, keeps scrub and
+  // numbers agreeing.
+  for (const la of project.arresters ?? []) {
+    const roof = project.roofs.find((r) => r.id === la.roofId);
+    if (!roof || roof.polygon.length < 3) continue;
+    const baseY = surfaceHeightAt(roof, la.pos, eaveRefs.get(roof.id));
+    const h = la.heightMm / 1000;
+    if (!(h > 0)) continue;
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.05), mat);
+    mesh.position.set(la.pos.x, baseY + h / 2, -la.pos.y);
+    mesh.userData = { casterKind: 'arrester', casterId: la.id, casterLabel: 'Lightning arrester' };
+    group.add(mesh);
+    meshes.push(mesh);
+  }
+
   // ── Tier-2: the modules themselves (Phase 8) ─────────────────────────────
   const spec = opts.includePanels ? project.components?.panel : null;
   if (spec) {

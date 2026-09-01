@@ -4,7 +4,7 @@ import { useActiveProject, useProjectPatch } from '../store/store';
 import { navigate } from '../router';
 import { Scene3D, seasonDate } from '../three/Scene3D';
 import type { ShadowCapture } from '../types';
-import { computeEnergyReport } from '../lib/solar';
+import { deriveEnergy } from '../lib/derive';
 import { isCaptureFresh, layoutFp } from '../lib/fingerprints';
 import { putImage } from '../lib/persistence/blobs';
 import { BlobImg } from '../components/BlobImg';
@@ -35,7 +35,7 @@ export function Step7Proposal() {
     project.captures.length >= 4 ? null : 0,
   );
   const [saveError, setSaveError] = useState<string | null>(null);
-  const report = computeEnergyReport(project);
+  const report = deriveEnergy(project);
 
   const captured = (id: string) =>
     project.captures.find((c) => c.id === id)?.imageBlobId ?? null;

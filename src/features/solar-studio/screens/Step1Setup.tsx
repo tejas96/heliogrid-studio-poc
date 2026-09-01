@@ -429,7 +429,14 @@ function LocationSection() {
           coverImageBlobId: null,
           coverForLayoutFp: null,
           // stamps/overrides describe the wiped design — reset them with it
-          derived: { solarAccessFp: null, sldOverrides: null, sldIntroSeen: false, healthSnapshot: null },
+          derived: {
+            solarAccessFp: null,
+            stringsFp: null,
+            routesFp: null,
+            sldOverrides: null,
+            sldIntroSeen: false,
+            healthSnapshot: null,
+          },
           // new location = new imagery — the old imagery calibration is void.
           // (No `siteFrame` here: the patch below always sets it from the NEW
           // pin, so a wipe never leaves the frame null.)

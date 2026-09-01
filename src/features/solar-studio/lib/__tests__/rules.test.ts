@@ -46,7 +46,6 @@ describe('India rule config (extraction snapshot)', () => {
       roofSetbackM: 0.3,
       tariffUnknownStateInrPerKwh: 7.5,
       tariffNewProjectInrPerKwh: 8,
-      planLimitKw: 10,
       // Phase 20 (ground mount). Both ASSUMED — no Indian standard fixes a
       // free-field boundary offset, and optimal tilt is site/latitude specific.
       groundSetbackM: 1.5,

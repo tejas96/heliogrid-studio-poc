@@ -10,7 +10,7 @@
 // so a plan regenerated after a reload is byte-identical and the installer's
 // tick-boxes still line up with the steps they were ticked against.
 import type { BomLine, Project } from '../types';
-import { projectStructures } from './structure';
+import { deriveStructures } from './derive/structures';
 import { mergedBom } from './bom';
 
 /** Coarse trade phases, in the only order they can physically happen. */
@@ -77,7 +77,7 @@ function materialsFor(bom: BomLine[], segmentId?: string, roofId?: string): stri
 export function installationPlan(project: Project): InstallStep[] {
   const steps: InstallStep[] = [];
   const bom = mergedBom(project);
-  const structures = projectStructures(project);
+  const structures = deriveStructures(project);
   const byRoof = new Map<string, typeof structures>();
   for (const s of structures) {
     const seg = project.segments.find((g) => g.id === s.segmentId);

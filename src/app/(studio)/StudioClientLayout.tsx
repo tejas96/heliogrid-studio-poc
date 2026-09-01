@@ -5,6 +5,7 @@ import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 import { useRoute, navigate } from '@/features/solar-studio/router';
 import { StoreProvider, useStore, useActiveProject } from '@/features/solar-studio/store/store';
 import { useDesignSync } from '@/features/solar-studio/store/useDesignSync';
+import { useElectricalSync } from '@/features/solar-studio/store/useElectricalSync';
 import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
 
 /**
@@ -14,6 +15,7 @@ import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
  */
 function DesignSync() {
   useDesignSync();
+  useElectricalSync();
   useHealthSync();
   return null;
 }

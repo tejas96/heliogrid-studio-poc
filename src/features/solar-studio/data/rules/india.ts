@@ -115,7 +115,6 @@ export interface DefaultRules {
   /** tariff preset on a brand-new project before a state is chosen (₹/kWh) */
   tariffNewProjectInrPerKwh: number;
   /** freemium plan gate on total DC capacity (kW) */
-  planLimitKw: number;
 }
 
 /** Health Score v1 (§8.2): fixed, capped, code-level deductions — the fixed
@@ -464,6 +463,8 @@ export const INDIA_RULES: MarketRules = {
       // a footing in a walkway / obstruction is a build blocker
       foundation_clash: 25,
       foundation_too_tall: 20,
+      // a stringing-topology defect, same tier as unstrung_panels/mppt_capacity
+      panel_in_two_strings: 30,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },
@@ -526,7 +527,6 @@ export const INDIA_RULES: MarketRules = {
     inverterClearanceM: 0.9,
     tariffUnknownStateInrPerKwh: 7.5,
     tariffNewProjectInrPerKwh: 8,
-    planLimitKw: 10,
   },
 };
 

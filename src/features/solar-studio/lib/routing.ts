@@ -40,8 +40,8 @@ import { resolveRules } from '../data/rules/india';
  * `Roof.heightM` and `InverterPlacement.heightM` sat right there (plan §F2:
  * "vertical drops at roof edges (from Roof.heightM)").
  */
-export function dropForRunM(project: Project, kind: 'dc' | 'ac'): number {
-  const pl = project.inverterPlacements[0];
+export function dropForRunM(project: Project, kind: 'dc' | 'ac', placementIndex = 0): number {
+  const pl = project.inverterPlacements[placementIndex] ?? project.inverterPlacements[0];
   if (!pl) return resolveRules().cable.defaultVerticalDropM;
   const roofH = project.roofs.find((r) => r.id === pl.roofId)?.heightM ?? 0;
   const invH = pl.heightM;
@@ -386,7 +386,6 @@ export function intraStringExtraM(s: StringDef, project: Project): number {
  */
 export function autoRouteStrings(project: Project): CableRoute[] {
   const rules = resolveRules().cable;
-  const target = inverterWorldPos(project);
   const byId = new Map(project.panels.map((p) => [p.id, p]));
   // Keep hand-routed runs — but ONLY while the string they serve still exists.
   // autoStringPlan mints a NEW id per string on every run, so after a re-string
@@ -399,7 +398,7 @@ export function autoRouteStrings(project: Project): CableRoute[] {
   const kept = (project.cableRoutes ?? []).filter(
     (r) => r.manual && r.kind === 'string_homerun' && aliveStrings.has(r.fromRef),
   );
-  if (!target) return kept;
+  if (!inverterWorldPos(project)) return kept; // no placement at all
   const out: CableRoute[] = [...kept];
 
   for (const s of project.strings) {
@@ -412,15 +411,19 @@ export function autoRouteStrings(project: Project): CableRoute[] {
     const blockers = roof ? routeBlockers(project, roof) : [];
     const corridor = roof ? [roofCorridor(roof), ...arrayCorridors(project, roof)] : undefined;
     const footprint = roof ? arrayFootprint(project, roof) : undefined;
+    // the placement THIS string lands on — `inverterWorldPos` falls back to [0]
+    // when the design names more inverters than the user has placed (defect #3)
+    const placementIndex = project.inverterPlacements[s.inverterIndex] ? s.inverterIndex : 0;
+    const target = inverterWorldPos(project, placementIndex)!;
     // a string needs BOTH conductors home: + from one end, − from the other
     ends.forEach((end, i) => {
       out.push({
         id: `${s.id}/hr/${i}`,
         kind: 'string_homerun',
         fromRef: s.id,
-        toRef: 'inverter',
+        toRef: `inverter/${placementIndex}`,
         waypoints: routePath(end.center, target, blockers, corridor, footprint),
-        verticalDropM: dropForRunM(project, 'dc'),
+        verticalDropM: dropForRunM(project, 'dc', placementIndex),
         slackPct: rules.slackPct,
       });
     });

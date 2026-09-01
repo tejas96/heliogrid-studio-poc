@@ -58,8 +58,8 @@ import { lightenHex, roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
 import { StructureNodesInstanced } from './StructureNodesInstanced';
-import { projectStructures, resolveRacking, type ResolvedRacking } from '../lib/structure';
-import { layoutFp } from '../lib/fingerprints';
+import { resolveRacking, type ResolvedRacking } from '../lib/structure';
+import { deriveStructures } from '../lib/derive';
 import {
   DEFAULT_STRUCTURE_VIEW,
   effectiveView,
@@ -1028,15 +1028,10 @@ function SceneContent({
 
   // parametric structures (Phase 7): the member graph is the owner — the
   // scene renders it and couples panel heights to the SAME resolved racking.
-  // Keyed on layoutFp rather than the project object: the graph depends only on
-  // geometry + racking, so re-deriving every structure on an unrelated patch
-  // (a price edit, a note) was pure waste on a large roof.
-  const layoutKey = useMemo(() => (spec ? layoutFp(project) : ''), [project, spec]);
-  const allStructures = useMemo(
-    () => (spec ? projectStructures(project) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layoutKey, spec],
-  );
+  // deriveStructures is itself memoised on the design fingerprint (Task 6),
+  // so re-deriving every structure on an unrelated patch (a price edit, a
+  // note) is no longer a recompute at all — no useMemo needed here.
+  const allStructures = deriveStructures(project);
 
   // ── Phase 22l: structure-inspection view state ────────────────────────────
   // NEVER persisted and never fingerprinted — ghosting a module to look at a
@@ -1379,7 +1374,7 @@ function SceneContent({
         const posts = Math.max(2, Math.round(len / 1.5) + 1);
         return (
           <group key={r.id} position={[cx, h, -cy]} rotation={[0, -ang, 0]}>
-            <mesh position={[0, railH, 0]} castShadow userData={{ shadowCaster: false }}>
+            <mesh position={[0, railH, 0]} userData={{ shadowCaster: false }}>
               <boxGeometry args={[len, 0.05, 0.05]} />
               <meshStandardMaterial color="#c23b3b" metalness={0.5} roughness={0.5} />
             </mesh>
@@ -1388,7 +1383,7 @@ function SceneContent({
               <meshStandardMaterial color="#c23b3b" metalness={0.5} roughness={0.5} />
             </mesh>
             {Array.from({ length: posts }, (_, i) => (
-              <mesh key={i} position={[-len / 2 + (i * len) / (posts - 1), railH / 2, 0]} castShadow>
+              <mesh key={i} position={[-len / 2 + (i * len) / (posts - 1), railH / 2, 0]}>
                 <cylinderGeometry args={[0.025, 0.025, railH, 8]} />
                 <meshStandardMaterial color="#a8a8a8" metalness={0.7} roughness={0.4} />
               </mesh>
@@ -1403,7 +1398,8 @@ function SceneContent({
         const base = surfAt(la.roofId, la.pos);
         return (
           <group key={la.id} position={[la.pos.x, base, -la.pos.y]}>
-            <mesh position={[0, la.heightMm / 2000, 0]} castShadow userData={{ shadowCaster: false }}>
+            {/* scene = engine: the mast casts in lib/scene-model too (engine v7) */}
+            <mesh position={[0, la.heightMm / 2000, 0]} castShadow userData={{ shadowCaster: true }}>
               <cylinderGeometry args={[0.03, 0.055, la.heightMm / 1000, 10]} />
               <meshStandardMaterial color="#b7bcc4" metalness={0.85} roughness={0.3} />
             </mesh>
@@ -1426,7 +1422,7 @@ function SceneContent({
         const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
         return (
           <group key={ip.id} position={[px, ip.heightM, -py]} rotation={[0, -wallAng, 0]}>
-            <mesh castShadow userData={{ shadowCaster: false }}>
+            <mesh userData={{ shadowCaster: false }}>
               <boxGeometry args={[0.48, 0.66, 0.2]} />
               <meshStandardMaterial color="#d64545" roughness={0.45} metalness={0.2} />
             </mesh>

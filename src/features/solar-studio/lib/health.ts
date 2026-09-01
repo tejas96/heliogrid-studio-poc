@@ -93,6 +93,8 @@ export const VALIDATION_CATEGORY: Record<string, HealthCategoryKey> = {
   shade_mismatch: 'energy',
   foundation_clash: 'utilization',
   foundation_too_tall: 'utilization',
+  // ── Phase 1 design kernel: defect #2 (a module wired into two strings) ───
+  panel_in_two_strings: 'electrical',
 };
 
 /**
@@ -138,6 +140,7 @@ const CODE_LABEL: Record<string, string> = {
   shade_mismatch: 'Mismatched shading within a string',
   foundation_clash: 'Foundations land where they cannot be built',
   foundation_too_tall: 'Foundation taller than its clearance',
+  panel_in_two_strings: 'A module wired into two strings',
 };
 const ANALYZER_LABEL: Record<string, string> = {
   'dc-ac-ratio': 'DC/AC ratio out of the 0.90–1.35 band',

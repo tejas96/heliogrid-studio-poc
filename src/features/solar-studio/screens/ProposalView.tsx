@@ -1,22 +1,20 @@
 import { useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { ArrowLeft, Camera, Link2, Printer, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Link2, Printer } from 'lucide-react';
 import { useActiveProject } from '../store/store';
 import { navigate } from '../router';
-import { computeEnergyReport } from '../lib/solar';
-import { computeFinancials } from '../lib/finance';
 import { computeFinancing } from '../lib/financing';
-import { mergedBom, bomMoney } from '../lib/bom';
 import { effectiveSld } from '../lib/sld';
 import { proposalNarrative } from '../lib/proposal-narrative';
 import {
   engineeringStatus,
-  projectStructures,
   STRUCTURE_DISCLAIMER,
   windZoneInfo,
 } from '../lib/structure';
-import { capturesFresh, isShadingFresh } from '../lib/fingerprints';
+import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, deriveStructures } from '../lib/derive';
 import { BlobImg } from '../components/BlobImg';
+import { FreshnessBanner } from '../components/FreshnessBanner';
+import { capturesFresh } from '../lib/fingerprints';
 import { useUnits } from '../lib/units';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 
@@ -45,11 +43,16 @@ function QrCode({ url, size }: { url: string; size: number }) {
 /** Printable web proposal — use the browser's Print → Save as PDF. */
 export function ProposalView() {
   const project = useActiveProject()!;
-  const r = computeEnergyReport(project);
-  const fin = computeFinancials(project, r);
-  const bom = mergedBom(project);
+  // the 3D images are a separate freshness: money can be final while a capture
+  // still shows last week's layout — say so on screen AND in print
+  const captureNotes = capturesFresh(project)
+    ? []
+    : ['the 3D images show an older layout — retake the captures in Step 7'];
+  const r = deriveEnergy(project);
+  const fin = deriveFinance(project);
+  const bom = deriveBomResult(project).lines;
   // the same money path Step 9 reads — the two documents cannot disagree
-  const money = bomMoney(bom, project);
+  const money = deriveMoney(project);
   // Four ways to buy the SAME system — derived from the one quote total, using
   // the SAME annual saving the report shows, so PPA savings reconcile exactly.
   const financing =
@@ -72,50 +75,12 @@ export function ProposalView() {
   // backend exists.
   const shareUrl = `${location.origin}/share/${project.shareId}`;
   const maxMonth = Math.max(...r.monthlyKwh, 1);
-  const shadingFresh = isShadingFresh(project);
-  const imagesFresh = capturesFresh(project);
 
   return (
     <div style={{ background: 'var(--paper-2)', minHeight: '100vh' }}>
-      {/* staleness gate: the proposal must reflect the CURRENT design (soft block) */}
-      {(!shadingFresh || !imagesFresh) && (
-        <div
-          className="no-print"
-          role="alert"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            justifyContent: 'center',
-            background: '#fffbeb',
-            borderBottom: '1px solid #f59e0b',
-            color: '#92400e',
-            padding: '9px 20px',
-            fontSize: 12.5,
-          }}
-        >
-          {!shadingFresh ? (
-            <>
-              <RefreshCw size={14} aria-hidden className="spin" />
-              Shading is recalculating after recent edits — wait a moment before printing so
-              the energy numbers reflect the final design.
-            </>
-          ) : (
-            <>
-              <Camera size={14} aria-hidden />
-              The design changed after the 3D images were captured — the pictures no longer
-              match the numbers.
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '3px 10px', fontSize: 12 }}
-                onClick={() => navigate('/wizard/7')}
-              >
-                Retake captures
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {/* staleness gate: the proposal must reflect the CURRENT design (soft block).
+          `print` keeps it visible through Print/Save-PDF, unlike the toolbar below. */}
+      <FreshnessBanner project={project} print extra={captureNotes} />
       {/* toolbar (hidden in print) */}
       <div
         className="no-print"
@@ -175,6 +140,9 @@ export function ProposalView() {
       <div style={{ maxWidth: 820, margin: '20px auto 60px', display: 'flex', flexDirection: 'column', gap: 20, padding: '0 14px' }}>
         {/* PAGE 1 — cover + 3D model */}
         <Page num={1} project={project}>
+          {/* same banner, again — this is the physical first printed page, so the
+              cover itself must carry PROVISIONAL, not just the on-screen toolbar. */}
+          <FreshnessBanner project={project} print extra={captureNotes} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 26, fontWeight: 800 }}>
@@ -409,7 +377,7 @@ export function ProposalView() {
               </div>
             </>
           )}
-          {projectStructures(project).length > 0 && (
+          {deriveStructures(project).length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 18, borderLeft: '3px solid var(--warn)', paddingLeft: 8 }}>
               <b>Mounting structure — {engineeringStatus(project).label}.</b>{' '}
               {STRUCTURE_DISCLAIMER}

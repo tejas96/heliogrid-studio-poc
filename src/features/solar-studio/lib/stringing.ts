@@ -93,6 +93,25 @@ export function validateSystem(
     }
   }
 
+  // One module, one series circuit. The planner cannot produce this; a hand
+  // edit can, and it used to pass the gate and reach the SLD (defect #2).
+  const owner = new Map<string, string>();
+  const twice = new Set<string>();
+  for (const s of strings) {
+    for (const id of s.panelIds) {
+      if (owner.has(id)) twice.add(id);
+      else owner.set(id, s.id);
+    }
+  }
+  if (twice.size > 0) {
+    issues.push({
+      level: 'error',
+      code: 'panel_in_two_strings',
+      message: `${twice.size} module${twice.size > 1 ? 's are' : ' is'} wired into two strings — a module can only be in one series circuit`,
+      focusPanelIds: [...twice],
+    });
+  }
+
   const dcKw = (totalPanels * panel.watt) / 1000;
   const acKw = inverter.acKw * inverterCount;
   if (acKw > 0) {

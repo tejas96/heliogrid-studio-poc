@@ -15,6 +15,8 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
+import { useOps } from '../store/useOps';
+import { componentsSet } from '../lib/ops/components-ops';
 import { PANEL_DB } from '../data/panels';
 import { INVERTER_DB } from '../data/inverters';
 import type { CellTech, InverterSpec, PanelSpec, Project } from '../types';
@@ -76,24 +78,24 @@ export function Step4Components() {
   const [compare, setCompare] = useState(false);
   const [pendingApply, setPendingApply] = useState<ComparisonRow | null>(null);
 
-  function setComponents(p: Partial<typeof c>) {
-    patch({ components: { ...c, ...p } });
+  const ops = useOps();
+  /**
+   * Every component change is an op: undoable, labelled, and a panel swap
+   * re-lays the tables with the new module (lib/ops/components-ops). Typed
+   * fields pass `{ undoable: false }` so a keystroke is not an undo step.
+   */
+  function setComponents(p: Partial<typeof c>, o: { undoable?: boolean } = {}) {
+    ops.run(componentsSet, p, o);
   }
 
-  /** ONE undoable patch: panel + inverter + count from a comparison row. */
+  /** ONE undoable op: panel + inverter + count from a comparison row. */
   function applyRow(row: ComparisonRow) {
     if (!row.inverter) return;
-    patch(
-      {
-        components: {
-          ...c,
-          panel: row.panel,
-          inverter: row.inverter,
-          inverterCount: row.inverterCount,
-        },
-      },
-      true,
-    );
+    ops.run(componentsSet, {
+      panel: row.panel,
+      inverter: row.inverter,
+      inverterCount: row.inverterCount,
+    });
   }
 
   const suggestedFromBill =
@@ -163,7 +165,9 @@ export function Step4Components() {
                   value={c.targetKwp || ''}
                   placeholder="0"
                   aria-label="Target capacity in kilowatt peak"
-                  onChange={(e) => setComponents({ targetKwp: Number(e.target.value) })}
+                  onChange={(e) =>
+                    setComponents({ targetKwp: Number(e.target.value) }, { undoable: false })
+                  }
                 />
                 <span
                   style={{

@@ -14,6 +14,7 @@ import { activeWeather, solarHourDate, sunPosition } from './solar';
 import { DIFFUSE_SHARE, poaBeamRatio } from './poa';
 import { DAYS_IN_MONTH } from './pvgis';
 import { buildShadowCasters, disposeGroup } from './scene-model';
+import { SAMPLE_YEAR } from './shading';
 
 export interface HeatCell {
   /** flat render position on the ground plane: (planX, 0.05, -planY) */
@@ -147,7 +148,7 @@ function buildMonthlySamples(
   hourStep: number,
   northOffsetDeg = 0,
 ): { samples: MonthSample[][]; daylength: number[] } {
-  const year = new Date().getFullYear();
+  const year = SAMPLE_YEAR; // one reference year for both samplers (defect #16)
   const samples: MonthSample[][] = [];
   const daylength: number[] = [];
   // geometry lives in the IMAGE frame — shift the sun's azimuth by the site

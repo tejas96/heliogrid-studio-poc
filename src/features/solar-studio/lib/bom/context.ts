@@ -7,7 +7,8 @@ import type { InverterSpec, PanelSpec, PlacedPanel, Project } from '../../types'
 import type { CombinerPlan } from '../electrical/combiner';
 import { combinerPlan } from '../electrical/combiner';
 import type { SegmentStructure } from '../structure';
-import { fastenerTotals, projectStructures } from '../structure';
+import { fastenerTotals } from '../structure';
+import { deriveStructures } from '../derive/structures';
 import { estimateDcCableM } from '../stringing';
 import { acCableFromRoutes, dcCableFromRoutes } from '../routing';
 import { resolveRules } from '../../data/rules/india';
@@ -164,7 +165,7 @@ export function buildContext(project: Project): BomContext | null {
   // ── Mechanical BOS — structured (elevated) segments get REAL tonnage from
   // the member/node graph (lib/structure.ts); flat per-panel prices remain
   // only for what the model does not cover (metal-shed flush, loose panels).
-  const structures = projectStructures(project);
+  const structures = deriveStructures(project);
   const structuredPanelIds = new Set(
     structures.flatMap((st) => {
       const seg = project.segments.find((sg) => sg.id === st.segmentId);
