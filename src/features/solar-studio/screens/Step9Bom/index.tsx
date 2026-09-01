@@ -46,13 +46,14 @@ import {
 } from '../../lib/bom/edit';
 import type { BomOrphan, OverridableField } from '../../lib/bom/merge';
 import { engineeringStatus, STRUCTURE_DISCLAIMER, windZoneInfo } from '../../lib/structure';
-import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney } from '../../lib/derive';
+import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, designFreshness } from '../../lib/derive';
 import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
 import { Dialog, NumberField } from '../../components/ui';
 import { genId } from '../../lib/geo';
 import type { BomLine } from '../../types';
 import { BomSection } from './BomSection';
 import { OrphanBanner } from './OrphanBanner';
+import { FreshnessBanner } from '../../components/FreshnessBanner';
 
 export function Step9Bom() {
   const project = useActiveProject()!;
@@ -66,6 +67,7 @@ export function Step9Bom() {
 
   // THE money path — same call the financials and the proposal make.
   const money = deriveMoney(project);
+  const fresh = designFreshness(project).all;
   const discount = project.pricing?.discount;
   /**
    * `undefined` REMOVES the rule rather than storing `{value: 0}` — the
@@ -190,6 +192,8 @@ export function Step9Bom() {
         </div>
       </div>
 
+      <FreshnessBanner project={project} />
+
       {/* summary strip */}
       <div
         style={{
@@ -251,7 +255,11 @@ export function Step9Bom() {
             </span>
           }
         />
-        <Stat label="Quote Total" value={`₹${money.total.toLocaleString('en-IN')}`} strong />
+        <Stat
+          label={fresh ? 'Quote Total' : 'Quote Total (provisional)'}
+          value={`₹${money.total.toLocaleString('en-IN')}`}
+          strong
+        />
         <Stat label="₹/Wp" value={`₹${perW}`} />
         <Stat
           label="Subsidy (residential)"

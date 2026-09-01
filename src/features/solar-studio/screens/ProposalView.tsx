@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import QRCode from 'qrcode';
-import { ArrowLeft, Camera, Link2, Printer, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Link2, Printer } from 'lucide-react';
 import { useActiveProject } from '../store/store';
 import { navigate } from '../router';
 import { computeFinancing } from '../lib/financing';
@@ -12,8 +12,8 @@ import {
   windZoneInfo,
 } from '../lib/structure';
 import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, deriveStructures } from '../lib/derive';
-import { capturesFresh, isShadingFresh } from '../lib/fingerprints';
 import { BlobImg } from '../components/BlobImg';
+import { FreshnessBanner } from '../components/FreshnessBanner';
 import { useUnits } from '../lib/units';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 
@@ -69,50 +69,12 @@ export function ProposalView() {
   // backend exists.
   const shareUrl = `${location.origin}/share/${project.shareId}`;
   const maxMonth = Math.max(...r.monthlyKwh, 1);
-  const shadingFresh = isShadingFresh(project);
-  const imagesFresh = capturesFresh(project);
 
   return (
     <div style={{ background: 'var(--paper-2)', minHeight: '100vh' }}>
-      {/* staleness gate: the proposal must reflect the CURRENT design (soft block) */}
-      {(!shadingFresh || !imagesFresh) && (
-        <div
-          className="no-print"
-          role="alert"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            justifyContent: 'center',
-            background: '#fffbeb',
-            borderBottom: '1px solid #f59e0b',
-            color: '#92400e',
-            padding: '9px 20px',
-            fontSize: 12.5,
-          }}
-        >
-          {!shadingFresh ? (
-            <>
-              <RefreshCw size={14} aria-hidden className="spin" />
-              Shading is recalculating after recent edits — wait a moment before printing so
-              the energy numbers reflect the final design.
-            </>
-          ) : (
-            <>
-              <Camera size={14} aria-hidden />
-              The design changed after the 3D images were captured — the pictures no longer
-              match the numbers.
-              <button
-                className="btn btn-secondary"
-                style={{ padding: '3px 10px', fontSize: 12 }}
-                onClick={() => navigate('/wizard/7')}
-              >
-                Retake captures
-              </button>
-            </>
-          )}
-        </div>
-      )}
+      {/* staleness gate: the proposal must reflect the CURRENT design (soft block).
+          `print` keeps it visible through Print/Save-PDF, unlike the toolbar below. */}
+      <FreshnessBanner project={project} print />
       {/* toolbar (hidden in print) */}
       <div
         className="no-print"
@@ -172,6 +134,9 @@ export function ProposalView() {
       <div style={{ maxWidth: 820, margin: '20px auto 60px', display: 'flex', flexDirection: 'column', gap: 20, padding: '0 14px' }}>
         {/* PAGE 1 — cover + 3D model */}
         <Page num={1} project={project}>
+          {/* same banner, again — this is the physical first printed page, so the
+              cover itself must carry PROVISIONAL, not just the on-screen toolbar. */}
+          <FreshnessBanner project={project} print />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 26, fontWeight: 800 }}>
