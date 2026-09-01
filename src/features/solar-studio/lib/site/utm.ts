@@ -1,9 +1,10 @@
 // ─── UTM ↔ WGS84 (Transverse Mercator, Snyder series) ───────────────────────
 // Google Solar dataLayers rasters are georeferenced in UTM (verified live:
 // EPSG:32643 for Pune — zone 43N, meters). Converting each traced vertex
-// UTM → lat/lng → makeProjector local-EN handles grid convergence and scale
-// EXACTLY, with no proj4 dependency. Standard Snyder series for the WGS84
-// ellipsoid; accuracy ~1 mm — far inside the ≤0.5 m alignment gate.
+// UTM → lat/lng → site-frame EN (frameFor / toEN in ./frame.ts) handles grid
+// convergence and scale EXACTLY, with no proj4 dependency. Standard Snyder
+// series for the WGS84 ellipsoid; accuracy ~1 mm — far inside the ≤0.5 m
+// alignment gate. The forward series below is the door out (toUtm) for CAD.
 const A = 6378137.0; // WGS84 semi-major
 const F = 1 / 298.257223563;
 const K0 = 0.9996;

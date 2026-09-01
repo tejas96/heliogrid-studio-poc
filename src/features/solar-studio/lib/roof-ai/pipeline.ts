@@ -23,8 +23,16 @@ export interface DetectInput {
   pin: LatLng;
   /**
    * The project's site frame. Optional so existing callers keep working; when
-   * absent one is built from `pin`. Passing the real frame matters once a
-   * project carries a north offset.
+   * absent one is built from `pin` — at northOffsetDeg 0.
+   *
+   * Nobody passes it yet: detect-client.ts's detectRoofs(pin, radiusM) has no
+   * frame parameter and the worker payload carries only the pin. So a user
+   * who has set a non-zero north offset in CalibrateDialog (settable TODAY,
+   * not only with a rotated imported underlay) gets roofs detected at 0°
+   * rotation, while shading, the scene and the north badge use the offset.
+   * This is PRE-EXISTING behaviour, not a regression — makeProjector never
+   * applied the offset either. Wiring the frame through detect-client and the
+   * worker payload is what closes it.
    */
   frame?: SiteFrame;
   imageryDate?: string;

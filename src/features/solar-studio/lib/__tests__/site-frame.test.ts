@@ -290,3 +290,28 @@ describe('makeProjector is gone', () => {
     expect('makeProjector' in geo).toBe(false);
   });
 });
+
+describe('lib/site/index.ts — the public surface spec §3 lists', () => {
+  it('re-exports every public function of frame.ts and utm.ts, by identity', async () => {
+    const site = (await import('../site')) as Record<string, unknown>;
+    for (const name of [
+      'makeSiteFrame',
+      'toEN',
+      'toLatLng',
+      'reanchor',
+      'toUtm',
+      'fromUtm',
+      'frameFor',
+      'utmZoneFromEpsg',
+      'utmZoneForLatLng',
+      'utmToLatLng',
+      'latLngToUtm',
+      'gridConvergenceDeg',
+    ]) {
+      expect(typeof site[name], name).toBe('function');
+    }
+    // the same functions, not wrappers — a consumer of either path gets one ruler
+    expect(site.makeSiteFrame).toBe(makeSiteFrame);
+    expect(site.toEN).toBe(toEN);
+  });
+});

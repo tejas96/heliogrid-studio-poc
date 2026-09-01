@@ -17,7 +17,7 @@ import { useActiveProject, useProjectPatch } from '../store/store';
 import { Seg } from '../components/ui';
 import { INDIAN_STATES, discomsForState, tariffFor } from '../data/discoms';
 import { loadGoogleMaps } from '../lib/maps';
-import { makeSiteFrame } from '../lib/site/frame';
+import { frameFor, makeSiteFrame, toEN } from '../lib/site/frame';
 import { latLngNear, mockIrradiance } from '../lib/solar';
 import { fetchBuildingInsights } from '../lib/solarApi';
 import { fetchWeather } from '../lib/weatherApi';
@@ -400,14 +400,17 @@ function LocationSection() {
     // the design and start fresh. Threshold is generous (25 m): getCenter drifts
     // several metres on map re-layout, and destroying work on that jitter is far
     // worse than keeping stale roofs — a real relocation moves the pin far more.
-    const prev = project.location?.latLng;
+    // The distance is measured in the site frame. This was the last hardcoded
+    // 111320 m/° ruler left in the studio after makeProjector went; frameFor /
+    // toEN is the only lat/lng → metre path. A rotation cannot change a hypot,
+    // so a calibrated north offset does not move the threshold.
+    const prevFrame = frameFor(project); // null until a location was confirmed
     let movedM = 0;
-    if (prev) {
-      const dLat = (lat - prev.lat) * 111320;
-      const dLng = (lng - prev.lng) * 111320 * Math.cos((prev.lat * Math.PI) / 180);
-      movedM = Math.hypot(dLat, dLng);
+    if (prevFrame) {
+      const d = toEN(prevFrame, { lat, lng });
+      movedM = Math.hypot(d.x, d.y);
     }
-    const moved = !!prev && movedM > 25;
+    const moved = !!prevFrame && movedM > 25;
     const freshDesign: Partial<Project> = moved
       ? {
           roofs: [],
@@ -427,9 +430,10 @@ function LocationSection() {
           coverForLayoutFp: null,
           // stamps/overrides describe the wiped design — reset them with it
           derived: { solarAccessFp: null, sldOverrides: null, sldIntroSeen: false, healthSnapshot: null },
-          // new location = new imagery — the old imagery calibration is void
+          // new location = new imagery — the old imagery calibration is void.
+          // (No `siteFrame` here: the patch below always sets it from the NEW
+          // pin, so a wipe never leaves the frame null.)
           calibration: { scaleFactor: 1, northOffsetDeg: 0, reference: null },
-          siteFrame: null,
           wizardStep: 1,
         }
       : {};
