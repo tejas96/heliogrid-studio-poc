@@ -374,18 +374,40 @@ verbatim; only its callers change.
 
 `confirmLocation`'s 25 m destruction (D4) is deleted outright.
 
-Moving the pin computes `deltaEN` via `frame.reanchor`, where
+Moving the pin calls `frame.reanchor(oldFrame, newOrigin)` — the **frame-level**
+operation. It returns the new frame (same `scaleFactor` / `northOffsetDeg`, fresh UTM
+anchor) together with
 
 ```
 deltaEN = toEN(oldFrame, newOrigin)      // the new origin expressed in the OLD frame
 ```
 
-If a design exists and `|deltaEN| > 1 m`, one dialog with two outcomes:
+`|deltaEN|` is the move distance the dialog shows and gates on. If a design exists and
+`|deltaEN| > 1 m`, one dialog with two outcomes:
 
 | Choice | Effect |
 |---|---|
-| **Keep the design on the same building** *(default)* | `p' = p − deltaEN` for every stored EN point. The design stays at the same lat/lng; only the frame origin moved. |
+| **Keep the design on the same building** *(default)* | Every stored EN point is re-projected **per point, exactly**: `p' = toEN(newFrame, toLatLng(oldFrame, p))`. The design stays at the same lat/lng; only the frame origin moved. |
 | **Slide the design to the new spot** | EN values untouched, so the design keeps its offset from the pin and moves with it. |
+
+**Why per point, not `p' = p − deltaEN`** *(corrected in the final review of slice 1)*. A
+single translation is exact only to first order: the new frame's origin latitude changed,
+so its metres-per-degree differ from the old frame's, and subtracting one constant leaves
+a residual that grows with the move and with the geometry's distance from the origin.
+Measured for geometry at (300, −200), moving the pin equally in lat and lng:
+
+| Move | Residual of `p − deltaEN` |
+|---|---|
+| 76 m | 0.7 mm |
+| 765 m | 6.6 mm |
+| 3.06 km | 0.21 m |
+| 13.8 km | 4.83 m |
+
+The per-point transform costs two function calls per vertex and is exact to the frame's
+own round-trip error (< 1 mm at 300 m). `reanchor` keeps returning `deltaEN` for the
+distance readout; the dialog must never use it to move geometry. `reanchor` itself is
+unchanged — it is the frame-level operation, and the per-point transform is how the
+dialog applies the move.
 
 Cancel leaves everything alone. The whole re-anchor is one undoable patch.
 

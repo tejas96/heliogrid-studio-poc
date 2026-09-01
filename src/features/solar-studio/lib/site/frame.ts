@@ -142,11 +142,30 @@ export function toLatLng(frame: SiteFrame, p: XY): LatLng {
 }
 
 /**
- * Move the frame's origin, keeping every other frame property.
+ * Move the frame's origin, keeping every other frame property — the
+ * FRAME-LEVEL operation of spec §6. Unconsumed in slice 1; slice 3's dialog
+ * consumes it.
  *
- * `deltaEN` is the NEW origin expressed in the OLD frame. Spec section 6:
- *   keep the design on the same building -> p' = p - deltaEN
+ * `deltaEN` is the NEW origin expressed in the OLD frame: the move distance
+ * the dialog shows and gates on (|deltaEN| > 1 m). Spec §6:
+ *   keep the design on the same building -> p' = toEN(frame', toLatLng(frame, p))
  *   slide the design to the new spot     -> leave p alone
+ *
+ * Do NOT apply the move as one translation, `p' = p − deltaEN`. That is exact
+ * only to first order: the new frame's origin latitude changed, so its
+ * metres-per-degree differ, and one constant leaves a residual that grows
+ * with the move and with the geometry's distance from the origin. Measured
+ * for geometry at (300, −200), moving the pin equally in lat and lng:
+ *
+ *     move       residual of p − deltaEN
+ *     76 m       0.7 mm
+ *     765 m      6.6 mm
+ *     3.06 km    0.21 m
+ *     13.8 km    4.83 m
+ *
+ * The exact per-point transform costs two calls per vertex and is good to the
+ * frame's own round-trip error (< 1 mm at 300 m). site-frame.test.ts pins
+ * both the residual and the exactness.
  */
 export function reanchor(
   frame: SiteFrame,

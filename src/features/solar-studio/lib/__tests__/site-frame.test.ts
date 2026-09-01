@@ -178,6 +178,36 @@ describe('reanchor', () => {
     const far = reanchor(f, { lat: 18.5, lng: 81.1 }); // zone 44
     expect(far.frame.utmZone).toBe(44);
   });
+
+  it('a single translation p − deltaEN is only first-order; the per-point transform is exact', () => {
+    // Spec §6 specifies p' = toEN(newFrame, toLatLng(oldFrame, p)) per point.
+    // The "same ground" test above passes with p − deltaEN only because a 76 m
+    // move leaves a 0.7 mm residual, inside its 1 mm tolerance. This pins the
+    // residual table on reanchor's comment so slice 3 cannot build the dialog
+    // on the linearised version by accident: at 13.8 km it is 4.83 m.
+    const f = makeSiteFrame(PUNE);
+    const p = { x: 300, y: -200 };
+    const truth = toLatLng(f, p);
+    const table: [number, number, number][] = [
+      // [degrees moved in BOTH lat and lng, expected move m, expected residual m]
+      [0.0005, 76.5, 0.00072],
+      [0.005, 764.9, 0.00664],
+      [0.02, 3059.5, 0.2108],
+      [0.09, 13767.6, 4.826],
+    ];
+    for (const [d, moveM, residualM] of table) {
+      const { frame: f2, deltaEN } = reanchor(f, { lat: PUNE.lat + d, lng: PUNE.lng + d });
+      expect(Math.hypot(deltaEN.x, deltaEN.y)).toBeCloseTo(moveM, 0);
+      const linear = { x: p.x - deltaEN.x, y: p.y - deltaEN.y };
+      const exact = toEN(f2, toLatLng(f, p));
+      // the residual grows with the move, exactly as the table says
+      expect(Math.hypot(linear.x - exact.x, linear.y - exact.y)).toBeCloseTo(residualM, 3);
+      // and the per-point transform lands on the same ground every time
+      const back = toLatLng(f2, exact);
+      expect(back.lat).toBeCloseTo(truth.lat, 9);
+      expect(back.lng).toBeCloseTo(truth.lng, 9);
+    }
+  });
 });
 
 describe('UTM interchange from local EN', () => {
