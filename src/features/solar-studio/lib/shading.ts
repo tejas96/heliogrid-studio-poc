@@ -64,6 +64,14 @@ const SAMPLE_HOUR_FROM = 4;
 const SAMPLE_HOUR_TO = 20;
 const SAMPLE_HOUR_STEP = 0.5;
 
+/**
+ * Fixed reference year for the sun quadrature. The sun's path repeats to
+ * within arc-minutes year over year, so any year gives the same access — but
+ * a WALL-CLOCK year made stamped-fresh solar access silently change across a
+ * New Year boundary (master plan defect #16). Shared with the heatmap sampler.
+ */
+export const SAMPLE_YEAR = 2025;
+
 export interface ShadingSample {
   dir: THREE.Vector3;
   weight: number;
@@ -75,7 +83,7 @@ export function buildSunSamples(
   northOffsetDeg = 0,
 ): ShadingSample[] {
   const samples: ShadingSample[] = [];
-  const y = new Date().getFullYear();
+  const y = SAMPLE_YEAR;
   // the traced geometry lives in the IMAGE frame; when true north is rotated
   // northOffsetDeg clockwise from image-up (site calibration), the sun's
   // image-frame azimuth shifts by the same amount

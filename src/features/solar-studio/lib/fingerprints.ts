@@ -241,7 +241,10 @@ export function designFp(p: Project): string {
 //       window at 0.5 h, sinα·dh weights (was 08:00–17:00 at ~1.5 h with a
 //       0.05 weight floor). The engine had been blind to the low-sun hours the
 //       scrubbed scene shows — and where row shading actually happens.
-export const SHADING_ENGINE_VERSION = 6;
+//   v7 (Phase 1 design kernel): a FIXED sample year (defect #16 — the wall-clock
+//       year silently re-sampled the sun every January) and lightning arresters
+//       cast in the engine as the scene always showed (defect #12).
+export const SHADING_ENGINE_VERSION = 7;
 
 /**
  * Recompute/stamp key for per-panel solar access (Class-A derived data).
