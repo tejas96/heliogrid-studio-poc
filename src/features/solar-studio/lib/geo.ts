@@ -1,29 +1,8 @@
-// ─── Geometry helpers: lat/lng ↔ local meters, polygon math ────────────────
+// ─── Geometry helpers: polygon math ────────────────────────────────────────
+// lat/lng <-> local metres moved to lib/site/frame.ts, which is geodetically
+// exact. This file is pure planar geometry.
 import pc from 'polygon-clipping';
-import type { LatLng, XY } from '../types';
-
-const EARTH_R = 6378137;
-
-/** Equirectangular projection around an origin — accurate enough at roof scale. */
-export function makeProjector(origin: LatLng) {
-  const latRad = (origin.lat * Math.PI) / 180;
-  const mPerDegLat = (Math.PI / 180) * EARTH_R;
-  const mPerDegLng = mPerDegLat * Math.cos(latRad);
-  return {
-    toXY(p: LatLng): XY {
-      return {
-        x: (p.lng - origin.lng) * mPerDegLng,
-        y: (p.lat - origin.lat) * mPerDegLat,
-      };
-    },
-    toLatLng(p: XY): LatLng {
-      return {
-        lat: origin.lat + p.y / mPerDegLat,
-        lng: origin.lng + p.x / mPerDegLng,
-      };
-    },
-  };
-}
+import type { XY } from '../types';
 
 export function dist(a: XY, b: XY): number {
   return Math.hypot(b.x - a.x, b.y - a.y);

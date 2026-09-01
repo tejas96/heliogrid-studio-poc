@@ -203,3 +203,12 @@ describe('UTM interchange from local EN', () => {
     expect(Math.hypot(back.x - p.x, back.y - p.y)).toBeLessThan(0.001);
   });
 });
+
+describe('makeProjector is gone', () => {
+  it('lib/geo.ts no longer exports a projector', async () => {
+    // A second lat/lng->metre path is exactly how the 0.57% stretch survived so
+    // long: two frames that disagreed, each locally reasonable. One path only.
+    const geo = await import('../geo');
+    expect('makeProjector' in geo).toBe(false);
+  });
+});

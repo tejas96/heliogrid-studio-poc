@@ -55,7 +55,6 @@ import {
   genId,
   insetPolygonRobust,
   isCCW,
-  makeProjector,
   pointInPolygon,
   pointSegDist,
   polygonArea,
@@ -64,6 +63,7 @@ import {
   sub,
   validateRoofPolygon,
 } from '../lib/geo';
+import { frameFor, toEN } from '../lib/site/frame';
 import { defaultPanelPose, panelCornersOnRoof } from '../lib/layout';
 import { cascadeDeleteRoof } from '../lib/cascade';
 import { gableFaces } from '../lib/roof-gable';
@@ -267,13 +267,14 @@ export function Step2Roof() {
     if (!selected || hintDoneRoofs[selected.id]) return null;
     const segs = loc.solarInsights?.roofSegments;
     if (!segs?.length) return null;
-    const proj = makeProjector(loc.latLng);
+    const frame = frameFor(project);
+    if (!frame) return null;
     const c = polygonCentroid(selected.polygon);
     let best: (typeof segs)[number] | null = null;
     let bestD = Infinity;
     for (const s of segs) {
       if (!s.center) continue;
-      const sc = proj.toXY(s.center);
+      const sc = toEN(frame, s.center);
       const d = Math.hypot(sc.x - c.x, sc.y - c.y);
       if (d < bestD) { bestD = d; best = s; }
     }
@@ -284,7 +285,7 @@ export function Step2Roof() {
       Math.abs(((best.azimuthDeg - selected.slopeAzimuthDeg + 540) % 360) - 180) <= 8;
     if (samePitch && sameAz) return null;
     return best;
-  }, [selected, hintDoneRoofs, loc.solarInsights, loc.latLng]);
+  }, [selected, hintDoneRoofs, loc.solarInsights, loc.latLng, project]);
 
   const canUndo = state.undoStack.length > 0;
   const canRedo = state.redoStack.length > 0;
