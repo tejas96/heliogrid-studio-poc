@@ -7,8 +7,15 @@
 // nesting: T(center) · Ry(yaw) · [Rx(−tilt) for the module | legs untilted].
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+import { useCursor } from '@react-three/drei';
 import { getPanelMaterials } from './textures';
 import { panelInstanceMatrix } from '../lib/scene-frame';
+
+const WHITE = new THREE.Color('#ffffff');
+/** selected: warm brass — the design system's accent, multiplied over the glass */
+const SELECTED = new THREE.Color('#ffc766');
+/** hovered: a cool lift, clearly not the accent */
+const HOVERED = new THREE.Color('#b8dcff');
 
 export interface PanelInstance {
   id: string;
@@ -40,12 +47,21 @@ export function PanelsInstanced({
   items,
   accessView,
   onPanelClick,
+  onPanelHover,
+  selectedIds,
+  hoverId = null,
   ghost = false,
 }: {
   items: PanelInstance[];
   accessView: boolean;
-  /** §H on-object editing: reports the clicked panel (ignored while orbiting) */
-  onPanelClick?: (panelId: string) => void;
+  /** §H on-object editing: reports the clicked panel (ignored while orbiting);
+   *  `additive` = shift/ctrl held, the same multi-select gesture as the 2D editor */
+  onPanelClick?: (panelId: string, additive: boolean) => void;
+  /** null when the pointer leaves the modules */
+  onPanelHover?: (panelId: string | null) => void;
+  /** the editor's selection — tinted brass so 2D and 3D agree on what is picked */
+  selectedIds?: ReadonlySet<string>;
+  hoverId?: string | null;
   /**
    * Draw these modules translucent so the structure beneath reads (Phase 22l).
    *
@@ -109,7 +125,8 @@ export function PanelsInstanced({
         i,
         composeInstance(m, p, true, [0, accessView ? 0.02 : 0, 0], [p.w, 0.045, p.d]),
       );
-      if (accessView) glassMesh.setColorAt(i, accessColor(p.access));
+      // always allocate instanceColor: selection/hover tint it later without a rebuild
+      glassMesh.setColorAt(i, accessView ? accessColor(p.access) : WHITE);
     });
 
     // aluminum frame — hidden in access view so gray doesn't wash the tint, and
@@ -172,19 +189,75 @@ export function PanelsInstanced({
     [glassMesh, frameMesh, legMesh],
   );
 
+  // Selection + hover tint: a per-instance colour write, never a rebuild. In
+  // access view the tint is skipped — the colour IS the data there (N6).
+  useEffect(() => {
+    if (accessView || ghost || !glassMesh.instanceColor) return;
+    items.forEach((p, i) => {
+      const c = selectedIds?.has(p.id) ? SELECTED : p.id === hoverId ? HOVERED : WHITE;
+      glassMesh.setColorAt(i, c);
+    });
+    glassMesh.instanceColor.needsUpdate = true;
+  }, [glassMesh, items, selectedIds, hoverId, accessView, ghost]);
+
+  // A tint alone is too faint on navy glass, so the picked modules also get a
+  // HALO: an unlit brass (selected) / sky-blue (hovered) plate just above the
+  // glass, the 3D twin of the 2D editor's selection outline. Rebuilt only when
+  // the pick changes, and only as large as the pick.
+  const haloMat = useMemo(
+    () => new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.55, depthWrite: false }),
+    [],
+  );
+  useEffect(() => () => haloMat.dispose(), [haloMat]);
+  const haloMesh = useMemo(() => {
+    if (ghost) return null;
+    const picked = items.filter((p) => selectedIds?.has(p.id) || p.id === hoverId);
+    if (picked.length === 0) return null;
+    const mesh = new THREE.InstancedMesh(boxGeom, haloMat, picked.length);
+    const m = new THREE.Matrix4();
+    picked.forEach((p, i) => {
+      mesh.setMatrixAt(i, composeInstance(m, p, true, [0, 0.035, 0], [p.w + 0.08, 0.012, p.d + 0.08]));
+      mesh.setColorAt(i, selectedIds?.has(p.id) ? SELECTED : HOVERED);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 3;
+    return mesh;
+  }, [items, selectedIds, hoverId, ghost, boxGeom, haloMat]);
+  useEffect(() => () => haloMesh?.dispose(), [haloMesh]);
+
+  useCursor(!!hoverId && !ghost, 'pointer', 'auto');
+
+  type PickEvent = {
+    instanceId?: number;
+    delta: number;
+    stopPropagation: () => void;
+    nativeEvent: MouseEvent | PointerEvent;
+  };
   const click =
     onPanelClick &&
-    ((e: { instanceId?: number; delta: number; stopPropagation: () => void }) => {
+    ((e: PickEvent) => {
       if (e.delta > 4 || e.instanceId == null) return; // drag, not a click
       e.stopPropagation();
       const it = items[e.instanceId];
-      if (it) onPanelClick(it.id);
+      if (it) onPanelClick(it.id, e.nativeEvent.shiftKey || e.nativeEvent.ctrlKey || e.nativeEvent.metaKey);
     });
+  const move =
+    onPanelHover &&
+    ((e: PickEvent) => {
+      if (e.instanceId == null) return;
+      e.stopPropagation();
+      const it = items[e.instanceId];
+      if (it && it.id !== hoverId) onPanelHover(it.id);
+    });
+  const out = onPanelHover && (() => onPanelHover(null));
   return (
     <>
-      <primitive object={glassMesh} onClick={click} />
-      {frameMesh && <primitive object={frameMesh} onClick={click} />}
+      <primitive object={glassMesh} onClick={click} onPointerMove={move} onPointerOut={out} />
+      {frameMesh && <primitive object={frameMesh} onClick={click} onPointerMove={move} onPointerOut={out} />}
       {legMesh && <primitive object={legMesh} />}
+      {haloMesh && <primitive object={haloMesh} raycast={() => null} />}
     </>
   );
 }

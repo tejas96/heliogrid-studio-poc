@@ -130,6 +130,9 @@ export function Scene3D({
   projectOverride,
   focusRoofId,
   initialViewMode = 'map',
+  visible = true,
+  selectedIds,
+  onSelectPanels,
 }: {
   onClose?: () => void;
   captureMode?: boolean;
@@ -140,6 +143,14 @@ export function Scene3D({
   /** roof to isolate in mesh view (studio render of a single building) */
   focusRoofId?: string;
   initialViewMode?: 'map' | 'mesh';
+  /**
+   * The scene stays MOUNTED while the 2D editor is up (no GL context, GLB or
+   * texture rebuild on every toggle); `visible=false` parks the render loop.
+   */
+  visible?: boolean;
+  /** the editor's module selection — 2D and 3D pick the same things */
+  selectedIds?: string[];
+  onSelectPanels?: (ids: string[], additive: boolean) => void;
 }) {
   const storeProject = useActiveProject();
   const project = projectOverride ?? storeProject!;
@@ -428,7 +439,9 @@ export function Scene3D({
       fn();
       return;
     }
-    if (e.key === 'Escape' && onClose) {
+    // Escape peels one layer at a time: an open card closes first (its own
+    // listener does that); only a bare scene leaves the 3D view
+    if (e.key === 'Escape' && onClose && !structEdit) {
       e.preventDefault();
       onClose();
     }
@@ -443,8 +456,10 @@ export function Scene3D({
   // and focusing it is a no-op. Handing focus back is the parent's job, since
   // only the parent still has a mounted element to hand it to.
   useEffect(() => {
-    wrapRef.current?.focus();
-  }, []);
+    if (visible) wrapRef.current?.focus();
+  }, [visible]);
+
+  const selectedSet = useMemo(() => new Set(selectedIds ?? []), [selectedIds]);
 
   function capture() {
     const gl = glRef.current;
@@ -475,6 +490,7 @@ export function Scene3D({
     >
       <Canvas
         shadows={{ type: THREE.PCFSoftShadowMap }}
+        frameloop={visible ? 'always' : 'never'}
         // retina at 3× rendered four times the pixels for no visible gain; 1.5 is
         // the sweet spot for a scene with SMAA on top
         dpr={[1, 1.5]}
@@ -511,6 +527,8 @@ export function Scene3D({
           heatResult={heatResult}
           heatMonth={heatMonth}
           bounds={bounds}
+          selectedIds={selectedSet}
+          onSelectPanels={onSelectPanels}
         />
         {/* Camera director: smooth, damped, touch-native (one finger pans, two
             fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
@@ -1054,9 +1072,13 @@ function SceneContent({
   heatResult,
   heatMonth,
   bounds,
+  selectedIds,
+  onSelectPanels,
 }: {
   project: Project;
   bounds: SceneBounds;
+  selectedIds: ReadonlySet<string>;
+  onSelectPanels?: (ids: string[], additive: boolean) => void;
   sunAltitude: number;
   sunAzimuth: number;
   solarAccessView: boolean;
@@ -1111,14 +1133,19 @@ function SceneContent({
     );
     return allStructures.filter((s) => keep.has(s.segmentId));
   }, [allStructures, selectedSegId, view]);
-  // ANY segmented panel opens the editor — a flush table has no structure to
-  // click, and must stay re-elevatable from 3D
+  // A click SELECTS the module (shared with the 2D editor) and, for a plain
+  // click, opens its table's on-object card — a flush table has no structure
+  // to click, and must stay re-elevatable from 3D. Shift/ctrl adds to the
+  // selection without opening anything, like the 2D editor.
+  const [hoverId, setHoverId] = useState<string | null>(null);
   const onPanelClickToEdit = useCallback(
-    (panelId: string) => {
+    (panelId: string, additive: boolean) => {
+      onSelectPanels?.([panelId], additive);
+      if (additive) return;
       const pp = project.panels.find((x) => x.id === panelId);
       if (pp?.segmentId) onStructOpen(pp.segmentId, pp.id);
     },
-    [project.panels, onStructOpen],
+    [project.panels, onStructOpen, onSelectPanels],
   );
 
 
@@ -1440,6 +1467,9 @@ function SceneContent({
           <PanelsInstanced
             accessView={solarAccessView}
             onPanelClick={onPanelClickToEdit}
+            onPanelHover={setHoverId}
+            selectedIds={selectedIds}
+            hoverId={hoverId}
             items={panelParts.normal}
           />
           {panelParts.ghost.length > 0 && (
@@ -1447,6 +1477,9 @@ function SceneContent({
               ghost
               accessView={false}
               onPanelClick={onPanelClickToEdit}
+              onPanelHover={setHoverId}
+              selectedIds={selectedIds}
+              hoverId={hoverId}
               items={panelParts.ghost}
             />
           )}

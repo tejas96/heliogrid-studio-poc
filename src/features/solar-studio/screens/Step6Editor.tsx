@@ -275,7 +275,10 @@ export function Step6Editor() {
   // Only here, after the editor has re-rendered, does a target exist again.
   const open3DRef = useRef<HTMLButtonElement>(null);
   const was3D = useRef(false);
+  // mounted lazily on first open, then kept
+  const [opened3D, setOpened3D] = useState(false);
   useEffect(() => {
+    if (show3D) setOpened3D(true);
     if (was3D.current && !show3D) open3DRef.current?.focus();
     was3D.current = show3D;
   }, [show3D]);
@@ -895,6 +898,7 @@ export function Step6Editor() {
     keyHandler.current = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]'))
         return;
+      if (show3D) return; // the scene owns the keyboard while it is up
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
@@ -970,12 +974,28 @@ export function Step6Editor() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  if (show3D) {
-    return <Scene3D onClose={() => setShow3D(false)} />;
-  }
-
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
+      {/* The 3D scene is a persistent layer, not a replacement: once opened it
+          stays mounted (GL context, GLBs and the satellite texture survive the
+          toggle) and only its render loop is parked while the plan is up.
+          Selection is shared, so what is picked here is picked there. */}
+      {opened3D && (
+        <div hidden={!show3D}>
+          <Scene3D
+            visible={show3D}
+            onClose={() => setShow3D(false)}
+            selectedIds={selectedIds}
+            onSelectPanels={(ids, additive) =>
+              setSelectedIds((cur) => {
+                if (!additive) return ids;
+                const all = ids.every((id) => cur.includes(id));
+                return all ? cur.filter((x) => !ids.includes(x)) : [...new Set([...cur, ...ids])];
+              })
+            }
+          />
+        </div>
+      )}
       {/* validation banner (the plan-limit gate is gone — D38) */}
       {issues.length > 0 && (
         <button
