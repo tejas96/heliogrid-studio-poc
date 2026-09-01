@@ -40,6 +40,11 @@ describe('decodeGeoTiff (real dataLayers rasters)', () => {
   });
 });
 
+// Covers the raster→frame chain in isolation: decodeGeoTiff's own
+// georeferencing (pixelToLatLng, from the raster's UTM tags) piped through
+// lib/site/frame.ts. It does NOT call detectRoofArtifact and so does NOT
+// cover pipeline.ts's choice of projector — see the golden test inside
+// 'detectRoofArtifact — dense fixture' below for that.
 describe('coordinate alignment gate (≤ 0.5 m)', () => {
   it('raster center maps back to the request pin', async () => {
     const mask = await decodeGeoTiff(await buf('datalayers-pune-dense', 'mask.tif'));
@@ -110,6 +115,44 @@ describe('detectRoofArtifact — dense fixture (building present)', () => {
       expect(sanitizeRoofPolygon(main.polygon).ok).toBe(true);
       expect(main.confidence).toBeGreaterThan(0);
       expect(main.confidence).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('golden: largest roof holds its north-south extent to real ground metres', async () => {
+    // GOLDEN / characterization test — same convention as bom-golden.test.ts and
+    // structure-golden.test.ts: pin the CURRENT, correct output, then diff future
+    // changes against it. This is the one test in this file that actually calls
+    // detectRoofArtifact (via the run() helper above) and would catch a regression
+    // to the old projector; the 'coordinate alignment gate' tests build their own
+    // frame directly against decodeGeoTiff and never touch the pipeline, so they
+    // pass unchanged even if pipeline.ts reverts to makeProjector.
+    //
+    // Golden value: 17.2439 m, measured from validated.artifact.roofs[0].polygon —
+    // max(y) - min(y), the polygon's north-south span in the image-aligned frame.
+    //
+    // Tolerance arithmetic: the bug this slice fixes adds +0.572% to any north-south
+    // length (equatorial vs meridional earth radius at Pune's latitude, 18.52°N).
+    // At this extent that is 0.00572 × 17.2439 ≈ 0.0986 m. A tolerance a quarter of
+    // that, ≈0.0247 m, is the loosest bound that still can't hide the bug. This test
+    // uses 0.02 m — tighter still, and the pipeline is proven bit-deterministic
+    // (see 'is fully deterministic' below), so there is no run-to-run noise to absorb.
+    //
+    // What a failure means:
+    //   - drift of about +0.57% (extent lands near 17.34 m, i.e. +0.099 m): the
+    //     pipeline has reverted to an equatorial-radius projector. Fix pipeline.ts;
+    //     do not touch this golden value.
+    //   - any OTHER drift: the vectorizer (traceBoundary / simplifyDP /
+    //     orthogonalizeGated) changed on purpose. Re-measure and re-baseline this
+    //     golden value deliberately.
+    const artifact = await run();
+    const validated = validateArtifact(artifact, DENSE_PIN);
+    expect(validated.ok).toBe(true);
+    if (validated.ok) {
+      const main = validated.artifact.roofs[0]; // largest component first
+      const ys = main.polygon.map((p) => p.y);
+      const extentNS = Math.max(...ys) - Math.min(...ys);
+      expect(extentNS).toBeGreaterThan(17.2439 - 0.02);
+      expect(extentNS).toBeLessThan(17.2439 + 0.02);
     }
   });
 
