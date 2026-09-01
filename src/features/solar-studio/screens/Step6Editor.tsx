@@ -126,6 +126,45 @@ registerAllAnalyzers();
 import { movePanels, nudgeDelta } from '../lib/panel-move';
 import { Scene3D } from '../three/Scene3D';
 import { findEraseTargetAt } from './step6-erase';
+import { useOps } from '../store/useOps';
+import { summarizeImpact } from '../lib/ops/metrics';
+import type { OpPreview } from '../lib/ops/run';
+import {
+  layoutAutoDesign,
+  layoutGroup,
+  layoutGrow,
+  panelsDelete,
+  panelsNudge,
+  panelsRotate,
+  panelsSetEnabled,
+  segmentChoice,
+  segmentDelete,
+  segmentDuplicate,
+  segmentRespace,
+  segmentSetAzimuth,
+  segmentSetProfile,
+  segmentSetRacking,
+  segmentSetStructureFields,
+  segmentSetTilt,
+} from '../lib/ops/layout-ops';
+import {
+  inverterPlace,
+  inverterRemove,
+  meterPlace,
+  meterRemove,
+  routesMoveWaypoint,
+  stringsAddManual,
+  stringsResetToAuto,
+} from '../lib/ops/electrical-ops';
+import {
+  arresterAdd,
+  arresterRemove,
+  keepoutAdd,
+  railAdd,
+  railRemove,
+  walkwayAdd,
+  walkwayRemove,
+} from '../lib/ops/site-ops';
 
 type Tool =
   | 'select'
@@ -136,8 +175,6 @@ type Tool =
   | 'inverter'
   | 'keepout'
   | 'erase';
-
-const PLAN_LIMIT_KW = resolveRules().defaults.planLimitKw; // freemium capacity gate
 
 const MUTATING_TOOLS: Tool[] = [
   'panels',
@@ -210,6 +247,16 @@ function RailBtn({
 export function Step6Editor() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
+  const ops = useOps();
+  /** One place decides what an op's outcome looks like: a refusal, or the impact line. */
+  function report(r: OpPreview): r is Extract<OpPreview, { ok: true }> {
+    if (!r.ok) {
+      flash('info', r.refusal.reason);
+      return false;
+    }
+    flash('ok', summarizeImpact(r.impact));
+    return true;
+  }
   const { state, dispatch } = useStore();
   const loc = project.location!;
   const spec = project.components.panel!;
@@ -295,14 +342,6 @@ export function Step6Editor() {
     };
   }, [manualString, project, spec, inverter]);
 
-  // step 5: offer auto-placement once when arriving with no panels
-  useEffect(() => {
-    if (project.panels.length === 0 && project.roofs.length > 0) {
-      setConfirmPlace(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
 
   // Real rasterised solar-access heatmap for the 2D canvas — same engine as 3D,
@@ -336,7 +375,7 @@ export function Step6Editor() {
     [project.panels, selectedIds],
   );
 
-  const overLimit = kwp > PLAN_LIMIT_KW;
+  const overLimit = false; // D38: no plan-limit gate — the capacity readout stays
   // banners stack: plan-limit (if over) then DRC issues (if any)
   const chromeTop = (overLimit ? 38 : 0) + (issues.length > 0 ? 38 : 0) + 14;
 
@@ -385,18 +424,10 @@ export function Step6Editor() {
   function runAutoPlace(objective: 'target_kwp' | 'max_roof' = 'target_kwp') {
     // ranked, budgeted, EXPLAINED layout (Phase 6) — roofs fill in order of
     // measured expected energy, and every choice lands in the decision log
-    const result = autoDesign(project, objective);
-    patch(
-      {
-        panels: result.panels,
-        segments: result.segments,
-        designLog: result.decisions,
-      },
-      true,
-    );
-    for (const w of result.warnings) flash('info', w);
+    const r = ops.run(layoutAutoDesign, { objective });
     setConfirmPlace(false);
-    if (result.decisions.length > 0) setWhySheet(true);
+    if (!report(r)) return;
+    if ((r.next.designLog ?? []).length > 0) setWhySheet(true);
   }
 
   // ── selection actions ──────────────────────────────────────────────────────
@@ -407,14 +438,7 @@ export function Step6Editor() {
       return;
     }
     const enable = !selectedPanels.every((p) => p.enabled);
-    patch(
-      {
-        panels: project.panels.map((p) =>
-          selectedIds.includes(p.id) ? { ...p, enabled: enable } : p,
-        ),
-      },
-      true,
-    );
+    report(ops.run(panelsSetEnabled, { ids: selectedIds, enabled: enable }));
   }
 
   function rotateSelected(deltaDeg: number) {
@@ -422,16 +446,7 @@ export function Step6Editor() {
       flashLock();
       return;
     }
-    patch(
-      {
-        panels: project.panels.map((p) =>
-          selectedIds.includes(p.id)
-            ? { ...p, azimuthDeg: (((p.azimuthDeg + deltaDeg) % 360) + 360) % 360 }
-            : p,
-        ),
-      },
-      true,
-    );
+    report(ops.run(panelsRotate, { ids: selectedIds, deltaDeg }));
   }
 
   /** Shared by click-to-select and the release of a drag that never moved. */
@@ -448,16 +463,11 @@ export function Step6Editor() {
       flashLock();
       return;
     }
-    const r = movePanels(project, spec, selectedIds, dx, dy);
-    if (!r.ok) {
-      // §H: the model is the feedback, but a REFUSED move shows nothing at all
-      // — so say why, once, instead of leaving the user tapping a dead key
-      flash('lock', r.reason);
-      return;
-    }
-    // strings survive a move: the same modules stay wired in the same order,
-    // only their positions changed
-    patch({ panels: r.panels, segments: r.segments }, true);
+    // §H: the model is the feedback, but a REFUSED move shows nothing at all
+    // — so say why, once, instead of leaving the user tapping a dead key.
+    // No impact toast per nudge: arrow keys would flood it.
+    const r = ops.run(panelsNudge, { ids: selectedIds, dx, dy });
+    if (!r.ok) flash('lock', r.refusal.reason);
   }
 
   function tiltSelected(deltaDeg: number) {
@@ -498,8 +508,7 @@ export function Step6Editor() {
       return;
     }
     if (selectedIds.length === 0) return;
-    // cascade: reindexes/drops affected tables and prunes (not wipes) strings
-    patch(cascadeDeletePanels(project, selectedIds), true);
+    report(ops.run(panelsDelete, { ids: selectedIds }));
     setSelectedIds([]);
   }
 
@@ -523,19 +532,10 @@ export function Step6Editor() {
       return;
     }
     if (!canGroup) return;
-    const roof = project.roofs.find((r) => r.id === selectedPanels[0].roofId);
-    if (!roof) return;
-    const res = groupIntoTable(roof, spec, selectedPanels, nextSegmentLabel(project.segments));
-    const selIds = new Set(selectedPanels.map((p) => p.id));
-    const others = project.panels.filter((p) => !selIds.has(p.id));
-    patch(
-      {
-        panels: [...others, ...res.panels],
-        segments: [...project.segments, res.segment],
-      },
-      true,
-    );
-    setSelectedIds(res.panels.map((p) => p.id));
+    const r = ops.run(layoutGroup, { panelIds: selectedPanels.map((p) => p.id) });
+    if (!report(r)) return;
+    const seg = r.next.segments[r.next.segments.length - 1];
+    setSelectedIds(r.next.panels.filter((p) => p.segmentId === seg.id).map((p) => p.id));
   }
 
   /**
@@ -554,17 +554,10 @@ export function Step6Editor() {
       : undefined;
     const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
     if (!seg || !roof) return true;
-    const res = growSegment(project, roof, spec, seg, axis, side, count);
-    if (res.added === 0) return false;
-    const others = project.panels.filter((p) => p.segmentId !== seg.id);
-    patch(
-      {
-        panels: [...others, ...res.panels],
-        segments: project.segments.map((s) => (s.id === seg.id ? res.segment : s)),
-      },
-      true,
-    );
-    setSelectedIds(res.panels.map((p) => p.id));
+    const r = ops.run(layoutGrow, { segmentId: seg.id, axis, side, count });
+    if (!r.ok) return false; // "no room" — the context bar shows it inline
+    flash('ok', summarizeImpact(r.impact));
+    setSelectedIds(r.next.panels.filter((p) => p.segmentId === seg.id).map((p) => p.id));
     return true;
   }
 
@@ -601,76 +594,52 @@ export function Step6Editor() {
   function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt') {
     if (locked) return flashLock();
     if (!selectedSegment || !selectedSegRoof) return;
-    applySegment(setSegmentRacking(selectedSegRoof, spec, selectedSegment, project.panels, kind));
+    report(ops.run(segmentSetRacking, { segmentId: selectedSegment.id, kind }));
   }
   function applyTilt(t: number) {
     if (locked || !selectedSegment) return;
-    applySegment(setSegmentTilt(spec, selectedSegment, project.panels, t));
+    report(ops.run(segmentSetTilt, { segmentId: selectedSegment.id, tiltDeg: t }));
   }
   function applyAzimuth(az: number) {
     if (locked || !selectedSegment) return;
-    applySegment(setSegmentAzimuth(selectedSegment, project.panels, az));
+    report(ops.run(segmentSetAzimuth, { segmentId: selectedSegment.id, azimuthDeg: az }));
   }
   function applyProfile(key: string) {
     if (locked || !selectedSegment) return;
-    const profile = STRUCTURE_PROFILES.find((p) => p.key === key);
-    if (!profile) return;
-    patch(
-      {
-        segments: project.segments.map((s) =>
-          s.id === selectedSegment.id ? setSegmentProfile(selectedSegment, profile) : s,
-        ),
-      },
-      true,
-    );
+    report(ops.run(segmentSetProfile, { segmentId: selectedSegment.id, profileKey: key }));
   }
   function applyStructureFields(
     fields: Partial<{ legSpacingM: number; foundation: 'anchor' | 'ballast'; clearanceM: number }>,
   ) {
     if (locked || !selectedSegment) return;
-    const segments = project.segments.map((sg) =>
-      sg.id === selectedSegment.id ? setSegmentStructureFields(selectedSegment, fields) : sg,
-    );
-    const panels = 'clearanceM' in fields ? reconcileBridgedPanels(project, { segments }) : null;
-    patch({ segments, ...(panels ? { panels } : {}) }, true);
+    report(ops.run(segmentSetStructureFields, { segmentId: selectedSegment.id, fields }));
   }
   /** Presets write the fields they OWN; anything else the user set survives. */
   function applyPreset(preset: Extract<StructChoice, { kind: 'preset' }>['preset']) {
     if (locked || !selectedSegment || !selectedSegRoof) return;
-    const r = applyStructChoice(project, selectedSegment.id, { kind: 'preset', preset });
-    if (r) patch(r, true);
+    report(ops.run(segmentChoice, { segmentId: selectedSegment.id, choice: { kind: 'preset', preset } }));
   }
   function applyRespace(pitch: number) {
     if (locked) return flashLock();
     if (!selectedSegment || !selectedSegRoof) return;
-    const res = respaceSegment(project, selectedSegRoof, spec, selectedSegment, pitch);
-    if (!res) return flash('info', 'No room to apply that spacing');
-    applySegment(res);
-    setSelectedIds(res.panels.map((p) => p.id));
+    const segId = selectedSegment.id;
+    const r = ops.run(segmentRespace, { segmentId: segId, rowPitchM: pitch });
+    if (!report(r)) return;
+    setSelectedIds(r.next.panels.filter((p) => p.segmentId === segId).map((p) => p.id));
   }
   function duplicateTable() {
     if (locked) return flashLock();
     if (!selectedSegment || !selectedSegRoof) return;
-    const dup = duplicateSegment(project, selectedSegRoof, spec, selectedSegment);
-    if (!dup) return flash('info', 'No room to duplicate this table');
-    dup.segment.label = nextSegmentLabel(project.segments);
-    patch(
-      {
-        panels: [...project.panels, ...dup.panels],
-        segments: [...project.segments, dup.segment],
-      },
-      true,
-    );
-    setSelectedIds(dup.panels.map((p) => p.id));
+    const r = ops.run(segmentDuplicate, { segmentId: selectedSegment.id });
+    if (!report(r)) return;
+    const seg = r.next.segments[r.next.segments.length - 1];
+    setSelectedIds(r.next.panels.filter((p) => p.segmentId === seg.id).map((p) => p.id));
     setTableSheet(false);
   }
   function deleteTable() {
     if (locked) return flashLock();
     if (!selectedSegment) return;
-    const ids = project.panels
-      .filter((p) => p.segmentId === selectedSegment.id)
-      .map((p) => p.id);
-    patch(cascadeDeletePanels(project, ids), true);
+    report(ops.run(segmentDelete, { segmentId: selectedSegment.id }));
     setSelectedIds([]);
     setTableSheet(false);
   }
@@ -697,36 +666,22 @@ export function Step6Editor() {
         if (!hit) return;
         switch (hit.kind) {
           case 'panel':
-            // cascade: reindexes/drops affected tables and prunes strings
-            patch(cascadeDeletePanels(project, [hit.id]), true);
+            report(ops.run(panelsDelete, { ids: [hit.id] }));
             return;
           case 'arrester':
-            patch(
-              { arresters: project.arresters.filter((a) => a.id !== hit.id) },
-              true,
-            );
+            report(ops.run(arresterRemove, { id: hit.id }));
             return;
           case 'inverter':
-            patch(
-              {
-                inverterPlacements: project.inverterPlacements.filter(
-                  (ip) => ip.id !== hit.id,
-                ),
-              },
-              true,
-            );
+            report(ops.run(inverterRemove, { id: hit.id }));
             return;
           case 'meter':
-            patch({ gridConnection: null }, true);
+            report(ops.run(meterRemove, {}));
             return;
           case 'walkway':
-            patch(
-              { walkways: project.walkways.filter((w) => w.id !== hit.id) },
-              true,
-            );
+            report(ops.run(walkwayRemove, { id: hit.id }));
             return;
           case 'rail':
-            patch({ rails: project.rails.filter((r) => r.id !== hit.id) }, true);
+            report(ops.run(railRemove, { id: hit.id }));
             return;
         }
         return;
@@ -734,21 +689,14 @@ export function Step6Editor() {
       case 'arrester': {
         const roof = pickRoofAt(m, project.roofs);
         if (!roof) return;
-        const la: LightningArrester = {
-          id: genId('la'),
-          roofId: roof.id,
-          pos: m,
-          heightMm: 2000,
-        };
-        patch({ arresters: [...project.arresters, la] }, true);
+        report(ops.run(arresterAdd, { roofId: roof.id, pos: m, heightMm: 2000 }));
         return;
       }
       case 'inverter': {
         if (placeKind === 'meter') {
           // the service entry is a free point: it is usually off the roof, at
           // ground level, so it is NOT snapped to an edge like the inverter
-          patch({ gridConnection: { pos: m } }, true);
-          flash('ok', 'Meter placed — Auto string to route the AC run');
+          report(ops.run(meterPlace, { pos: m })); // the AC run routes itself
           return;
         }
         // click near a roof edge to hang the inverter on that wall
@@ -762,22 +710,15 @@ export function Step6Editor() {
           }
         }
         if (best && best.d < 4) {
-          patch(
-            {
-              inverterPlacements: [
-                {
-                  id: genId('invp'),
-                  roofId: best.roofId,
-                  edgeIndex: best.edgeIndex,
-                  t: best.t,
-                  heightM: 1.5,
-                },
-              ],
-            },
-            true,
+          report(
+            ops.run(inverterPlace, {
+              roofId: best.roofId,
+              edgeIndex: best.edgeIndex,
+              t: best.t,
+              heightM: 1.5,
+            }),
           );
           setTool('select');
-          flash('ok', 'Inverter mounted — now string the panels');
         }
         return;
       }
@@ -827,7 +768,7 @@ export function Step6Editor() {
         widthMm: Math.round(Math.min(3000, Math.max(100, walkwayWidthMm || 800))),
         heightMm: 100,
       };
-      patch({ walkways: [...project.walkways, w] }, true);
+      report(ops.run(walkwayAdd, { walkway: w }));
     } else if (tool === 'keepout') {
       // A no-build zone is an axis-aligned rectangle in project metres. Height 0
       // means "blocks placement but casts no shadow" — a lane/reservation, not a
@@ -849,7 +790,7 @@ export function Step6Editor() {
         heightM: 0,
         kind: 'fire_setback',
       };
-      patch({ keepouts: [...project.keepouts, k] }, true);
+      report(ops.run(keepoutAdd, { keepout: k }));
     } else if (tool === 'rail') {
       const r: SafetyRail = {
         id: genId('rl'),
@@ -858,7 +799,7 @@ export function Step6Editor() {
         b,
         heightMm: 1100,
       };
-      patch({ rails: [...project.rails, r] }, true);
+      report(ops.run(railAdd, { rail: r }));
     }
   }
 
@@ -889,13 +830,10 @@ export function Step6Editor() {
     // "Auto string" is now a RESET: hand-built strings are released and the
     // whole array re-derives. Everyday re-derivation no longer needs a button —
     // useElectricalSync does it whenever the layout moves.
-    const r = resetStringsToAuto(project);
-    patch(r.patch, true);
+    const r = ops.run(stringsResetToAuto, {});
     setStringSheet(false);
     setShowStrings(true);
-    for (const c of r.report.plan?.manualChanges ?? []) {
-      flash('info', `${c.name}: ${c.change === 'dropped' ? 'removed' : `${c.removedPanelIds.length} module(s) released`}`);
-    }
+    report(r);
   }
 
   /**
@@ -938,24 +876,7 @@ export function Step6Editor() {
     // An inserted corner the user never moved is just noise on the same line —
     // drop it rather than litter the route with collinear points.
     if (d.insert && Math.hypot(m.x - d.pos.x, m.y - d.pos.y) < 0.25) return;
-    patch(
-      {
-        cableRoutes: (project.cableRoutes ?? []).map((r) =>
-          r.id === d.routeId
-            ? {
-                ...r,
-                waypoints: d.insert
-                  ? [...r.waypoints.slice(0, d.index), m, ...r.waypoints.slice(d.index)]
-                  : r.waypoints.map((w, i) => (i === d.index ? m : w)),
-                // hand-edited: auto-routing must never stomp it (autoRouteStrings
-                // keeps `manual` routes and skips re-routing that string)
-                manual: true,
-              }
-            : r,
-        ),
-      },
-      true,
-    );
+    report(ops.run(routesMoveWaypoint, { routeId: d.routeId, index: d.index, pos: m, insert: !!d.insert }));
   }
 
   function finishManualString() {
@@ -963,17 +884,7 @@ export function Step6Editor() {
       setManualString(null);
       return;
     }
-    const idx = project.strings.length;
-    const s: StringDef = {
-      id: genId('str'),
-      name: `String ${idx + 1}`,
-      inverterIndex: Math.floor(idx / inverter.mppt.count),
-      mpptIndex: idx % inverter.mppt.count,
-      panelIds: manualString,
-      color: ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7'][idx % 5],
-      manual: true,
-    };
-    patch({ strings: [...project.strings, s] }, true);
+    report(ops.run(stringsAddManual, { panelIds: manualString }));
     setManualString(null);
   }
 
@@ -1065,26 +976,7 @@ export function Step6Editor() {
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
-      {/* plan-limit / validation banners */}
-      {overLimit && (
-        <div
-          className="banner-error"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 45 }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <AlertTriangle size={15} />
-            Total capacity {kwp.toFixed(1)} kWp exceeds the {PLAN_LIMIT_KW} kW plan limit —
-            remove panels or upgrade.
-          </span>
-          <button
-            className="btn btn-primary"
-            style={{ minHeight: 28, padding: '4px 14px', fontSize: 12 }}
-            onClick={() => flash('info', 'Plan upgrades are not available in this demo')}
-          >
-            Upgrade
-          </button>
-        </div>
-      )}
+      {/* validation banner (the plan-limit gate is gone — D38) */}
       {issues.length > 0 && (
         <button
           className={issues.some((i) => i.level === 'error') ? 'banner-error' : 'banner-warn'}
@@ -2350,19 +2242,6 @@ export function Step6Editor() {
               setManualString([]);
             }}
           />
-          {project.strings.length > 0 && (
-            <button
-              className="btn btn-danger btn-block"
-              style={{ marginTop: 6 }}
-              onClick={() => {
-                patch(resetStringsToAuto(project).patch, true);
-                setStringSheet(false);
-              }}
-            >
-              <Trash2 />
-              Clear strings
-            </button>
-          )}
         </Sheet>
       )}
 

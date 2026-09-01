@@ -14,6 +14,7 @@ import {
 import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, deriveStructures } from '../lib/derive';
 import { BlobImg } from '../components/BlobImg';
 import { FreshnessBanner } from '../components/FreshnessBanner';
+import { capturesFresh } from '../lib/fingerprints';
 import { useUnits } from '../lib/units';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 
@@ -42,6 +43,11 @@ function QrCode({ url, size }: { url: string; size: number }) {
 /** Printable web proposal — use the browser's Print → Save as PDF. */
 export function ProposalView() {
   const project = useActiveProject()!;
+  // the 3D images are a separate freshness: money can be final while a capture
+  // still shows last week's layout — say so on screen AND in print
+  const captureNotes = capturesFresh(project)
+    ? []
+    : ['the 3D images show an older layout — retake the captures in Step 7'];
   const r = deriveEnergy(project);
   const fin = deriveFinance(project);
   const bom = deriveBomResult(project).lines;
@@ -74,7 +80,7 @@ export function ProposalView() {
     <div style={{ background: 'var(--paper-2)', minHeight: '100vh' }}>
       {/* staleness gate: the proposal must reflect the CURRENT design (soft block).
           `print` keeps it visible through Print/Save-PDF, unlike the toolbar below. */}
-      <FreshnessBanner project={project} print />
+      <FreshnessBanner project={project} print extra={captureNotes} />
       {/* toolbar (hidden in print) */}
       <div
         className="no-print"
@@ -136,7 +142,7 @@ export function ProposalView() {
         <Page num={1} project={project}>
           {/* same banner, again — this is the physical first printed page, so the
               cover itself must carry PROVISIONAL, not just the on-screen toolbar. */}
-          <FreshnessBanner project={project} print />
+          <FreshnessBanner project={project} print extra={captureNotes} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 26, fontWeight: 800 }}>

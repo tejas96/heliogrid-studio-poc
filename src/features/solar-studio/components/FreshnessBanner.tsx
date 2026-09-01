@@ -11,9 +11,18 @@ import { designFreshness, freshnessReasons } from '../lib/derive/freshness';
  * and its existing `.banner-warn` class already pairs `--warn` as both the
  * accent AND the text colour — reused here rather than adding a raw hex.
  */
-export function FreshnessBanner({ project, print = false }: { project: Project; print?: boolean }) {
-  if (designFreshness(project).all) return null;
-  const reasons = freshnessReasons(project);
+export function FreshnessBanner({
+  project,
+  print = false,
+  extra = [],
+}: {
+  project: Project;
+  print?: boolean;
+  /** screen-specific reasons (e.g. stale 3D captures) shown alongside the money ones */
+  extra?: string[];
+}) {
+  const reasons = [...freshnessReasons(project), ...extra];
+  if (designFreshness(project).all && extra.length === 0) return null;
   return (
     <div
       role="status"

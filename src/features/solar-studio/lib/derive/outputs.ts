@@ -17,7 +17,9 @@ export const deriveBomResult = memoByKey(outputKey, mergedBomResult);
 export const deriveMoney = memoByKey(outputKey, (p) => bomMoney(deriveBomResult(p).lines, p));
 export const deriveFinance = memoByKey(outputKey, (p) => computeFinancials(p, deriveEnergy(p)));
 
-/** Every check Step 6 shows, composed once — the same list the ops kernel counts. */
+const LEVEL_RANK: Record<ValidationIssue['level'], number> = { error: 0, warn: 1, ok: 2 };
+
+/** Every check Step 6 shows, composed once, errors first — the same list the ops kernel counts. */
 export const designIssues = memoByKey(outputKey, (p): ValidationIssue[] => {
   const spec = p.components.panel;
   const inverter = p.components.inverter;
@@ -29,5 +31,5 @@ export const designIssues = memoByKey(outputKey, (p): ValidationIssue[] => {
     ...(spec && inverter
       ? validateSystem(p.strings, spec, inverter, p.components.inverterCount, enabled.length, resolveDesignTemps(p), enabled.map((x) => x.id))
       : []),
-  ];
+  ].sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level]);
 });

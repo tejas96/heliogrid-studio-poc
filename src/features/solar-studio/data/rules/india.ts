@@ -115,7 +115,6 @@ export interface DefaultRules {
   /** tariff preset on a brand-new project before a state is chosen (₹/kWh) */
   tariffNewProjectInrPerKwh: number;
   /** freemium plan gate on total DC capacity (kW) */
-  planLimitKw: number;
 }
 
 /** Health Score v1 (§8.2): fixed, capped, code-level deductions — the fixed
@@ -528,7 +527,6 @@ export const INDIA_RULES: MarketRules = {
     inverterClearanceM: 0.9,
     tariffUnknownStateInrPerKwh: 7.5,
     tariffNewProjectInrPerKwh: 8,
-    planLimitKw: 10,
   },
 };
 
