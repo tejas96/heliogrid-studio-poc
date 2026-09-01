@@ -403,3 +403,35 @@ describe('dcCableFromRoutes → the BOM line', () => {
     expect(dcLine.formula).not.toMatch(/15% slack incl/); // the old lie
   });
 });
+
+describe('defect #3 — multi-inverter home runs', () => {
+  it('routes each string to the placement matching its inverterIndex', () => {
+    const panels = fixturePanels(12);
+    const stringA = stringOf(panels.slice(0, 6).map((x) => x.id));
+    const stringB = {
+      ...stringOf(panels.slice(6, 12).map((x) => x.id)),
+      id: 'str_2',
+      inverterIndex: 1,
+    };
+    const p = project({
+      panels,
+      strings: [stringA, stringB],
+      inverterPlacements: [
+        { id: 'ip1', roofId: fixtureRoof().id, edgeIndex: 0, t: 0.5, heightM: 1.5 },
+        { id: 'invp_2', roofId: fixtureRoof().id, edgeIndex: 2, t: 0.5, heightM: 1.2 },
+      ],
+    });
+    const routes = autoRouteStrings(p);
+    const pos1 = inverterWorldPos(p, 1)!;
+    for (const s of p.strings.filter((s) => s.inverterIndex === 1)) {
+      const mine = routes.filter((r) => r.fromRef === s.id);
+      expect(mine.length).toBe(2);
+      for (const r of mine) {
+        const end = r.waypoints[r.waypoints.length - 1];
+        expect(end.x).toBeCloseTo(pos1.x, 6);
+        expect(end.y).toBeCloseTo(pos1.y, 6);
+        expect(r.toRef).toBe('inverter/1');
+      }
+    }
+  });
+});
