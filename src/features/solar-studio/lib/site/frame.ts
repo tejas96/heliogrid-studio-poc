@@ -38,10 +38,61 @@ function metresPerDegree(origin: LatLng): { lat: number; lng: number } {
   };
 }
 
+/**
+ * Origin latitudes the frame accepts: the UTM band, 80°S to 84°N.
+ *
+ * Policy: REJECT with a RangeError — never clamp. Outside the band the
+ * frame's UTM anchor is undefined (UPS territory), and towards the poles
+ * metres-per-degree of longitude → 0, so toLatLng would divide by it: before
+ * this guard a frame at 89.9999999° returned lng = 1.46e13. Clamping instead
+ * would leave the origin silently different from the project's location, so
+ * frameFor / normalizeSiteFrame would rebuild it on every read and the frame
+ * would describe a place the pin is not. A non-finite or unnormalised origin
+ * (|lng| > 180 corrupts the UTM anchor) is rejected for the same reason.
+ * Every production caller passes a confirmed pin or a normalize-validated
+ * location, and repository.ts isolates a throwing normalizeProject per
+ * project, so a bad stored origin drops that one project, not the store.
+ *
+ * Not guarded: an explicitly passed NaN for scaleFactor / northOffsetDeg
+ * bypasses the `??` defaults. Every current caller passes normalize- or
+ * UI-validated values, so it is left alone.
+ */
+const MIN_ORIGIN_LAT = -80;
+const MAX_ORIGIN_LAT = 84;
+
+function assertUsableOrigin(origin: LatLng): void {
+  if (!Number.isFinite(origin.lat) || !Number.isFinite(origin.lng)) {
+    throw new RangeError(`site frame origin must be finite, got ${origin.lat}, ${origin.lng}`);
+  }
+  if (origin.lat < MIN_ORIGIN_LAT || origin.lat > MAX_ORIGIN_LAT) {
+    throw new RangeError(
+      `site frame origin latitude ${origin.lat} is outside the UTM band ${MIN_ORIGIN_LAT}..${MAX_ORIGIN_LAT}`,
+    );
+  }
+  if (origin.lng < -180 || origin.lng > 180) {
+    throw new RangeError(`site frame origin longitude ${origin.lng} is outside -180..180`);
+  }
+}
+
+/**
+ * Longitude difference wrapped into (−180, 180], so the frame measures across
+ * the antimeridian the short way round: a frame at 179.98°E converting a
+ * point at 179.98°W is 0.04° (≈4.2 km) EAST of the origin, not 359.96° west —
+ * without the wrap toEN returned x ≈ −38,000 km. The ordinary case
+ * (|d| ≤ 180) returns d untouched, so no site in the world loses a bit of
+ * precision to the modulo arithmetic.
+ */
+function wrapLngDelta(d: number): number {
+  if (d > -180 && d <= 180) return d;
+  const w = ((((d + 180) % 360) + 360) % 360) - 180; // [-180, 180)
+  return w === -180 ? 180 : w;
+}
+
 export function makeSiteFrame(
   origin: LatLng,
   opts?: { scaleFactor?: number; northOffsetDeg?: number },
 ): SiteFrame {
+  assertUsableOrigin(origin);
   const { zone, north } = utmZoneForLatLng(origin.lat, origin.lng);
   return {
     origin,
@@ -60,7 +111,7 @@ export function makeSiteFrame(
  */
 export function toEN(frame: SiteFrame, p: LatLng): XY {
   const mpd = metresPerDegree(frame.origin);
-  const dE = (p.lng - frame.origin.lng) * mpd.lng; // true east metres
+  const dE = wrapLngDelta(p.lng - frame.origin.lng) * mpd.lng; // true east metres
   const dN = (p.lat - frame.origin.lat) * mpd.lat; // true north metres
   const t = frame.northOffsetDeg * D2R;
   const cos = Math.cos(t);
@@ -73,7 +124,10 @@ export function toEN(frame: SiteFrame, p: LatLng): XY {
   };
 }
 
-/** Exact inverse of toEN. */
+/**
+ * Exact inverse of toEN. The longitude comes back canonical, in (−180, 180],
+ * so a point east of a frame at 179.98°E reads as −179.98 rather than 180.02.
+ */
 export function toLatLng(frame: SiteFrame, p: XY): LatLng {
   const t = frame.northOffsetDeg * D2R;
   const cos = Math.cos(t);
@@ -83,7 +137,7 @@ export function toLatLng(frame: SiteFrame, p: XY): LatLng {
   const mpd = metresPerDegree(frame.origin);
   return {
     lat: frame.origin.lat + dN / mpd.lat,
-    lng: frame.origin.lng + dE / mpd.lng,
+    lng: wrapLngDelta(frame.origin.lng + dE / mpd.lng),
   };
 }
 

@@ -204,6 +204,84 @@ describe('UTM interchange from local EN', () => {
   });
 });
 
+describe('origin guards — reject, never clamp', () => {
+  it('rejects a polar origin instead of building a frame that divides by zero', () => {
+    // Before the guard, makeSiteFrame({ lat: 89.9999999 }) built happily and
+    // toLatLng(frame, { x: 1, y: 0 }).lng came back as 1.46e13.
+    expect(() => makeSiteFrame({ lat: 89.9999999, lng: 0 })).toThrow(RangeError);
+    expect(() => makeSiteFrame({ lat: 90, lng: 0 })).toThrow(RangeError);
+    expect(() => makeSiteFrame({ lat: -90, lng: 0 })).toThrow(RangeError);
+    // and just outside the UTM band on either side
+    expect(() => makeSiteFrame({ lat: 84.01, lng: 0 })).toThrow(/UTM band/);
+    expect(() => makeSiteFrame({ lat: -80.01, lng: 0 })).toThrow(/UTM band/);
+  });
+
+  it('accepts the whole UTM band, edges included, and still round-trips there', () => {
+    expect(() => makeSiteFrame({ lat: 84, lng: 15 })).not.toThrow();
+    expect(() => makeSiteFrame({ lat: -80, lng: 15 })).not.toThrow();
+    for (const f of [makeSiteFrame({ lat: 84, lng: 15 }), makeSiteFrame({ lat: -80, lng: 15 })]) {
+      const p = { x: 100, y: -50 };
+      const back = toEN(f, toLatLng(f, p));
+      expect(Math.hypot(back.x - p.x, back.y - p.y)).toBeLessThan(0.001);
+    }
+  });
+
+  it('rejects a non-finite or unnormalised origin', () => {
+    expect(() => makeSiteFrame({ lat: NaN, lng: 73 })).toThrow(RangeError);
+    expect(() => makeSiteFrame({ lat: 18, lng: Infinity })).toThrow(RangeError);
+    // 250°E would feed latLngToUtm a 361° offset from its central meridian
+    expect(() => makeSiteFrame({ lat: 18, lng: 250 })).toThrow(RangeError);
+    expect(() => makeSiteFrame({ lat: 18, lng: -180.5 })).toThrow(RangeError);
+  });
+
+  it('reanchor inherits the rejection — a pin cannot be moved onto the pole', () => {
+    const f = makeSiteFrame(PUNE);
+    expect(() => reanchor(f, { lat: 89.9999999, lng: 0 })).toThrow(RangeError);
+  });
+});
+
+describe('antimeridian — the longitude difference is wrapped into (−180, 180]', () => {
+  const ORIGIN = { lat: 18.5202, lng: 179.98 };
+
+  it('measures a point across ±180° the short way round', () => {
+    const f = makeSiteFrame(ORIGIN);
+    const across = toEN(f, { lat: ORIGIN.lat, lng: -179.98 }); // 0.04° EAST
+    // 0.04° x N(18.52°) x cos(18.52°) x pi/180 = 4223.6 m east — not ≈38,000 km
+    // west, which is what an unwrapped 359.96° difference produced.
+    expect(across.x).toBeCloseTo(4223.6, 1);
+    expect(across.y).toBeCloseTo(0, 6);
+    // identical to the same ground point written without crossing the line
+    const unwrapped = toEN(f, { lat: ORIGIN.lat, lng: 180.02 });
+    expect(across.x).toBeCloseTo(unwrapped.x, 6);
+  });
+
+  it('wraps the western side as well', () => {
+    const f = makeSiteFrame({ lat: ORIGIN.lat, lng: -179.98 });
+    const across = toEN(f, { lat: ORIGIN.lat, lng: 179.98 }); // 0.04° WEST
+    expect(across.x).toBeCloseTo(-4223.6, 1);
+  });
+
+  it('round-trips across the line and returns a canonical longitude', () => {
+    const f = makeSiteFrame(ORIGIN);
+    const ll = toLatLng(f, { x: 4223.6, y: 0 });
+    expect(ll.lng).toBeGreaterThan(-180); // came back as -179.98 ...
+    expect(ll.lng).toBeLessThan(-179.9); // ... not 180.02
+    const back = toEN(f, ll);
+    expect(back.x).toBeCloseTo(4223.6, 6);
+    expect(back.y).toBeCloseTo(0, 6);
+  });
+
+  it('leaves an ordinary site bit-identical — the wrap has a fast path', () => {
+    const f = makeSiteFrame(PUNE);
+    // exact-equality expectations elsewhere in this file depend on the
+    // ordinary path not passing through the modulo arithmetic
+    expect(toEN(f, PUNE)).toEqual({ x: 0, y: 0 });
+    const p = { lat: PUNE.lat + 0.0005, lng: PUNE.lng - 0.0003 };
+    const d = (p.lng - PUNE.lng) * 105590.1; // hand-derived east metres at Pune
+    expect(toEN(f, p).x).toBeCloseTo(d, 2);
+  });
+});
+
 describe('makeProjector is gone', () => {
   it('lib/geo.ts no longer exports a projector', async () => {
     // A second lat/lng->metre path is exactly how the 0.57% stretch survived so
