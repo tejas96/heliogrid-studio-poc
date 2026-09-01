@@ -63,3 +63,96 @@ export function utmToLatLng(
 
   return { lat: lat * (180 / Math.PI), lng: lng * (180 / Math.PI) };
 }
+
+const D2R = Math.PI / 180;
+const R2D = 180 / Math.PI;
+
+/**
+ * UTM zone for a geographic point, including the two published exceptions
+ * (Norway 32V, Svalbard 31X/33X/35X/37X). India never hits either, but a wrong
+ * zone silently displaces an exported drawing by hundreds of kilometres, so the
+ * rule is implemented in full rather than approximated.
+ */
+export function utmZoneForLatLng(
+  lat: number,
+  lng: number,
+): { zone: number; north: boolean } {
+  const wrapped = ((((lng + 180) % 360) + 360) % 360) - 180;
+  let zone = Math.floor((wrapped + 180) / 6) + 1;
+  if (zone > 60) zone = 60;
+  if (lat >= 56 && lat < 64 && wrapped >= 3 && wrapped < 12) zone = 32;
+  if (lat >= 72 && lat < 84) {
+    if (wrapped >= 0 && wrapped < 9) zone = 31;
+    else if (wrapped >= 9 && wrapped < 21) zone = 33;
+    else if (wrapped >= 21 && wrapped < 33) zone = 35;
+    else if (wrapped >= 33 && wrapped < 42) zone = 37;
+  }
+  return { zone, north: lat >= 0 };
+}
+
+/** Central meridian of a UTM zone, in radians. */
+function centralMeridianRad(zone: number): number {
+  return ((zone - 1) * 6 - 180 + 3) * D2R;
+}
+
+/**
+ * WGS84 → UTM easting/northing (Snyder forward series). Inverse of utmToLatLng
+ * to ~1 mm inside a zone — the round-trip is the gate in site-utm.test.ts.
+ */
+export function latLngToUtm(
+  lat: number,
+  lng: number,
+  zone: number,
+  north: boolean,
+): { e: number; n: number } {
+  const phi = lat * D2R;
+  const lam = lng * D2R;
+  const lam0 = centralMeridianRad(zone);
+
+  const sinPhi = Math.sin(phi);
+  const cosPhi = Math.cos(phi);
+  const tanPhi = Math.tan(phi);
+
+  const N = A / Math.sqrt(1 - E2 * sinPhi * sinPhi);
+  const T = tanPhi * tanPhi;
+  const C = EP2 * cosPhi * cosPhi;
+  const Aa = (lam - lam0) * cosPhi;
+
+  const M =
+    A *
+    ((1 - E2 / 4 - (3 * E2 * E2) / 64 - (5 * E2 ** 3) / 256) * phi -
+      ((3 * E2) / 8 + (3 * E2 * E2) / 32 + (45 * E2 ** 3) / 1024) * Math.sin(2 * phi) +
+      ((15 * E2 * E2) / 256 + (45 * E2 ** 3) / 1024) * Math.sin(4 * phi) -
+      ((35 * E2 ** 3) / 3072) * Math.sin(6 * phi));
+
+  const e =
+    K0 *
+      N *
+      (Aa +
+        ((1 - T + C) * Aa ** 3) / 6 +
+        ((5 - 18 * T + T * T + 72 * C - 58 * EP2) * Aa ** 5) / 120) +
+    500000;
+
+  let n =
+    K0 *
+    (M +
+      N *
+        tanPhi *
+        ((Aa * Aa) / 2 +
+          ((5 - T + 9 * C + 4 * C * C) * Aa ** 4) / 24 +
+          ((61 - 58 * T + T * T + 600 * C - 330 * EP2) * Aa ** 6) / 720));
+  if (!north) n += 10000000;
+
+  return { e, n };
+}
+
+/**
+ * Grid convergence: degrees that UTM grid north lies clockwise of TRUE north at
+ * this point. Needed when exporting to a UTM-referenced CAD file, so the drawing
+ * is not rotated by up to 3° at a zone edge.
+ */
+export function gridConvergenceDeg(lat: number, lng: number, zone: number): number {
+  const phi = lat * D2R;
+  const dLam = lng * D2R - centralMeridianRad(zone);
+  return Math.atan(Math.tan(dLam) * Math.sin(phi)) * R2D;
+}
