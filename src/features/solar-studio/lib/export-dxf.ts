@@ -11,7 +11,7 @@ import type { Project, XY } from '../types';
 import { DxfBuilder } from './dxf';
 import { panelCornersOnRoof } from './layout';
 import { rectCorners, polygonCentroid } from './geo';
-import { projectStructures } from './structure';
+import { deriveStructures } from './derive/structures';
 import { ruleFor } from './foundation';
 
 export const DXF_LAYERS = {
@@ -154,7 +154,7 @@ export function layoutToDxf(project: Project): string {
  * from above. The elevation that shows leg heights is a separate sheet.
  */
 function drawStructure(d: DxfBuilder, project: Project): void {
-  for (const s of projectStructures(project)) {
+  for (const s of deriveStructures(project)) {
     // members first, so the setting-out marks sit on top of them
     for (const m of s.members) {
       if (m.kind === 'front_leg' || m.kind === 'back_leg') continue; // a point in plan

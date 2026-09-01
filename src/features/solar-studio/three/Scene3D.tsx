@@ -58,8 +58,8 @@ import { lightenHex, roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
 import { StructureNodesInstanced } from './StructureNodesInstanced';
-import { projectStructures, resolveRacking, type ResolvedRacking } from '../lib/structure';
-import { layoutFp } from '../lib/fingerprints';
+import { resolveRacking, type ResolvedRacking } from '../lib/structure';
+import { deriveStructures } from '../lib/derive';
 import {
   DEFAULT_STRUCTURE_VIEW,
   effectiveView,
@@ -1028,15 +1028,10 @@ function SceneContent({
 
   // parametric structures (Phase 7): the member graph is the owner — the
   // scene renders it and couples panel heights to the SAME resolved racking.
-  // Keyed on layoutFp rather than the project object: the graph depends only on
-  // geometry + racking, so re-deriving every structure on an unrelated patch
-  // (a price edit, a note) was pure waste on a large roof.
-  const layoutKey = useMemo(() => (spec ? layoutFp(project) : ''), [project, spec]);
-  const allStructures = useMemo(
-    () => (spec ? projectStructures(project) : []),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [layoutKey, spec],
-  );
+  // deriveStructures is itself memoised on the design fingerprint (Task 6),
+  // so re-deriving every structure on an unrelated patch (a price edit, a
+  // note) is no longer a recompute at all — no useMemo needed here.
+  const allStructures = deriveStructures(project);
 
   // ── Phase 22l: structure-inspection view state ────────────────────────────
   // NEVER persisted and never fingerprinted — ghosting a module to look at a

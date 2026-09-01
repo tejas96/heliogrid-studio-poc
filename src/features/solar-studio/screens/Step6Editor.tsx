@@ -75,7 +75,6 @@ import {
   panelFitsAt,
   snapPanelCenter,
 } from '../lib/layout';
-import { layoutIssues, structureIssues } from '../lib/drc';
 import {
   computeHeatmap,
   heatColor,
@@ -106,11 +105,12 @@ import {
 import { cascadeDeletePanels } from '../lib/cascade';
 import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
-import { estimateDcCableM, stringSizing, validateSystem, vocAtTemp } from '../lib/stringing';
-import { dcCableFromRoutes, routeIssues } from '../lib/routing';
+import { estimateDcCableM, stringSizing, vocAtTemp } from '../lib/stringing';
+import { dcCableFromRoutes } from '../lib/routing';
 import { autoDesign } from '../lib/auto-design';
 import { resolveDesignTemps } from '../lib/electrical/temps';
 import { resetStringsToAuto } from '../lib/derive/electrical-sync';
+import { designIssues } from '../lib/derive';
 import { applyStructChoice, reconcileBridgedPanels, type StructChoice } from '../lib/structure-edit';
 import {
   buildStructure,
@@ -329,31 +329,7 @@ export function Step6Editor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmap, heatFp]);
 
-  const issues = useMemo(
-    () =>
-      [
-        ...layoutIssues(project, spec),
-        ...structureIssues(project, spec),
-        ...routeIssues(project, spec),
-        ...validateSystem(
-          project.strings,
-          spec,
-          inverter,
-          project.components.inverterCount,
-          enabledPanels.length,
-          resolveDesignTemps(project),
-          enabledPanels.map((p) => p.id),
-        ),
-      ].sort((a, b) => (a.level === 'error' ? 0 : 1) - (b.level === 'error' ? 0 : 1)),
-    [
-      project,
-      project.strings,
-      spec,
-      inverter,
-      project.components.inverterCount,
-      enabledPanels.length,
-    ],
-  );
+  const issues = designIssues(project);
 
   const selectedPanels = useMemo(
     () => project.panels.filter((p) => selectedIds.includes(p.id)),

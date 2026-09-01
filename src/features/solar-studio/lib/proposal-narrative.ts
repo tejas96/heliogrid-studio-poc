@@ -6,8 +6,7 @@
 // This is the honest version of a "premium proposal" — persuasive because it is
 // true, not because it reads well.
 import type { DesignDecision, Project } from '../types';
-import { computeEnergyReport } from './solar';
-import { computeFinancials } from './finance';
+import { deriveEnergy, deriveFinance } from './derive';
 import { estimateMaxCapacityKwp } from './layout';
 
 export interface NarrativeBeat {
@@ -27,10 +26,10 @@ const inr = (n: number) => `₹${Math.round(n).toLocaleString('en-IN')}`;
  * are omitted rather than padded — an empty design tells no story.
  */
 export function proposalNarrative(project: Project, fmtArea: (m2: number) => string): NarrativeSection[] {
-  const r = computeEnergyReport(project);
+  const r = deriveEnergy(project);
   const spec = project.components.panel;
   if (!spec || r.panelCount === 0) return [];
-  const fin = computeFinancials(project, r);
+  const fin = deriveFinance(project);
   const sections: NarrativeSection[] = [];
 
   // ── Your property ────────────────────────────────────────────────────────

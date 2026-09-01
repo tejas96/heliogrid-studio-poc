@@ -3,18 +3,15 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Camera, Link2, Printer, RefreshCw } from 'lucide-react';
 import { useActiveProject } from '../store/store';
 import { navigate } from '../router';
-import { computeEnergyReport } from '../lib/solar';
-import { computeFinancials } from '../lib/finance';
 import { computeFinancing } from '../lib/financing';
-import { mergedBom, bomMoney } from '../lib/bom';
 import { effectiveSld } from '../lib/sld';
 import { proposalNarrative } from '../lib/proposal-narrative';
 import {
   engineeringStatus,
-  projectStructures,
   STRUCTURE_DISCLAIMER,
   windZoneInfo,
 } from '../lib/structure';
+import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, deriveStructures } from '../lib/derive';
 import { capturesFresh, isShadingFresh } from '../lib/fingerprints';
 import { BlobImg } from '../components/BlobImg';
 import { useUnits } from '../lib/units';
@@ -45,11 +42,11 @@ function QrCode({ url, size }: { url: string; size: number }) {
 /** Printable web proposal — use the browser's Print → Save as PDF. */
 export function ProposalView() {
   const project = useActiveProject()!;
-  const r = computeEnergyReport(project);
-  const fin = computeFinancials(project, r);
-  const bom = mergedBom(project);
+  const r = deriveEnergy(project);
+  const fin = deriveFinance(project);
+  const bom = deriveBomResult(project).lines;
   // the same money path Step 9 reads — the two documents cannot disagree
-  const money = bomMoney(bom, project);
+  const money = deriveMoney(project);
   // Four ways to buy the SAME system — derived from the one quote total, using
   // the SAME annual saving the report shows, so PPA savings reconcile exactly.
   const financing =
@@ -409,7 +406,7 @@ export function ProposalView() {
               </div>
             </>
           )}
-          {projectStructures(project).length > 0 && (
+          {deriveStructures(project).length > 0 && (
             <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 18, borderLeft: '3px solid var(--warn)', paddingLeft: 8 }}>
               <b>Mounting structure — {engineeringStatus(project).label}.</b>{' '}
               {STRUCTURE_DISCLAIMER}

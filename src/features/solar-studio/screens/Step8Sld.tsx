@@ -9,7 +9,7 @@ import type { Project, SldParams } from '../types';
 import { deriveSldDefaults, diffSldOverrides, effectiveSld, acConductorLabels } from '../lib/sld';
 import { combinerPlan } from '../lib/electrical/combiner';
 import { resolveRules } from '../data/rules/india';
-import { computeEnergyReport } from '../lib/solar';
+import { deriveEnergy } from '../lib/derive';
 import { panelCornersOnRoof } from '../lib/layout';
 import { resolveDesignTemps } from '../lib/electrical/temps';
 import { resetStringsToAuto } from '../lib/derive/electrical-sync';
@@ -371,7 +371,7 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
   // an unstrung design renders the UnstrungState instead of a fabricated
   // (electrically impossible) all-panels series string.
   const strings = project.strings;
-  const r = computeEnergyReport(project);
+  const r = deriveEnergy(project);
 
   const H = 640;
   const W = 980;
@@ -624,7 +624,7 @@ function LayoutSheet() {
   const project = useActiveProject()!;
   const spec = project.components.panel!;
   const t = useLayoutTransform();
-  const r = computeEnergyReport(project);
+  const r = deriveEnergy(project);
   if (!t) return null;
 
   return (

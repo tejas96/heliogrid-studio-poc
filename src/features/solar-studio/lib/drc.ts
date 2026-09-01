@@ -12,7 +12,8 @@ import {
 } from './geo';
 import { panelCornersOnRoof } from './layout';
 import { requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
-import { projectStructures, resolveRacking } from './structure';
+import { resolveRacking } from './structure';
+import { deriveStructures } from './derive/structures';
 import {
   foundationDeadLoadKg,
   foundationKindOfSpec,
@@ -237,7 +238,7 @@ export function structureIssues(project: Project, spec: PanelSpec | null): Valid
   const issues: ValidationIssue[] = [];
   if (!spec) return issues;
 
-  const structures = projectStructures(project);
+  const structures = deriveStructures(project);
   if (structures.length === 0) return issues;
 
   const segById = new Map(project.segments.map((s) => [s.id, s]));

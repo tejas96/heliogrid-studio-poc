@@ -20,7 +20,7 @@ import { navigate } from '../router';
 import { Dialog, EmptyState } from '../components/ui';
 import type { Project } from '../types';
 import { staticSatelliteUrl } from '../lib/maps';
-import { computeEnergyReport } from '../lib/solar';
+import { deriveEnergy } from '../lib/derive';
 
 type Filter = 'all' | 'in_progress' | 'proposal_ready';
 
@@ -264,7 +264,7 @@ export function Dashboard() {
             }}
           >
             {projects.map((p) => {
-              const report = computeEnergyReport(p);
+              const report = deriveEnergy(p);
               const thumb = p.location
                 ? staticSatelliteUrl(
                     p.location.latLng.lat,
