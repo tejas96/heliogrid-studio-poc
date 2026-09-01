@@ -1,4 +1,4 @@
-// ─── UTM → WGS84 inverse (Transverse Mercator) ──────────────────────────────
+// ─── UTM ↔ WGS84 (Transverse Mercator, Snyder series) ───────────────────────
 // Google Solar dataLayers rasters are georeferenced in UTM (verified live:
 // EPSG:32643 for Pune — zone 43N, meters). Converting each traced vertex
 // UTM → lat/lng → makeProjector local-EN handles grid convergence and scale

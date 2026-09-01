@@ -7,7 +7,7 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { decodeGeoTiff, detectRoofArtifact } from '../roof-ai/pipeline';
 import { validateArtifact } from '../roof-ai/artifact';
-import { utmToLatLng } from '../roof-ai/utm';
+import { utmToLatLng } from '../site/utm';
 import { makeProjector, polygonArea } from '../geo';
 import { sanitizeRoofPolygon } from '../roof-factory';
 
