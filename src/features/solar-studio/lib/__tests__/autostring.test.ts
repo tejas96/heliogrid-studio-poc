@@ -257,6 +257,30 @@ describe('autoStringPlan — the Phase-4 KNOWN LIMIT, closed', () => {
   });
 });
 
+describe('deterministic identity and reserved slots', () => {
+  it('two runs over the same design produce identical string ids and names', () => {
+    const p = project(fixturePanels(20));
+    const a = autoStringPlan(p, panel, inverter, 1, TEMPS);
+    const b = autoStringPlan(p, panel, inverter, 1, TEMPS);
+    expect(a.strings.map((s) => s.id)).toEqual(b.strings.map((s) => s.id));
+    expect(new Set(a.strings.map((s) => s.id)).size).toBe(a.strings.length);
+  });
+
+  it('never places a string on a reserved MPPT slot', () => {
+    const p = project(fixturePanels(20));
+    const plan = autoStringPlan(p, panel, inverter, 1, TEMPS, {
+      reservedSlots: [{ inverterIndex: 0, mpptIndex: 0 }],
+    });
+    expect(plan.strings.every((s) => !(s.inverterIndex === 0 && s.mpptIndex === 0))).toBe(true);
+  });
+
+  it('numbers strings after nameOffset', () => {
+    const p = project(fixturePanels(20));
+    const plan = autoStringPlan(p, panel, inverter, 1, TEMPS, { nameOffset: 2 });
+    expect(plan.strings[0]?.name).toBe('String 3');
+  });
+});
+
 describe('validateSystem — unstrung panels are an ERROR that outlives autostring', () => {
   it('flags enabled panels no string covers (however they were authored)', () => {
     const panels = fixturePanels(20);
