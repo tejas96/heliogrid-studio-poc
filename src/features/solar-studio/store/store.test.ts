@@ -60,6 +60,8 @@ function stateWith(project: Project): AppState {
     externalConflictAt: null,
     undoStack: [],
     redoStack: [],
+    undoLabels: [],
+    redoLabels: [],
   };
 }
 

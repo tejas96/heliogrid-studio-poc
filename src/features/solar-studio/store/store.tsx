@@ -46,6 +46,13 @@ export interface AppState {
   /** simple undo stack of project snapshots for the active project */
   undoStack: Project[];
   redoStack: Project[];
+  /**
+   * One human-readable label per undo/redo entry, parallel to the stacks
+   * ("Tilt 15°", "Move inverter"). Written by ops (lib/ops) through the
+   * `label` on update-project; a plain patch records "Edit".
+   */
+  undoLabels: string[];
+  redoLabels: string[];
 }
 
 export type Action =
@@ -59,9 +66,12 @@ export type Action =
   | { type: 'close-project' }
   | {
       type: 'hydrate';
-      state: Omit<AppState, 'hydrated' | 'undoStack' | 'redoStack' | 'externalConflictAt'>;
+      state: Omit<
+        AppState,
+        'hydrated' | 'undoStack' | 'redoStack' | 'undoLabels' | 'redoLabels' | 'externalConflictAt'
+      >;
     }
-  | { type: 'update-project'; patch: Partial<Project>; undoable?: boolean }
+  | { type: 'update-project'; patch: Partial<Project>; undoable?: boolean; label?: string }
   // background health stamp — merged into the CURRENT project at reduce time
   // (a debounced setTimeout closure can hold a stale derived; this can't)
   | {
@@ -147,6 +157,8 @@ const INITIAL_STATE: AppState = {
   externalConflictAt: null,
   undoStack: [],
   redoStack: [],
+  undoLabels: [],
+  redoLabels: [],
 };
 
 export function reducer(state: AppState, action: Action): AppState {
@@ -170,6 +182,8 @@ export function reducer(state: AppState, action: Action): AppState {
         activeProjectId: action.project.id,
         undoStack: [],
         redoStack: [],
+        undoLabels: [],
+        redoLabels: [],
       };
     case 'delete-project':
       return {
@@ -184,10 +198,19 @@ export function reducer(state: AppState, action: Action): AppState {
         activeProjectId: action.id,
         undoStack: [],
         redoStack: [],
+        undoLabels: [],
+        redoLabels: [],
         externalConflictAt: null,
       };
     case 'close-project':
-      return { ...state, activeProjectId: null, undoStack: [], redoStack: [] };
+      return {
+        ...state,
+        activeProjectId: null,
+        undoStack: [],
+        redoStack: [],
+        undoLabels: [],
+        redoLabels: [],
+      };
     case 'hydrate':
       return {
         ...action.state,
@@ -195,6 +218,8 @@ export function reducer(state: AppState, action: Action): AppState {
         externalConflictAt: null,
         undoStack: [],
         redoStack: [],
+        undoLabels: [],
+        redoLabels: [],
       };
     case 'update-project': {
       const id = state.activeProjectId;
@@ -213,6 +238,10 @@ export function reducer(state: AppState, action: Action): AppState {
           ? [...state.undoStack.slice(-24), current]
           : state.undoStack,
         redoStack: action.undoable ? [] : state.redoStack,
+        undoLabels: action.undoable
+          ? [...state.undoLabels.slice(-24), action.label ?? 'Edit']
+          : state.undoLabels,
+        redoLabels: action.undoable ? [] : state.redoLabels,
       };
     }
     case 'stamp-health': {
@@ -245,6 +274,8 @@ export function reducer(state: AppState, action: Action): AppState {
         projects: state.projects.map((p) => (p.id === id ? restored : p)),
         undoStack: state.undoStack.slice(0, -1),
         redoStack: [...state.redoStack, current],
+        undoLabels: state.undoLabels.slice(0, -1),
+        redoLabels: [...state.redoLabels, state.undoLabels[state.undoLabels.length - 1] ?? 'Edit'],
       };
     }
     case 'redo': {
@@ -258,6 +289,8 @@ export function reducer(state: AppState, action: Action): AppState {
         projects: state.projects.map((p) => (p.id === id ? restored : p)),
         redoStack: state.redoStack.slice(0, -1),
         undoStack: [...state.undoStack, current],
+        redoLabels: state.redoLabels.slice(0, -1),
+        undoLabels: [...state.undoLabels, state.redoLabels[state.redoLabels.length - 1] ?? 'Edit'],
       };
     }
     case 'external-project-update': {
@@ -283,6 +316,8 @@ export function reducer(state: AppState, action: Action): AppState {
         // local undo history describes a replaced timeline — drop it
         undoStack: isActive && !stampOnly ? [] : state.undoStack,
         redoStack: isActive && !stampOnly ? [] : state.redoStack,
+        undoLabels: isActive && !stampOnly ? [] : state.undoLabels,
+        redoLabels: isActive && !stampOnly ? [] : state.redoLabels,
         externalConflictAt: isActive && !stampOnly ? Date.now() : state.externalConflictAt,
       };
     }
