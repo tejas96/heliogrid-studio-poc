@@ -126,56 +126,9 @@ export function buildParapetGeometries(
   return out;
 }
 
-export function mulberry32(a: number) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-export interface ContextBuilding {
-  x: number;
-  z: number;
-  w: number;
-  d: number;
-  h: number;
-  tint: string;
-}
-
-/**
- * Deterministic DECORATIVE neighbourhood (seeded by location).
- * Visual context only — never part of shading/energy calculations.
- * Real neighbour shading must be modeled by the user as a 'building'
- * obstruction, which IS an engineering object.
- */
-export function contextBuildings(project: Project): ContextBuilding[] {
-  const loc = project.location;
-  if (!loc) return [];
-  const seed = Math.abs(Math.sin(loc.latLng.lat * 1000) * 10000);
-  const rnd = mulberry32(Math.floor(seed));
-  const tints = ['#8d8579', '#9a9287', '#7f7a70', '#948b7d'];
-  const out: ContextBuilding[] = [];
-  for (let i = 0; i < 14; i++) {
-    const ang = rnd() * Math.PI * 2;
-    const dist = 18 + rnd() * 26;
-    const x = Math.cos(ang) * dist;
-    const z = Math.sin(ang) * dist;
-    const w = 5 + rnd() * 9;
-    const d = 5 + rnd() * 9;
-    const h = 3 + rnd() * 7;
-    const tint = tints[Math.floor(rnd() * tints.length)];
-    const clear = project.roofs.every((r) => {
-      const c = polygonCentroid(r.polygon);
-      return Math.hypot(x - c.x, z + c.y) > 14;
-    });
-    if (!clear) continue;
-    out.push({ x, z, w, d, h, tint });
-  }
-  return out;
-}
+// The seeded "decorative neighbourhood" that used to live here is gone: the
+// scene now streams Google's real photogrammetry (three/RealSurround.tsx) and
+// draws nothing when no real data exists.
 
 /**
  * Build the ENGINEERING shadow-caster meshes for a project:

@@ -13,6 +13,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.1.1",
+    "3d-tiles-renderer": "^0.5.2",
     "camera-controls": "^3.1.2",
     "geotiff": "^3.0.5",
     "lucide-react": "^0.525.0",

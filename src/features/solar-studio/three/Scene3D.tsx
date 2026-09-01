@@ -22,6 +22,7 @@ import { inverterRemove } from '../lib/ops/electrical-ops';
 import { segmentDelete } from '../lib/ops/layout-ops';
 import { batteryRemove } from '../lib/ops/battery-ops';
 import { TableGizmo, WallGizmo } from './Gizmos';
+import { RealSurround } from './RealSurround';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 
@@ -97,7 +98,6 @@ import { EnergyReportSheet } from '../components/EnergyReportSheet';
 import {
   buildParapetGeometries,
   buildRoofSolidGeometry,
-  contextBuildings,
   roofTopRing,
 } from '../lib/scene-model';
 import { computeEaveRefs, isSloped, surfaceHeightAt } from '../lib/roof-plane';
@@ -554,6 +554,7 @@ export function Scene3D({
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.0;
           gl.outputColorSpace = THREE.SRGBColorSpace;
+          gl.localClippingEnabled = true; // the real surround is cut out under the site
           glRef.current = gl;
         }}
       >
@@ -671,9 +672,9 @@ export function Scene3D({
               <>
                 <button
                   className={`tool-btn ${showBuildings ? '' : 'on'}`}
-                  data-tip={showBuildings ? 'Hide neighbour buildings' : 'Show neighbour buildings'}
+                  data-tip={showBuildings ? 'Hide the real surroundings (Google 3D)' : 'Show the real surroundings (Google 3D)'}
                   data-tip-right=""
-                  aria-label="Toggle neighbour buildings"
+                  aria-label="Toggle the real surroundings"
                   aria-pressed={!showBuildings}
                   onClick={() => setShowBuildings((v) => !v)}
                 >
@@ -1467,14 +1468,16 @@ function SceneContent({
         </group>
       ) : (
         <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -0.02, 0]} receiveShadow>
             <planeGeometry args={[300, 300]} />
             <meshStandardMaterial color="#151a21" roughness={1} envMapIntensity={0.2} />
           </mesh>
           {/* the aerial photo is an already-exposed picture, not an albedo: under
               a full sun plus sky it would render ~2.4× too bright, so it is
-              scaled down to read as the ground it is, and still takes shadows */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+              scaled down to read as the ground it is, and still takes shadows.
+              With the real surround on it sits a hand below grade: the streamed
+              terrain wins where it exists, the photo shows where it does not */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -0.6 : 0, 0]} receiveShadow>
             <planeGeometry args={[spanM, spanM]} />
             <meshStandardMaterial map={groundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
           </mesh>
@@ -1966,9 +1969,8 @@ function SceneContent({
         );
       })}
 
-      {!meshMode && showBuildings && (
-        <NeighbourBuildings project={project} photoreal />
-      )}
+      {/* the real neighbourhood — Google's photogrammetry, never invented boxes */}
+      {!meshMode && showBuildings && <RealSurround project={project} />}
 
       {!meshMode && showSunPath && (
         <SunPath
@@ -2076,34 +2078,6 @@ function RoofMesh({
  * would contradict the numbers. Model real neighbours as 'building'
  * obstructions to make them count in BOTH.
  */
-function NeighbourBuildings({ project, photoreal }: { project: Project; photoreal: boolean }) {
-  const buildings = useMemo(() => contextBuildings(project), [project]);
-
-  return (
-    <>
-      {buildings.map((b, i) => (
-        <group key={i} position={[b.x, 0, b.z]}>
-          <mesh position={[0, b.h / 2, 0]} receiveShadow userData={{ shadowCaster: false }}>
-            <boxGeometry args={[b.w, b.h, b.d]} />
-            <meshStandardMaterial
-              color={photoreal ? b.tint : '#334155'}
-              roughness={0.95}
-              envMapIntensity={0.3}
-              transparent={!photoreal}
-              opacity={photoreal ? 1 : 0.8}
-            />
-          </mesh>
-          {/* parapet lip */}
-          <mesh position={[0, b.h + 0.15, 0]} userData={{ shadowCaster: false }}>
-            <boxGeometry args={[b.w + 0.24, 0.3, b.d + 0.24]} />
-            <meshStandardMaterial color={photoreal ? '#b6ad9e' : '#3d4a5e'} roughness={0.95} />
-          </mesh>
-        </group>
-      ))}
-    </>
-  );
-}
-
 /**
  * Golden sun-path arc with hour markers. Hour labels use drei <Html> chips —
  * deliberately NOT drei <Text>: troika fetches its font at runtime and the
