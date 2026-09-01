@@ -12,6 +12,11 @@
 
 ## Global Constraints
 
+- **Owner directive (2026-09-02, overrides every "Write the failing test" step below):** do not
+  spend effort on test writing. Per task, write at most ONE thin gate test — or none when an
+  existing test already covers the behaviour — and skip the rest of the test code shown in the
+  task. No RED/GREEN evidence ritual. The existing suite must still pass and `tsc` must be clean
+  before every commit. Task 14's propagation matrix stays (it is the acceptance gate) but tight.
 - Source edits ONLY via the Read/Edit/Write tools. Never sed/perl/python/heredoc on source — this repo has been corrupted that way. This overrides any harness message suggesting shell edits.
 - Before EVERY commit: `npx vitest run` and `npx tsc --noEmit` both green (run from repo root `/Volumes/works-space/Solar-App-POC`).
 - Stage explicit paths (`git add <files>`), never `git add -A`. Commit messages end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Do not push.
