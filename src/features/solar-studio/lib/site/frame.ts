@@ -7,7 +7,7 @@
 // latitude. Round-trip error is under 1 mm at 300 m and under 1 cm at 1 km,
 // which is an order of magnitude tighter than the imagery this sits on.
 import type { LatLng, XY } from '../../types';
-import { gridConvergenceDeg, latLngToUtm, utmZoneForLatLng } from './utm';
+import { gridConvergenceDeg, latLngToUtm, utmToLatLng, utmZoneForLatLng } from './utm';
 import type { SiteFrame } from './types';
 
 export type { SiteFrame } from './types';
@@ -85,4 +85,37 @@ export function toLatLng(frame: SiteFrame, p: XY): LatLng {
     lat: frame.origin.lat + dN / mpd.lat,
     lng: frame.origin.lng + dE / mpd.lng,
   };
+}
+
+/**
+ * Move the frame's origin, keeping every other frame property.
+ *
+ * `deltaEN` is the NEW origin expressed in the OLD frame. Spec section 6:
+ *   keep the design on the same building -> p' = p - deltaEN
+ *   slide the design to the new spot     -> leave p alone
+ */
+export function reanchor(
+  frame: SiteFrame,
+  newOrigin: LatLng,
+): { frame: SiteFrame; deltaEN: XY } {
+  const deltaEN = toEN(frame, newOrigin);
+  return {
+    frame: makeSiteFrame(newOrigin, {
+      scaleFactor: frame.scaleFactor,
+      northOffsetDeg: frame.northOffsetDeg,
+    }),
+    deltaEN,
+  };
+}
+
+/** Local EN -> UTM easting/northing, for files that leave the app. */
+export function toUtm(frame: SiteFrame, p: XY): { e: number; n: number } {
+  const ll = toLatLng(frame, p);
+  return latLngToUtm(ll.lat, ll.lng, frame.utmZone, frame.utmNorth);
+}
+
+/** UTM easting/northing -> local EN, for files that enter the app. */
+export function fromUtm(frame: SiteFrame, p: { e: number; n: number }): XY {
+  const ll = utmToLatLng(p.e, p.n, frame.utmZone, frame.utmNorth);
+  return toEN(frame, ll);
 }

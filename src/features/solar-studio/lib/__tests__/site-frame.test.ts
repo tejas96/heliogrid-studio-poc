@@ -13,7 +13,7 @@
 // coming back: the metres-per-degree assertions below fail loudly if the
 // equatorial radius is ever reintroduced.
 import { describe, expect, it } from 'vitest';
-import { makeSiteFrame, toEN, toLatLng } from '../site/frame';
+import { fromUtm, makeSiteFrame, reanchor, toEN, toLatLng, toUtm } from '../site/frame';
 
 const PUNE = { lat: 18.5202, lng: 73.8567 };
 
@@ -136,5 +136,70 @@ describe('UTM anchor', () => {
     expect(f.utmOrigin.e).toBeLessThan(700000);
     expect(f.convergenceDeg).toBeLessThan(0);
     expect(f.convergenceDeg).toBeGreaterThan(-0.5);
+  });
+});
+
+describe('reanchor', () => {
+  it('reports the new origin expressed in the old frame', () => {
+    const f = makeSiteFrame(PUNE);
+    const moved = { lat: PUNE.lat + 0.0005, lng: PUNE.lng + 0.0005 };
+    const { deltaEN } = reanchor(f, moved);
+    expect(deltaEN.x).toBeCloseTo(toEN(f, moved).x, 9);
+    expect(deltaEN.y).toBeCloseTo(toEN(f, moved).y, 9);
+  });
+
+  it('keeps geometry on the same ground when deltaEN is subtracted', () => {
+    // This is the "keep the design on the same building" branch of spec section 6.
+    const f = makeSiteFrame(PUNE);
+    const p = { x: 40, y: -25 };
+    const groundTruth = toLatLng(f, p);
+
+    const moved = { lat: PUNE.lat + 0.0005, lng: PUNE.lng - 0.0003 };
+    const { frame: f2, deltaEN } = reanchor(f, moved);
+    const p2 = { x: p.x - deltaEN.x, y: p.y - deltaEN.y };
+
+    const after = toLatLng(f2, p2);
+    // under 1 mm: 1e-8 deg latitude is ~1.1 mm
+    expect(after.lat).toBeCloseTo(groundTruth.lat, 8);
+    expect(after.lng).toBeCloseTo(groundTruth.lng, 8);
+  });
+
+  it('carries scaleFactor and northOffsetDeg to the new frame', () => {
+    const f = makeSiteFrame(PUNE, { scaleFactor: 1.02, northOffsetDeg: 4 });
+    const { frame } = reanchor(f, { lat: PUNE.lat + 0.01, lng: PUNE.lng });
+    expect(frame.scaleFactor).toBe(1.02);
+    expect(frame.northOffsetDeg).toBe(4);
+  });
+
+  it('recomputes the UTM zone when the move crosses one', () => {
+    const f = makeSiteFrame({ lat: 18.5, lng: 74.9 }); // zone 43
+    const { frame } = reanchor(f, { lat: 18.5, lng: 75.1 }); // zone 43 still
+    expect(frame.utmZone).toBe(43);
+    const far = reanchor(f, { lat: 18.5, lng: 81.1 }); // zone 44
+    expect(far.frame.utmZone).toBe(44);
+  });
+});
+
+describe('UTM interchange from local EN', () => {
+  it('maps the frame origin to the frame origin easting/northing', () => {
+    const f = makeSiteFrame(PUNE);
+    const u = toUtm(f, { x: 0, y: 0 });
+    expect(u.e).toBeCloseTo(f.utmOrigin.e, 3);
+    expect(u.n).toBeCloseTo(f.utmOrigin.n, 3);
+  });
+
+  it('round-trips local EN through UTM within 1 mm', () => {
+    const f = makeSiteFrame(PUNE);
+    for (const p of [{ x: 120, y: 80 }, { x: -95, y: -240 }]) {
+      const back = fromUtm(f, toUtm(f, p));
+      expect(Math.hypot(back.x - p.x, back.y - p.y)).toBeLessThan(0.001);
+    }
+  });
+
+  it('round-trips under a rotated frame', () => {
+    const f = makeSiteFrame(PUNE, { northOffsetDeg: 12 });
+    const p = { x: 200, y: -60 };
+    const back = fromUtm(f, toUtm(f, p));
+    expect(Math.hypot(back.x - p.x, back.y - p.y)).toBeLessThan(0.001);
   });
 });
