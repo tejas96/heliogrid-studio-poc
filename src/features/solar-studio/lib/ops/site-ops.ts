@@ -104,8 +104,21 @@ export const obstructionSetCastsShadow = defineOp<{ id: string; castsShadow: boo
   id: 'obstruction.setCastsShadow',
   layer: 'geometry',
   label: (a) => (a.castsShadow ? 'Obstruction casts shadow' : 'Obstruction casts no shadow'),
+  // The legacy flag is only the DEFAULT: a per-instance capability record (every
+  // factory-made obstruction carries one) overrides it in resolveCapabilities.
+  // Writing the flag alone left the toggle dead on those objects, so both go.
   apply: (p, a) => ({
-    obstructions: p.obstructions.map((o) => (o.id === a.id ? { ...o, castsShadow: a.castsShadow } : o)),
+    obstructions: p.obstructions.map((o) =>
+      o.id === a.id
+        ? {
+            ...o,
+            castsShadow: a.castsShadow,
+            ...(o.capabilities
+              ? { capabilities: { ...o.capabilities, castsAnalyticalShadow: a.castsShadow } }
+              : {}),
+          }
+        : o,
+    ),
   }),
 });
 
