@@ -61,16 +61,20 @@ export function getPanelMaterials(): PanelMaterials {
   panelMats = {
     // the cell-grid map carries the #061a3f navy, so the base color stays
     // white — multiplying navy × navy would render nearly black.
+    // Tempered low-iron glass over the cells: a hard clearcoat that reflects
+    // the environment map (Scene3D's <Environment>), low base roughness so the
+    // sky reads in it at glancing angles, near-zero metalness (glass, not steel).
     glass: new THREE.MeshPhysicalMaterial({
       color: '#ffffff',
-      metalness: 0.15,
-      roughness: 0.22,
-      clearcoat: 0.7,
-      clearcoatRoughness: 0.25,
+      metalness: 0.04,
+      roughness: 0.16,
+      clearcoat: 1,
+      clearcoatRoughness: 0.08,
+      envMapIntensity: 1.15,
       map: getCellGridTexture(),
     }),
-    frame: new THREE.MeshStandardMaterial({ color: '#c9ccd2', metalness: 0.8, roughness: 0.35 }),
-    leg: new THREE.MeshStandardMaterial({ color: '#9aa0a8', metalness: 0.7, roughness: 0.4 }),
+    frame: new THREE.MeshStandardMaterial({ color: '#cfd3d9', metalness: 0.85, roughness: 0.3, envMapIntensity: 1 }),
+    leg: new THREE.MeshStandardMaterial({ color: '#a3a9b1', metalness: 0.75, roughness: 0.38, envMapIntensity: 0.9 }),
   };
   return panelMats;
 }

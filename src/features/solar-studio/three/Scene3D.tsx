@@ -1,8 +1,18 @@
 // ─── 3D Studio v2: photoreal scene, sun sim, solar access, pro HUD ──────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Line, Html, Sky } from '@react-three/drei';
+import {
+  CameraControls,
+  CameraControlsImpl,
+  Environment,
+  Html,
+  Lightformer,
+  Line,
+  Sky,
+} from '@react-three/drei';
 import * as THREE from 'three';
+import { designBounds, type SceneBounds } from './scene-bounds';
+import { ScenePost } from './ScenePost';
 import {
   ArrowDown,
   Axis3d,
@@ -58,7 +68,6 @@ import { lightenHex, roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
 import { StructureNodesInstanced } from './StructureNodesInstanced';
-import { resolveRacking, type ResolvedRacking } from '../lib/structure';
 import { deriveStructures } from '../lib/derive';
 import {
   DEFAULT_STRUCTURE_VIEW,
@@ -84,24 +93,33 @@ export function seasonDate(preset: SeasonPreset): Date {
   }
 }
 
-/** Minimal shape of the OrbitControls instance we drive for view presets. */
-interface ControlsLike {
-  object: THREE.Camera;
-  target: THREE.Vector3;
-  update(): void;
-}
-
 type ViewPreset = 'top' | 'iso' | 'front';
 
-const VIEW_POSITIONS: Record<ViewPreset, [number, number, number]> = {
-  top: [0.01, 80, 0.01],
-  iso: [30, 42, 42],
-  front: [0, 10, 58],
+/** Unit view directions; the camera director scales them to the design's size. */
+const VIEW_DIRS: Record<ViewPreset, [number, number, number]> = {
+  top: [0.001, 1, 0.001],
+  iso: [0.55, 0.62, 0.55],
+  front: [0, 0.3, 1],
 };
 
-/** Stable orbit pivot — a fresh array here would let drei re-apply it every
- *  render and snap the pivot back to centre, defeating zoom-to-cursor. */
-const ORBIT_TARGET: [number, number, number] = [0, 3, 0];
+const ACTION = CameraControlsImpl.ACTION;
+
+/**
+ * Where the camera should stand to see the whole design from a preset
+ * direction: far enough that the bounding sphere fits the vertical field of view.
+ */
+function presetPose(b: SceneBounds, v: ViewPreset, fovDeg: number) {
+  const d = VIEW_DIRS[v];
+  const n = Math.hypot(d[0], d[1], d[2]);
+  const dist = Math.max(10, (b.r * 1.15) / Math.tan((fovDeg * Math.PI) / 360));
+  return {
+    pos: [b.cx + (d[0] / n) * dist, b.cy + (d[1] / n) * dist, b.cz + (d[2] / n) * dist] as const,
+    target: [b.cx, b.cy, b.cz] as const,
+  };
+}
+
+const CAMERA_FOV = 40;
+const POST_ENABLED = true;
 
 export function Scene3D({
   onClose,
@@ -167,6 +185,7 @@ export function Scene3D({
     const c = controlsRef.current;
     if (!c) return;
     let target: [number, number, number] | null = null;
+    // (moveTo keeps the current orbit offset — the view glides, it does not jump)
     if (kind === 'obstruction') {
       const o = project.obstructions.find((x) => x.id === id);
       const roof = o ? project.roofs.find((r) => r.id === o.roofId) : undefined;
@@ -183,8 +202,7 @@ export function Scene3D({
       }
     }
     if (!target) return;
-    c.target.set(...target);
-    c.update();
+    void c.moveTo(target[0], target[1], target[2], true);
   };
   const commitStructChoice = (choice: StructChoice) => {
     if (!structEdit) return;
@@ -246,7 +264,14 @@ export function Scene3D({
   const [heatProgress, setHeatProgress] = useState<{ done: number; total: number } | null>(null);
   const heatCacheRef = useRef<{ fp: string; res: HeatmapResult } | null>(null);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
-  const controlsRef = useRef<ControlsLike | null>(null);
+  const controlsRef = useRef<CameraControlsImpl | null>(null);
+  // the design's footprint drives the camera director AND the shadow frustum
+  const focusRoofForBounds = focusRoofId ? project.roofs.filter((r) => r.id === focusRoofId) : undefined;
+  const bounds = useMemo(
+    () => designBounds(project, focusRoofForBounds && focusRoofForBounds.length ? focusRoofForBounds : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project.roofs, project.panels, focusRoofId],
+  );
 
   const { sunrise, sunset } = useMemo(
     () => sunriseSunset(date, loc.latLng.lat, loc.latLng.lng),
@@ -256,8 +281,8 @@ export function Scene3D({
   useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => {
-      setHour((h) => (h + 0.12 > 19 ? 5 : h + 0.12));
-    }, 60);
+      setHour((h) => (h + 0.05 > 19 ? 5 : h + 0.05));
+    }, 33);
     return () => clearInterval(id);
   }, [playing]);
 
@@ -313,13 +338,38 @@ export function Scene3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmap, heatFp]);
 
-  function goView(v: ViewPreset) {
+  /** Camera director: fly to a preset that frames the WHOLE design. */
+  function goView(v: ViewPreset, animate = true) {
     const c = controlsRef.current;
     if (!c) return;
-    c.object.position.set(...VIEW_POSITIONS[v]);
-    c.target.set(0, 3, 0);
-    c.update();
+    const { pos, target } = presetPose(bounds, v, CAMERA_FOV);
+    void c.setLookAt(pos[0], pos[1], pos[2], target[0], target[1], target[2], animate);
   }
+
+  // open framed on the design (a 300 m site no longer opens off-screen), and
+  // re-frame when the design's footprint changes shape
+  const framedFor = useRef<string>('');
+  useEffect(() => {
+    const key = `${bounds.cx.toFixed(1)}|${bounds.cz.toFixed(1)}|${bounds.r.toFixed(1)}`;
+    if (framedFor.current === key) return;
+    // <Canvas> mounts its children in its own React root, so the controls ref
+    // can still be null in this effect — poll a few frames until it exists
+    let tries = 0;
+    let raf = 0;
+    const attempt = () => {
+      if (framedFor.current === key) return;
+      if (controlsRef.current) {
+        const first = framedFor.current === '';
+        framedFor.current = key;
+        goView('iso', !first);
+        return;
+      }
+      if (tries++ < 120) raf = requestAnimationFrame(attempt);
+    };
+    attempt();
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bounds]);
 
   /**
    * Orbit the camera from the keyboard (Phase 22p).
@@ -338,16 +388,10 @@ export function Scene3D({
   function orbitBy(dAzimuth: number, dElevation: number, zoomFactor = 1) {
     const c = controlsRef.current;
     if (!c) return;
-    const offset = c.object.position.clone().sub(c.target);
-    const s = new THREE.Spherical().setFromVector3(offset);
-    s.theta += dAzimuth;
-    // clamp above the horizon and below straight-down, matching what dragging
-    // allows — going under the ground plane is disorienting, not useful
-    s.phi = Math.max(0.06, Math.min(Math.PI / 2 - 0.02, s.phi + dElevation));
-    s.radius = Math.max(4, Math.min(320, s.radius * zoomFactor));
-    c.object.position.copy(c.target.clone().add(new THREE.Vector3().setFromSpherical(s)));
-    c.object.lookAt(c.target);
-    c.update();
+    // the controls own the clamps (min/max polar and distance), so keyboard
+    // and pointer can never disagree about where the camera may go
+    if (dAzimuth !== 0 || dElevation !== 0) void c.rotate(dAzimuth, dElevation, true);
+    if (zoomFactor !== 1) void c.dolly(zoomFactor < 1 ? c.distance * 0.12 : -c.distance * 0.12, true);
   }
 
   /**
@@ -431,11 +475,14 @@ export function Scene3D({
     >
       <Canvas
         shadows={{ type: THREE.PCFSoftShadowMap }}
-        gl={{ preserveDrawingBuffer: true, antialias: true, alpha: meshMode }}
-        camera={{ position: VIEW_POSITIONS.iso, fov: 45 }}
+        // retina at 3× rendered four times the pixels for no visible gain; 1.5 is
+        // the sweet spot for a scene with SMAA on top
+        dpr={[1, 1.5]}
+        gl={{ preserveDrawingBuffer: true, antialias: false, alpha: meshMode }}
+        camera={{ position: [30, 42, 42], fov: CAMERA_FOV, near: 0.3, far: 3000 }}
         onCreated={({ gl }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 1.05;
+          gl.toneMappingExposure = 1.0;
           gl.outputColorSpace = THREE.SRGBColorSpace;
           glRef.current = gl;
         }}
@@ -463,23 +510,35 @@ export function Scene3D({
           heatmap={heatmap}
           heatResult={heatResult}
           heatMonth={heatMonth}
+          bounds={bounds}
         />
-        <OrbitControls
-          ref={controlsRef as never}
+        {/* Camera director: smooth, damped, touch-native (one finger pans, two
+            fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
+            and every preset/focus is a tween rather than a jump. */}
+        <CameraControls
+          ref={controlsRef}
           makeDefault
+          minDistance={1.5}
+          maxDistance={600}
           maxPolarAngle={Math.PI / 2.05}
-          minDistance={8}
-          maxDistance={170}
-          target={ORBIT_TARGET}
-          enableDamping
-          dampingFactor={0.08}
-          zoomToCursor
-          screenSpacePanning={false}
-          zoomSpeed={1.15}
-          panSpeed={0.9}
-          rotateSpeed={0.9}
-          enableRotate={!heatmap}
+          dollyToCursor
+          smoothTime={0.2}
+          draggingSmoothTime={0.06}
+          azimuthRotateSpeed={heatmap ? 0 : 1}
+          polarRotateSpeed={heatmap ? 0 : 1}
+          mouseButtons={{
+            left: ACTION.ROTATE,
+            middle: ACTION.DOLLY,
+            right: ACTION.TRUCK,
+            wheel: ACTION.DOLLY,
+          }}
+          touches={{
+            one: ACTION.TOUCH_TRUCK,
+            two: ACTION.TOUCH_DOLLY_ROTATE,
+            three: ACTION.TOUCH_TRUCK,
+          }}
         />
+        {!heatmap && POST_ENABLED && <ScenePost />}
       </Canvas>
 
       {/* ── left rail: scene toggles ── */}
@@ -994,8 +1053,10 @@ function SceneContent({
   heatmap,
   heatResult,
   heatMonth,
+  bounds,
 }: {
   project: Project;
+  bounds: SceneBounds;
   sunAltitude: number;
   sunAzimuth: number;
   solarAccessView: boolean;
@@ -1024,7 +1085,8 @@ function SceneContent({
 }) {
   const loc = project.location!;
   const spec = project.components.panel;
-  const R = 70;
+  // sun-path arc and sun disc radius: beyond the design, scaled to the site
+  const R = Math.max(70, bounds.r * 2.6);
 
   // parametric structures (Phase 7): the member graph is the owner — the
   // scene renders it and couples panel heights to the SAME resolved racking.
@@ -1049,23 +1111,6 @@ function SceneContent({
     );
     return allStructures.filter((s) => keep.has(s.segmentId));
   }, [allStructures, selectedSegId, view]);
-  // (plain record — the lucide `Map` icon import shadows the Map constructor)
-  const rackingBySeg = useMemo(() => {
-    const m: Record<string, ResolvedRacking> = {};
-    if (!spec) return m;
-    // ALL structures, not the isolate-filtered set: this drives panel POSE, and
-    // isolating one table must not change how any other table's modules sit.
-    const structured = new Set(allStructures.map((st) => st.segmentId));
-    for (const seg of project.segments) {
-      if (!structured.has(seg.id)) continue;
-      const roof = project.roofs.find((r) => r.id === seg.roofId);
-      if (!roof) continue;
-      const rr = resolveRacking(project, roof, seg, spec);
-      if (rr) m[seg.id] = rr;
-    }
-    return m;
-  }, [project, spec, allStructures]);
-
   // ANY segmented panel opens the editor — a flush table has no structure to
   // click, and must stay re-elevatable from 3D
   const onPanelClickToEdit = useCallback(
@@ -1099,32 +1144,41 @@ function SceneContent({
    * Modules split into how each must be drawn (Phase 22l). One pose source
    * feeds all three buckets, so ghosting can never move a module.
    */
-  const panelParts = spec
-    ? partitionPanels(
-        project.panels
-          .filter((p) => p.enabled && inScope(p.roofId))
-          .map((p) => {
-            const roof = project.roofs.find((r) => r.id === p.roofId);
-            // ONE pose source for the mesh, the analytical shadow slab and the
-            // shading engine's rays (§A0) — they cannot drift apart
-            const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center));
-            return {
-              id: p.id,
-              segmentId: p.segmentId,
-              position: pose.position,
-              yawRad: pose.yawRad,
-              tiltRad: pose.tiltRad,
-              w: pose.w,
-              d: pose.d,
-              flush: pose.flush,
-              legs: pose.structured ? false : undefined, // structure draws real legs
-              access: p.solarAccess ?? 1,
-            };
-          }),
-        selectedSegId,
-        view,
-      )
-    : { normal: [], ghost: [], hidden: [] };
+  // Memoised on the PROJECT, not recomputed per render: before this, every
+  // hour-slider tick and every async solar-access stamp re-posed every module
+  // and re-allocated every InstancedMesh — the single biggest frame cost, and
+  // the reason hover preview had to be removed.
+  const panelParts = useMemo(
+    () =>
+      spec
+        ? partitionPanels(
+            project.panels
+              .filter((p) => p.enabled && inScope(p.roofId))
+              .map((p) => {
+                const roof = project.roofs.find((r) => r.id === p.roofId);
+                // ONE pose source for the mesh, the analytical shadow slab and the
+                // shading engine's rays (§A0) — they cannot drift apart
+                const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center));
+                return {
+                  id: p.id,
+                  segmentId: p.segmentId,
+                  position: pose.position,
+                  yawRad: pose.yawRad,
+                  tiltRad: pose.tiltRad,
+                  w: pose.w,
+                  d: pose.d,
+                  flush: pose.flush,
+                  legs: pose.structured ? false : undefined, // structure draws real legs
+                  access: p.solarAccess ?? 1,
+                };
+              }),
+            selectedSegId,
+            view,
+          )
+        : { normal: [], ghost: [], hidden: [] },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project, spec, selectedSegId, view, focusRoof, eaveRefs],
+  );
   // shift so the shown building(s)' collective center sits at the world origin
   const meshCenter =
     meshMode && shownRoofs.length > 0
@@ -1168,6 +1222,17 @@ function SceneContent({
   const sunVisible = sunAltitude > 0;
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
+  // the sun light aims at the design's centre and its shadow frustum wraps the
+  // design's footprint — a 300 m site keeps its shadows, a 20 m house gets a
+  // sharp map instead of 60 m of wasted texels
+  const lightTarget = useMemo(() => new THREE.Object3D(), []);
+  lightTarget.position.set(bounds.cx, 0, bounds.cz);
+  const shadowHalf = Math.max(20, bounds.r * 1.2);
+  const sunPos = useMemo(
+    () => sunDir.clone().multiplyScalar(Math.max(80, bounds.r * 3)).add(new THREE.Vector3(bounds.cx, 0, bounds.cz)),
+    [sunDir, bounds],
+  );
+
   // heatmap mode: flat satellite ground + colored roof-surface cells only —
   // no 3D model, no lighting drama (unlit cells read the true ramp colors)
   if (heatmap) {
@@ -1186,29 +1251,62 @@ function SceneContent({
 
   return (
     <group>
+      {/* Image-based lighting: a procedural sky dome + ground bounce rendered
+          once into a small cube map. Every PBR material finally has something
+          to reflect — glass reads as glass, steel as steel — with no HDR file. */}
+      <Environment resolution={128} frames={1} background={false}>
+        <Lightformer
+          form="rect"
+          intensity={sunVisible ? 1.4 : 0.35}
+          color="#dbe7f7"
+          position={[0, 14, 0]}
+          rotation-x={Math.PI / 2}
+          scale={[40, 40, 1]}
+        />
+        <Lightformer
+          form="rect"
+          intensity={sunVisible ? 0.9 : 0.2}
+          color="#f6ecd8"
+          position={[0, 4, -16]}
+          scale={[36, 10, 1]}
+        />
+        <Lightformer
+          form="rect"
+          intensity={0.3}
+          color="#6b6357"
+          position={[0, -6, 0]}
+          rotation-x={-Math.PI / 2}
+          scale={[40, 40, 1]}
+        />
+      </Environment>
+      <primitive object={lightTarget} />
+
       {meshMode ? (
         <>
           {/* studio background + soft product-render lighting (sun-independent) */}
           <color attach="background" args={['#0c0f15']} />
-          <fogExp2 attach="fog" args={['#0c0f15', 0.006]} />
-          <ambientLight intensity={0.55} />
-          <hemisphereLight intensity={0.5} groundColor="#12161d" color="#dfe8f5" />
+          <fogExp2 attach="fog" args={['#0c0f15', 0.0022]} />
+          <ambientLight intensity={0.35} />
+          <hemisphereLight intensity={0.45} groundColor="#12161d" color="#dfe8f5" />
           <directionalLight
-            position={[24, 40, 20]}
+            position={[bounds.cx + 24, 40, bounds.cz + 20]}
+            target={lightTarget}
             intensity={1.15}
             color="#ffffff"
             castShadow
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
-            shadow-camera-left={-40}
-            shadow-camera-right={40}
-            shadow-camera-top={40}
-            shadow-camera-bottom={-40}
-            shadow-camera-far={160}
-            shadow-bias={-0.0004}
+            shadow-mapSize-width={4096}
+            shadow-mapSize-height={4096}
+            shadow-camera-left={-shadowHalf}
+            shadow-camera-right={shadowHalf}
+            shadow-camera-top={shadowHalf}
+            shadow-camera-bottom={-shadowHalf}
+            shadow-camera-near={1}
+            shadow-camera-far={shadowHalf * 6}
+            shadow-bias={-0.00015}
+            shadow-normalBias={0.03}
           />
           {/* fill light from the opposite side to lift shadows */}
-          <directionalLight position={[-28, 22, -18]} intensity={0.35} color="#b9c9e0" />
+          <directionalLight position={[-28, 22, -18]} intensity={0.3} color="#b9c9e0" />
         </>
       ) : (
         <>
@@ -1217,33 +1315,39 @@ function SceneContent({
             <Sky
               distance={4500}
               sunPosition={sunDir.clone().multiplyScalar(450).toArray()}
-              turbidity={6}
-              rayleigh={2.2}
+              turbidity={5.5}
+              rayleigh={2.0}
               mieCoefficient={0.006}
               mieDirectionalG={0.85}
             />
           ) : (
             <color attach="background" args={['#0a0f1c']} />
           )}
-          <fogExp2 attach="fog" args={[sunVisible ? '#b9c7d8' : '#0a0f1c', 0.0035]} />
+          {/* real haze at site scale is faint: the old 0.0035 washed a whole
+              framed design grey once the camera stood 100 m back */}
+          <fogExp2 attach="fog" args={[sunVisible ? '#b9c7d8' : '#0a0f1c', 0.0006]} />
 
-          {/* lights */}
-          <ambientLight intensity={0.14 + 0.38 * duskFactor} />
-          <hemisphereLight intensity={0.12 + 0.28 * duskFactor} groundColor="#2a2f38" color="#cfe0f4" />
+          {/* lights — the environment map now carries the sky's ambient share,
+              so the flat ambient/hemisphere terms are small */}
+          <ambientLight intensity={0.05 + 0.12 * duskFactor} />
+          <hemisphereLight intensity={0.06 + 0.16 * duskFactor} groundColor="#2a2f38" color="#cfe0f4" />
           {sunVisible && (
             <directionalLight
-              position={sunDir.clone().multiplyScalar(R)}
-              intensity={0.4 + 1.5 * duskFactor}
+              position={sunPos}
+              target={lightTarget}
+              intensity={0.4 + 1.35 * duskFactor}
               color="#fff4e0"
               castShadow
-              shadow-mapSize-width={2048}
-              shadow-mapSize-height={2048}
-              shadow-camera-left={-60}
-              shadow-camera-right={60}
-              shadow-camera-top={60}
-              shadow-camera-bottom={-60}
-              shadow-camera-far={220}
-              shadow-bias={-0.0004}
+              shadow-mapSize-width={4096}
+              shadow-mapSize-height={4096}
+              shadow-camera-left={-shadowHalf}
+              shadow-camera-right={shadowHalf}
+              shadow-camera-top={shadowHalf}
+              shadow-camera-bottom={-shadowHalf}
+              shadow-camera-near={1}
+              shadow-camera-far={shadowHalf * 8}
+              shadow-bias={-0.00015}
+              shadow-normalBias={0.03}
             />
           )}
         </>
@@ -1262,11 +1366,14 @@ function SceneContent({
         <>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
             <planeGeometry args={[300, 300]} />
-            <meshStandardMaterial color="#151a21" roughness={1} />
+            <meshStandardMaterial color="#151a21" roughness={1} envMapIntensity={0.2} />
           </mesh>
+          {/* the aerial photo is an already-exposed picture, not an albedo: under
+              a full sun plus sky it would render ~2.4× too bright, so it is
+              scaled down to read as the ground it is, and still takes shadows */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[spanM, spanM]} />
-            <meshStandardMaterial map={groundTex} roughness={1} />
+            <meshStandardMaterial map={groundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
           </mesh>
         </>
       )}
@@ -1525,7 +1632,8 @@ function RoofMesh({
   // distinct soft tint per roof in the plain/mesh studio view; photoreal keeps
   // realistic concrete so the final look isn't rainbow-coloured
   const colorIndex = allRoofs.findIndex((r) => r.id === roof.id);
-  const surfaceColor = photoreal ? '#ddd8cf' : lightenHex(roofColor(colorIndex), 0.5);
+  // weathered RCC reads at ~40% albedo; a near-white deck blows out under sun + sky
+  const surfaceColor = photoreal ? '#a8a39a' : lightenHex(roofColor(colorIndex), 0.5);
 
   return (
     <group>
@@ -1533,6 +1641,7 @@ function RoofMesh({
         <meshStandardMaterial
           color={surfaceColor}
           roughness={0.9}
+          envMapIntensity={0.55}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -1541,7 +1650,7 @@ function RoofMesh({
       </lineLoop>
       {parapetGeoms.map((g, i) => (
         <mesh key={i} geometry={g} castShadow receiveShadow userData={{ shadowCaster: true }}>
-          <meshStandardMaterial color="#c8c2b8" roughness={0.92} />
+          <meshStandardMaterial color="#9f998f" roughness={0.92} envMapIntensity={0.4} />
         </mesh>
       ))}
     </group>
@@ -1567,6 +1676,7 @@ function NeighbourBuildings({ project, photoreal }: { project: Project; photorea
             <meshStandardMaterial
               color={photoreal ? b.tint : '#334155'}
               roughness={0.95}
+              envMapIntensity={0.3}
               transparent={!photoreal}
               opacity={photoreal ? 1 : 0.8}
             />

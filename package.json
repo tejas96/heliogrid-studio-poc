@@ -12,14 +12,18 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.1.1",
+    "camera-controls": "^3.1.2",
     "geotiff": "^3.0.5",
     "lucide-react": "^0.525.0",
     "next": "^15.3.5",
     "polygon-clipping": "^0.15.7",
+    "postprocessing": "^6.39.4",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "three-mesh-bvh": "^0.9.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
