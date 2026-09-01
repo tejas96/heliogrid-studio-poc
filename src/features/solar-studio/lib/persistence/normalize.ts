@@ -130,8 +130,15 @@ function normalizePricing(p: Project): PricingSettings {
 /**
  * Additive migration: projects saved before lib/site existed get a frame built
  * from their confirmed location, seeded with their calibration. Geometry is NOT
- * touched (spec decision A8). A stored frame whose origin disagrees with the
- * location is rebuilt — the location is authoritative.
+ * touched (spec decision A8).
+ *
+ * A stored frame is trusted only when it agrees with BOTH authorities — the
+ * location for its origin, and the calibration for its scaleFactor and
+ * northOffsetDeg. CalibrateDialog (Step2Roof) writes `calibration` alone, so
+ * without the second check a frame saved before a calibration would carry the
+ * old offset forever (the origin still matches, so the origin check alone can
+ * never catch it). `frameFor` in lib/site/frame.ts applies the same rule at
+ * read time; keep the two in step.
  */
 function normalizeSiteFrame(p: {
   location?: { latLng?: { lat?: unknown; lng?: unknown } } | null;
@@ -156,10 +163,18 @@ function normalizeSiteFrame(p: {
 
   const stored = p.siteFrame as SiteFrame | undefined;
   // A stored frame must clear the same numeric bar as a freshly built one —
-  // Number.isFinite on every field, plus the scaleFactor > 0 domain check the
-  // fresh-build path applies above — not just typeof. Otherwise a corrupt or
-  // domain-invalid frame (scaleFactor 0 or negative) would be trusted merely
-  // because its origin still matches the location.
+  // every one of SiteFrame's seven fields checked for shape AND finiteness
+  // (origin, utmZone, utmNorth, utmOrigin.e/n, convergenceDeg, scaleFactor,
+  // northOffsetDeg), plus the scaleFactor > 0 domain check the fresh-build
+  // path applies above — not just typeof on a few. A frame missing utmOrigin
+  // would otherwise be trusted because its origin still matched, and crash the
+  // first consumer that reads `frame.utmOrigin.e` (toUtm/fromUtm, slice 2+).
+  //
+  // scaleFactor and northOffsetDeg must also EQUAL the (normalised)
+  // calibration — see the doc comment above. The Number.isFinite / > 0 checks
+  // on scaleFactor are implied by that equality (the calibration value was
+  // validated above) but are kept so this guard reads as the mirror of the
+  // fresh-build path rather than depending on it.
   if (
     stored &&
     typeof stored.origin?.lat === 'number' &&
@@ -174,7 +189,16 @@ function normalizeSiteFrame(p: {
     Number.isFinite(stored.utmZone) &&
     Number.isFinite(stored.northOffsetDeg) &&
     Number.isFinite(stored.scaleFactor) &&
-    stored.scaleFactor > 0
+    stored.scaleFactor > 0 &&
+    stored.scaleFactor === scaleFactor &&
+    stored.northOffsetDeg === northOffsetDeg &&
+    typeof stored.utmNorth === 'boolean' &&
+    typeof stored.utmOrigin?.e === 'number' &&
+    typeof stored.utmOrigin?.n === 'number' &&
+    Number.isFinite(stored.utmOrigin.e) &&
+    Number.isFinite(stored.utmOrigin.n) &&
+    typeof stored.convergenceDeg === 'number' &&
+    Number.isFinite(stored.convergenceDeg)
   ) {
     return stored;
   }

@@ -6,7 +6,7 @@
 // Model: first-order local ENU using the true radii of curvature at the origin
 // latitude. Round-trip error is under 1 mm at 300 m and under 1 cm at 1 km,
 // which is an order of magnitude tighter than the imagery this sits on.
-import type { LatLng, XY } from '../../types';
+import type { LatLng, Project, XY } from '../../types';
 import { gridConvergenceDeg, latLngToUtm, utmToLatLng, utmZoneForLatLng } from './utm';
 import type { SiteFrame } from './types';
 
@@ -122,25 +122,36 @@ export function fromUtm(frame: SiteFrame, p: { e: number; n: number }): XY {
 
 /**
  * The frame for a project, or null when no location is confirmed. The single
- * accessor every consumer uses — never read `project.siteFrame` directly, so
- * the location stays authoritative if the two ever drift.
+ * accessor every consumer uses — never read `project.siteFrame` directly.
+ *
+ * Two authorities, both enforced here: `location` owns the origin, and
+ * `calibration` owns `scaleFactor` and `northOffsetDeg`. A stored frame that
+ * disagrees with either is rebuilt. The calibration half matters today:
+ * CalibrateDialog (Step2Roof) writes `calibration.northOffsetDeg` and never
+ * touches `siteFrame`, and `toEN` DOES apply the offset — so a frame left at
+ * 0° beside a calibration at 7° would place a Google Solar segment centre up
+ * to 2.4 m off inside the roof-hint matcher's 20 m gate, while shading, the
+ * scene and the north badge all used 7°. A frame that agrees with both is
+ * returned by reference, so memoised consumers keep a stable identity.
+ *
+ * `normalizeSiteFrame` in lib/persistence/normalize.ts applies the same rule
+ * at load time; keep the two in step.
  */
-export function frameFor(project: {
-  location: { latLng: LatLng } | null;
-  calibration: { scaleFactor: number; northOffsetDeg: number };
-  siteFrame: SiteFrame | null;
-}): SiteFrame | null {
+export function frameFor(
+  project: Pick<Project, 'location' | 'calibration' | 'siteFrame'>,
+): SiteFrame | null {
   if (!project.location) return null;
   const f = project.siteFrame;
+  const { latLng } = project.location;
+  const { scaleFactor, northOffsetDeg } = project.calibration;
   if (
     f &&
-    f.origin.lat === project.location.latLng.lat &&
-    f.origin.lng === project.location.latLng.lng
+    f.origin.lat === latLng.lat &&
+    f.origin.lng === latLng.lng &&
+    f.scaleFactor === scaleFactor &&
+    f.northOffsetDeg === northOffsetDeg
   ) {
     return f;
   }
-  return makeSiteFrame(project.location.latLng, {
-    scaleFactor: project.calibration.scaleFactor,
-    northOffsetDeg: project.calibration.northOffsetDeg,
-  });
+  return makeSiteFrame(latLng, { scaleFactor, northOffsetDeg });
 }
