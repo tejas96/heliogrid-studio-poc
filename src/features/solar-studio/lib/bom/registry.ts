@@ -16,6 +16,11 @@ export type LineKey =
   | 'modules.panel'
   // ── Inverter
   | 'inverter.unit'
+  // ── Battery storage
+  | 'battery.unit'
+  | 'battery.cable'
+  | 'battery.isolator'
+  | 'battery.interface'
   // ── Electrical BOS
   | 'elec.dc_cable'
   | 'elec.ac_cable'
@@ -91,6 +96,7 @@ export type LineKey =
 export const CATEGORY_ORDER: BomCategory[] = [
   'Modules',
   'Inverter',
+  'Battery Storage',
   'Electrical BOS',
   'Mechanical BOS',
   'Safety',
@@ -113,6 +119,7 @@ export const CATEGORY_ORDER: BomCategory[] = [
 export const WASTE_PCT_BY_LINE: Record<string, number> = {
   'elec.dc_cable': 8,
   'elec.ac_cable': 8,
+  'battery.cable': 8,
   'elec.conduit': 5,
   'mech.steel': 4,
   // absorbs the hardcoded × 1.05 that used to be baked into the rail quantity

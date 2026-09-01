@@ -512,6 +512,26 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
         <line x1={752} y1={305} x2={800} y2={305} stroke="#047857" strokeWidth={1.6} />
       </g>
 
+      {/* battery storage — under the inverter; DC-coupled hangs off the
+          inverter's DC bus, AC-coupled off the AC bus to the ACDB */}
+      {sld.batteryLabel && (
+        <g fontFamily="monospace">
+          {sld.batteryCoupling === 'ac_coupled' ? (
+            <line x1={580} y1={305} x2={580} y2={352} stroke="#6d28d9" strokeWidth={1.4} strokeDasharray="4 3" />
+          ) : (
+            <line x1={540} y1={345} x2={540} y2={352} stroke="#6d28d9" strokeWidth={1.4} />
+          )}
+          <rect x={512} y={352} width={150} height={46} rx={2} fill="#f5f3ff" stroke="#6d28d9" strokeWidth={1.4} />
+          <text x={587} y={365} textAnchor="middle" fontSize={9} fontWeight={800} fill="#6d28d9">
+            BATTERY {sld.batteryCoupling === 'ac_coupled' ? '· AC-COUPLED' : '· DC (HYBRID)'}
+          </text>
+          <text x={587} y={378} textAnchor="middle" fontSize={7}>{sld.batteryLabel.slice(0, 38)}</text>
+          <text x={587} y={390} textAnchor="middle" fontSize={6.5} fill="#555">
+            DC isolator + fuse per cabinet · IEC 62619
+          </text>
+        </g>
+      )}
+
       {/* meters + grid */}
       <g fontFamily="monospace">
         <circle cx={815} cy={305} r={15} fill="none" stroke="#111" strokeWidth={1.4} />

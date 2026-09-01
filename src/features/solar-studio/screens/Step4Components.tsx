@@ -19,13 +19,14 @@ import { useOps } from '../store/useOps';
 import { componentsSet } from '../lib/ops/components-ops';
 import { PANEL_DB } from '../data/panels';
 import { INVERTER_DB } from '../data/inverters';
+import { BatteryPicker } from './Step4Battery';
 import type { CellTech, InverterSpec, PanelSpec, Project } from '../types';
 import { estimateMaxCapacityKwp } from '../lib/layout';
 import { suggestKwpFromBill } from '../lib/solar';
 import { memoizedComparison, recommendInverterFor, type ComparisonRow } from '../lib/comparison';
 import { Dialog, Seg, Sheet } from '../components/ui';
 
-type Section = 'panel' | 'capacity' | 'inverter';
+type Section = 'panel' | 'capacity' | 'inverter' | 'battery';
 
 function SearchInput({
   placeholder,
@@ -294,6 +295,29 @@ export function Step4Components() {
               : 'Plain string wiring — a string may only hold modules of matching roof, orientation, tilt and shade exposure.'}
           </span>
         </div>
+      )}
+
+      {/* BATTERY STORAGE — optional; "None" is a real choice */}
+      <SectionHead
+        label="BATTERY STORAGE"
+        state={
+          c.battery
+            ? `${c.battery.brand} · ${(c.battery.kwh * Math.max(1, c.batteryCount ?? 1)).toFixed(1)} kWh`
+            : 'None'
+        }
+        step="Optional"
+        open={open === 'battery'}
+        onToggle={() => setOpen('battery')}
+      />
+      {open === 'battery' && (
+        <BatteryPicker
+          selected={c.battery ?? null}
+          count={Math.max(1, c.batteryCount ?? 1)}
+          coupling={c.batteryCoupling ?? 'dc_hybrid'}
+          onSelect={(b) => setComponents({ battery: b })}
+          onCount={(n) => setComponents({ batteryCount: n })}
+          onCoupling={(k) => setComponents({ batteryCoupling: k })}
+        />
       )}
 
       {/* COMPARISON MATRIX (§8.6) — every option through the real pipelines */}

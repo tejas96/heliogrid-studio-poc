@@ -77,6 +77,13 @@ export const PRICE_BOOK = {
   earthingPit: 2650,
   dcdb: 4200,
   acdb: 5200,
+  // ── battery storage (representative 2026 rates)
+  /** 2 × 35 sq.mm Cu battery leads, per metre of pair */
+  batteryCablePerM: 850,
+  /** DC isolator + fuse between battery and inverter, per battery */
+  batteryDcIsolator: 3200,
+  /** AC-coupled battery inverter / interface kit, per kW of battery power */
+  batteryAcInterfacePerKw: 9000,
   combinerBox: 8500, // string combiner box (SCB/AJB) with busbar + isolator + SPD
   stringFuse: 120, // gPV string fuse (per pole)
   dcOptimizer: 3400, // per-module DC optimiser (MLPE)

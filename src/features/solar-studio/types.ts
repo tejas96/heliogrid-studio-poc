@@ -306,6 +306,47 @@ export interface InverterSpec {
   warrantyYears?: number;
 }
 
+// ─── Battery storage (BESS) ───────────────────────────────────────────────────
+
+export type BatteryChemistry = 'lfp' | 'nmc' | 'lead_acid';
+/**
+ * How the battery meets the PV. 'dc_hybrid' = a hybrid inverter charges it on
+ * the DC bus (one box, the residential default). 'ac_coupled' = a separate
+ * battery inverter hangs off the AC side (retrofits, large C&I).
+ */
+export type BatteryCoupling = 'dc_hybrid' | 'ac_coupled';
+
+export interface BatterySpec {
+  id: string;
+  brand: string;
+  model: string;
+  /** USABLE energy per unit, kWh */
+  kwh: number;
+  nominalV: number;
+  chemistry: BatteryChemistry;
+  /** continuous charge/discharge power per unit, kW */
+  powerKw: number;
+  cycleLife: number;
+  warrantyYears?: number;
+  /** cabinet size — drives placement clearance and the 3D model */
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  weightKg: number;
+  priceInr: number;
+}
+
+/** A battery cabinet standing at the foot of a wall (same edge frame as the inverter). */
+export interface BatteryPlacement {
+  id: string;
+  roofId: string;
+  edgeIndex: number;
+  /** 0..1 along the edge */
+  t: number;
+  /** base height above grade — 0 = floor-standing */
+  heightM: number;
+}
+
 /**
  * DC collection topology. 'string' = strings go straight to inverter MPPTs
  * (residential/small C&I, today's default). 'central' = strings are paralleled
@@ -331,6 +372,12 @@ export interface Components {
   inverterTopology?: InverterTopology;
   /** module-level power electronics; absent ⇒ 'none' (back-compat) */
   mlpe?: MlpeKind;
+  /** battery storage — absent/null ⇒ a plain grid-tied system (back-compat) */
+  battery?: BatterySpec | null;
+  /** units of the selected battery; absent ⇒ 1 */
+  batteryCount?: number;
+  /** absent ⇒ 'dc_hybrid' */
+  batteryCoupling?: BatteryCoupling;
 }
 
 // ─── Steps 5–6: Layout & electrical ─────────────────────────────────────────
@@ -679,6 +726,7 @@ export interface FinancialSummary {
 export type BomCategory =
   | 'Modules'
   | 'Inverter'
+  | 'Battery Storage'
   | 'Electrical BOS'
   | 'Mechanical BOS'
   | 'Safety'
@@ -844,6 +892,9 @@ export interface SldParams {
   maxStringLength: number;
   /** number of inverters — the sheet notes when the block represents several */
   inverterCount: number;
+  /** battery bank on the sheet, e.g. "2 × 5.12 kWh LFP · 5.0 kW · 51.2 V"; absent ⇒ no storage */
+  batteryLabel?: string;
+  batteryCoupling?: BatteryCoupling;
 }
 
 // ─── Auto-design decision log (§3.5 explainability) ─────────────────────────
@@ -952,6 +1003,8 @@ export interface Project {
   rails: SafetyRail[];
   arresters: LightningArrester[];
   inverterPlacements: InverterPlacement[];
+  /** battery cabinets at the foot of a wall; absent ⇒ none (additive migration) */
+  batteryPlacements?: BatteryPlacement[];
   /**
    * Where the supply meets the grid — meter / service entry, in plan metres.
    * OPTIONAL BY DESIGN. Aurora models this because a permit plan set must show

@@ -52,6 +52,17 @@ export function deriveSldDefaults(project: Project): SldParams | null {
     acSpdType: 'Type-II',
     acIsolatorA: mcb,
     standard: 'IS/IEC 62548 · CEA (India)',
+    ...(project.components.battery
+      ? (() => {
+          const bat = project.components.battery;
+          const n = Math.max(1, project.components.batteryCount ?? 1);
+          const ac = (project.components.batteryCoupling ?? 'dc_hybrid') === 'ac_coupled';
+          return {
+            batteryLabel: `${n} × ${bat.kwh} kWh ${bat.chemistry === 'lead_acid' ? 'Pb' : bat.chemistry.toUpperCase()} · ${(bat.powerKw * n).toFixed(1)} kW · ${bat.nominalV} V`,
+            batteryCoupling: ac ? ('ac_coupled' as const) : ('dc_hybrid' as const),
+          };
+        })()
+      : {}),
   };
 }
 

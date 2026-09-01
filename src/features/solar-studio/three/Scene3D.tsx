@@ -20,6 +20,7 @@ import type { DesignOp } from '../lib/ops/types';
 import type { OpPreview } from '../lib/ops/run';
 import { inverterRemove } from '../lib/ops/electrical-ops';
 import { segmentDelete } from '../lib/ops/layout-ops';
+import { batteryRemove } from '../lib/ops/battery-ops';
 
 /** the first selected module of a table, so "Edit table" opens on the module the user picked */
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
@@ -31,7 +32,7 @@ import { polygonArea } from '../lib/geo';
 import type { ObstructionType } from '../types';
 
 /** What the scene can pick besides modules (modules use the shared selection). */
-export type ScenePick = { kind: 'obstruction' | 'inverter' | 'roof' | 'table'; id: string };
+export type ScenePick = { kind: 'obstruction' | 'inverter' | 'battery' | 'roof' | 'table'; id: string };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
 
 const OBSTRUCTION_NAME: Record<ObstructionType, string> = {
@@ -1819,7 +1820,94 @@ function SceneContent({
                   fontFamily: 'var(--mono)',
                 }}
               >
-                INV 1
+                INV {idx + 1}
+              </div>
+            </Html>
+          </group>
+        );
+      })}
+
+      {/* battery cabinets — floor-standing at a wall, pickable */}
+      {(project.batteryPlacements ?? []).filter((bp) => inScope(bp.roofId)).map((bp, idx) => {
+        const roof = project.roofs.find((r) => r.id === bp.roofId);
+        const spec = project.components.battery;
+        if (!roof || !spec) return null;
+        const a = roof.polygon[bp.edgeIndex];
+        const b = roof.polygon[(bp.edgeIndex + 1) % roof.polygon.length];
+        const px = a.x + (b.x - a.x) * bp.t;
+        const py = a.y + (b.y - a.y) * bp.t;
+        const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
+        const w = spec.widthMm / 1000;
+        const d = spec.depthMm / 1000;
+        const h = spec.heightMm / 1000;
+        const picked = pick?.kind === 'battery' && pick.id === bp.id;
+        const hovered = !picked && hoverPick?.kind === 'battery' && hoverPick.id === bp.id;
+        const coupling = project.components.batteryCoupling ?? 'dc_hybrid';
+        return (
+          <group
+            key={bp.id}
+            position={[px, bp.heightM + h / 2, -py]}
+            rotation={[0, -wallAng, 0]}
+            onClick={(e) => {
+              if (e.delta > 4) return;
+              e.stopPropagation();
+              onPick({ kind: 'battery', id: bp.id });
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              onHoverPick({ kind: 'battery', id: bp.id });
+            }}
+            onPointerOut={() => onHoverPick(null)}
+          >
+            {(picked || hovered) && <PickHalo center={[0, 0, 0]} size={[w + 0.2, h + 0.2, d + 0.2]} picked={picked} />}
+            {picked && (
+              <EntityLabel
+                position={[0, h / 2 + 0.55, 0]}
+                title={`Battery ${idx + 1}`}
+                lines={[
+                  `${spec.brand} ${spec.model}`,
+                  `${spec.kwh} kWh · ${spec.powerKw} kW · ${coupling === 'ac_coupled' ? 'AC-coupled' : 'hybrid DC'} · ${spec.weightKg} kg`,
+                ]}
+                onClose={() => onPick(null)}
+                actions={[
+                  {
+                    label: 'Remove',
+                    danger: true,
+                    onClick: () => {
+                      runOp(batteryRemove, { id: bp.id });
+                      onPick(null);
+                    },
+                  },
+                ]}
+              />
+            )}
+            {/* cabinet: dark steel body, a lighter door panel, a status strip */}
+            <mesh castShadow userData={{ shadowCaster: false }}>
+              <boxGeometry args={[w, h, d]} />
+              <meshStandardMaterial color="#2b3038" roughness={0.55} metalness={0.35} />
+            </mesh>
+            <mesh position={[0, 0, d / 2 + 0.004]}>
+              <boxGeometry args={[w * 0.88, h * 0.86, 0.008]} />
+              <meshStandardMaterial color="#3a404a" roughness={0.5} metalness={0.3} />
+            </mesh>
+            <mesh position={[0, h * 0.36, d / 2 + 0.01]}>
+              <boxGeometry args={[w * 0.5, 0.02, 0.006]} />
+              <meshStandardMaterial color="#4ade80" emissive="#22c55e" emissiveIntensity={1.4} toneMapped={false} />
+            </mesh>
+            <Html center distanceFactor={30} position={[0, h / 2 + 0.18, 0]}>
+              <div
+                style={{
+                  fontSize: 10,
+                  background: 'rgba(20,24,30,0.85)',
+                  color: '#f2f4f6',
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  fontFamily: 'var(--mono)',
+                }}
+              >
+                BAT {idx + 1} · {spec.kwh} kWh
               </div>
             </Html>
           </group>

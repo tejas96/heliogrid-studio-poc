@@ -20,6 +20,8 @@ export const GST_SERVICE_PCT = 18;
 export const GST_BY_CATEGORY: Record<BomCategory, number> = {
   Modules: GST_EQUIPMENT_PCT,
   Inverter: GST_EQUIPMENT_PCT,
+  // leads, isolators and the battery inverter ride with the solar system
+  'Battery Storage': GST_EQUIPMENT_PCT,
   'Electrical BOS': GST_EQUIPMENT_PCT,
   'Mechanical BOS': GST_EQUIPMENT_PCT,
   Safety: GST_EQUIPMENT_PCT,
@@ -35,6 +37,9 @@ export const GST_BY_CATEGORY: Record<BomCategory, number> = {
 export const GST_BY_LINE: Record<string, number> = {
   // cast in place by a civil crew, not bought as a device
   'mech.pedestal': GST_SERVICE_PCT,
+  // lithium / lead-acid batteries (HSN 8507) are 18% since the Sept-2025
+  // reform — the solar-device concession does not reach the cells
+  'battery.unit': 18,
 };
 
 export function gstPctFor(category: BomCategory, lineKey: string): number {

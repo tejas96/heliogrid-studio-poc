@@ -156,6 +156,8 @@ import {
   stringsAddManual,
   stringsResetToAuto,
 } from '../lib/ops/electrical-ops';
+import { batteryPlace, batteryRemove } from '../lib/ops/battery-ops';
+import { batteryWorldPos } from '../lib/battery';
 import {
   arresterAdd,
   arresterRemove,
@@ -294,7 +296,7 @@ export function Step6Editor() {
   // option — the rail already overflows its own column (that is exactly how the
   // 3D pill came to cover "Mount inverter"), so the sub-mode lives in the tool's
   // own hint bar, the pattern manual-stringing already uses.
-  const [placeKind, setPlaceKind] = useState<'inverter' | 'meter'>('inverter');
+  const [placeKind, setPlaceKind] = useState<'inverter' | 'meter' | 'battery'>('inverter');
   // §H: the router's corners are draggable ON the route. Live position is LOCAL
   // (like dragLine/marquee) — the store is written once, on release, so a drag
   // is ONE undo step rather than one per pointermove.
@@ -677,6 +679,9 @@ export function Step6Editor() {
           case 'inverter':
             report(ops.run(inverterRemove, { id: hit.id }));
             return;
+          case 'battery':
+            report(ops.run(batteryRemove, { id: hit.id }));
+            return;
           case 'meter':
             report(ops.run(meterRemove, {}));
             return;
@@ -711,6 +716,13 @@ export function Step6Editor() {
             const { d, t } = pointSegDist(m, a, b);
             if (!best || d < best.d) best = { roofId: roof.id, edgeIndex: i, t, d };
           }
+        }
+        if (best && best.d < 4 && placeKind === 'battery') {
+          // a cabinet stands on the floor at the foot of the same wall
+          report(ops.run(batteryPlace, { roofId: best.roofId, edgeIndex: best.edgeIndex, t: best.t, heightM: 0 }));
+          const wanted = Math.max(1, project.components.batteryCount ?? 1);
+          if ((project.batteryPlacements ?? []).length + 1 >= wanted) setTool('select');
+          return;
         }
         if (best && best.d < 4) {
           report(
@@ -1582,7 +1594,10 @@ export function Step6Editor() {
               dark hint bar made the SELECTED chip recede and the unselected one
               pop — the active state read as inactive. State this explicitly
               rather than borrowing button semantics that invert here. */}
-          {(['inverter', 'meter'] as const).map((k) => (
+          {(project.components.battery
+            ? (['inverter', 'meter', 'battery'] as const)
+            : (['inverter', 'meter'] as const)
+          ).map((k) => (
             <button
               key={k}
               className="btn"
@@ -1599,7 +1614,7 @@ export function Step6Editor() {
               }}
               onClick={() => setPlaceKind(k)}
             >
-              {k === 'inverter' ? 'Inverter' : 'Meter'}
+              {k === 'inverter' ? 'Inverter' : k === 'meter' ? 'Meter' : 'Battery'}
             </button>
           ))}
           <span style={{ opacity: 0.85 }}>
@@ -1612,6 +1627,16 @@ export function Step6Editor() {
                     ? `Tap a roof edge to hang inverter ${placed + 1} of ${wanted}`
                     : `All ${wanted} inverters mounted · tap an edge to move the oldest one`;
                 })()
+              : placeKind === 'battery'
+                ? (() => {
+                    const wanted = Math.max(1, project.components.batteryCount ?? 1);
+                    const placed = (project.batteryPlacements ?? []).length;
+                    if (placed < wanted)
+                      return wanted === 1
+                        ? 'Tap a wall to stand the battery cabinet at its foot'
+                        : `Tap a wall to stand battery ${placed + 1} of ${wanted}`;
+                    return `All ${wanted} batteries placed · tap a wall to move the oldest one`;
+                  })()
               : project.gridConnection
                 ? 'Tap to move the meter / service entry'
                 : 'Tap the meter / service entry — optional, but it makes the AC cable a measured length'}
@@ -3155,6 +3180,24 @@ function EditorLayers({
               strokeWidth={1.5}
             />
             <PlugZap x={-6} y={-6} width={12} height={12} color="#fff" />
+          </g>
+        );
+      })}
+
+      {/* battery cabinets — a green box with a battery glyph at the wall foot */}
+      {(project.batteryPlacements ?? []).map((bp, i) => {
+        const wp = batteryWorldPos(project, bp);
+        if (!wp) return null;
+        const pos = frame.toPx(wp);
+        return (
+          <g key={bp.id} transform={`translate(${pos.x}, ${pos.y}) scale(${1 / frame.zoom})`}>
+            <rect x={-9} y={-9} width={18} height={18} rx={3} fill="#15803d" stroke="#fff" strokeWidth={1.5} />
+            <rect x={-5.5} y={-3} width={9} height={6} rx={1} fill="none" stroke="#fff" strokeWidth={1.2} />
+            <rect x={3.5} y={-1.5} width={1.6} height={3} fill="#fff" />
+            <rect x={-4} y={-1.5} width={4.5} height={3} fill="#fff" />
+            <text x={0} y={16} textAnchor="middle" fontSize={7} fontWeight={700} fill="#15803d">
+              BAT {i + 1}
+            </text>
           </g>
         );
       })}

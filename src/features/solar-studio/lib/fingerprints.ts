@@ -143,7 +143,16 @@ export function electricalFp(p: Project): string {
     // CONDITIONAL suffix: only central topology appends — 'string' (default)
     // serialises identically to before, so existing projects don't go stale.
     (p.components.inverterTopology === 'central' ? '|central' : '') +
-    (p.components.mlpe === 'optimizer' ? '|mlpe' : '')
+    (p.components.mlpe === 'optimizer' ? '|mlpe' : '') +
+    // battery storage — CONDITIONAL for the same reason: no battery, no suffix
+    (p.components.battery
+      ? '|bat:' +
+        JSON.stringify([
+          p.components.battery.id,
+          p.components.batteryCount ?? 1,
+          p.components.batteryCoupling ?? 'dc_hybrid',
+        ])
+      : '')
   );
 }
 
@@ -187,6 +196,11 @@ export function designFp(p: Project): string {
       p.arresters.map((x) => [x.id, x.pos]),
       p.inverterPlacements.map((x) => [x.id, x.roofId, x.edgeIndex, x.t]),
     ]) +
+    // battery cabinets — conditional suffix, so battery-less projects keep
+    // their fingerprint byte-identical
+    ((p.batteryPlacements?.length ?? 0) > 0
+      ? '|batp:' + JSON.stringify(p.batteryPlacements!.map((x) => [x.id, x.roofId, x.edgeIndex, x.t]))
+      : '') +
     // structure defaults (Phase 7) — CONDITIONAL suffix: absent fields add
     // NOTHING, so every pre-Phase-7 project's fingerprint (and its captures)
     // survives the upgrade byte-identical
