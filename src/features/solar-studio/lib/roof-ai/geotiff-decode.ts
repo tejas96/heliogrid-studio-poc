@@ -9,7 +9,7 @@
 // never enter the main client bundle (≈113 KB) and GeoTIFF.Pool must never
 // be used (worker_threads bundling hazard).
 import { fromArrayBuffer } from 'geotiff';
-import { utmToLatLng, utmZoneFromEpsg } from './utm';
+import { utmToLatLng, utmZoneFromEpsg } from '../site/utm';
 import type { LatLng } from '../../types';
 
 export interface DecodedRaster {

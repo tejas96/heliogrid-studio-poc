@@ -125,6 +125,7 @@ export function newProject(): Project {
     pricing: { marginPct: DEFAULT_MARGIN_PCT },
     derived: { solarAccessFp: null, sldOverrides: null, sldIntroSeen: false, healthSnapshot: null },
     calibration: { scaleFactor: 1, northOffsetDeg: 0, reference: null },
+    siteFrame: null,
     insightState: {},
     shareId: newShareId(),
   };

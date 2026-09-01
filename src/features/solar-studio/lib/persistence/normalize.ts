@@ -16,6 +16,8 @@ import type {
 import { isValidSiteWeather } from '../pvgis';
 import { deriveSldDefaults, diffSldOverrides } from '../sld';
 import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
+import { makeSiteFrame } from '../site/frame';
+import type { SiteFrame } from '../site/types';
 
 /**
  * Validate persisted weather before it can drive energy numbers. A corrupt /
@@ -125,6 +127,84 @@ function normalizePricing(p: Project): PricingSettings {
   } satisfies Exhaustive<PricingSettings>;
 }
 
+/**
+ * Additive migration: projects saved before lib/site existed get a frame built
+ * from their confirmed location, seeded with their calibration. Geometry is NOT
+ * touched (spec decision A8).
+ *
+ * A stored frame is trusted only when it agrees with BOTH authorities — the
+ * location for its origin, and the calibration for its scaleFactor and
+ * northOffsetDeg. CalibrateDialog (Step2Roof) writes `calibration` alone, so
+ * without the second check a frame saved before a calibration would carry the
+ * old offset forever (the origin still matches, so the origin check alone can
+ * never catch it). `frameFor` in lib/site/frame.ts applies the same rule at
+ * read time; keep the two in step.
+ */
+function normalizeSiteFrame(p: {
+  location?: { latLng?: { lat?: unknown; lng?: unknown } } | null;
+  calibration?: { scaleFactor?: unknown; northOffsetDeg?: unknown } | null;
+  siteFrame?: unknown;
+}): SiteFrame | null {
+  const ll = p.location?.latLng;
+  if (typeof ll?.lat !== 'number' || typeof ll?.lng !== 'number') return null;
+  if (!Number.isFinite(ll.lat) || !Number.isFinite(ll.lng)) return null;
+
+  const scaleFactor =
+    typeof p.calibration?.scaleFactor === 'number' &&
+    Number.isFinite(p.calibration.scaleFactor) &&
+    p.calibration.scaleFactor > 0
+      ? p.calibration.scaleFactor
+      : 1;
+  const northOffsetDeg =
+    typeof p.calibration?.northOffsetDeg === 'number' &&
+    Number.isFinite(p.calibration.northOffsetDeg)
+      ? p.calibration.northOffsetDeg
+      : 0;
+
+  const stored = p.siteFrame as SiteFrame | undefined;
+  // A stored frame must clear the same numeric bar as a freshly built one —
+  // every one of SiteFrame's seven fields checked for shape AND finiteness
+  // (origin, utmZone, utmNorth, utmOrigin.e/n, convergenceDeg, scaleFactor,
+  // northOffsetDeg), plus the scaleFactor > 0 domain check the fresh-build
+  // path applies above — not just typeof on a few. A frame missing utmOrigin
+  // would otherwise be trusted because its origin still matched, and crash the
+  // first consumer that reads `frame.utmOrigin.e` (toUtm/fromUtm, slice 2+).
+  //
+  // scaleFactor and northOffsetDeg must also EQUAL the (normalised)
+  // calibration — see the doc comment above. The Number.isFinite / > 0 checks
+  // on scaleFactor are implied by that equality (the calibration value was
+  // validated above) but are kept so this guard reads as the mirror of the
+  // fresh-build path rather than depending on it.
+  if (
+    stored &&
+    typeof stored.origin?.lat === 'number' &&
+    typeof stored.origin?.lng === 'number' &&
+    stored.origin.lat === ll.lat &&
+    stored.origin.lng === ll.lng &&
+    typeof stored.utmZone === 'number' &&
+    typeof stored.northOffsetDeg === 'number' &&
+    typeof stored.scaleFactor === 'number' &&
+    Number.isFinite(stored.origin.lat) &&
+    Number.isFinite(stored.origin.lng) &&
+    Number.isFinite(stored.utmZone) &&
+    Number.isFinite(stored.northOffsetDeg) &&
+    Number.isFinite(stored.scaleFactor) &&
+    stored.scaleFactor > 0 &&
+    stored.scaleFactor === scaleFactor &&
+    stored.northOffsetDeg === northOffsetDeg &&
+    typeof stored.utmNorth === 'boolean' &&
+    typeof stored.utmOrigin?.e === 'number' &&
+    typeof stored.utmOrigin?.n === 'number' &&
+    Number.isFinite(stored.utmOrigin.e) &&
+    Number.isFinite(stored.utmOrigin.n) &&
+    typeof stored.convergenceDeg === 'number' &&
+    Number.isFinite(stored.convergenceDeg)
+  ) {
+    return stored;
+  }
+  return makeSiteFrame({ lat: ll.lat, lng: ll.lng }, { scaleFactor, northOffsetDeg });
+}
+
 export function normalizeProject(p: Project): Project {
   return {
     ...p,
@@ -178,6 +258,7 @@ export function normalizeProject(p: Project): Project {
           : 0,
       reference: p.calibration?.reference ?? null,
     } satisfies Exhaustive<Calibration>,
+    siteFrame: normalizeSiteFrame(p),
     segments: Array.isArray(p.segments)
       ? p.segments.filter(isValidSegment).map(sanitizeLegPlan)
       : [],

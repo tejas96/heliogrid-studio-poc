@@ -1,5 +1,5 @@
 // ─── dataLayers → RoofArtifact: the full detection pipeline ─────────────────
-// mask GeoTIFF → components → boundary trace → (UTM → lat/lng → project EN)
+// mask GeoTIFF → components → boundary trace → (UTM → lat/lng → site frame EN)
 // → simplify → gated orthogonalize → DSM plane fit (pitch/azimuth/RMSE →
 // confidence) → obstruction residual clusters → RoofArtifact v1 (UNVALIDATED
 // — the caller MUST run validateArtifact before showing ghosts).
@@ -8,7 +8,8 @@
 // ids (ar_N / ao_N by descending component area). Pure math — runs in a
 // Web Worker in the app and directly under vitest against the real fixtures.
 import type { LatLng, XY } from '../../types';
-import { makeProjector } from '../geo';
+import { makeSiteFrame, toEN } from '../site/frame';
+import type { SiteFrame } from '../site/types';
 import { decodeGeoTiff, type DecodedRaster } from './geotiff-decode';
 import { isInterior, labelComponents, orthogonalizeGated, segmentByHeight, simplifyDP, traceBoundary } from './vectorize';
 import { fitPlane, groundLevelM, residualClusters } from './plane-fit';
@@ -20,6 +21,20 @@ export interface DetectInput {
   dsmBuffer: ArrayBuffer;
   /** the project pin — origin of the local east-north frame */
   pin: LatLng;
+  /**
+   * The project's site frame. Optional so existing callers keep working; when
+   * absent one is built from `pin` — at northOffsetDeg 0.
+   *
+   * Nobody passes it yet: detect-client.ts's detectRoofs(pin, radiusM) has no
+   * frame parameter and the worker payload carries only the pin. So a user
+   * who has set a non-zero north offset in CalibrateDialog (settable TODAY,
+   * not only with a rotated imported underlay) gets roofs detected at 0°
+   * rotation, while shading, the scene and the north badge use the offset.
+   * This is PRE-EXISTING behaviour, not a regression — makeProjector never
+   * applied the offset either. Wiring the frame through detect-client and the
+   * worker payload is what closes it.
+   */
+  frame?: SiteFrame;
   imageryDate?: string;
   imageryQuality?: string;
   generatedAt: number;
@@ -62,8 +77,9 @@ export async function detectRoofArtifact(input: DetectInput): Promise<RoofArtifa
   }
   bigEnough.sort((a, b) => comps.areas[b] - comps.areas[a]);
 
-  const project = makeProjector(input.pin);
-  const pixelToEN = (col: number, row: number): XY => project.toXY(mask.pixelToLatLng(col, row));
+  const frame = input.frame ?? makeSiteFrame(input.pin);
+  const pixelToEN = (col: number, row: number): XY =>
+    toEN(frame, mask.pixelToLatLng(col, row));
   // the DSM shares the mask's grid (same request) — verify, don't assume
   const sameGrid = dsm.width === width && dsm.height === height;
   if (!sameGrid) warnings.push('DSM and mask grids differ — heights/pitch skipped.');

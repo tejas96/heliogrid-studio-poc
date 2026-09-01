@@ -7,8 +7,9 @@ import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { decodeGeoTiff, detectRoofArtifact } from '../roof-ai/pipeline';
 import { validateArtifact } from '../roof-ai/artifact';
-import { utmToLatLng } from '../roof-ai/utm';
-import { makeProjector, polygonArea } from '../geo';
+import { utmToLatLng } from '../site/utm';
+import { polygonArea } from '../geo';
+import { makeSiteFrame, toEN } from '../site/frame';
 import { sanitizeRoofPolygon } from '../roof-factory';
 
 const FIXTURES = join(__dirname, 'fixtures');
@@ -39,36 +40,53 @@ describe('decodeGeoTiff (real dataLayers rasters)', () => {
   });
 });
 
+// Covers the raster→frame chain in isolation: decodeGeoTiff's own
+// georeferencing (pixelToLatLng, from the raster's UTM tags) piped through
+// lib/site/frame.ts. It does NOT call detectRoofArtifact and so does NOT
+// cover pipeline.ts's choice of projector — see the golden test inside
+// 'detectRoofArtifact — dense fixture' below for that.
 describe('coordinate alignment gate (≤ 0.5 m)', () => {
   it('raster center maps back to the request pin', async () => {
     const mask = await decodeGeoTiff(await buf('datalayers-pune-dense', 'mask.tif'));
     const center = mask.pixelToLatLng(mask.width / 2, mask.height / 2);
     // AOI is centered on the pin — sub-pixel agreement expected
-    const project = makeProjector(DENSE_PIN);
-    const en = project.toXY(center);
+    const frame = makeSiteFrame(DENSE_PIN);
+    const en = toEN(frame, center);
     expect(Math.hypot(en.x, en.y)).toBeLessThan(5); // meters off the pin
   });
 
-  it('UTM distances survive the utm→latLng→projector chain within 0.5 m over 50 m', async () => {
-    // The gate measures consistency with the APP's frame (the spherical
-    // makeProjector every hand-traced roof uses), not raw UTM ground truth.
-    // Two understood systematics, both inside the 0.5 m budget at 50 m:
-    //   east:  UTM k-factor at Pune → 49.994 m (−0.012%)
-    //   north: spherical projector vs ellipsoid meridian → 50.31 m (+0.63%)
-    // The north-axis scale is shared by the imagery mapping itself, and any
-    // residual is exactly what the known-distance CALIBRATION corrects.
+  it('UTM distances survive the utm→latLng→frame chain within 0.1 m over 50 m', async () => {
+    // This gate previously ACCEPTED a +0.63% north stretch, with a comment
+    // saying "the north-axis scale is shared by the imagery mapping itself".
+    // That comment was RIGHT about the imagery, and the correction that first
+    // replaced it was wrong: the canvas (metersPerStaticMap in lib/maps.ts,
+    // 156543.03392 = 2π·6378137/256) and makeProjector (EARTH_R = 6378137)
+    // were the SAME spherical model. Web Mercator is conformal on the sphere,
+    // so it is isotropic in MAP units — which is anisotropic in ground metres
+    // on the ellipsoid by exactly the projector's factors: a/M = 1.005720
+    // north-south and a/N = 0.999662 east-west at Pune. The two legacy rulers
+    // therefore AGREED with each other (~1 cm over 50 m); what was wrong was
+    // the ABSOLUTE scale — both over-read true ground north-south, and the
+    // BOM prices rail and cable by the metre. The frame (lib/site/frame.ts)
+    // makes THIS path exact; the imagery path stays spherical until slice 2,
+    // so detected and traced geometry now differ by a/M − 1 = 0.572%
+    // north-south — the known gap pinned by imagery-scale-parity.test.ts.
+    //
+    // One systematic remains, and is correct: the UTM point scale factor at
+    // Pune (~113 km west of the 75°E central meridian) makes 50 m of UTM
+    // easting about 49.99 m on the ground.
     const mask = await decodeGeoTiff(await buf('datalayers-pune-dense', 'mask.tif'));
-    const project = makeProjector(DENSE_PIN);
-    const enOf = (col: number, row: number) => project.toXY(mask.pixelToLatLng(col, row));
+    const frame = makeSiteFrame(DENSE_PIN);
+    const enOf = (col: number, row: number) => toEN(frame, mask.pixelToLatLng(col, row));
     const a = enOf(50, 50);
     const b = enOf(550, 50); // 500 px = 50 m east
     const c = enOf(50, 550); // 500 px = 50 m south
-    expect(Math.abs(Math.hypot(b.x - a.x, b.y - a.y) - 50)).toBeLessThan(0.5);
-    expect(Math.abs(Math.hypot(c.x - a.x, c.y - a.y) - 50)).toBeLessThan(0.5);
-    // and the tight per-axis expectations for the KNOWN values
+    expect(Math.abs(Math.hypot(b.x - a.x, b.y - a.y) - 50)).toBeLessThan(0.1);
+    expect(Math.abs(Math.hypot(c.x - a.x, c.y - a.y) - 50)).toBeLessThan(0.1);
+    // per-axis: both now land on true ground metres
     expect(b.x - a.x).toBeCloseTo(49.99, 1);
-    expect(a.y - c.y).toBeGreaterThan(50.2); // meridian scale, documented above
-    expect(a.y - c.y).toBeLessThan(50.45);
+    expect(a.y - c.y).toBeGreaterThan(49.95);
+    expect(a.y - c.y).toBeLessThan(50.05); // was 50.2-50.45 before the fix
     // orientation: east really is +x, south really is −y (convergence ≤ 0.4°)
     expect(Math.abs(b.y - a.y)).toBeLessThan(0.5);
     expect(Math.abs(c.x - a.x)).toBeLessThan(0.5);
@@ -106,6 +124,53 @@ describe('detectRoofArtifact — dense fixture (building present)', () => {
       expect(sanitizeRoofPolygon(main.polygon).ok).toBe(true);
       expect(main.confidence).toBeGreaterThan(0);
       expect(main.confidence).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('golden: largest roof holds its north-south extent to real ground metres', async () => {
+    // GOLDEN / characterization test — same convention as bom-golden.test.ts and
+    // structure-golden.test.ts: pin the CURRENT, correct output, then diff future
+    // changes against it. This is the one test in this file that actually calls
+    // detectRoofArtifact (via the run() helper above) and would catch a regression
+    // to the old projector; the 'coordinate alignment gate' tests build their own
+    // frame directly against decodeGeoTiff and never touch the pipeline, so they
+    // pass unchanged even if pipeline.ts reverts to makeProjector.
+    //
+    // Golden value: 17.2439 m, measured from validated.artifact.roofs[0].polygon —
+    // max(y) - min(y), the polygon's north-south span in the image-aligned frame.
+    //
+    // Tolerance arithmetic: the bug this slice fixes adds +0.572% to any north-south
+    // length (equatorial vs meridional earth radius at Pune's latitude, 18.52°N).
+    // At this extent that is 0.00572 × 17.2439 ≈ 0.0986 m. A tolerance a quarter of
+    // that, ≈0.0247 m, is the loosest bound that still can't hide the bug. This test
+    // uses 0.02 m — tighter still, and the pipeline is proven bit-deterministic
+    // (see 'is fully deterministic' below), so there is no run-to-run noise to absorb.
+    //
+    // What a failure means:
+    //   - drift of about +0.57% (extent lands near 17.34 m, i.e. +0.099 m): the
+    //     pipeline has reverted to an equatorial-radius projector. Fix pipeline.ts;
+    //     do not touch this golden value.
+    //   - any OTHER drift: the vectorizer (traceBoundary / simplifyDP /
+    //     orthogonalizeGated) changed on purpose. Re-measure and re-baseline this
+    //     golden value deliberately.
+    //
+    // What the value MEANS (corrected in the final review): 17.2439 m is TRUE
+    // ground metres. The canvas this roof is drawn over is still spherical
+    // (metersPerStaticMap), so a hand trace of the same edge reads
+    // 17.2439 × 1.005720 ≈ 17.34 m today — the same figure a reverted projector
+    // would produce here. The legacy canvas and projector agreed with each
+    // other; this branch made the detection path exact and left the imagery,
+    // so that 0.572% is a known gap (imagery-scale-parity.test.ts), closed by
+    // slice 2 correcting the imagery scale — never by moving this golden value.
+    const artifact = await run();
+    const validated = validateArtifact(artifact, DENSE_PIN);
+    expect(validated.ok).toBe(true);
+    if (validated.ok) {
+      const main = validated.artifact.roofs[0]; // largest component first
+      const ys = main.polygon.map((p) => p.y);
+      const extentNS = Math.max(...ys) - Math.min(...ys);
+      expect(extentNS).toBeGreaterThan(17.2439 - 0.02);
+      expect(extentNS).toBeLessThan(17.2439 + 0.02);
     }
   });
 
