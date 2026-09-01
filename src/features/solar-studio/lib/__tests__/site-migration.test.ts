@@ -84,6 +84,38 @@ describe('normalizeProject adds a site frame', () => {
     raw.siteFrame = { ...raw.siteFrame, origin: { lat: 0, lng: 0 } };
     expect(normalizeProject(raw).siteFrame!.origin).toEqual(PUNE);
   });
+
+  it('rebuilds when the stored frame has scaleFactor: 0 — matches typeof but fails the domain check', () => {
+    // typeof 0 === 'number' is true, so a type-only guard would wrongly trust
+    // this. The fresh-build path already refuses a non-positive scaleFactor
+    // (falls back to 1); the stored-frame branch must refuse one exactly the
+    // same way rather than passing a zero scale through unchanged.
+    const raw = stored({
+      ...locatedProject(),
+      calibration: { scaleFactor: 1.2, northOffsetDeg: 3, reference: null },
+    });
+    raw.siteFrame = { ...raw.siteFrame, scaleFactor: 0 };
+    expect(normalizeProject(raw).siteFrame!.scaleFactor).toBe(1.2);
+  });
+
+  it('rebuilds when the stored frame has a negative scaleFactor', () => {
+    const raw = stored({
+      ...locatedProject(),
+      calibration: { scaleFactor: 1.2, northOffsetDeg: 3, reference: null },
+    });
+    raw.siteFrame = { ...raw.siteFrame, scaleFactor: -1 };
+    expect(normalizeProject(raw).siteFrame!.scaleFactor).toBe(1.2);
+  });
+
+  it('still trusts a stored frame by reference when its scaleFactor is genuinely valid', () => {
+    // Regression guard for the two tests above: the stricter check must not
+    // start rejecting a valid stored frame. 2.5 matches neither calibration's
+    // default (1) nor makeSiteFrame's own fallback (1), so only the
+    // "keep stored" branch can produce it.
+    const raw = stored(locatedProject());
+    raw.siteFrame = { ...raw.siteFrame, scaleFactor: 2.5 };
+    expect(normalizeProject(raw).siteFrame!.scaleFactor).toBe(2.5);
+  });
 });
 
 describe('frameFor', () => {

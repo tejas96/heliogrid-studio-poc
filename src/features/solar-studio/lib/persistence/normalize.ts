@@ -155,6 +155,11 @@ function normalizeSiteFrame(p: {
       : 0;
 
   const stored = p.siteFrame as SiteFrame | undefined;
+  // A stored frame must clear the same numeric bar as a freshly built one —
+  // Number.isFinite on every field, plus the scaleFactor > 0 domain check the
+  // fresh-build path applies above — not just typeof. Otherwise a corrupt or
+  // domain-invalid frame (scaleFactor 0 or negative) would be trusted merely
+  // because its origin still matches the location.
   if (
     stored &&
     typeof stored.origin?.lat === 'number' &&
@@ -163,7 +168,13 @@ function normalizeSiteFrame(p: {
     stored.origin.lng === ll.lng &&
     typeof stored.utmZone === 'number' &&
     typeof stored.northOffsetDeg === 'number' &&
-    typeof stored.scaleFactor === 'number'
+    typeof stored.scaleFactor === 'number' &&
+    Number.isFinite(stored.origin.lat) &&
+    Number.isFinite(stored.origin.lng) &&
+    Number.isFinite(stored.utmZone) &&
+    Number.isFinite(stored.northOffsetDeg) &&
+    Number.isFinite(stored.scaleFactor) &&
+    stored.scaleFactor > 0
   ) {
     return stored;
   }
