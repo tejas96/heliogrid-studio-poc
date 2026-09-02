@@ -3049,7 +3049,9 @@ function SceneContent({
       )}
 
       {!meshMode && showSunPath && (
-        <>
+        // centred on the DESIGN, not the scene origin: a building 25 m from
+        // the origin had its sun arc drawn 25 m beside it
+        <group position={[bounds.cx, 0, bounds.cz]}>
           {/* the year's envelope: solstices and the equinox, faint, so a
               glance shows how far the sun swings between seasons */}
           {seasonDates(date.getFullYear()).map((s) => (
@@ -3071,10 +3073,10 @@ function SceneContent({
             radius={R * 0.75}
             northOffsetDeg={project.calibration.northOffsetDeg}
           />
-        </>
+        </group>
       )}
       {!meshMode && sunVisible && (
-        <mesh position={sunDir.clone().multiplyScalar(R * 0.75)}>
+        <mesh position={sunDir.clone().multiplyScalar(R * 0.75).add(new THREE.Vector3(bounds.cx, 0, bounds.cz))}>
           <sphereGeometry args={[2.1, 20, 20]} />
           <meshBasicMaterial color="#fff0c0" />
         </mesh>

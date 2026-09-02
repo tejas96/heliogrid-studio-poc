@@ -196,7 +196,16 @@ export function RealSurround({
       tiles.setCamera(camera);
       tiles.setResolutionFromRenderer(camera, gl);
       tiles.group.name = 'real-surround';
-      scene.add(tiles.group);
+      // The design lives in the IMAGE frame; the tiles come in true-north
+      // ENU. Turn the mesh by the calibration's north offset so a site whose
+      // imagery is not north-up still has its photomesh under its roofs.
+      // (The reorientation plugin owns tiles.group's own transform, so the
+      // turn goes on a parent.) Same sign as every other sun/compass consumer.
+      const frame = new THREE.Group();
+      frame.name = 'real-surround-frame';
+      frame.rotation.y = -((project.calibration?.northOffsetDeg ?? 0) * Math.PI) / 180;
+      frame.add(tiles.group);
+      scene.add(frame);
       tilesRef.current = tiles;
       if (process.env.NODE_ENV !== 'production') {
         (window as unknown as { __tiles?: TilesRenderer | null }).__tiles = tiles;
@@ -305,7 +314,9 @@ export function RealSurround({
       cleanupEvents?.();
       setTerrainSampler(null);
       if (tiles) {
-        scene.remove(tiles.group);
+        const frame = tiles.group.parent;
+        if (frame && frame !== scene) scene.remove(frame);
+        else scene.remove(tiles.group);
         tiles.dispose();
       }
       dracoLoader?.dispose();
