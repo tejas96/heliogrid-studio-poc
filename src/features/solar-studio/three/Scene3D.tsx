@@ -35,6 +35,7 @@ import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
 import { SurroundRelief } from './SurroundRelief';
+import { ROOF_HEIGHT_TOLERANCE_M } from '../lib/surround-check';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
@@ -2396,6 +2397,15 @@ function SceneContent({
                   `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave`,
                   `${r.pitchDeg > 0 ? `${r.pitchDeg}° pitch facing ${Math.round(r.slopeAzimuthDeg)}°` : 'flat'} · ${r.roofType.replace('_', ' ')} · ${r.provenance?.source ?? 'traced by hand'}`,
                   `${project.panels.filter((p) => p.roofId === r.id && p.enabled).length} modules`,
+                  // what Google's height map read over this polygon when the surround was fetched
+                  ...(project.surround?.roofReadM?.[r.id] !== undefined
+                    ? [
+                        `aerial height map reads ≈ ${fmtLen(project.surround.roofReadM[r.id], 1)}` +
+                          (Math.abs(project.surround.roofReadM[r.id] - r.heightM) > ROOF_HEIGHT_TOLERANCE_M
+                            ? ' — check the eave height'
+                            : ''),
+                      ]
+                    : []),
                 ]}
                 onClose={() => onPick(null)}
                 // on-object placement: choose here, then tap the wall it goes on

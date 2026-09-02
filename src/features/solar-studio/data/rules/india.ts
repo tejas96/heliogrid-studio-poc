@@ -469,6 +469,10 @@ export const INDIA_RULES: MarketRules = {
       // clips real energy; an idle one is paid for and does nothing
       inverter_dc_ac_high: 20,
       inverter_unused: 15,
+      // the roof's height in the model is far from what the aerial height map
+      // read over it: the shade, the drops and the structure all lean on it —
+      // same tier as shade_mismatch (the number is uncertain, not yet wrong)
+      roof_height_vs_map: 12,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },

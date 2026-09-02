@@ -23,6 +23,7 @@ import { resolveDesignTemps } from './electrical/temps';
 import type { HealthSnapshotEntry, Project, ValidationIssue } from '../types';
 import { resolveRules } from '../data/rules/india';
 import { layoutIssues, structureIssues } from './drc';
+import { roofHeightIssues } from './surround-check';
 import { validateSystem } from './stringing';
 import { listAnalyzers, memoizedInsights } from './insights/registry';
 import { registerAllAnalyzers } from './insights/analyzers';
@@ -99,6 +100,9 @@ export const VALIDATION_CATEGORY: Record<string, HealthCategoryKey> = {
   // one unit at 1.9 beside idle ones is a defect even when the fleet total is fine
   inverter_dc_ac_high: 'electrical',
   inverter_unused: 'electrical',
+  // ── the model against the aerial height map: a roof drawn 3 m tall that the
+  // map reads at 6 m shades wrong first — every energy number leans on it ───
+  roof_height_vs_map: 'energy',
 };
 
 /**
@@ -141,6 +145,7 @@ const CODE_LABEL: Record<string, string> = {
   isc_high: 'String current above MPPT limit',
   inverter_dc_ac_high: 'One inverter overloaded (DC/AC above 1.35)',
   inverter_unused: 'An inverter has no strings',
+  roof_height_vs_map: 'Roof height differs from the aerial height map',
   mppt_capacity: 'Not enough MPPT capacity',
   string_window_empty: 'No legal string length for this array',
   dc_voltage_drop: 'DC voltage drop above limit',
@@ -203,6 +208,7 @@ export function computeHealth(project: Project): HealthResult {
   // ── collect validation issues, dedupe by code (imp_high inflation guard) ──
   const issues: ValidationIssue[] = spec
     ? [
+        ...roofHeightIssues(project),
         ...layoutIssues(project, spec),
         ...structureIssues(project, spec),
         ...validateSystem(

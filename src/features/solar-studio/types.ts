@@ -1045,6 +1045,13 @@ export interface SiteSurround {
   /** blob id of the Int16 heights (centimetres above grade, row-major) */
   blobId: string;
   fetchedAt: number;
+  /**
+   * What the height map read over each roof polygon at fetch time: the median
+   * height above grade, metres, by roof id (roofs under 10 m² are skipped).
+   * The roof-height check compares it with the model's `heightM`. Absent on
+   * surrounds stored before the reading existed — they refetch once.
+   */
+  roofReadM?: Record<string, number>;
 }
 
 // ─── Project root ───────────────────────────────────────────────────────────
