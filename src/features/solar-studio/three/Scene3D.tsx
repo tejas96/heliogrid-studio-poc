@@ -37,6 +37,9 @@ import { RealSurround } from './RealSurround';
 import { SurroundRelief } from './SurroundRelief';
 import { ROOF_HEIGHT_TOLERANCE_M, roofReadings } from '../lib/surround-check';
 import { surroundSetIgnored } from '../lib/ops/site-ops';
+import { obstructionsAddFromMap, roofApplyMapFit } from '../lib/ops/roof-ops';
+import { raisedObjectsNotDrawn, roofMapFit, roofRaisedObjects } from '../lib/roof-map-fit';
+import { useSurroundGrid } from '../lib/use-surround-grid';
 import { clockLabel } from '../lib/sun-chart';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
@@ -1474,7 +1477,7 @@ export function Scene3D({
           style={{
             font: 'inherit',
             position: 'absolute',
-            right: 12,
+            right: 64, // clear of the Measure rail
             bottom: 124,
             zIndex: 12,
             fontSize: 9.5,
@@ -1993,6 +1996,8 @@ function SceneContent({
   useTerrainGeneration();
   // cards that quote shade costs re-render when the full analysis lands
   useShadeProfileVersion();
+  // the aerial height map, for the roof card's measured height and raised objects
+  const surroundGrid = useSurroundGrid(project.surround);
   // object isolation: only the picked entity (and the roofs) stay drawn
   const isoOk = (kind: ScenePick['kind'], id: string) => !isolate || (isolate.kind === kind && isolate.id === id);
   // isolating a table keeps its modules; a string keeps its own modules; a
@@ -2426,6 +2431,27 @@ function SceneContent({
                 actions={
                   onPlaceKind && !meshMode
                     ? [
+                        // what the aerial height map says this roof is — one tap to take it
+                        ...(() => {
+                          const g = surroundGrid;
+                          const fit = g ? roofMapFit(g, r, project.calibration.northOffsetDeg) : null;
+                          if (!g || !fit) return [];
+                          const acts: { label: string; onClick: () => void }[] = [];
+                          if (Math.abs(fit.heightM - r.heightM) > ROOF_HEIGHT_TOLERANCE_M) {
+                            acts.push({
+                              label: `Use map height (${fmtLen(fit.heightM, 1)}${fit.pitchDeg ? `, ${fit.pitchDeg}°` : ''})`,
+                              onClick: () => runOp(roofApplyMapFit, { roofId: r.id }),
+                            });
+                          }
+                          const raised = raisedObjectsNotDrawn(roofRaisedObjects(g, r, fit), project.obstructions);
+                          if (raised.length > 0) {
+                            acts.push({
+                              label: `Add ${raised.length} raised object${raised.length === 1 ? '' : 's'} from map`,
+                              onClick: () => runOp(obstructionsAddFromMap, { roofId: r.id }),
+                            });
+                          }
+                          return acts;
+                        })(),
                         {
                           label: 'Hang inverter',
                           onClick: () => {

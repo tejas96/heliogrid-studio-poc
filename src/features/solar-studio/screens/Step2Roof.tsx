@@ -77,6 +77,9 @@ import {
   sanitizeRoofPolygon,
   nextGroundName,
 } from '../lib/roof-factory';
+import { useSurroundGrid } from '../lib/use-surround-grid';
+import { roofMapFit, roofsWithMapFit, TRUSTED_RMSE_M } from '../lib/roof-map-fit';
+import { ROOF_HEIGHT_TOLERANCE_M } from '../lib/surround-check';
 import { detectRoofs } from '../lib/roof-ai/detect-client';
 import { detectRoofsViaGemini } from '../lib/roof-ai/gemini-client';
 import { applyArtifact, validateArtifact, type RoofArtifact } from '../lib/roof-ai/artifact';
@@ -120,6 +123,8 @@ function compass8(azDeg: number): string {
 export function Step2Roof() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
+  // the aerial height map: a traced roof takes its height, pitch and facing from it
+  const surroundGrid = useSurroundGrid(project.surround);
   const { state, dispatch } = useStore();
   const loc = project.location!;
 
@@ -722,11 +727,31 @@ export function Step2Roof() {
         pointInPolygon(polygonCentroid(polygon), r.polygon),
     );
     // shared factory — identical defaults for hand-drawn and AI-imported roofs
-    const roof: Roof = makeRoof({ polygon, existing: project.roofs, parent });
+    let roof: Roof = makeRoof({ polygon, existing: project.roofs, parent });
+    // the aerial height map knows this roof: its height, pitch and facing are
+    // MEASURED, not typed — the user can still change any of them
+    const grid = surroundGrid;
+    const fit = grid ? roofMapFit(grid, roof, project.calibration.northOffsetDeg) : null;
+    if (fit) {
+      roof = {
+        ...roof,
+        heightM: fit.heightM,
+        heightSource: 'aerial_map',
+        ...(fit.rmseM <= TRUSTED_RMSE_M
+          ? { pitchDeg: fit.pitchDeg, ...(fit.slopeAzimuthDeg !== null ? { slopeAzimuthDeg: fit.slopeAzimuthDeg } : {}) }
+          : {}),
+      };
+    }
     patch({ roofs: [...project.roofs, roof] }, true);
     cancelDraw();
     selectRoof(roof.id);
-    if (parent) showHint(`Placed on ${parent.name} — height set to ${roof.heightM.toFixed(1)} m`);
+    if (fit) {
+      showHint(
+        `${roof.name}: ${roof.heightM.toFixed(1)} m${roof.pitchDeg ? ` · ${roof.pitchDeg}° facing ${Math.round(roof.slopeAzimuthDeg)}°` : ' · flat'} — measured from the aerial height map`,
+      );
+    } else if (parent) {
+      showHint(`Placed on ${parent.name} — height set to ${roof.heightM.toFixed(1)} m`);
+    }
   }
 
   function deleteRoof(id: string) {
@@ -1937,11 +1962,11 @@ export function Step2Roof() {
             label="Height from Ground"
             value={selected.heightM}
             min={2}
-            max={30}
+            max={150}
             step={0.5}
             unit={units === 'imperial' ? 'ft' : 'm'}
             format={(v) => lenValue(v, 1)}
-            onChange={(v) => updateRoof(selected.id, { heightM: v })}
+            onChange={(v) => updateRoof(selected.id, { heightM: v, heightSource: 'user' })}
             hint={
               selected.faceGroupId
                 ? 'Low-side (eave) wall height — shared by every face of this roof, so it applies to all of them.'
@@ -1950,6 +1975,32 @@ export function Step2Roof() {
                   : 'Height of roof surface from ground level. Used for accurate shadow calculations.'
             }
           />
+          {(() => {
+            // what the aerial height map measured over this polygon — one tap to take it
+            const grid = surroundGrid;
+            const fit = grid ? roofMapFit(grid, selected, project.calibration.northOffsetDeg) : null;
+            if (!grid || !fit) return null;
+            const differs =
+              Math.abs(fit.heightM - selected.heightM) > ROOF_HEIGHT_TOLERANCE_M ||
+              (fit.rmseM <= TRUSTED_RMSE_M && Math.abs(fit.pitchDeg - selected.pitchDeg) >= 1);
+            // this roof and every roof standing on it, in one undo step
+            const take = () =>
+              patch({ roofs: roofsWithMapFit(project.roofs, grid, selected.id, project.calibration.northOffsetDeg) }, true);
+            return (
+              <div className="hint" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '-4px 0 10px' }}>
+                <span>
+                  Aerial height map: ≈ {lenValue(fit.heightM, 1)} {units === 'imperial' ? 'ft' : 'm'}
+                  {fit.pitchDeg ? ` · ${fit.pitchDeg}° facing ${fit.slopeAzimuthDeg}°` : ' · flat'}
+                  {selected.heightSource === 'aerial_map' && !differs ? ' · in use' : ''}
+                </span>
+                {differs && (
+                  <button type="button" className="btn btn-secondary" onClick={take}>
+                    Use
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {roofHint && (
             <div
               style={{

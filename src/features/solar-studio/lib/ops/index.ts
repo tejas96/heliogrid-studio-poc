@@ -7,6 +7,7 @@ import './battery-ops';
 import './string-ops';
 import './box-ops';
 import './route-ops';
+import './roof-ops';
 
 export * from './types';
 export * from './run';

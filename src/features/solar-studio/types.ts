@@ -181,6 +181,11 @@ export interface Roof {
    * A roof without it behaves exactly as it always did (per-roof edits only).
    */
   faceGroupId?: string;
+  /**
+   * Where `heightM` (and the pitch/facing set with it) came from: measured
+   * off the aerial height map, or typed by the user. Absent = typed (legacy).
+   */
+  heightSource?: 'aerial_map' | 'user';
   /** per-roof structure defaults (Phase 7) — overrides project defaults */
   structureOverride?: StructureDefaults;
   /** absent = manual (drawn by hand) */
