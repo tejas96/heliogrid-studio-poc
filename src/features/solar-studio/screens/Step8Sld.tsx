@@ -3,6 +3,7 @@ import { BookOpen, Cable, Download, Grid3x3, PencilLine, RotateCcw, Sparkles, Za
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { Sheet, TitleBlock } from '../components/drawing';
 import { StructureSheet } from '../components/drawing/StructureSheet';
+import { CableScheduleSheet } from './CableScheduleSheet';
 import { engineeringStatus, STRUCTURE_DISCLAIMER, windZoneInfo } from '../lib/structure';
 import { Dialog } from '../components/ui';
 import type { Project, SldParams } from '../types';
@@ -16,7 +17,7 @@ import { resetStringsToAuto } from '../lib/derive/electrical-sync';
 import { layoutToDxf, dxfFileName } from '../lib/export-dxf';
 import { navigate } from '../router';
 
-type Tab = 'sld' | 'layout' | 'strings' | 'structure';
+type Tab = 'sld' | 'layout' | 'strings' | 'cables' | 'structure';
 
 export function Step8Sld() {
   const project = useActiveProject()!;
@@ -86,6 +87,7 @@ export function Step8Sld() {
               ['sld', 'SLD', <Zap key="sld" size={13} aria-hidden />],
               ['layout', 'PV Layout', <Grid3x3 key="layout" size={13} aria-hidden />],
               ['strings', 'String Route', <Cable key="strings" size={13} aria-hidden />],
+              ['cables', 'Cable Schedule', <Cable key="cables" size={13} aria-hidden />],
               ['structure', 'Structure', <Grid3x3 key="structure" size={13} aria-hidden />],
             ] as [Tab, string, ReactNode][]
           ).map(([t, label, icon]) => (
@@ -210,6 +212,7 @@ export function Step8Sld() {
         {tab === 'sld' && (hasStrings ? <SldSheet sld={sld} threeLine={threeLine} /> : <UnstrungState />)}
         {tab === 'layout' && <LayoutSheet />}
         {tab === 'strings' && (hasStrings ? <StringSheet /> : <UnstrungState />)}
+        {tab === 'cables' && <CableScheduleSheet />}
         {/* Phase 22o: the structure has been modelled since 22a and priced
             throughout, and nothing printed it until now. */}
         {tab === 'structure' && <StructureSheet project={project} />}

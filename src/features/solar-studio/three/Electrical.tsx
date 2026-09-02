@@ -19,6 +19,8 @@ import type { DesignOp } from '../lib/ops/types';
 import { previewOp, type OpPreview } from '../lib/ops/run';
 import { stringsAddManual, stringsResetToAuto } from '../lib/ops/electrical-ops';
 import { stringRemove } from '../lib/ops/string-ops';
+import { routeResetToAuto } from '../lib/ops/route-ops';
+import { RouteGizmo } from './RouteGizmo';
 import { resolveDesignTemps, vmpAt, vocAt } from '../lib/electrical/temps';
 import { stringSizing } from '../lib/electrical/window';
 import { polylineLengthM } from '../lib/routing';
@@ -161,31 +163,50 @@ export function ElectricalOverlay({
 
   // ── cable runs: along the deck, then down the wall to the unit ──
   const routeLines = useMemo(() => {
-    const out: { id: string; pts: Vec3[]; color: string; kind: string }[] = [];
+    const out: { id: string; pts: Vec3[]; color: string; kind: string; tube: THREE.TubeGeometry | null }[] = [];
     const pairIndex = new Map<string, number>();
     for (const r of routes) {
       if (r.waypoints.length < 2) continue;
       const pts: Vec3[] = [];
+      let color = AC;
+      let kind = 'AC run to the meter';
       if (r.kind === 'string_homerun') {
         const k = pairIndex.get(r.fromRef) ?? 0;
         pairIndex.set(r.fromRef, k + 1);
         for (const w of r.waypoints) pts.push([w.x, roofHeightAt(w) + 0.05 + k * 0.03, -w.y]);
-        // the last waypoint is the inverter's wall point: drop to its mount height
+        // the last waypoint is the wall point of the DCDB / inverter: drop to its mount height
+        const box = (project.electricalBoxes ?? []).find((b) => b.kind === 'dcdb');
         const ip = project.inverterPlacements.find((x) => x.id === r.toRef) ?? project.inverterPlacements[0];
         const last = r.waypoints[r.waypoints.length - 1];
-        if (ip) pts.push([last.x, ip.heightM + 0.3, -last.y]);
-        out.push({ id: r.id, pts, color: k === 0 ? DC_PLUS : DC_MINUS, kind: 'DC home run' });
+        const landH = box ? box.heightM + 0.25 : ip ? ip.heightM + 0.3 : null;
+        if (landH !== null) pts.push([last.x, landH, -last.y]);
+        color = k === 0 ? DC_PLUS : DC_MINUS;
+        kind = k === 0 ? 'DC home run (+)' : 'DC home run (−)';
       } else if (r.kind === 'inverter_ac') {
         const ip = project.inverterPlacements[0];
         const first = r.waypoints[0];
         if (ip) pts.push([first.x, ip.heightM - 0.3, -first.y]);
         for (const w of r.waypoints) pts.push([w.x, 0.06, -w.y]);
-        out.push({ id: r.id, pts, color: AC, kind: 'AC run to the meter' });
+      } else {
+        continue;
       }
+      let tube: THREE.TubeGeometry | null = null;
+      if (pts.length >= 2) {
+        const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal', 0);
+        // a fat, faint sleeve: the drawn line stays thin, the click target is a hand's width
+        tube = new THREE.TubeGeometry(curve, Math.max(8, pts.length * 4), 0.2, 6, false);
+      }
+      out.push({ id: r.id, pts, color, kind, tube });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [routes, project.roofs, project.inverterPlacements]);
+  }, [routes, project.roofs, project.inverterPlacements, project.electricalBoxes]);
+  useEffect(
+    () => () => {
+      for (const l of routeLines) l.tube?.dispose();
+    },
+    [routeLines],
+  );
 
   const picked = pick?.kind === 'string' ? project.strings.find((s) => s.id === pick.id) : null;
 
@@ -265,9 +286,85 @@ export function ElectricalOverlay({
         );
       })}
 
-      {routeLines.map((r) => (
-        <Line key={r.id} points={r.pts} color={r.color} lineWidth={2.5} transparent opacity={0.85} raycast={() => null} />
-      ))}
+      {routeLines.map((r) => {
+        const isPicked = pick?.kind === 'route' && pick.id === r.id;
+        const isHover = !isPicked && hoverPick?.kind === 'route' && hoverPick.id === r.id;
+        return (
+          <group key={r.id}>
+            <Line
+              points={r.pts}
+              color={r.color}
+              lineWidth={isPicked ? 4.5 : isHover ? 3.5 : 2.5}
+              transparent
+              opacity={0.9}
+              raycast={() => null}
+            />
+            {r.tube && (
+              <mesh
+                geometry={r.tube}
+                // runs lie under the modules; the raycaster filter in Scene3D
+                // lets this sleeve win the click even when glass is in front
+                userData={{ pickPriority: 1 }}
+                onClick={(e) => {
+                  if (e.delta > 4) return;
+                  e.stopPropagation();
+                  onPick({ kind: 'route', id: r.id });
+                }}
+                onPointerOver={(e) => {
+                  e.stopPropagation();
+                  onHoverPick({ kind: 'route', id: r.id });
+                }}
+                onPointerOut={() => onHoverPick(null)}
+              >
+                <meshBasicMaterial color={r.color} transparent opacity={isPicked || isHover ? 0.45 : 0.18} depthWrite={false} toneMapped={false} />
+              </mesh>
+            )}
+          </group>
+        );
+      })}
+
+      {/* the picked run: its card and the corner handles */}
+      {pick?.kind === 'route' &&
+        (() => {
+          const r = routes.find((x) => x.id === pick.id);
+          const drawn = routeLines.find((x) => x.id === pick.id);
+          if (!r || !drawn) return null;
+          const planM = polylineLengthM(r.waypoints);
+          const totalM = Math.round((planM + r.verticalDropM) * (1 + r.slackPct));
+          const fromName =
+            r.kind === 'string_homerun' ? (project.strings.find((s) => s.id === r.fromRef)?.name ?? 'string') : 'Inverter';
+          const toName =
+            r.kind === 'string_homerun'
+              ? (project.electricalBoxes ?? []).some((b) => b.kind === 'dcdb')
+                ? 'DCDB'
+                : 'Inverter'
+              : (project.electricalBoxes ?? []).some((b) => b.kind === 'acdb')
+                ? 'ACDB → meter'
+                : 'Meter';
+          const mid = drawn.pts[Math.floor(drawn.pts.length / 2)];
+          const deckY = drawn.pts[0][1];
+          const toScene = (p: XY): Vec3 => [p.x, roofHeightAt(p) + 0.05, -p.y];
+          return (
+            <group>
+              <EntityLabel
+                position={[mid[0], mid[1] + 0.9, mid[2]]}
+                title={`${drawn.kind}${r.manual ? ' · hand-routed' : ''}`}
+                lines={[
+                  `${fromName} → ${toName}`,
+                  `${Math.round(planM)} m on the roof + ${Math.round(r.verticalDropM)} m drop · +${Math.round(r.slackPct * 100)}% slack = ${totalM} m to buy`,
+                  'Drag a corner to move it · drag a + to add one',
+                ]}
+                onClose={() => onPick(null)}
+                actions={
+                  r.manual
+                    ? [{ label: 'Re-route automatically', onClick: () => runOp(routeResetToAuto, { id: r.id }) }]
+                    : []
+                }
+              />
+              <RouteGizmo project={project} route={r} planeY={deckY} toScene={toScene} runOp={runOp} />
+            </group>
+          );
+        })()}
 
       {picked &&
         spec &&
@@ -304,6 +401,8 @@ export function ElectricalOverlay({
                     onWiringChange([...s.panelIds]);
                   },
                 },
+                // the run itself is a thin line under the glass — reach it from here
+                ...(mine.length ? [{ label: 'Cable run', onClick: () => onPick({ kind: 'route', id: mine[0].id }) }] : []),
                 { label: 'Re-plan all strings', onClick: () => runOp(stringsResetToAuto, {}) },
                 ...(s.manual
                   ? [

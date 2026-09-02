@@ -11,6 +11,7 @@ export type EraseTarget =
   | { kind: 'arrester'; id: string; pos: XY }
   | { kind: 'inverter'; id: string; pos: XY }
   | { kind: 'battery'; id: string; pos: XY }
+  | { kind: 'box'; id: string; pos: XY }
   | { kind: 'meter'; pos: XY }
   | { kind: 'walkway'; id: string }
   | { kind: 'rail'; id: string };
@@ -52,11 +53,16 @@ export function findEraseTargetAt(project: Project, m: XY): EraseTarget | null {
       return { kind: 'inverter', id: ip.id, pos };
   }
 
-  // battery cabinets share the inverter's wall-edge frame
+  // battery cabinets and DCDB/ACDB boxes share the inverter's wall-edge frame
   for (const bp of project.batteryPlacements ?? []) {
     const pos = inverterPlacementPos(project, bp);
     if (pos && Math.hypot(m.x - pos.x, m.y - pos.y) < MARKER_R)
       return { kind: 'battery', id: bp.id, pos };
+  }
+  for (const bx of project.electricalBoxes ?? []) {
+    const pos = inverterPlacementPos(project, bx);
+    if (pos && Math.hypot(m.x - pos.x, m.y - pos.y) < MARKER_R)
+      return { kind: 'box', id: bx.id, pos };
   }
 
   const gc = project.gridConnection;

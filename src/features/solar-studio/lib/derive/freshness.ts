@@ -47,7 +47,12 @@ export function routesInputFp(p: Project): string {
       p.inverterPlacements.map((i) => [i.id, i.roofId, i.edgeIndex, r(i.t, 1000), i.heightM]),
       p.gridConnection?.pos ?? null,
       (p.cableRoutes ?? []).filter((c) => c.manual).map((c) => [c.id, c.fromRef, c.waypoints]),
-    ])
+    ]) +
+    // DCDB / ACDB boxes bend the runs — CONDITIONAL suffix, so a project
+    // without boxes keeps its route fingerprint byte-identical
+    ((p.electricalBoxes?.length ?? 0) > 0
+      ? '|box:' + JSON.stringify(p.electricalBoxes!.map((b) => [b.id, b.kind, b.roofId, b.edgeIndex, r(b.t, 1000), b.heightM]))
+      : '')
   );
 }
 

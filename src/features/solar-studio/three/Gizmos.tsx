@@ -13,7 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { Html, useCursor } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
-import { Move, RotateCw, ArrowUpDown, PlugZap, BatteryCharging } from 'lucide-react';
+import { Move, RotateCw, ArrowUpDown, PlugZap, BatteryCharging, Box } from 'lucide-react';
 import type { ArraySegment, PanelSpec, Project, Roof, XY } from '../types';
 import type { DesignOp } from '../lib/ops/types';
 import { previewOp, type OpPreview } from '../lib/ops/run';
@@ -21,6 +21,7 @@ import { summarizeImpact } from '../lib/ops/metrics';
 import { panelsNudge, segmentSetAzimuth, segmentSetTilt } from '../lib/ops/layout-ops';
 import { inverterMove } from '../lib/ops/electrical-ops';
 import { batteryMove } from '../lib/ops/battery-ops';
+import { boxMove } from '../lib/ops/box-ops';
 import { wallOutward } from '../lib/battery';
 import { pointSegDist } from '../lib/geo';
 import { PanelsInstanced, type PanelInstance } from './PanelsInstanced';
@@ -28,7 +29,7 @@ import { PanelsInstanced, type PanelInstance } from './PanelsInstanced';
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
 
 /** plan point (x east, y north-ish) from a pointer event, on the plane y = planeY */
-function usePlanePointer() {
+export function usePlanePointer() {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const ray = useRef(new THREE.Raycaster());
@@ -45,7 +46,7 @@ function usePlanePointer() {
 }
 
 /** A 44 px round handle that owns its drag (pointer capture). */
-function Handle({
+export function Handle({
   position,
   title,
   children,
@@ -131,7 +132,7 @@ function Handle({
 }
 
 /** The live readout beside a drag: the op's sentence and what it changes. */
-function Readout({
+export function Readout({
   position,
   preview,
   offsetY = 0,
@@ -361,7 +362,7 @@ export function WallGizmo({
   onDragging,
 }: {
   project: Project;
-  kind: 'inverter' | 'battery';
+  kind: 'inverter' | 'battery' | 'box';
   id: string;
   runOp: RunOp;
   onDragging?: (dragging: boolean) => void;
@@ -378,19 +379,23 @@ export function WallGizmo({
   const unit =
     kind === 'inverter'
       ? project.inverterPlacements.find((u) => u.id === id)
-      : (project.batteryPlacements ?? []).find((u) => u.id === id);
+      : kind === 'box'
+        ? (project.electricalBoxes ?? []).find((u) => u.id === id)
+        : (project.batteryPlacements ?? []).find((u) => u.id === id);
   if (!unit) return null;
   const roof = project.roofs.find((r) => r.id === unit.roofId);
   if (!roof) return null;
   const a = roof.polygon[unit.edgeIndex];
   const b = roof.polygon[(unit.edgeIndex + 1) % roof.polygon.length];
   const out = wallOutward(roof, unit.edgeIndex);
-  const outOff = kind === 'inverter' ? 0.12 : (project.components.battery?.depthMm ?? 250) / 2000 + 0.03;
+  const outOff =
+    kind === 'battery' ? (project.components.battery?.depthMm ?? 250) / 2000 + 0.03 : 0.12;
   const px = a.x + (b.x - a.x) * unit.t + out.x * outOff;
   const py = a.y + (b.y - a.y) * unit.t + out.y * outOff;
   const spec = project.components.battery;
-  const topY = kind === 'inverter' ? unit.heightM + 0.55 : unit.heightM + (spec ? spec.heightMm / 1000 : 0.9) + 0.25;
-  const planeY = kind === 'inverter' ? unit.heightM : unit.heightM + 0.4;
+  const topY =
+    kind === 'battery' ? unit.heightM + (spec ? spec.heightMm / 1000 : 0.9) + 0.25 : unit.heightM + 0.55;
+  const planeY = kind === 'battery' ? unit.heightM + 0.4 : unit.heightM;
 
   /** nearest point on any roof edge to the plan point — the wall the unit will hang on */
   const snapToWall = (m: XY) => {
@@ -406,7 +411,7 @@ export function WallGizmo({
     }
     return best;
   };
-  const op = (kind === 'inverter' ? inverterMove : batteryMove) as DesignOp<{
+  const op = (kind === 'inverter' ? inverterMove : kind === 'box' ? boxMove : batteryMove) as DesignOp<{
     id: string;
     roofId: string;
     edgeIndex: number;
@@ -457,13 +462,25 @@ export function WallGizmo({
       <Handle
         position={handleAt}
         offsetY={WALL_HANDLE_OFFSET_PX}
-        title={kind === 'inverter' ? 'Drag along a wall to move the inverter' : 'Drag along a wall to move the battery'}
+        title={
+          kind === 'inverter'
+            ? 'Drag along a wall to move the inverter'
+            : kind === 'box'
+              ? 'Drag along a wall to move the box'
+              : 'Drag along a wall to move the battery'
+        }
         active={!!drag}
         onStart={start}
         onMove={move}
         onEnd={end}
       >
-        {kind === 'inverter' ? <PlugZap size={20} aria-hidden /> : <BatteryCharging size={20} aria-hidden />}
+        {kind === 'inverter' ? (
+          <PlugZap size={20} aria-hidden />
+        ) : kind === 'box' ? (
+          <Box size={20} aria-hidden />
+        ) : (
+          <BatteryCharging size={20} aria-hidden />
+        )}
       </Handle>
       <Readout position={drag ? [drag.pos.x, topY, -drag.pos.y] : handleAt} preview={preview} />
     </group>

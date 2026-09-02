@@ -157,6 +157,7 @@ import {
   stringsResetToAuto,
 } from '../lib/ops/electrical-ops';
 import { batteryPlace, batteryRemove } from '../lib/ops/battery-ops';
+import { boxPlace, boxRemove } from '../lib/ops/box-ops';
 import { batteryWorldPos } from '../lib/battery';
 import {
   arresterAdd,
@@ -296,7 +297,7 @@ export function Step6Editor() {
   // option — the rail already overflows its own column (that is exactly how the
   // 3D pill came to cover "Mount inverter"), so the sub-mode lives in the tool's
   // own hint bar, the pattern manual-stringing already uses.
-  const [placeKind, setPlaceKind] = useState<'inverter' | 'meter' | 'battery'>('inverter');
+  const [placeKind, setPlaceKind] = useState<'inverter' | 'meter' | 'battery' | 'dcdb' | 'acdb'>('inverter');
   // §H: the router's corners are draggable ON the route. Live position is LOCAL
   // (like dragLine/marquee) — the store is written once, on release, so a drag
   // is ONE undo step rather than one per pointermove.
@@ -682,6 +683,9 @@ export function Step6Editor() {
           case 'battery':
             report(ops.run(batteryRemove, { id: hit.id }));
             return;
+          case 'box':
+            report(ops.run(boxRemove, { id: hit.id }));
+            return;
           case 'meter':
             report(ops.run(meterRemove, {}));
             return;
@@ -716,6 +720,11 @@ export function Step6Editor() {
             const { d, t } = pointSegDist(m, a, b);
             if (!best || d < best.d) best = { roofId: roof.id, edgeIndex: i, t, d };
           }
+        }
+        if (best && best.d < 4 && (placeKind === 'dcdb' || placeKind === 'acdb')) {
+          report(ops.run(boxPlace, { kind: placeKind, roofId: best.roofId, edgeIndex: best.edgeIndex, t: best.t, heightM: 1.2 }));
+          setTool('select');
+          return;
         }
         if (best && best.d < 4 && placeKind === 'battery') {
           // a cabinet stands on the floor at the foot of the same wall
@@ -1595,8 +1604,8 @@ export function Step6Editor() {
               pop — the active state read as inactive. State this explicitly
               rather than borrowing button semantics that invert here. */}
           {(project.components.battery
-            ? (['inverter', 'meter', 'battery'] as const)
-            : (['inverter', 'meter'] as const)
+            ? (['inverter', 'meter', 'battery', 'dcdb', 'acdb'] as const)
+            : (['inverter', 'meter', 'dcdb', 'acdb'] as const)
           ).map((k) => (
             <button
               key={k}
@@ -1614,7 +1623,7 @@ export function Step6Editor() {
               }}
               onClick={() => setPlaceKind(k)}
             >
-              {k === 'inverter' ? 'Inverter' : k === 'meter' ? 'Meter' : 'Battery'}
+              {k === 'inverter' ? 'Inverter' : k === 'meter' ? 'Meter' : k === 'battery' ? 'Battery' : k === 'dcdb' ? 'DCDB' : 'ACDB'}
             </button>
           ))}
           <span style={{ opacity: 0.85 }}>
@@ -1627,6 +1636,8 @@ export function Step6Editor() {
                     ? `Tap a roof edge to hang inverter ${placed + 1} of ${wanted}`
                     : `All ${wanted} inverters mounted · tap an edge to move the oldest one`;
                 })()
+              : placeKind === 'dcdb' || placeKind === 'acdb'
+                ? `Tap a wall to hang the ${placeKind.toUpperCase()} — ${placeKind === 'dcdb' ? 'home runs will land on it' : 'the AC run will pass through it'}`
               : placeKind === 'battery'
                 ? (() => {
                     const wanted = Math.max(1, project.components.batteryCount ?? 1);
@@ -3202,6 +3213,21 @@ function EditorLayers({
         );
       })}
 
+      {/* DCDB / ACDB enclosures on the wall */}
+      {(project.electricalBoxes ?? []).map((bx) => {
+        const wp = batteryWorldPos(project, bx);
+        if (!wp) return null;
+        const pos = frame.toPx(wp);
+        return (
+          <g key={bx.id} transform={`translate(${pos.x}, ${pos.y}) scale(${1 / frame.zoom})`}>
+            <rect x={-10} y={-8} width={20} height={16} rx={2} fill="#374151" stroke="#fff" strokeWidth={1.5} />
+            <text x={0} y={3} textAnchor="middle" fontSize={6.5} fontWeight={800} fill="#fff">
+              {bx.kind === 'dcdb' ? 'DC' : 'AC'}
+            </text>
+          </g>
+        );
+      })}
+
       {/* marquee selection */}
       {marquee && (
         <rect
@@ -3344,6 +3370,8 @@ function EditorLayers({
             }
             case 'arrester':
             case 'inverter':
+            case 'battery':
+            case 'box':
             case 'meter': {
               // ring around the point marker, constant screen size across zoom
               const q = frame.toPx(eraseTarget.pos);

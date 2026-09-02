@@ -1,6 +1,6 @@
 // ─── 3D Studio v2: photoreal scene, sun sim, solar access, pro HUD ──────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import {
   CameraControls,
   CameraControlsImpl,
@@ -21,6 +21,7 @@ import type { OpPreview } from '../lib/ops/run';
 import { inverterRemove } from '../lib/ops/electrical-ops';
 import { segmentDelete } from '../lib/ops/layout-ops';
 import { batteryRemove } from '../lib/ops/battery-ops';
+import { boxRemove } from '../lib/ops/box-ops';
 import { TableGizmo, WallGizmo } from './Gizmos';
 import { RealSurround } from './RealSurround';
 import { getRoofSurface } from './roof-textures';
@@ -38,8 +39,30 @@ import { polygonArea } from '../lib/geo';
 import type { ObstructionType } from '../types';
 
 /** What the scene can pick besides modules (modules use the shared selection). */
+/**
+ * Pick order. Cable runs lie under the modules, so from above the glass is
+ * always the nearest hit — the run could never be clicked. Objects that ask
+ * for priority (`userData.pickPriority`) go first whenever the ray passes
+ * through them; everything else keeps the nearest-first order.
+ */
+function pickFilter(items: THREE.Intersection[]): THREE.Intersection[] {
+  if (items.length < 2) return items;
+  const pri = (i: THREE.Intersection) => (i.object.userData?.pickPriority as number | undefined) ?? 0;
+  if (!items.some((i) => pri(i) > 0)) return items;
+  return [...items].sort((a, b) => pri(b) - pri(a) || a.distance - b.distance);
+}
+
+/** Installs the pick order on the fiber event manager (must live inside the Canvas). */
+function PickOrder() {
+  const setEvents = useThree((s) => s.setEvents);
+  useEffect(() => {
+    setEvents({ filter: pickFilter });
+  }, [setEvents]);
+  return null;
+}
+
 export type ScenePick = {
-  kind: 'obstruction' | 'inverter' | 'battery' | 'roof' | 'table' | 'string';
+  kind: 'obstruction' | 'inverter' | 'battery' | 'box' | 'roof' | 'table' | 'string' | 'route';
   id: string;
 };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
@@ -569,6 +592,7 @@ export function Scene3D({
           glRef.current = gl;
         }}
       >
+        <PickOrder />
         <SceneContent
           project={project}
           structEdit={structInteractive ? structEdit : null}
@@ -1845,7 +1869,7 @@ function SceneContent({
             />
           );
         })()}
-      {!meshMode && pick && (pick.kind === 'inverter' || pick.kind === 'battery') && (
+      {!meshMode && pick && (pick.kind === 'inverter' || pick.kind === 'battery' || pick.kind === 'box') && (
         <WallGizmo project={project} kind={pick.kind} id={pick.id} runOp={runOp} />
       )}
 
@@ -1955,6 +1979,10 @@ function SceneContent({
                 ]}
                 onClose={() => onPick(null)}
                 actions={[
+                  // the AC run is a thin line on the ground — reach it from here
+                  ...(idx === 0 && (project.cableRoutes ?? []).some((r) => r.id === 'ac/main')
+                    ? [{ label: 'AC run', onClick: () => onPick({ kind: 'route' as const, id: 'ac/main' }) }]
+                    : []),
                   {
                     label: 'Remove',
                     danger: true,
@@ -2085,6 +2113,89 @@ function SceneContent({
       })}
 
       {/* the real neighbourhood — Google's photogrammetry, never invented boxes */}
+      {/* DCDB / ACDB enclosures — wall-mounted, pickable, slide along the wall */}
+      {(project.electricalBoxes ?? []).filter((bx) => inScope(bx.roofId)).map((bx) => {
+        const roof = project.roofs.find((r) => r.id === bx.roofId);
+        if (!roof) return null;
+        const a = roof.polygon[bx.edgeIndex];
+        const b = roof.polygon[(bx.edgeIndex + 1) % roof.polygon.length];
+        const px = a.x + (b.x - a.x) * bx.t;
+        const py = a.y + (b.y - a.y) * bx.t;
+        const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
+        const out = wallOutward(roof, bx.edgeIndex);
+        const picked = pick?.kind === 'box' && pick.id === bx.id;
+        const hovered = !picked && hoverPick?.kind === 'box' && hoverPick.id === bx.id;
+        const dc = bx.kind === 'dcdb';
+        const w = dc ? 0.4 : 0.5;
+        const h = dc ? 0.5 : 0.6;
+        return (
+          <group
+            key={bx.id}
+            position={[px + out.x * 0.12, bx.heightM, -(py + out.y * 0.12)]}
+            rotation={[0, -wallAng, 0]}
+            onClick={(e) => {
+              if (e.delta > 4) return;
+              e.stopPropagation();
+              onPick({ kind: 'box', id: bx.id });
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              onHoverPick({ kind: 'box', id: bx.id });
+            }}
+            onPointerOut={() => onHoverPick(null)}
+          >
+            {(picked || hovered) && <PickHalo center={[0, 0, 0]} size={[w + 0.2, h + 0.2, 0.42]} picked={picked} />}
+            {picked && (
+              <EntityLabel
+                position={[0, h / 2 + 0.55, 0]}
+                title={dc ? 'DCDB' : 'ACDB'}
+                lines={[
+                  dc
+                    ? 'String fuses, DC SPD, DC isolator — the home runs land here'
+                    : 'MCCB, AC SPD, isolator — the AC run passes through here',
+                  `${fmtLen(bx.heightM, 1)} up the wall`,
+                ]}
+                onClose={() => onPick(null)}
+                actions={[
+                  {
+                    label: 'Remove',
+                    danger: true,
+                    onClick: () => {
+                      runOp(boxRemove, { id: bx.id });
+                      onPick(null);
+                    },
+                  },
+                ]}
+              />
+            )}
+            <mesh castShadow userData={{ shadowCaster: false }}>
+              <boxGeometry args={[w, h, 0.22]} />
+              <meshStandardMaterial color="#8e959d" roughness={0.5} metalness={0.4} />
+            </mesh>
+            <mesh position={[0, 0, 0.114]}>
+              <boxGeometry args={[w * 0.9, h * 0.9, 0.01]} />
+              <meshStandardMaterial color="#b8bfc7" roughness={0.45} metalness={0.35} />
+            </mesh>
+            <Html center distanceFactor={30} position={[0, h / 2 + 0.16, 0]}>
+              <div
+                style={{
+                  fontSize: 10,
+                  background: 'rgba(20,24,30,0.85)',
+                  color: '#f2f4f6',
+                  padding: '1px 6px',
+                  borderRadius: 4,
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  fontFamily: 'var(--mono)',
+                }}
+              >
+                {dc ? 'DCDB' : 'ACDB'}
+              </div>
+            </Html>
+          </group>
+        );
+      })}
+
       {!meshMode && showBuildings && (
         <RealSurround project={project} onAttribution={onSurroundAttribution} />
       )}

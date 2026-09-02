@@ -336,6 +336,22 @@ export interface BatterySpec {
   priceInr: number;
 }
 
+/**
+ * A distribution box on a wall: the DCDB (string fuses, DC SPD, isolator)
+ * where the home runs land, or the ACDB (MCCB, AC SPD) between the inverter
+ * and the meter. Same wall-edge frame as the inverter. Placing one changes
+ * where the cable runs go — the BOM already bills the boxes themselves.
+ */
+export interface ElectricalBox {
+  id: string;
+  kind: 'dcdb' | 'acdb';
+  roofId: string;
+  edgeIndex: number;
+  /** 0..1 along the edge */
+  t: number;
+  heightM: number;
+}
+
 /** A battery cabinet standing at the foot of a wall (same edge frame as the inverter). */
 export interface BatteryPlacement {
   id: string;
@@ -1036,6 +1052,8 @@ export interface Project {
   inverterPlacements: InverterPlacement[];
   /** battery cabinets at the foot of a wall; absent ⇒ none (additive migration) */
   batteryPlacements?: BatteryPlacement[];
+  /** DCDB / ACDB enclosures on walls; absent ⇒ none (routes go straight to the inverter/meter) */
+  electricalBoxes?: ElectricalBox[];
   /**
    * Where the supply meets the grid — meter / service entry, in plan metres.
    * OPTIONAL BY DESIGN. Aurora models this because a permit plan set must show

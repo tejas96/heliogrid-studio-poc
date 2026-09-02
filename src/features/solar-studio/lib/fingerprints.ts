@@ -202,6 +202,9 @@ export function designFp(p: Project): string {
     ((p.batteryPlacements?.length ?? 0) > 0
       ? '|batp:' + JSON.stringify(p.batteryPlacements!.map((x) => [x.id, x.roofId, x.edgeIndex, x.t]))
       : '') +
+    ((p.electricalBoxes?.length ?? 0) > 0
+      ? '|box:' + JSON.stringify(p.electricalBoxes!.map((x) => [x.id, x.kind, x.roofId, x.edgeIndex, x.t]))
+      : '') +
     // structure defaults (Phase 7) — CONDITIONAL suffix: absent fields add
     // NOTHING, so every pre-Phase-7 project's fingerprint (and its captures)
     // survives the upgrade byte-identical
