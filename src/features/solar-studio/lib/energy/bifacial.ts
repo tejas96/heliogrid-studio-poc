@@ -35,6 +35,9 @@
 import type { PanelSpec, PlacedPanel, Project, RoofType, XY } from '../../types';
 import { panelFootprintM } from '../layout';
 import { resolveRacking } from '../structure';
+import { measuredRowPitchM, resolveTrackerAxis, type TrackerAxis } from './tracker';
+
+export { measuredRowPitchM };
 
 /** angular bins in the half-space sweep — the view factors are built once */
 const SWEEP_BINS = 240;
@@ -92,6 +95,8 @@ export interface RearGeometryInput {
 }
 
 export interface RearGeometry {
+  /** identity of this geometry — two tables with the same one share a build */
+  key: string;
   tiltDeg: number;
   pitchM: number;
   lowEdgeM: number;
@@ -236,14 +241,18 @@ export function buildRearGeometry(input: RearGeometryInput): RearGeometry {
   let groundVfTotal = 0;
   for (const g of groundVf) groundVfTotal += g;
 
-  return { tiltDeg: input.tiltDeg, pitchM: pitch, lowEdgeM: h0, slantM: w, skyVf, groundVf, groundVfTotal, binSkyVf, points, rows };
+  return { key: geometryKey(input), tiltDeg: input.tiltDeg, pitchM: pitch, lowEdgeM: h0, slantM: w, skyVf, groundVf, groundVfTotal, binSkyVf, points, rows };
+}
+
+function geometryKey(i: RearGeometryInput): string {
+  return `${i.tiltDeg.toFixed(1)}|${i.slantM.toFixed(2)}|${i.lowEdgeM.toFixed(2)}|${i.pitchM.toFixed(2)}`;
 }
 
 /** A geometry cache: one build serves every module on the same table. */
 const cache = new Map<string, RearGeometry>();
 
 export function rearGeometryFor(input: RearGeometryInput): RearGeometry {
-  const key = `${input.tiltDeg.toFixed(1)}|${input.slantM.toFixed(2)}|${input.lowEdgeM.toFixed(2)}|${input.pitchM.toFixed(2)}`;
+  const key = geometryKey(input);
   const hit = cache.get(key);
   if (hit) return hit;
   const built = buildRearGeometry(input);
@@ -371,18 +380,37 @@ export const REAR_BOXED_IN_OPENNESS = 0.2;
  * off. ONE derivation, read by the hourly engine and by the design check, so
  * the warning and the yield can never be arguing from different geometry.
  */
+export interface ProjectRearGeometry {
+  /** fixed mounts: the one geometry each module's back looks out on */
+  byPanel: Map<string, RearGeometry>;
+  /** tracker mounts: the tube each module rides, whose pose is the time of day */
+  trackerByPanel: Map<string, TrackerAxis>;
+  /** tracker mounts: the geometry the back sees at a given rotation */
+  rearAtByPanel: Map<string, (tiltDeg: number) => RearGeometry>;
+  albedo: number;
+  bifaciality: number;
+}
+
+/**
+ * A tracker's rear geometry changes every hour, and building one per tenth of
+ * a degree would be thousands of sweeps for a difference nobody can measure.
+ * Five-degree steps give a dozen builds and a rear gain that moves smoothly.
+ */
+const TRACKER_REAR_TILT_STEP_DEG = 5;
+
 export function projectRearGeometry(
   project: Project,
   spec: PanelSpec,
   enabled: PlacedPanel[],
-): { byPanel: Map<string, RearGeometry>; albedo: number; bifaciality: number } {
+): ProjectRearGeometry {
   const bifaciality = (spec.bifacialityPct ?? 0) / 100;
   const surfaces = new Set(
     project.roofs.filter((r) => enabled.some((p) => p.roofId === r.id)).map((r) => r.roofType),
   );
   const albedo = surfaces.size === 1 ? surfaceAlbedo([...surfaces][0]) : DEFAULT_ALBEDO;
   const byPanel = new Map<string, RearGeometry>();
-  if (bifaciality <= 0) return { byPanel, albedo, bifaciality };
+  const trackerByPanel = new Map<string, TrackerAxis>();
+  const rearAtByPanel = new Map<string, (tiltDeg: number) => RearGeometry>();
 
   const centresBySeg = new Map<string, XY[]>();
   for (const p of enabled) {
@@ -391,55 +419,49 @@ export function projectRearGeometry(
     if (list) list.push(p.center);
     else centresBySeg.set(p.segmentId, [p.center]);
   }
+  // one axis object per tracker table: the engine caches its hourly pose by
+  // identity, so every module on a tube must share the same object
+  const axisBySeg = new Map<string, TrackerAxis>();
+
   for (const p of enabled) {
     const seg = p.segmentId ? project.segments.find((s) => s.id === p.segmentId) : undefined;
     const roof = project.roofs.find((r) => r.id === p.roofId);
     const resolved = seg && roof ? resolveRacking(project, roof, seg, spec) : null;
+    const slantM = panelFootprintM(spec, p.orientation).h;
+    const measured = seg ? measuredRowPitchM(centresBySeg.get(seg.id) ?? [], p.azimuthDeg) : null;
+    const declared = seg && seg.racking.kind !== 'flush' ? seg.racking.rowPitchM : 0;
+    const pitchM = measured ?? (declared > 0 ? declared : 0);
+
+    if (resolved?.kind === 'tracker_hsat' && seg) {
+      let axis = axisBySeg.get(seg.id);
+      if (!axis) {
+        axis = resolveTrackerAxis({ ...(seg.racking as { rowPitchM: number }), rowPitchM: pitchM > 0 ? pitchM : declared }, slantM, seg.azimuthDeg);
+        axisBySeg.set(seg.id, axis);
+      }
+      trackerByPanel.set(p.id, axis);
+      if (bifaciality > 0) {
+        // the tube carries the module's CENTRE, so as it rolls the low edge
+        // swings down toward the ground — that is the height the back sees from
+        const tubeM = resolved.frontLegM;
+        rearAtByPanel.set(p.id, (tiltDeg) => {
+          const step = Math.round(tiltDeg / TRACKER_REAR_TILT_STEP_DEG) * TRACKER_REAR_TILT_STEP_DEG;
+          const lowEdgeM = tubeM - (slantM / 2) * Math.sin((step * Math.PI) / 180);
+          return rearGeometryFor({ tiltDeg: step, slantM, lowEdgeM: Math.max(0.05, lowEdgeM), pitchM });
+        });
+      }
+      continue;
+    }
+
+    if (bifaciality <= 0) continue;
     // how high the back stands over what it reflects off: the table's own front
     // leg, or a flush mount's rail standoff
     const lowEdgeM = Math.max(FLUSH_STANDOFF_M, resolved ? resolved.frontLegM : FLUSH_STANDOFF_M);
-    const measured = seg ? measuredRowPitchM(centresBySeg.get(seg.id) ?? [], p.azimuthDeg) : null;
-    const declared = seg && seg.racking.kind !== 'flush' ? seg.racking.rowPitchM : 0;
-    byPanel.set(
-      p.id,
-      rearGeometryFor({
-        tiltDeg: p.tiltDeg,
-        slantM: panelFootprintM(spec, p.orientation).h,
-        lowEdgeM,
-        pitchM: measured ?? (declared > 0 ? declared : 0),
-      }),
-    );
+    byPanel.set(p.id, rearGeometryFor({ tiltDeg: p.tiltDeg, slantM, lowEdgeM, pitchM }));
   }
-  return { byPanel, albedo, bifaciality };
+  return { byPanel, trackerByPanel, rearAtByPanel, albedo, bifaciality };
 }
 
 /** a flush module's standoff off its roof covering, m — rail height, typical */
 export const FLUSH_STANDOFF_M = 0.1;
 
-/**
- * The row pitch of a table, MEASURED off where its modules actually stand.
- *
- * `racking.rowPitchM` is what the fill solver asked for; the modules are what
- * got built, and after a row is grown, shrunk or dragged the two can differ.
- * This is a geometry model, so it reads the geometry: project every module
- * centre onto the down-slope direction, and the gap between neighbouring rows
- * is the pitch. Null when there is only one row — nothing to measure, and the
- * model then falls back to contiguous.
- */
-export function measuredRowPitchM(centres: XY[], azimuthDeg: number): number | null {
-  if (centres.length < 2) return null;
-  const a = (azimuthDeg * Math.PI) / 180;
-  const dx = Math.sin(a);
-  const dy = Math.cos(a);
-  const seen: number[] = [];
-  for (const c of centres) {
-    const t = c.x * dx + c.y * dy;
-    if (!seen.some((v) => Math.abs(v - t) < 0.05)) seen.push(t);
-  }
-  if (seen.length < 2) return null;
-  seen.sort((p, q) => p - q);
-  const gaps: number[] = [];
-  for (let i = 1; i < seen.length; i++) gaps.push(seen[i] - seen[i - 1]);
-  gaps.sort((p, q) => p - q);
-  return gaps[Math.floor(gaps.length / 2)];
-}
+

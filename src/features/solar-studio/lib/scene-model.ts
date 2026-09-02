@@ -170,9 +170,12 @@ export function buildShadowCasters(
 ): {
   group: THREE.Group;
   meshes: THREE.Object3D[];
+  /** the module plates, by panel id — a tracker's turns through the day */
+  panelPlates: Map<string, THREE.Mesh>;
 } {
   const group = new THREE.Group();
   const meshes: THREE.Object3D[] = [];
+  const panelPlates = new Map<string, THREE.Mesh>();
   // DoubleSide is load-bearing: Raycaster culls by material.side, and rays
   // leaving a panel can exit through BACKFACES (parapet inner walls, roof
   // undersides) — FrontSide silently missed those hits, under-counting shade
@@ -275,6 +278,7 @@ export function buildShadowCasters(
       };
       group.add(mesh);
       meshes.push(mesh);
+      panelPlates.set(p.id, mesh);
     }
   }
 
@@ -299,7 +303,7 @@ export function buildShadowCasters(
   }
 
   group.updateMatrixWorld(true);
-  return { group, meshes };
+  return { group, meshes, panelPlates };
 }
 
 export function disposeGroup(group: THREE.Group) {

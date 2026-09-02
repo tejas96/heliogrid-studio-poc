@@ -25,6 +25,7 @@ import {
   REAR_STRUCTURE_SHADE_FRAC,
   type RearGeometry,
 } from './bifacial';
+import { trackerPose, type TrackerAxis } from './tracker';
 import type { TmyYear } from './tmy';
 
 export interface EnginePanel {
@@ -41,6 +42,14 @@ export interface EnginePanel {
   bifaciality?: number;
   /** the mounting geometry the module's back looks out on; null = no rear yield */
   rear?: RearGeometry | null;
+  /**
+   * On a single-axis tracker, the module's plane is a function of the hour, so
+   * `tiltDeg`/`azimuthDeg` above are only its rest position. Present ⇒ the
+   * plane is solved from the sun every hour and `rearAt` supplies the rear
+   * geometry for whatever tilt it lands on.
+   */
+  tracker?: TrackerAxis | null;
+  rearAt?: (tiltDeg: number) => RearGeometry | null;
 }
 
 export interface EngineInverter {
@@ -195,9 +204,9 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
   let clippingHours = 0;
 
   // plane normals (scene frame: x east, y up, z = −north), per module
-  const normals = panels.map((p) => {
-    const t = (p.tiltDeg * Math.PI) / 180;
-    const a = (p.azimuthDeg * Math.PI) / 180;
+  const planeNormal = (tiltDeg: number, azimuthDeg: number) => {
+    const t = (tiltDeg * Math.PI) / 180;
+    const a = (azimuthDeg * Math.PI) / 180;
     return {
       nx: Math.sin(t) * Math.sin(a),
       ny: Math.cos(t),
@@ -205,15 +214,21 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
       cosTilt: Math.cos(t),
       sinTilt: Math.sin(t),
     };
-  });
+  };
+  const normals = panels.map((p) => planeNormal(p.tiltDeg, p.azimuthDeg));
+  // a tracker's plane is solved once per axis per hour, then shared by every
+  // module riding that tube
+  const anyTracker = panels.some((p) => p.tracker);
+  const poseThisHour = new Map<TrackerAxis, { tiltDeg: number; azimuthDeg: number }>();
   const yearStartMs = Date.UTC(CALENDAR_YEAR, 0, 1);
   const inv = input.inverter;
   const dcOhmStc = input.dcOhmicStcFrac;
   // every module on one table shares a mounting geometry, so its back sees the
   // same thing: the rear irradiance is solved once per geometry per hour
-  const anyBifacial = panels.some((p) => (p.bifaciality ?? 0) > 0 && p.rear);
-  const rearThisHour = new Map<RearGeometry, number>();
-  const azRad = panels.map((p) => (p.azimuthDeg * Math.PI) / 180);
+  const anyBifacial = panels.some((p) => (p.bifaciality ?? 0) > 0 && (p.rear || p.rearAt));
+  // keyed by geometry AND facing: two tables can share a mounting geometry and
+  // still be pointing different ways, and the back of each sees its own sun
+  const rearThisHour = new Map<string, number>();
 
   for (let h = 0; h < tmy.ghi.length; h++) {
     const ghi = tmy.ghi[h];
@@ -253,9 +268,26 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
 
     let dcWh = 0;
     if (anyBifacial) rearThisHour.clear();
+    if (anyTracker) poseThisHour.clear();
+    const sunAltDeg = (alt * 180) / Math.PI;
+    const sunAzDeg = (sun.azimuth * 180) / Math.PI;
     for (let i = 0; i < panels.length; i++) {
       const p = panels[i];
-      const n = normals[i];
+      // ── where this module is pointing right now ──────────────────────────
+      let n = normals[i];
+      let tiltNow = p.tiltDeg;
+      let azNow = p.azimuthDeg;
+      if (p.tracker) {
+        let pose = poseThisHour.get(p.tracker);
+        if (!pose) {
+          const t = trackerPose(p.tracker, sunAltDeg, sunAzDeg);
+          pose = { tiltDeg: t.tiltDeg, azimuthDeg: t.azimuthDeg };
+          poseThisHour.set(p.tracker, pose);
+        }
+        tiltNow = pose.tiltDeg;
+        azNow = pose.azimuthDeg;
+        n = planeNormal(pose.tiltDeg, pose.azimuthDeg);
+      }
       const cosThetaRaw = n.nx * sx + n.ny * sy + n.nz * sz;
       const cosTheta = Math.max(0, cosThetaRaw);
       const beam = dni * cosTheta;
@@ -276,21 +308,24 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
       let rearWm2 = 0;
       let rearEff = 0;
       const bif = p.bifaciality ?? 0;
-      if (bif > 0 && p.rear) {
-        const cached = rearThisHour.get(p.rear);
+      // a tracker's back looks out on a geometry that turns with it
+      const rearGeom = p.tracker && p.rearAt ? p.rearAt(tiltNow) : p.rear;
+      if (bif > 0 && rearGeom) {
+        const cacheKey = `${rearGeom.key}@${azNow.toFixed(0)}`;
+        const cached = rearThisHour.get(cacheKey);
         if (cached !== undefined) {
           rearWm2 = cached;
         } else {
-          rearWm2 = rearIrradiance(p.rear, {
+          rearWm2 = rearIrradiance(rearGeom, {
             dni,
             dhi,
-            cosAzOffset: Math.cos(sun.azimuth - azRad[i]),
+            cosAzOffset: Math.cos(sun.azimuth - (azNow * Math.PI) / 180),
             sinAlt: Math.sin(alt),
             cosAlt: Math.cos(alt),
             cosThetaRear: Math.max(0, -cosThetaRaw),
             albedo: input.albedo,
           });
-          rearThisHour.set(p.rear, rearWm2);
+          rearThisHour.set(cacheKey, rearWm2);
         }
         // the sky the back sees is the same sky the front's skyline blocks
         rearWm2 *= input.skyView;
@@ -450,7 +485,11 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
 
   // The back of a bifacial module is worth whatever its mounting lets it see —
   // the same derivation the design check reads, so the two can never disagree.
-  const { byPanel: rearByPanel, albedo, bifaciality } = projectRearGeometry(project, spec, enabled);
+  const { byPanel: rearByPanel, trackerByPanel, rearAtByPanel, albedo, bifaciality } = projectRearGeometry(
+    project,
+    spec,
+    enabled,
+  );
 
   const panels: EnginePanel[] = enabled.map((p) => {
     const seg = p.segmentId ? project.segments.find((s) => s.id === p.segmentId) : undefined;
@@ -468,6 +507,8 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
       beamAccess: access(p.id, p.solarAccess ?? 1),
       bifaciality,
       rear: rearByPanel.get(p.id) ?? null,
+      tracker: trackerByPanel.get(p.id) ?? null,
+      rearAt: rearAtByPanel.get(p.id),
     };
   });
   const invSpec = project.components.inverter;

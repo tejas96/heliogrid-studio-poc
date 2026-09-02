@@ -513,12 +513,28 @@ export type FoundationShape = 'square' | 'circular';
 export type RackingSpec =
   | { kind: 'flush' } // pitched roof: coplanar, no self-shade, hotter
   | {
-      kind: 'fixed_tilt' | 'dual_tilt'; // flat roof: elevated
+      /**
+       * Elevated on posts. `tracker_hsat` is a horizontal single-axis tracker:
+       * the same steel plus a torque tube and a drive, so it carries exactly
+       * the fields the fixed kinds do — its `tiltDeg` is 0 because a tracker
+       * lies FLAT at rest and its real tilt is a function of the time of day
+       * (lib/energy/tracker.ts), read wherever a module's pose is needed.
+       */
+      kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat'; // flat roof / open ground: elevated
       tiltDeg: number;
       rowPitchM: number; // centre-to-centre; GCR solver fills this (Phase 3)
       frontLegM: number;
       backLegM: number; // = frontLegM + slant·sin(tilt)
       profile: StructureProfile;
+
+      // ── Tracker only (Batch C3). All LAZY: a fixed table never writes them,
+      // so every existing project fingerprints byte-identically. ────────────
+      /** bearing of the torque tube, degrees from north; absent ⇒ 0, true north–south */
+      axisAzimuthDeg?: number;
+      /** rotation limit either side of flat, degrees; absent ⇒ 55 (common hardware) */
+      maxRotationDeg?: number;
+      /** turn back at a low sun to keep the rows out of each other's light; absent ⇒ true */
+      backtracking?: boolean;
       /** LAZY fields (Phase 7): absent = resolved from roof/project defaults
        *  at READ time (resolveRacking) — only explicit edits write them, so
        *  existing projects' fingerprints (and captures) stay untouched. */

@@ -37,6 +37,16 @@ function shrink(c: XY[]): XY[] {
  * roof setback, and meaningfully shaded panels. Returns [] when there is no
  * panel spec or no panels.
  */
+/**
+ * Modules on a TRACKER lie flat at rest but are NOT grid-aligned — they sit
+ * along their torque tube. Their plan footprint must follow their own azimuth
+ * or DRC measures a rectangle turned 90° from the one placement validated,
+ * and reports overlaps that are not there.
+ */
+function trackerSegmentIds(project: Project): Set<string> {
+  return new Set(project.segments.filter((s) => s.racking.kind === 'tracker_hsat').map((s) => s.id));
+}
+
 export function layoutIssues(
   project: Project,
   spec: PanelSpec | null,
@@ -45,6 +55,8 @@ export function layoutIssues(
   if (!spec) return issues;
   const panels = project.panels.filter((p) => p.enabled);
   if (panels.length === 0) return issues;
+  const trackers = trackerSegmentIds(project);
+  const faces = (p: PlacedPanel) => !!p.segmentId && trackers.has(p.segmentId);
 
   const byRoof = new Map<string, PlacedPanel[]>();
   for (const p of panels) {
@@ -65,7 +77,7 @@ export function layoutIssues(
     );
     // canonical frame — the SAME footprint placement validated (down-slope
     // grid + cos(pitch) foreshortening), so DRC can never contradict the fill
-    const corners = rp.map((p) => panelCornersOnRoof(p, spec, roof));
+    const corners = rp.map((p) => panelCornersOnRoof(p, spec, roof, faces(p)));
 
     // setback breach: a panel whose footprint isn't fully inside any inset region
     for (let i = 0; i < corners.length; i++) {
@@ -128,7 +140,7 @@ export function layoutIssues(
         .map((k) => k.shape);
       if (zones.length === 0) continue;
       for (const pn of rp) {
-        const c = shrink(panelCornersOnRoof(pn, spec, roof));
+        const c = shrink(panelCornersOnRoof(pn, spec, roof, faces(pn)));
         if (zones.some((z) => rectIntersectsPolygon(c, z))) inZone.add(pn.id);
       }
     }
@@ -153,7 +165,7 @@ export function layoutIssues(
           ? rectCorners(o.center, o.diameterM, o.diameterM, 0)
           : rectCorners(o.center, o.lengthM, o.widthM, o.rotationDeg);
       const over = panelsOn.filter((x) =>
-        rectsOverlap(shrink(panelCornersOnRoof(x, spec, roof)), foot),
+        rectsOverlap(shrink(panelCornersOnRoof(x, spec, roof, faces(x))), foot),
       );
       if (over.length === 0) continue;
       const caps = resolveCapabilities(o);

@@ -43,6 +43,14 @@ export const PRICE_BOOK = {
   perimeterFencePerM: 850, // chain-link on HDG posts
   fenceGate: 14000, // single vehicle gate
   steelPerKg: 92, // HDG structural steel, fabricated — drives member-model tonnage lines
+  // ── Single-axis tracker hardware. ALL ASSUMED market rates: this tool has no
+  // tracker supplier pricebook, and a real tender prices the whole system per
+  // MW against a named vendor. Every line that uses these says so, so nobody
+  // reads them as a quotation.
+  trackerTubePerM: 2650, // HDG torque tube, section + fabrication
+  trackerBearingPerPost: 3200, // bearing housing + fasteners at each post
+  trackerDrivePerTube: 78000, // slew drive + motor + damper for one row
+  trackerControllerPerPlant: 145000, // NCU, wind sensor, wiring, commissioning
   anchorBoltPc: 38, // chemical/expansion anchor per pc
   basePlatePc: 120, // HDG base plate per pc
   structureBoltPc: 14, // M10 SS bolt+nut+washer set per pc

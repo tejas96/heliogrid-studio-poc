@@ -42,6 +42,11 @@ export type LineKey =
   | 'mech.bolts'
   | 'mech.mms_rcc'
   | 'mech.mms_ground'
+  /** single-axis tracker hardware, over and above the posts and steel */
+  | 'mech.tracker_tube'
+  | 'mech.tracker_bearing'
+  | 'mech.tracker_drive'
+  | 'mech.tracker_controller'
   /** per roof COVERING — suffixed with the covering, so the two pitched
    *  coverings (which share one item string) can never collide */
   | 'mech.mms_sloped'

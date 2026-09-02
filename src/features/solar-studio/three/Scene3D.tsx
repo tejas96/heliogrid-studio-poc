@@ -2044,6 +2044,24 @@ function SceneContent({
   // hour-slider tick and every async solar-access stamp re-posed every module
   // and re-allocated every InstancedMesh — the single biggest frame cost, and
   // the reason hover preview had to be removed.
+  //
+  // A TRACKER is the one exception, because its modules genuinely move with the
+  // hour and an array drawn flat while the timeline runs would be a lie. So the
+  // sun enters the dependencies ONLY when a tracker is in the design, rounded
+  // to half a degree so a slider drag does not thrash the instanced meshes.
+  // Every other project keeps exactly the old cost.
+  const hasTracker = useMemo(
+    () => project.segments.some((s) => s.racking.kind === 'tracker_hsat'),
+    [project.segments],
+  );
+  // `sunAzimuth` is already the SCENE frame (true north + the imagery's
+  // calibration offset) — the same basis the shading engine's samples use
+  const trackerSun = hasTracker
+    ? {
+        altitudeDeg: Math.round(((sunAltitude * 180) / Math.PI) * 2) / 2,
+        azimuthDeg: Math.round(((((((sunAzimuth * 180) / Math.PI) % 360) + 360) % 360) * 2)) / 2,
+      }
+    : undefined;
   const panelParts = useMemo(
     () =>
       spec
@@ -2054,7 +2072,7 @@ function SceneContent({
                 const roof = project.roofs.find((r) => r.id === p.roofId);
                 // ONE pose source for the mesh, the analytical shadow slab and the
                 // shading engine's rays (§A0) — they cannot drift apart
-                const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center));
+                const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center), trackerSun);
                 return {
                   id: p.id,
                   segmentId: p.segmentId,
@@ -2073,7 +2091,7 @@ function SceneContent({
           )
         : { normal: [], ghost: [], hidden: [] },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project, spec, selectedSegId, view, focusRoof, eaveRefs, isolate],
+    [project, spec, selectedSegId, view, focusRoof, eaveRefs, isolate, trackerSun?.altitudeDeg, trackerSun?.azimuthDeg],
   );
   // Object focus: a sphere around whatever is picked, reported up for the F
   // key / Focus button. View-only; computed from the same poses the scene draws.

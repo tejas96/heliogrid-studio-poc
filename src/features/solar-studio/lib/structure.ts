@@ -132,7 +132,7 @@ const DEFAULT_GROUND_FOUNDATION = 'pile' as const;
 const DEFAULT_SHEET_FOUNDATION = 'anchor' as const;
 
 export interface ResolvedRacking {
-  kind: 'fixed_tilt' | 'dual_tilt';
+  kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat';
   tiltDeg: number;
   /** effective low-edge leg height (clearanceM wins when larger) */
   frontLegM: number;

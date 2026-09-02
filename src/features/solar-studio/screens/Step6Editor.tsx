@@ -106,6 +106,12 @@ import { cascadeDeletePanels } from '../lib/cascade';
 import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
 import { estimateDcCableM, stringSizing, vocAtTemp } from '../lib/stringing';
+import {
+  measuredRowPitchM,
+  TRACKER_DEFAULT_GCR,
+  TRACKER_DEFAULT_MAX_ROTATION_DEG,
+  trackerAxisFromSegment,
+} from '../lib/energy/tracker';
 import { dcCableFromRoutes } from '../lib/routing';
 import { autoDesign } from '../lib/auto-design';
 import { resolveDesignTemps } from '../lib/electrical/temps';
@@ -144,6 +150,7 @@ import {
   segmentSetAzimuth,
   segmentSetProfile,
   segmentSetRacking,
+  segmentSetTrackerLimit,
   segmentSetStructureFields,
   segmentSetTilt,
 } from '../lib/ops/layout-ops';
@@ -641,7 +648,7 @@ export function Step6Editor() {
       reconcileBridgedPanels(project, { segments, panels: update.panels }) ?? update.panels;
     patch({ panels, segments }, true);
   }
-  function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt') {
+  function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat') {
     if (locked) return flashLock();
     if (!selectedSegment || !selectedSegRoof) return;
     report(ops.run(segmentSetRacking, { segmentId: selectedSegment.id, kind }));
@@ -649,6 +656,10 @@ export function Step6Editor() {
   function applyTilt(t: number) {
     if (locked || !selectedSegment) return;
     report(ops.run(segmentSetTilt, { segmentId: selectedSegment.id, tiltDeg: t }));
+  }
+  function applyTrackerLimit(deg: number) {
+    if (locked || !selectedSegment) return;
+    report(ops.run(segmentSetTrackerLimit, { segmentId: selectedSegment.id, maxRotationDeg: deg }));
   }
   function applyAzimuth(az: number) {
     if (locked || !selectedSegment) return;
@@ -1945,9 +1956,17 @@ export function Step6Editor() {
         const segPanels = project.panels.filter((p) => p.segmentId === seg.id);
         const kwp = Math.round(((segPanels.length * spec.watt) / 1000) * 10) / 10;
         const isFlush = seg.racking.kind === 'flush';
+        // a tracker's tilt is the time of day, so its panel controls differ
+        const isTracker = seg.racking.kind === 'tracker_hsat';
         const tilt = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 0;
         const az = seg.azimuthDeg;
         const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(az / 45) % 8];
+        // a torque tube is a LINE, so it is named by the axis it lies on, not
+        // by one end of it: bearing 90 and bearing 270 are the same tube
+        const tubeLine = (bearing: number) => {
+          const n = ['north–south', 'northeast–southwest', 'east–west', 'southeast–northwest'];
+          return n[Math.round((((bearing % 180) + 180) % 180) / 45) % 4];
+        };
         const seg2 = seg.racking;
         const rowStyle = { display: 'flex', gap: 6, marginBottom: 12 } as const;
         const lbl = { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--editor-ink-2)', margin: '2px 0 6px' } as const;
@@ -2066,14 +2085,56 @@ export function Step6Editor() {
 
             <div style={lbl as React.CSSProperties}>Racking</div>
             <div style={rowStyle}>
-              {(['flush', 'fixed_tilt', 'dual_tilt'] as const).map((k) => (
+              {/* A tracker belongs on open ground: nothing on a roof turns, so
+                  the option is not offered where it could not be built. */}
+              {(
+                [
+                  'flush',
+                  'fixed_tilt',
+                  'dual_tilt',
+                  ...(selectedSegRoof?.roofType === 'ground' ? (['tracker_hsat'] as const) : []),
+                ] as const
+              ).map((k) => (
                 <button key={k} style={seg3btn(seg.racking.kind === k) as React.CSSProperties} onClick={() => applyRacking(k)}>
-                  {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : 'Dual tilt'}
+                  {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : k === 'dual_tilt' ? 'Dual tilt' : 'Tracker'}
                 </button>
               ))}
             </div>
 
-            {!isFlush && (
+            {isTracker &&
+              (() => {
+                // the elevated variant carries the tracker's own lazy fields
+                const r = seg.racking.kind !== 'flush' ? seg.racking : null;
+                if (!r) return null;
+                const limit = r.maxRotationDeg ?? TRACKER_DEFAULT_MAX_ROTATION_DEG;
+                const slant = (seg.orientation === 'portrait' ? spec.lengthMm : spec.widthMm) / 1000;
+                const g = r.rowPitchM > 0 ? slant / r.rowPitchM : 1;
+                return (
+                  <>
+                    <div style={lbl as React.CSSProperties}>Rotation limit · ±{limit}°</div>
+                    <div style={rowStyle}>
+                      <button className="tool-btn" onClick={() => applyTrackerLimit(limit - 5)}>−</button>
+                      <input
+                        type="range" min={30} max={60} step={5} value={limit}
+                        onChange={(e) => applyTrackerLimit(Number(e.target.value))}
+                        style={{ flex: 1 }}
+                        aria-label="Tracker rotation limit"
+                      />
+                      <button className="tool-btn" onClick={() => applyTrackerLimit(limit + 5)}>+</button>
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.45, marginTop: 4 }}>
+                      Single-axis tracker: each ROW is a torque tube, and it rolls its modules
+                      to follow the sun, backtracking near sunrise and sunset so the rows stay
+                      out of each other&apos;s light. This table&apos;s tubes run{' '}
+                      <b>{tubeLine(trackerAxisFromSegment(az))}</b> — a tube lies along its row,
+                      so the table&apos;s facing sets it. Open the 3D view and run the timeline
+                      to watch it turn.
+                    </div>
+                  </>
+                );
+              })()}
+
+            {!isFlush && !isTracker && (
               <>
                 <div style={lbl as React.CSSProperties}>Panel tilt · {tilt}°</div>
                 <div style={rowStyle}>
@@ -2094,8 +2155,23 @@ export function Step6Editor() {
               (() => {
                 const loc = project.location;
                 const collectorLen = (seg.orientation === 'portrait' ? spec.lengthMm : spec.widthMm) / 1000;
-                const pitch = shadowFreePitchM(loc.latLng.lat, loc.latLng.lng, tilt, collectorLen, az);
+                // A TRACKER never stands still, so "the winter shadow-free pitch
+                // at this tilt" means nothing to it: at rest it is flat and
+                // shades nothing, and at 55° it would shade a neighbour three
+                // rows away. What a tracker field is laid out to is a ground
+                // cover ratio — the same number its backtracking is computed
+                // from — so that is what is recommended and applied here.
+                const pitch = isTracker
+                  ? collectorLen / TRACKER_DEFAULT_GCR
+                  : shadowFreePitchM(loc.latLng.lat, loc.latLng.lng, tilt, collectorLen, az);
                 const g = gcr(collectorLen, pitch);
+                // what the rows ACTUALLY are, which is what the engines read
+                const built = measuredRowPitchM(
+                  project.panels.filter((p) => p.enabled && p.segmentId === seg.id).map((p) => p.center),
+                  az,
+                );
+                const builtGcr = built ? gcr(collectorLen, built) : null;
+                const tooTight = isTracker && builtGcr !== null && builtGcr > TRACKER_DEFAULT_GCR + 0.08;
                 return (
                   <div
                     style={{
@@ -2106,7 +2182,9 @@ export function Step6Editor() {
                       fontSize: 12,
                     }}
                   >
-                    <div style={lbl as React.CSSProperties}>Inter-row shading · winter shadow-free</div>
+                    <div style={lbl as React.CSSProperties}>
+                      {isTracker ? 'Row spacing · tracker' : 'Inter-row shading · winter shadow-free'}
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--editor-ink-2)' }}>Recommended row pitch</span>
                       <b style={{ fontVariantNumeric: 'tabular-nums' }}>{pitch.toFixed(2)} m</b>
@@ -2115,12 +2193,27 @@ export function Step6Editor() {
                       <span style={{ color: 'var(--editor-ink-2)' }}>Ground coverage (GCR)</span>
                       <b style={{ fontVariantNumeric: 'tabular-nums' }}>{g.toFixed(2)}</b>
                     </div>
+                    {built !== null && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                        <span style={{ color: 'var(--editor-ink-2)' }}>Rows as built</span>
+                        <b style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {built.toFixed(2)} m · GCR {builtGcr!.toFixed(2)}
+                        </b>
+                      </div>
+                    )}
+                    {tooTight && (
+                      <div style={{ marginTop: 6, color: 'var(--editor-warn, #f0b429)', lineHeight: 1.45 }}>
+                        These rows are packed tighter than the tracker was set up for, so it will
+                        backtrack hard all morning and evening and give away much of what tracking
+                        earns. Widen them to the pitch above.
+                      </div>
+                    )}
                     <button
                       className="btn"
                       style={{ width: '100%', marginTop: 10, minHeight: 30, fontSize: 12, fontWeight: 700 }}
                       onClick={() => applyRespace(pitch)}
                     >
-                      Apply shadow-free spacing
+                      {isTracker ? 'Apply tracker spacing' : 'Apply shadow-free spacing'}
                     </button>
                   </div>
                 );
@@ -2886,6 +2979,12 @@ function EditorLayers({
   const spec = project.components.panel!;
   const pxPerM = frame.sizePx / frame.spanM;
   const byId = new Map(project.panels.map((p) => [p.id, p]));
+  // a module on a TRACKER rests flat but is not grid-aligned — it sits along
+  // its torque tube, so its drawn footprint follows its own facing
+  const trackerSegs = new Set(
+    project.segments.filter((sg) => sg.racking.kind === 'tracker_hsat').map((sg) => sg.id),
+  );
+  const onTracker = (p: PlacedPanel) => !!p.segmentId && trackerSegs.has(p.segmentId);
 
   // Live preview for the panel-table (drag-fill) tool: the drawn rectangle AND a
   // ghost of the panels that would land there — already obstruction/setback-aware
@@ -3067,7 +3166,9 @@ function EditorLayers({
       {/* panels */}
       {project.panels.map((p) => {
         const roof = project.roofs.find((r) => r.id === p.roofId);
-        const corners = panelCornersOnRoof(p, spec, roof);
+        // a module on a TRACKER lies flat but sits along its tube, so its
+        // footprint follows its own facing rather than the site's grid
+        const corners = panelCornersOnRoof(p, spec, roof, onTracker(p));
         const inString = manualString?.includes(p.id);
         const isSelected = selected.includes(p.id);
         const stringOf = project.strings.find((s) => s.panelIds.includes(p.id));

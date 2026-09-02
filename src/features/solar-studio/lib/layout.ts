@@ -215,12 +215,23 @@ export function roofGridAngle(roof: Roof): number {
 export function gridAngleFor(
   roof: Roof,
   pose: { tiltDeg: number; azimuthDeg: number },
+  opts: {
+    /**
+     * Follow the facing even at tilt 0. A TRACKER rests flat but its facing is
+     * not cosmetic: its rows ARE its torque tubes, so a lattice that fell back
+     * to the roof's dominant edge would lay the modules ACROSS the tubes —
+     * every module its own one-module tracker, shading its neighbour all
+     * morning. The tilt-0 shortcut below is about flush tables, which have no
+     * facing to violate; a tracker has one.
+     */
+    faceAzimuth?: boolean;
+  } = {},
 ): number {
   if (isSloped(roof)) {
     const sv = slopeVector(roof);
     return (Math.atan2(sv.dy, sv.dx) * 180) / Math.PI;
   }
-  if (pose.tiltDeg > 0) return 180 - pose.azimuthDeg;
+  if (pose.tiltDeg > 0 || opts.faceAzimuth) return 180 - pose.azimuthDeg;
   return dominantEdgeAngle(roof.polygon);
 }
 
@@ -547,6 +558,13 @@ export function panelCornersOnRoof(
   panel: PlacedPanel,
   spec: PanelSpec,
   roof: Roof | undefined,
+  /**
+   * Follow the module's own azimuth even at tilt 0 — see `gridAngleFor`. A
+   * TRACKER rests flat but is not grid-aligned: its modules sit along their
+   * torque tube, which runs along the table's rows. Left false (every existing
+   * caller), the tilt-0 footprint stays exactly what it always was.
+   */
+  faceAzimuth = false,
 ): XY[] {
   if (!roof) return placedPanelCorners(panel, spec, 0);
   // FLAT roof + TILTED module: the footprint is the plan projection of the
@@ -560,7 +578,7 @@ export function panelCornersOnRoof(
   // tiltDeg == 0 keeps the grid-aligned w × h (footprint alignment governs,
   // matching pose's yaw = roofGridAngle for untilted flat panels). Sloped
   // roofs are flush — pose comes from the roof — and are untouched below.
-  if (!isSloped(roof) && panel.tiltDeg > 0) {
+  if (!isSloped(roof) && (panel.tiltDeg > 0 || faceAzimuth)) {
     const { w, h } = panelFootprintM(spec, panel.orientation);
     const cosT = Math.cos((panel.tiltDeg * Math.PI) / 180);
     return rectCorners(panel.center, w, h * cosT, -panel.azimuthDeg);
@@ -635,7 +653,7 @@ export function panelFitsAt(
   center: XY,
   orientation: PanelOrientation,
   bridgeClearanceM?: number,
-  pose?: { tiltDeg: number; azimuthDeg: number },
+  pose?: { tiltDeg: number; azimuthDeg: number; faceAzimuth?: boolean },
 ): boolean {
   const insetRegions = insetPolygonRobust(
     roof.polygon,
@@ -658,7 +676,7 @@ export function panelFitsAt(
     solarAccess: 1,
     enabled: true,
   };
-  const corners = panelCornersOnRoof(cand, spec, roof);
+  const corners = panelCornersOnRoof(cand, spec, roof, pose?.faceAzimuth ?? false);
   if (!insetRegions.some((reg) => corners.every((c) => pointInPolygon(c, reg)))) return false;
   const blockers = [
     ...obstructionBlockers(roof, project.obstructions, bridgeClearanceM),
