@@ -79,32 +79,42 @@ function heightAt(g: SurroundHeights, p: XY): number | null {
  * Plan geometry is in the image frame; compass azimuths are turned by the
  * calibration's north offset.
  */
-export function horizonProfile(project: Project, stepDeg = 3): HorizonProfile {
+export function horizonProfile(
+  project: Project,
+  stepDeg = 3,
+  /** 'centre': the array as a whole (matches the engine's average); 'corners': the worst of its four extreme modules */
+  eyeMode: 'centre' | 'corners' = 'centre',
+): HorizonProfile {
   const n = Math.round(360 / stepDeg);
   const elev = new Array<number>(n).fill(0);
   const panels = project.panels.filter((p) => p.enabled);
   const roofOf = (id: string) => project.roofs.find((r) => r.id === id);
-  // eyes: the array centre and its four corners, or the first roof's centroid
-  // when nothing is placed yet
+  // eyes: the array centre, or its four corners, or the first roof's centroid
+  // when nothing is placed yet. A corner module can see a neighbour at 50°
+  // that the array's middle sees at 15° — both are true, for different
+  // modules, so the chart shows both and says which is which.
   const eyes: { p: XY; h: number; roofId: string | null }[] = [];
   if (panels.length) {
     const roof = roofOf(panels[0].roofId);
     const h = (roof?.heightM ?? 0) + 1.2;
-    const c = {
-      x: panels.reduce((a, p) => a + p.center.x, 0) / panels.length,
-      y: panels.reduce((a, p) => a + p.center.y, 0) / panels.length,
-    };
-    eyes.push({ p: c, h, roofId: roof?.id ?? null });
-    const far = (score: (p: XY) => number) =>
-      panels.reduce((best, p) => (score(p.center) > score(best.center) ? p : best), panels[0]);
-    for (const corner of [
-      far((p) => p.x + p.y),
-      far((p) => p.x - p.y),
-      far((p) => -p.x + p.y),
-      far((p) => -p.x - p.y),
-    ]) {
-      const r = roofOf(corner.roofId);
-      eyes.push({ p: corner.center, h: (r?.heightM ?? 0) + 1.2, roofId: r?.id ?? null });
+    if (eyeMode === 'centre') {
+      const c = {
+        x: panels.reduce((a, p) => a + p.center.x, 0) / panels.length,
+        y: panels.reduce((a, p) => a + p.center.y, 0) / panels.length,
+      };
+      eyes.push({ p: c, h, roofId: roof?.id ?? null });
+    } else {
+      const far = (score: (p: XY) => number) =>
+        panels.reduce((best, p) => (score(p.center) > score(best.center) ? p : best), panels[0]);
+      for (const corner of [
+        far((p) => p.x + p.y),
+        far((p) => p.x - p.y),
+        far((p) => -p.x + p.y),
+        far((p) => -p.x - p.y),
+      ]) {
+        const r = roofOf(corner.roofId);
+        eyes.push({ p: corner.center, h: (r?.heightM ?? 0) + 1.2, roofId: r?.id ?? null });
+      }
     }
   } else {
     const roof = project.roofs[0];

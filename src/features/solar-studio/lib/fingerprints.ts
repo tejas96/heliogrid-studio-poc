@@ -268,7 +268,10 @@ export function designFp(p: Project): string {
 //   v7 (Phase 1 design kernel): a FIXED sample year (defect #16 — the wall-clock
 //       year silently re-sampled the sun every January) and lightning arresters
 //       cast in the engine as the scene always showed (defect #12).
-export const SHADING_ENGINE_VERSION = 7;
+// 8: the engine now also reports per-sample access and per-caster loss (the
+// in-memory shade profile); stored access values are unchanged, but a saved
+// project must run once more so the profile exists this session
+export const SHADING_ENGINE_VERSION = 8;
 
 /**
  * Recompute/stamp key for per-panel solar access (Class-A derived data).

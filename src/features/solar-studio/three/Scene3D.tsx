@@ -29,6 +29,8 @@ import { Measure, type MeasureMode } from './Measure';
 import { unitBaseY, unitWhere } from '../lib/unit-pos';
 import { clockHour, seasonDates } from '../lib/sun-chart';
 import { groundLiftAt, useTerrainGeneration } from './terrain-probe';
+import { casterCost } from '../lib/string-shade';
+import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
@@ -1966,6 +1968,8 @@ function SceneContent({
   const inScope = (roofId: string | null) => !focusRoof || roofId === focusRoof.id;
   // ground-level things re-read the photomesh height whenever more tiles land
   useTerrainGeneration();
+  // cards that quote shade costs re-render when the full analysis lands
+  useShadeProfileVersion();
   // object isolation: only the picked entity (and the roofs) stay drawn
   const isoOk = (kind: ScenePick['kind'], id: string) => !isolate || (isolate.kind === kind && isolate.id === id);
   // isolating a table keeps its modules; a string keeps its own modules; a
@@ -2482,6 +2486,17 @@ function SceneContent({
                 lines={[
                   dims,
                   `${casts ? 'Casts shadow' : 'No shadow'} · ${o.blocksPlacement ? 'blocks modules' : 'modules may span it'} · ${o.provenance?.source ?? 'manual'}`,
+                  // before/after in one line: what the plant makes with it, and without it
+                  ...(() => {
+                    if (!casts) return [];
+                    const cost = casterCost(project, `obstruction:${o.id}`);
+                    if (!cost) return ['shade cost: run the analysis to see it'];
+                    return [
+                      cost.modules === 0
+                        ? 'shades no module — costs nothing'
+                        : `shades ${cost.modules} module${cost.modules === 1 ? '' : 's'} · costs ≈ ${cost.kwhPerYear.toLocaleString('en-IN')} kWh/yr (${cost.pct}%) — remove it and the plant gains that`,
+                    ];
+                  })(),
                 ]}
                 onClose={() => onPick(null)}
                 actions={[

@@ -7,6 +7,7 @@ import { roofsUnionAreaM2 } from './roof-topology';
 // Astronomical core lives in lib/sun.ts (kept acyclic for physics modules);
 // re-exported here so every existing `from './solar'` import keeps working.
 export { sunPosition, solarHourDate, sunriseSunset, type SunPos } from './sun';
+import { electricalShadingLossPct } from './string-shade';
 
 export function fmtHour(h: number): string {
   // round to the minute FIRST: rounding the fraction alone gave "7:60 AM" at 7.995
@@ -209,10 +210,16 @@ export function computeEnergyReport(project: Project): EnergyReport {
   // excludes orientation (POA is the reference plane) — always within (0,1]
   const pr = Math.min(1, Math.max(0.005, prEquip * shadeFactor));
   const shadingLossPct = Math.max(0, (1 - shadeFactor) * 100);
+  // series wiring: a shaded module pulls its whole string down — known only
+  // once the full analysis has run this session and strings exist
+  const electricalPct = electricalShadingLossPct(project);
   const reportLosses: LossItem[] = [
     ...losses,
     // includes obstruction AND row-on-row shading — one measured beam term
     { key: 'shading', label: 'Shading (beam)', pct: Math.round(shadingLossPct * 10) / 10 },
+    ...(electricalPct !== null && electricalPct > 0
+      ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
+      : []),
   ];
   const totalLossPct = Math.round((1 - pr) * 1000) / 10;
   const degradation = 0.0075;

@@ -24,6 +24,8 @@ import { RouteGizmo } from './RouteGizmo';
 import { resolveDesignTemps, vmpAt, vocAt } from '../lib/electrical/temps';
 import { stringSizing } from '../lib/electrical/window';
 import { dcdbForInverter, polylineLengthM } from '../lib/routing';
+import { stringShade } from '../lib/string-shade';
+import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { EntityLabel } from './EntityLabel';
 import type { ScenePick } from './Scene3D';
 
@@ -126,6 +128,8 @@ export function ElectricalOverlay({
 }) {
   const inv = project.components.inverter;
   const routes = project.cableRoutes ?? [];
+  // the string card quotes electrical shade: re-render when the analysis lands
+  useShadeProfileVersion();
   // isolation is a render-time filter, so the memoised geometry below is untouched
   const stringVisible = (id: string) => !isolate || (isolate.kind === 'string' && isolate.id === id);
   const routeVisible = (id: string) =>
@@ -471,6 +475,13 @@ export function ElectricalOverlay({
                 `Voc cold ${health.vocCold} V of ${inv.maxDcV} V · Vmp hot ${health.vmpHot} V (MPPT ${inv.mppt.minV}–${inv.mppt.maxV} V)`,
                 health.status === 'ok' ? `OK — ${health.why}` : `PROBLEM — ${health.why}`,
                 `${longest > 0 ? `home run ${Math.round(longest)} m` : 'not routed yet'} · INV ${s.inverterIndex + 1} carries ${invLoadKw.toFixed(1)} kWp on ${inv.acKw} kW AC (${(invLoadKw / inv.acKw).toFixed(2)})`,
+                ...(() => {
+                  const sh = stringShade(project, s.id);
+                  if (!sh) return ['shade: run the analysis to see this string’s loss'];
+                  return [
+                    `shade: modules average ${Math.round(sh.linear * 100)}% · weakest ${Math.round(sh.worstModule * 100)}% · as a series string ${Math.round(sh.electrical * 100)}% (${sh.mismatchLoss >= 0.005 ? `−${(sh.mismatchLoss * 100).toFixed(1)}% electrical` : 'no electrical loss'})`,
+                  ];
+                })(),
               ]}
               onClose={() => onPick(null)}
               actions={[

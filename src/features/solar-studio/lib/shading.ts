@@ -41,6 +41,7 @@ import { solarHourDate, sunPosition } from './solar';
 import { buildShadowCasters, disposeGroup } from './scene-model';
 import { computeEaveRefs, surfaceHeightAt } from './roof-plane';
 import type { SurroundHeights } from './surround-geometry';
+import type { ShadeProfile } from './shade-profile-cache';
 
 /** Extra casters the caller resolved outside the engine (the real neighbourhood). */
 export interface ShadingOptions {
@@ -82,6 +83,9 @@ export const SAMPLE_YEAR = 2025;
 export interface ShadingSample {
   dir: THREE.Vector3;
   weight: number;
+  /** calendar month 0..11 and solar hour of the sample, for consumers that read the profile */
+  month: number;
+  hour: number;
 }
 
 export function buildSunSamples(
@@ -112,6 +116,8 @@ export function buildSunSamples(
         // beam-irradiance proxy × the hour it stands for — the heatmap's
         // exact quadrature, so the two surfaces integrate the same year
         weight: Math.max(0, Math.sin(s.altitude)) * SAMPLE_HOUR_STEP,
+        month: m,
+        hour: h,
       });
     }
   }
@@ -166,16 +172,30 @@ function panelRayOrigins(
  * over its sample points (partial shade ⇒ fractional access).
  */
 export function computeSolarAccess(project: Project, opts: ShadingOptions = {}): Map<string, number> {
+  return computeShadeProfile(project, opts).access;
+}
+
+/**
+ * The full analysis: annual access per module PLUS the two things the
+ * summary throws away — the clear fraction at every sample (so a string's
+ * weakest module at each hour is known: electrical shading) and, for every
+ * blocked ray, WHICH caster blocked it (so an obstruction can say what it
+ * costs). Same rays, same numbers; nothing is computed twice.
+ */
+export function computeShadeProfile(project: Project, opts: ShadingOptions = {}): ShadeProfile {
   const access = new Map<string, number>();
+  const bySample = new Map<string, Float32Array>();
+  const byCaster = new Map<string, Map<string, number>>();
   const loc = project.location;
-  if (!loc || project.panels.length === 0) return access;
+  const empty: ShadeProfile = { samples: [], bySample, byCaster, access };
+  if (!loc || project.panels.length === 0) return empty;
 
   const samples = buildSunSamples(
     loc.latLng.lat,
     loc.latLng.lng,
     project.calibration?.northOffsetDeg ?? 0,
   );
-  if (samples.length === 0) return access;
+  if (samples.length === 0) return empty;
   const totalW = samples.reduce((s, x) => s + x.weight, 0);
 
   // Tier-2 (Phase 8): the modules are casters too — row-on-row self-shading is
@@ -202,7 +222,9 @@ export function computeSolarAccess(project: Project, opts: ShadingOptions = {}):
 
       let clearW = 0;
       let panelW = 0; // beam-available weight for THIS module
-      for (const s of samples) {
+      const perSample = new Float32Array(samples.length).fill(-1);
+      const casters = new Map<string, number>(); // caster key → blocked weight
+      samples.forEach((s, si) => {
         // BEHIND THE PLANE ⇒ no beam on this module at all. The self-exclusion
         // below already says this is incidence rather than shade, but it only
         // excluded the module's own PLATE — its own ROOF solid still swallowed
@@ -210,7 +232,7 @@ export function computeSolarAccess(project: Project, opts: ShadingOptions = {}):
         // multiplies by poaBeamRatio, which has ALREADY zeroed these hours, so
         // the same physics was priced twice. Worst on a gable's north face,
         // which this tool produces on every gable.
-        if (nx * s.dir.x + ny * s.dir.y + nz * s.dir.z <= 0) continue;
+        if (nx * s.dir.x + ny * s.dir.y + nz * s.dir.z <= 0) return;
         panelW += s.weight;
         let clearPts = 0;
         for (const origin of origins) {
@@ -220,19 +242,38 @@ export function computeSolarAccess(project: Project, opts: ShadingOptions = {}):
           // — it is incidence, already priced by the POA transposition
           // (poaBeamRatio). Counting it here would derate the same physics twice.
           const hits = raycaster.intersectObjects(meshes, false);
-          if (!hits.some((h) => h.object.userData.panelId !== p.id)) clearPts++;
+          const blocker = hits.find((h) => h.object.userData.panelId !== p.id);
+          if (!blocker) clearPts++;
+          else {
+            // the NEAREST foreign hit is the caster that took this ray
+            const u = blocker.object.userData as { casterKind?: string; casterId?: string };
+            const key = `${u.casterKind ?? 'unknown'}:${u.casterId ?? ''}`;
+            casters.set(key, (casters.get(key) ?? 0) + s.weight / origins.length);
+          }
         }
         clearW += (s.weight * clearPts) / origins.length;
-      }
+        perSample[si] = clearPts / origins.length;
+      });
       // Denominator is the module's OWN beam-available weight: solarAccess is
       // "of the hours that could light this module, how many are unshaded".
       // Orientation is poaBeamRatio's job, not this metric's.
       access.set(p.id, panelW > 0 ? clearW / panelW : 1);
+      bySample.set(p.id, perSample);
+      if (casters.size > 0 && panelW > 0) {
+        const fracs = new Map<string, number>();
+        for (const [k, w] of casters) fracs.set(k, w / panelW);
+        byCaster.set(p.id, fracs);
+      }
     }
   } finally {
     disposeGroup(group);
   }
-  return access;
+  return {
+    samples: samples.map((s) => ({ month: s.month, hour: s.hour, weight: s.weight })),
+    bySample,
+    byCaster,
+    access,
+  };
 }
 
 // ─── Per-panel shade attribution (Phase 8 task 27c) ─────────────────────────

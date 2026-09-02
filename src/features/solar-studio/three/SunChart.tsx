@@ -10,6 +10,7 @@ import { X } from 'lucide-react';
 import type { Project } from '../types';
 import { fmtHour } from '../lib/solar';
 import { loadSurroundHeights, peekSurroundHeights } from '../lib/surround';
+import { farHorizonAt, fetchFarHorizon, type FarHorizonPoint } from '../lib/far-horizon';
 import { clockHour, horizonAt, horizonProfile, seasonDates, shadeWindows, sunCurve, type SunSample } from '../lib/sun-chart';
 
 const W = 460;
@@ -57,7 +58,40 @@ export function SunChart({
     };
   }, [project.surround]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const profile = useMemo(() => horizonProfile(project), [project, gridReady]);
+  const nearProfile = useMemo(() => horizonProfile(project, 3, 'centre'), [project, gridReady]);
+  // the worst of the four corner modules — what an edge module can see
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const cornerProfile = useMemo(() => horizonProfile(project, 3, 'corners'), [project, gridReady]);
+  // the far hills (PVGIS) — already inside the climate data, shown so they are seen
+  const [far, setFar] = useState<FarHorizonPoint[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void fetchFarHorizon(lat, lng).then((h) => {
+      if (alive) setFar(h);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [lat, lng]);
+  // the skyline the words use: near objects OR the far hills, whichever is higher
+  const profile = useMemo(() => {
+    if (!far) return nearProfile;
+    return {
+      ...nearProfile,
+      elevDeg: nearProfile.elevDeg.map((e, i) => Math.max(e, farHorizonAt(far, i * nearProfile.stepDeg))),
+    };
+  }, [nearProfile, far]);
+  const farMax = far ? Math.max(...far.map((p) => p.elevDeg)) : 0;
+  const cornerMax = Math.max(...cornerProfile.elevDeg);
+  const cornerAz = cornerProfile.elevDeg.indexOf(cornerMax) * cornerProfile.stepDeg;
+  const cornerPath =
+    `M${x(AZ0)},${y(0)} ` +
+    cornerProfile.elevDeg
+      .map((e, i) => ({ az: i * cornerProfile.stepDeg, e }))
+      .filter((s) => s.az >= AZ0 && s.az <= AZ1)
+      .map((s) => `L${x(s.az).toFixed(1)},${y(s.e).toFixed(1)}`)
+      .join(' ') +
+    ` L${x(AZ1)},${y(0)}`;
   const seasons = useMemo(() => seasonDates(date.getFullYear()).map((s) => ({ ...s, curve: sunCurve(lat, lng, s.date) })), [lat, lng, date]);
   const today = useMemo(() => sunCurve(lat, lng, date), [lat, lng, date]);
   const now = today.reduce<SunSample | null>((best, s) => (!best || Math.abs(s.hour - hour) < Math.abs(best.hour - hour) ? s : best), null);
@@ -101,7 +135,7 @@ export function SunChart({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 12 }} title="The skyline is the worst case seen from the array's centre and its four corners">
+        <div style={{ fontWeight: 700, fontSize: 12 }} title="Filled skyline: as the array's middle sees it. Dashed: as its worst corner sees it.">
           Sun paths over this site · clock time (IST)
         </div>
         <button
@@ -131,8 +165,28 @@ export function SunChart({
             </text>
           </g>
         ))}
-        {/* the site's skyline: everything that can shade the array */}
+        {/* what an edge module can see — thin, so the middle's skyline stays the reading */}
+        {cornerMax > Math.max(...nearProfile.elevDeg) + 2 && (
+          <path d={cornerPath} fill="rgba(148,163,184,0.10)" stroke="#94a3b8" strokeWidth={0.8} strokeDasharray="4 3" />
+        )}
+        {/* the site's skyline as the array's middle sees it: what shades the plant as a whole */}
         <path d={skylinePath} fill="rgba(148,163,184,0.28)" stroke="#94a3b8" strokeWidth={1} />
+        {/* the far hills, dashed — PVGIS's own horizon */}
+        {far && farMax > 0.5 && (
+          <path
+            d={
+              `M${x(AZ0)},${y(farHorizonAt(far, AZ0))} ` +
+              Array.from({ length: 57 }, (_, i) => AZ0 + i * 5)
+                .filter((a) => a <= AZ1)
+                .map((a) => `L${x(a).toFixed(1)},${y(farHorizonAt(far, a)).toFixed(1)}`)
+                .join(' ')
+            }
+            fill="none"
+            stroke="#a3b1c6"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        )}
         {/* season curves */}
         {seasons.map((s) => (
           <path key={s.label} d={pathOf(s.curve)} fill="none" stroke="#d4a017" strokeWidth={1} opacity={0.55} />
@@ -182,8 +236,14 @@ export function SunChart({
         {seasons.map((s) => (
           <div key={s.label}>{words(s.label, s.curve)}</div>
         ))}
+        {cornerMax > Math.max(...nearProfile.elevDeg) + 2 && (
+          <div style={{ marginTop: 3, color: '#cbd5e1' }}>
+            Edge modules see more: a corner of the array has the skyline at {Math.round(cornerMax)}° toward{' '}
+            {cornerAz}° (dashed) — the module-by-module analysis already counts that.
+          </div>
+        )}
         <div style={{ marginTop: 4, fontSize: 10, opacity: 0.8 }}>
-          Skyline seen from the array’s centre and corners, from{' '}
+          Skyline as the array’s middle sees it, from{' '}
           {[
             profile.sources.surround ? 'Google’s height map' : null,
             profile.sources.obstructions ? `${profile.sources.obstructions} obstruction${profile.sources.obstructions === 1 ? '' : 's'}` : null,
@@ -192,6 +252,11 @@ export function SunChart({
             .filter(Boolean)
             .join(' · ') || 'nothing yet — an open site'}
           {maxSky > 0 ? ` · highest ${Math.round(maxSky)}° at ${skyline.reduce((a, s) => (s.e > a.e ? s : a), skyline[0]).az}°` : ''}
+          {far
+            ? farMax > 0.5
+              ? ` · far hills up to ${Math.round(farMax)}° (PVGIS; already inside the climate data)`
+              : ' · no far hills (PVGIS)'
+            : ''}
         </div>
       </div>
     </div>

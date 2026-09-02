@@ -9,7 +9,8 @@
 // is stale, so a superseded recompute costs nothing but CPU it was already
 // spending. The worker holds NO state between messages — the project arrives
 // whole (structured clone) and the reply is plain data.
-import { computeSolarAccess } from '../lib/shading';
+import { computeShadeProfile } from '../lib/shading';
+import type { ShadeProfile } from '../lib/shade-profile-cache';
 import type { SurroundHeights } from '../lib/surround-geometry';
 import type { Project } from '../types';
 
@@ -22,15 +23,16 @@ export interface AnalysisRequest {
 }
 
 export type AnalysisResponse =
-  | { id: number; ok: true; kind: 'access'; access: Array<[string, number]> }
+  // structured clone carries the Maps and Float32Arrays of the profile as-is
+  | { id: number; ok: true; kind: 'access'; access: Array<[string, number]>; profile: ShadeProfile }
   | { id: number; ok: false; error: string };
 
 self.onmessage = (e: MessageEvent<AnalysisRequest>) => {
   const { id, kind, project, surround } = e.data;
   try {
     if (kind === 'access') {
-      const map = computeSolarAccess(project, { surround: surround ?? null });
-      const res: AnalysisResponse = { id, ok: true, kind: 'access', access: [...map.entries()] };
+      const profile = computeShadeProfile(project, { surround: surround ?? null });
+      const res: AnalysisResponse = { id, ok: true, kind: 'access', access: [...profile.access.entries()], profile };
       (self as unknown as Worker).postMessage(res);
       return;
     }
