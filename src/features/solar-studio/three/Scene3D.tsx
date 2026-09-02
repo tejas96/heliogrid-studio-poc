@@ -34,6 +34,7 @@ import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
+import { SurroundRelief } from './SurroundRelief';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
@@ -1042,7 +1043,11 @@ export function Scene3D({
               <>
                 <button
                   className={`tool-btn ${showBuildings ? '' : 'on'}`}
-                  data-tip={showBuildings ? 'Hide the real surroundings (Google 3D)' : 'Show the real surroundings (Google 3D)'}
+                  data-tip={
+                    showBuildings
+                      ? 'Hide the real surroundings (Google 3D + height map)'
+                      : 'Show the real surroundings (Google 3D + height map)'
+                  }
                   data-tip-right=""
                   aria-label="Toggle the real surroundings"
                   aria-pressed={!showBuildings}
@@ -3064,7 +3069,13 @@ function SceneContent({
       })}
 
       {!meshMode && showBuildings && !isolate && (
-        <RealSurround project={project} onAttribution={onSurroundAttribution} />
+        <>
+          <RealSurround project={project} onAttribution={onSurroundAttribution} />
+          {/* the tiles are flat where Google has no 3D buildings (all of India):
+              the neighbours' real heights come from the same height map the
+              shade engine casts against */}
+          {project.surround && <SurroundRelief project={project} />}
+        </>
       )}
 
       {!meshMode && showSunPath && (
