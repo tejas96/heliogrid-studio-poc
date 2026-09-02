@@ -5,6 +5,7 @@
 // then plan the remaining modules around them on the MPPT inputs left over.
 import type { Project, StringDef, ValidationIssue } from '../../types';
 import { autoStringPlan } from './autostring';
+import { inverterLoadsKwp } from './balance';
 import { resolveDesignTemps } from './temps';
 
 export interface ManualStringChange {
@@ -54,6 +55,8 @@ export function deriveStringPlan(project: Project): DerivedStringPlan {
   };
   const auto = autoStringPlan(view, panel, inverter, project.components.inverterCount, resolveDesignTemps(project), {
     reservedSlots: kept.map((s) => ({ inverterIndex: s.inverterIndex, mpptIndex: s.mpptIndex })),
+    // the balancer must see what the hand-made strings already load
+    reservedKwp: inverterLoadsKwp(kept, panel, project.components.inverterCount),
     nameOffset: kept.length,
   });
   return {

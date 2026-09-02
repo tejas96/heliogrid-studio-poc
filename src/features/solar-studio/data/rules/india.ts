@@ -465,6 +465,10 @@ export const INDIA_RULES: MarketRules = {
       foundation_too_tall: 20,
       // a stringing-topology defect, same tier as unstrung_panels/mppt_capacity
       panel_in_two_strings: 30,
+      // per-inverter Pnom ratio (PVsyst sizes each inverter): an overloaded unit
+      // clips real energy; an idle one is paid for and does nothing
+      inverter_dc_ac_high: 20,
+      inverter_unused: 15,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },

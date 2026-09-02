@@ -95,6 +95,10 @@ export const VALIDATION_CATEGORY: Record<string, HealthCategoryKey> = {
   foundation_too_tall: 'utilization',
   // ── Phase 1 design kernel: defect #2 (a module wired into two strings) ───
   panel_in_two_strings: 'electrical',
+  // ── Phase 5: per-inverter Pnom ratio (PVsyst sizes EACH inverter) ────────
+  // one unit at 1.9 beside idle ones is a defect even when the fleet total is fine
+  inverter_dc_ac_high: 'electrical',
+  inverter_unused: 'electrical',
 };
 
 /**
@@ -114,6 +118,8 @@ export const EXCLUDED_VALIDATION = new Set([
   'dc_ac_low',
   'temp_coeff_estimated',
   'foundation_dead_load',
+  // a lightly loaded inverter is the same design choice as dc_ac_low, per unit
+  'inverter_dc_ac_low',
 ]);
 
 /** Short human labels for deduction codes — the "What changed" panel persists
@@ -133,6 +139,8 @@ const CODE_LABEL: Record<string, string> = {
   unstrung_panels: 'Panels not wired into any string',
   panel_in_keepout: 'Panels inside a no-build zone',
   isc_high: 'String current above MPPT limit',
+  inverter_dc_ac_high: 'One inverter overloaded (DC/AC above 1.35)',
+  inverter_unused: 'An inverter has no strings',
   mppt_capacity: 'Not enough MPPT capacity',
   string_window_empty: 'No legal string length for this array',
   dc_voltage_drop: 'DC voltage drop above limit',

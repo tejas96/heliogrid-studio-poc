@@ -11,6 +11,7 @@ import { genId } from './geo';
 import { vocAt, type DesignTemps } from './electrical/temps';
 import { stringSizing } from './electrical/window';
 import { autoStringPlan } from './electrical/autostring';
+import { inverterLoadsKwp } from './electrical/balance';
 
 /** Re-exported for callers that only need one module's cold Voc. */
 export function vocAtTemp(spec: PanelSpec, tempC: number): number {
@@ -131,6 +132,37 @@ export function validateSystem(
         code: 'dc_ac_low',
         message: `DC/AC ratio ${ratio.toFixed(2)} is low (<0.90) — inverter is oversized`,
       });
+  }
+  // PER-INVERTER Pnom ratio (PVsyst checks each inverter's array/inverter
+  // power, warning above 1.30): a fleet whose total is fine can still hide
+  // one unit at 1.9 beside two idle ones. Same 0.90–1.35 band as every other
+  // surface in the app.
+  if (inverterCount > 1 && strings.length > 0) {
+    const loads = inverterLoadsKwp(strings, panel, inverterCount);
+    loads.forEach((kwp, i) => {
+      const r = kwp / inverter.acKw;
+      const focus = strings.filter((s) => s.inverterIndex === i).flatMap((s) => s.panelIds);
+      if (r > 1.35)
+        issues.push({
+          level: 'warn',
+          code: 'inverter_dc_ac_high',
+          message: `Inverter ${i + 1} carries ${kwp.toFixed(1)} kWp on ${inverter.acKw} kW AC (ratio ${r.toFixed(2)}, above 1.35; PVsyst warns above 1.30) — move strings to a lighter inverter`,
+          focusPanelIds: focus,
+        });
+      else if (kwp === 0)
+        issues.push({
+          level: 'warn',
+          code: 'inverter_unused',
+          message: `Inverter ${i + 1} has no strings — either wire modules to it or remove it from Step 4`,
+        });
+      else if (r < 0.9)
+        issues.push({
+          level: 'warn',
+          code: 'inverter_dc_ac_low',
+          message: `Inverter ${i + 1} carries only ${kwp.toFixed(1)} kWp on ${inverter.acKw} kW AC (ratio ${r.toFixed(2)}, below 0.90)`,
+          focusPanelIds: focus,
+        });
+    });
   }
   // An enabled panel outside every string is a HOLE in the design: it is
   // counted in capacity, priced in the BOM and drawn on the layout, but no
