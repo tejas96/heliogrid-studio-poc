@@ -122,6 +122,24 @@ function PickOrder() {
   return null;
 }
 
+/**
+ * Dev-only handle on the live scene. A renderer bug — z-fighting, a material
+ * that did not take, a mesh drawn at the wrong height — can only be settled by
+ * reading the scene graph, and r3f keeps it behind its own store. Costs
+ * nothing in production, where the block is stripped.
+ */
+function DevSceneHandle() {
+  const three = useThree();
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    (window as unknown as { __three?: unknown }).__three = three;
+    return () => {
+      (window as unknown as { __three?: unknown }).__three = undefined;
+    };
+  }, [three]);
+  return null;
+}
+
 export type ScenePick = {
   kind: 'obstruction' | 'inverter' | 'battery' | 'box' | 'roof' | 'table' | 'string' | 'route';
   id: string;
@@ -926,6 +944,7 @@ export function Scene3D({
         }}
       >
         <PickOrder />
+        <DevSceneHandle />
         <SceneContent
           project={project}
           structEdit={structInteractive ? structEdit : null}

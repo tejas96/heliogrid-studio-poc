@@ -24,8 +24,34 @@ const RELIEF_ZOOM = 19;
 const RELIEF_RADIUS_M = 88;
 /** The photo is an exposed picture, not an albedo — same scaling as the ground plane. */
 const PHOTO_TINT = '#767676';
-/** Steep faces are the height map's walls: flat concrete, not the roof photo smeared down them. */
-const WALL_RGB = '0.58, 0.56, 0.54';
+/**
+ * How steep a face must be before it counts as a WALL — the vertical side of a
+ * block, where the photo can only smear.
+ *
+ * This used to be `smoothstep(0.35, 0.8)`, a band calibrated on a city: a
+ * building has a flat roof (upness 1) and a vertical wall (upness 0), and
+ * nothing in between. A height map of ordinary ground is not like that. Scrub,
+ * a tree line, a field bund — sampled every half metre — is rough everywhere,
+ * so most of its area landed inside that band. MEASURED on a farmland site
+ * near Sangli: 49% of the relief's 8,722 m² was painted as wall and only 34%
+ * kept the photo. Half the neighbourhood was rendered as flat grey.
+ *
+ * The surface is genuinely two-humped, and these thresholds sit in the trough:
+ * 35% of its area is near-vertical (upness 0.1–0.2, the blocks' own sides),
+ * 26% is flat top (0.9–1.0), and the 30% between the two is rough ground that
+ * must keep its photo. Same site, new band: 76% photo.
+ */
+export const WALL_UPNESS_FULL = 0.05;
+export const WALL_UPNESS_NONE = 0.3;
+/**
+ * What a wall does to the photo: DARKENS it. A vertical face sees about half
+ * the sky a horizontal one does, so this is the physical answer — and, more
+ * importantly, it makes it impossible for the relief to out-shine the map it
+ * stands in. The old flat concrete (0.58) rendered 2.7× BRIGHTER than the same
+ * face with the photo on it, which is why the height map read as a white mass
+ * and flashed through every time the streamed photomesh thinned on a zoom.
+ */
+export const WALL_SHADE = 0.55;
 
 function wallAwareMaterial(map: THREE.Texture): THREE.MeshStandardMaterial {
   const mat = new THREE.MeshStandardMaterial({ map, color: PHOTO_TINT, roughness: 1, metalness: 0, envMapIntensity: 0.15 });
@@ -39,8 +65,9 @@ function wallAwareMaterial(map: THREE.Texture): THREE.MeshStandardMaterial {
         '#include <map_fragment>',
         `#ifdef USE_MAP
   vec4 sampledDiffuseColor = texture2D( map, vMapUv );
-  float flatFace = smoothstep( 0.35, 0.8, vUpness );
-  diffuseColor *= mix( vec4( ${WALL_RGB}, 1.0 ), sampledDiffuseColor, flatFace );
+  float wallness = 1.0 - smoothstep( ${WALL_UPNESS_FULL.toFixed(2)}, ${WALL_UPNESS_NONE.toFixed(2)}, vUpness );
+  // the same ground seen edge on — never a different, brighter colour
+  diffuseColor *= sampledDiffuseColor * mix( 1.0, ${WALL_SHADE.toFixed(2)}, wallness );
 #endif`,
       );
   };
@@ -110,7 +137,11 @@ export function SurroundRelief({ project }: { project: Project }) {
     let live = true;
     setGrid(null);
     void loadSurroundHeights(meta).then((g) => {
-      if (live) setGrid(g);
+      if (!live) return;
+      setGrid(g);
+      if (process.env.NODE_ENV !== 'production') {
+        (window as unknown as { __surroundGrid?: unknown }).__surroundGrid = g;
+      }
     });
     return () => {
       live = false;
