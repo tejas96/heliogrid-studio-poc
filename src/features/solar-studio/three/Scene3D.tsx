@@ -1372,8 +1372,12 @@ function SceneContent({
   // module id → glass centre, for the string runs drawn on top of the modules
   // (globalThis.Map: the lucide `Map` icon shadows the global in this file)
   const panelPositions = useMemo(() => {
-    const m = new globalThis.Map<string, [number, number, number]>();
-    for (const p of [...panelParts.normal, ...panelParts.ghost]) m.set(p.id, p.position);
+    const m = new globalThis.Map<string, { position: [number, number, number]; lift: number }>();
+    for (const p of [...panelParts.normal, ...panelParts.ghost]) {
+      // a tilted module's high edge rises above its centre — the string run
+      // must clear it or it disappears into the glass
+      m.set(p.id, { position: p.position, lift: 0.1 + Math.sin(p.tiltRad) * (p.d / 2) });
+    }
     return m;
   }, [panelParts]);
   // shift so the shown building(s)' collective center sits at the world origin

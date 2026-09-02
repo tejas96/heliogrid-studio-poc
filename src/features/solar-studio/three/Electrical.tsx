@@ -11,7 +11,7 @@
 // "Wire by hand" turns module clicks into membership toggles with a live
 // readout; Save runs strings.addManual, so the planner strings the rest
 // around it (lib/derive/electrical-sync).
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
 import type { InverterSpec, PanelSpec, Project, StringDef, XY } from '../types';
@@ -107,8 +107,8 @@ export function ElectricalOverlay({
 }: {
   project: Project;
   spec: PanelSpec | null;
-  /** module id → scene position of its glass centre (from the rendered instances) */
-  panelPositions: ReadonlyMap<string, Vec3>;
+  /** module id → glass centre and how far above it a run must sit to clear the tilted high edge */
+  panelPositions: ReadonlyMap<string, { position: Vec3; lift: number }>;
   pick: ScenePick | null;
   hoverPick: ScenePick | null;
   onPick: (p: ScenePick | null) => void;
@@ -126,19 +126,37 @@ export function ElectricalOverlay({
     return roof ? roof.heightM : 0;
   };
 
-  // ── strings: module-to-module runs, lifted 8 cm above the glass ──
+  // ── strings: module-to-module runs, lifted clear of the tilted glass. The
+  // pick tube is built HERE, once per change: rebuilding it inside render left
+  // a pointer ray a mesh without a geometry (boundingSphere of undefined).
   const stringLines = useMemo(
     () =>
       project.strings.map((s) => {
         const pts: Vec3[] = [];
         for (const id of s.panelIds) {
           const p = panelPositions.get(id);
-          if (p) pts.push([p[0], p[1] + 0.08, p[2]]);
+          if (p) pts.push([p.position[0], p.position[1] + p.lift, p.position[2]]);
         }
         const health = spec && inv ? stringHealth(project, s.panelIds, spec, inv) : null;
-        return { s, pts, health };
+        let tube: THREE.TubeGeometry | null = null;
+        if (pts.length >= 2) {
+          const curve = new THREE.CatmullRomCurve3(
+            pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
+            false,
+            'centripetal',
+            0,
+          );
+          tube = new THREE.TubeGeometry(curve, Math.max(8, pts.length * 4), 0.13, 6, false);
+        }
+        return { s, pts, health, tube };
       }),
     [project, panelPositions, spec, inv],
+  );
+  useEffect(
+    () => () => {
+      for (const l of stringLines) l.tube?.dispose();
+    },
+    [stringLines],
   );
 
   // ── cable runs: along the deck, then down the wall to the unit ──
@@ -178,27 +196,21 @@ export function ElectricalOverlay({
   const wiringAnchor: Vec3 | null = (() => {
     if (!wiring) return null;
     const first = wiring.length > 0 ? panelPositions.get(wiring[0]) : null;
-    if (first) return [first[0], first[1] + 1.2, first[2]];
-    const any = panelPositions.values().next().value as Vec3 | undefined;
-    return any ? [any[0], any[1] + 1.2, any[2]] : [0, 4, 0];
+    if (first) return [first.position[0], first.position[1] + first.lift + 1.1, first.position[2]];
+    const any = panelPositions.values().next().value as { position: Vec3; lift: number } | undefined;
+    return any ? [any.position[0], any.position[1] + any.lift + 1.1, any.position[2]] : [0, 4, 0];
   })();
 
   return (
     <group>
-      {stringLines.map(({ s, pts, health }) => {
-        if (pts.length < 2) return null;
+      {stringLines.map(({ s, pts, health, tube }) => {
+        if (pts.length < 2 || !tube) return null;
         const isPicked = picked?.id === s.id;
         const isHover = !isPicked && hoverPick?.kind === 'string' && hoverPick.id === s.id;
         const bad = health && health.status !== 'ok';
         const color = bad ? RED : s.color;
         // a 2 px line is no touch target: an invisible 25 cm tube along the run
         // takes the clicks and hovers (it sits above the glass, so it wins the ray)
-        const curve = new THREE.CatmullRomCurve3(
-          pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])),
-          false,
-          'centripetal',
-          0,
-        );
         return (
           <group key={s.id}>
             <Line
@@ -210,6 +222,7 @@ export function ElectricalOverlay({
               raycast={() => null}
             />
             <mesh
+              geometry={tube}
               onClick={(e) => {
                 if (e.delta > 4) return;
                 e.stopPropagation();
@@ -221,8 +234,8 @@ export function ElectricalOverlay({
               }}
               onPointerOut={() => onHoverPick(null)}
             >
-              <tubeGeometry args={[curve, Math.max(8, pts.length * 4), 0.13, 6, false]} />
-              <meshBasicMaterial visible={false} />
+              {/* a faint sleeve: the pick target, and a hint that the run is a thing */}
+              <meshBasicMaterial color={color} transparent opacity={isPicked || isHover ? 0.45 : 0.22} depthWrite={false} toneMapped={false} />
             </mesh>
             {/* the + end: where the run starts */}
             <mesh position={pts[0]} raycast={() => null}>
@@ -262,7 +275,8 @@ export function ElectricalOverlay({
         (() => {
           const s = picked;
           const health = stringHealth(project, s.panelIds, spec, inv);
-          const mid = panelPositions.get(s.panelIds[Math.floor(s.panelIds.length / 2)]);
+          const midEntry = panelPositions.get(s.panelIds[Math.floor(s.panelIds.length / 2)]);
+          const mid = midEntry ? [midEntry.position[0], midEntry.position[1] + midEntry.lift, midEntry.position[2]] : null;
           const mine = routes.filter((r) => r.kind === 'string_homerun' && r.fromRef === s.id);
           const longest = mine.length ? Math.max(...mine.map((r) => polylineLengthM(r.waypoints) + r.verticalDropM)) : 0;
           const invLoadKw =
