@@ -23,7 +23,7 @@ import { routeResetToAuto } from '../lib/ops/route-ops';
 import { RouteGizmo } from './RouteGizmo';
 import { resolveDesignTemps, vmpAt, vocAt } from '../lib/electrical/temps';
 import { stringSizing } from '../lib/electrical/window';
-import { polylineLengthM } from '../lib/routing';
+import { dcdbForInverter, polylineLengthM } from '../lib/routing';
 import { EntityLabel } from './EntityLabel';
 import type { ScenePick } from './Scene3D';
 
@@ -34,6 +34,7 @@ const RED = '#ef4444';
 const DC_PLUS = '#c62828';
 const DC_MINUS = '#1f2428';
 const AC = '#2e7d32';
+const BATTERY = '#d97706';
 
 export interface StringHealth {
   n: number;
@@ -132,9 +133,31 @@ export function ElectricalOverlay({
     (isolate.kind === 'route' && isolate.id === id) ||
     (isolate.kind === 'string' && routes.some((r) => r.id === id && r.fromRef === isolate.id));
 
+  // A run's row-end exits and its wall landings sit ON the roof outline (or a
+  // hand's width past it, on the parapet). "Inside the polygon" is false there,
+  // and drawing those points at ground level painted a red ring around the
+  // building. Anything within a parapet's reach of an edge is on the roof.
+  const nearEdge = (p: XY, poly: XY[], tol: number): boolean => {
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[(i + 1) % poly.length];
+      const vx = b.x - a.x;
+      const vy = b.y - a.y;
+      const t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1)));
+      if (Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y) <= tol) return true;
+    }
+    return false;
+  };
   const roofHeightAt = (p: XY): number => {
-    const roof = project.roofs.find((r) => inPolygon(p, r.polygon));
+    const roof = project.roofs.find((r) => inPolygon(p, r.polygon) || nearEdge(p, r.polygon, 0.8));
     return roof ? roof.heightM : 0;
+  };
+  const wallPos = (u: { roofId: string; edgeIndex: number; t: number }): XY => {
+    const roof = project.roofs.find((r) => r.id === u.roofId);
+    if (!roof) return { x: 0, y: 0 };
+    const a = roof.polygon[u.edgeIndex % roof.polygon.length];
+    const b = roof.polygon[(u.edgeIndex + 1) % roof.polygon.length];
+    return { x: a.x + (b.x - a.x) * u.t, y: a.y + (b.y - a.y) * u.t };
   };
 
   // ── strings: module-to-module runs, lifted clear of the tilted glass. The
@@ -174,6 +197,11 @@ export function ElectricalOverlay({
   const routeLines = useMemo(() => {
     const out: { id: string; pts: Vec3[]; color: string; kind: string; tube: THREE.TubeGeometry | null }[] = [];
     const pairIndex = new Map<string, number>();
+    const stringIdx = new Map(project.strings.map((s, i) => [s.id, i]));
+    const placementAt = (ref: string) => {
+      const m = /^inverter\/(\d+)$/.exec(ref);
+      return m ? project.inverterPlacements[Number(m[1])] : undefined;
+    };
     for (const r of routes) {
       if (r.waypoints.length < 2) continue;
       const pts: Vec3[] = [];
@@ -182,20 +210,45 @@ export function ElectricalOverlay({
       if (r.kind === 'string_homerun') {
         const k = pairIndex.get(r.fromRef) ?? 0;
         pairIndex.set(r.fromRef, k + 1);
-        for (const w of r.waypoints) pts.push([w.x, roofHeightAt(w) + 0.05 + k * 0.03, -w.y]);
+        // runs that share a tray are drawn a few centimetres apart — a bundle,
+        // not one line on top of another (the metres come from the waypoints)
+        const lane = ((stringIdx.get(r.fromRef) ?? 0) % 6) * 0.06;
+        for (const w of r.waypoints) pts.push([w.x + lane, roofHeightAt(w) + 0.05 + k * 0.03, -(w.y + lane)]);
         // the last waypoint is the wall point of the DCDB / inverter: drop to its mount height
-        const box = (project.electricalBoxes ?? []).find((b) => b.kind === 'dcdb');
-        const ip = project.inverterPlacements.find((x) => x.id === r.toRef) ?? project.inverterPlacements[0];
+        const ip = placementAt(r.toRef) ?? project.inverterPlacements[0];
         const last = r.waypoints[r.waypoints.length - 1];
+        const box = (project.electricalBoxes ?? []).find(
+          (b) => b.kind === 'dcdb' && Math.hypot(wallPos(b).x - last.x, wallPos(b).y - last.y) < 0.5,
+        );
         const landH = box ? box.heightM + 0.25 : ip ? ip.heightM + 0.3 : null;
-        if (landH !== null) pts.push([last.x, landH, -last.y]);
+        if (landH !== null) pts.push([last.x + lane, landH, -(last.y + lane)]);
         color = k === 0 ? DC_PLUS : DC_MINUS;
         kind = k === 0 ? 'DC home run (+)' : 'DC home run (−)';
       } else if (r.kind === 'inverter_ac') {
-        const ip = project.inverterPlacements[0];
         const first = r.waypoints[0];
-        if (ip) pts.push([first.x, ip.heightM - 0.3, -first.y]);
+        const ip = placementAt(r.fromRef);
+        const acdb = (project.electricalBoxes ?? []).find((b) => b.kind === 'acdb');
+        // starts at the inverter's AC terminals or the ACDB, runs at ground level
+        const startH = ip ? ip.heightM - 0.3 : r.fromRef === 'acdb' && acdb ? acdb.heightM - 0.2 : null;
+        if (startH !== null) pts.push([first.x, startH, -first.y]);
         for (const w of r.waypoints) pts.push([w.x, 0.06, -w.y]);
+        if (r.toRef === 'acdb' && acdb) {
+          const last = r.waypoints[r.waypoints.length - 1];
+          pts.push([last.x, acdb.heightM - 0.2, -last.y]);
+        }
+        kind = r.fromRef === 'acdb' ? 'AC run · ACDB to the meter' : r.toRef === 'acdb' ? 'AC run · inverter to the ACDB' : 'AC run to the meter';
+      } else if (r.kind === 'battery_dc') {
+        // cabinet base to the inverter's DC terminals, along the wall
+        const ip = placementAt(r.toRef);
+        const first = r.waypoints[0];
+        pts.push([first.x, 0.35, -first.y]);
+        for (const w of r.waypoints) pts.push([w.x, 0.12, -w.y]);
+        if (ip) {
+          const last = r.waypoints[r.waypoints.length - 1];
+          pts.push([last.x, ip.heightM - 0.2, -last.y]);
+        }
+        color = BATTERY;
+        kind = 'Battery DC leads';
       } else {
         continue;
       }
@@ -327,7 +380,8 @@ export function ElectricalOverlay({
                 }}
                 onPointerOut={() => onHoverPick(null)}
               >
-                <meshBasicMaterial color={r.color} transparent opacity={isPicked || isHover ? 0.45 : 0.18} depthWrite={false} toneMapped={false} />
+                {/* faint: eighteen sleeves share the parapet tray and used to read as one solid red band */}
+                <meshBasicMaterial color={r.color} transparent opacity={isPicked || isHover ? 0.4 : 0.05} depthWrite={false} toneMapped={false} />
               </mesh>
             )}
           </group>
@@ -342,16 +396,28 @@ export function ElectricalOverlay({
           if (!r || !drawn) return null;
           const planM = polylineLengthM(r.waypoints);
           const totalM = Math.round((planM + r.verticalDropM) * (1 + r.slackPct));
+          const invNo = (ref: string) => {
+            const m = /^inverter\/(\d+)$/.exec(ref);
+            return m ? `INV ${Number(m[1]) + 1}` : 'Inverter';
+          };
           const fromName =
-            r.kind === 'string_homerun' ? (project.strings.find((s) => s.id === r.fromRef)?.name ?? 'string') : 'Inverter';
+            r.kind === 'string_homerun'
+              ? (project.strings.find((s) => s.id === r.fromRef)?.name ?? 'string')
+              : r.kind === 'battery_dc'
+                ? `Battery ${(project.batteryPlacements ?? []).findIndex((b) => b.id === r.fromRef) + 1}`
+                : r.fromRef === 'acdb'
+                  ? 'ACDB'
+                  : invNo(r.fromRef);
           const toName =
             r.kind === 'string_homerun'
-              ? (project.electricalBoxes ?? []).some((b) => b.kind === 'dcdb')
-                ? 'DCDB'
-                : 'Inverter'
-              : (project.electricalBoxes ?? []).some((b) => b.kind === 'acdb')
-                ? 'ACDB → meter'
-                : 'Meter';
+              ? dcdbForInverter(project, Number(/\d+$/.exec(r.toRef)?.[0] ?? 0))
+                ? `DCDB of ${invNo(r.toRef)}`
+                : invNo(r.toRef)
+              : r.toRef === 'acdb'
+                ? 'ACDB'
+                : r.toRef === 'grid'
+                  ? 'Meter'
+                  : invNo(r.toRef);
           const mid = drawn.pts[Math.floor(drawn.pts.length / 2)];
           const deckY = drawn.pts[0][1];
           const toScene = (p: XY): Vec3 => [p.x, roofHeightAt(p) + 0.05, -p.y];

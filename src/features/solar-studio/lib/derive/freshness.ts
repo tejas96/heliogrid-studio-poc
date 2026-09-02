@@ -52,6 +52,10 @@ export function routesInputFp(p: Project): string {
     // without boxes keeps its route fingerprint byte-identical
     ((p.electricalBoxes?.length ?? 0) > 0
       ? '|box:' + JSON.stringify(p.electricalBoxes!.map((b) => [b.id, b.kind, b.roofId, b.edgeIndex, r(b.t, 1000), b.heightM]))
+      : '') +
+    // battery leads follow the cabinets — same conditional rule
+    ((p.batteryPlacements?.length ?? 0) > 0
+      ? '|bat:' + JSON.stringify(p.batteryPlacements!.map((b) => [b.id, b.roofId, b.edgeIndex, r(b.t, 1000), b.heightM]))
       : '')
   );
 }

@@ -88,6 +88,32 @@ function cutoutPlanes(project: Project, marginM = 0.6): THREE.Plane[] {
   ];
 }
 
+/**
+ * Points to read the ground at: 5 m outside each roof corner and edge
+ * midpoint. The pin itself sits on the building, and in Google's mesh that is
+ * the building's ROOF — measuring there put the plinth in the ground.
+ */
+function groundRing(project: Project): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [];
+  for (const roof of project.roofs) {
+    const poly = roof.polygon;
+    if (poly.length < 3) continue;
+    const c = poly.reduce((a, p) => ({ x: a.x + p.x / poly.length, y: a.y + p.y / poly.length }), { x: 0, y: 0 });
+    const push = (p: { x: number; y: number }) => {
+      const dx = p.x - c.x;
+      const dy = p.y - c.y;
+      const m = Math.hypot(dx, dy) || 1;
+      out.push({ x: p.x + (dx / m) * 5, y: p.y + (dy / m) * 5 });
+    };
+    poly.forEach((v, i) => {
+      push(v);
+      const w = poly[(i + 1) % poly.length];
+      push({ x: (v.x + w.x) / 2, y: (v.y + w.y) / 2 });
+    });
+  }
+  return out;
+}
+
 export function RealSurround({
   project,
   onStatus,
@@ -108,6 +134,9 @@ export function RealSurround({
   const tilesRef = useRef<TilesRenderer | null>(null);
   const planes = useMemo(() => cutoutPlanes(project), [project.roofs]); // eslint-disable-line react-hooks/exhaustive-deps
   const planesRef = useRef(planes);
+  // ground samples: a ring just outside every roof footprint (plan metres)
+  const ringRef = useRef<{ x: number; y: number }[]>([]);
+  ringRef.current = groundRing(project);
   planesRef.current = planes;
   // once planes change, re-clip the models already loaded
   useEffect(() => {
@@ -214,9 +243,25 @@ export function RealSurround({
           .filter(Boolean);
         onAttribution?.(attr.join(' · '));
         if (measured >= 8) return;
-        ray.set(new THREE.Vector3(0, 3000, 0), new THREE.Vector3(0, -1, 0));
-        const hits = ray.intersectObject(t.group, true);
-        if (hits.length === 0) {
+        const down = new THREE.Vector3(0, -1, 0);
+        const hitY = (x: number, z: number): number | null => {
+          ray.set(new THREE.Vector3(x, 3000, z), down);
+          const hits = ray.intersectObject(t.group, true);
+          return hits.length ? hits[0].point.y : null;
+        };
+        // coarse probe: the pin is fine (a few km per tile). Fine tree: the
+        // ground is the MEDIAN of a ring outside the footprint, never the pin —
+        // the pin is on the building, and the mesh building has a roof.
+        let h: number | null = null;
+        if (!probing) {
+          const ys = ringRef.current
+            .map((q) => hitY(q.x, -q.y))
+            .filter((v): v is number => v !== null)
+            .sort((a, b) => a - b);
+          if (ys.length >= 3) h = ys[Math.floor(ys.length / 2)];
+        }
+        if (h === null) h = hitY(0, 0);
+        if (h === null) {
           // still probing and the coarse tile missed the pin: go one level coarser
           if (probing && ++probeMisses >= 2 && probeDepth > 8) {
             probeDepth--;
@@ -226,7 +271,6 @@ export function RealSurround({
           }
           return;
         }
-        const h = hits[0].point.y;
         if (probing) {
           // first real ground: lift the tileset onto it and open the fine tree
           probing = false;

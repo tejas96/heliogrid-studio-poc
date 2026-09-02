@@ -635,7 +635,7 @@ export interface InverterPlacement {
  */
 export interface CableRoute {
   id: string;
-  kind: 'string_homerun' | 'inverter_ac' | 'earth_conductor';
+  kind: 'string_homerun' | 'inverter_ac' | 'earth_conductor' | 'battery_dc';
   /** what it connects, for traceability back to the design */
   fromRef: string;
   toRef: string;

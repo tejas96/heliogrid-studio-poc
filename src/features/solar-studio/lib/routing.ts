@@ -29,6 +29,7 @@ import type {
 } from '../types';
 import { pointInPolygon, polygonCentroid } from './geo';
 import { roofGridAngle } from './layout';
+import { rowExitPoint } from './routing-tray';
 import { resolveCapabilities } from './capabilities';
 import { resolveRules } from '../data/rules/india';
 
@@ -48,15 +49,50 @@ export function dropForRunM(project: Project, kind: 'dc' | 'ac', placementIndex 
   return kind === 'dc' ? Math.max(0, roofH - invH) : Math.max(0, invH);
 }
 
-/** Plan position of a wall-mounted DCDB / ACDB enclosure. */
+/** Plan position of any wall-mounted unit (inverter, battery cabinet, DCDB, ACDB). */
+export function wallUnitPos(project: Project, u: { roofId: string; edgeIndex: number; t: number }): XY | null {
+  const roof = project.roofs.find((r) => r.id === u.roofId);
+  if (!roof || roof.polygon.length < 2) return null;
+  const a = roof.polygon[u.edgeIndex % roof.polygon.length];
+  const b = roof.polygon[(u.edgeIndex + 1) % roof.polygon.length];
+  return { x: a.x + (b.x - a.x) * u.t, y: a.y + (b.y - a.y) * u.t };
+}
+
+/** Plan position of the first DCDB / ACDB enclosure of a kind. */
 export function boxWorldPos(project: Project, kind: 'dcdb' | 'acdb'): XY | null {
   const box = (project.electricalBoxes ?? []).find((b) => b.kind === kind);
-  if (!box) return null;
-  const roof = project.roofs.find((r) => r.id === box.roofId);
-  if (!roof || roof.polygon.length < 2) return null;
-  const a = roof.polygon[box.edgeIndex % roof.polygon.length];
-  const b = roof.polygon[(box.edgeIndex + 1) % roof.polygon.length];
-  return { x: a.x + (b.x - a.x) * box.t, y: a.y + (b.y - a.y) * box.t };
+  return box ? wallUnitPos(project, box) : null;
+}
+
+/**
+ * The DCDB that serves inverter `i`: every DCDB belongs to the inverter it
+ * stands nearest to (one string box per inverter — a shared box would mix
+ * two inverters' DC inputs), so inverter `i` lands its home runs on the
+ * nearest of the boxes that chose it, or straight on its own inputs when
+ * none did.
+ */
+export function dcdbForInverter(project: Project, i: number): XY | null {
+  const invPos = project.inverterPlacements.map((ip) => wallUnitPos(project, ip));
+  const mine = invPos[i];
+  if (!mine) return null;
+  let best: { p: XY; d: number } | null = null;
+  for (const box of (project.electricalBoxes ?? []).filter((b) => b.kind === 'dcdb')) {
+    const bp = wallUnitPos(project, box);
+    if (!bp) continue;
+    let owner = -1;
+    let od = Infinity;
+    invPos.forEach((p, j) => {
+      if (!p) return;
+      const d = Math.hypot(p.x - bp.x, p.y - bp.y);
+      if (d < od) {
+        od = d;
+        owner = j;
+      }
+    });
+    if (owner !== i) continue;
+    if (!best || od < best.d) best = { p: bp, d: od };
+  }
+  return best?.p ?? null;
 }
 
 /** World position of a wall-mounted inverter, in the plan frame. */
@@ -425,17 +461,21 @@ export function autoRouteStrings(project: Project): CableRoute[] {
     // the placement THIS string lands on — `inverterWorldPos` falls back to [0]
     // when the design names more inverters than the user has placed (defect #3)
     const placementIndex = project.inverterPlacements[s.inverterIndex] ? s.inverterIndex : 0;
-    // home runs land on the DCDB when one is placed (string fuses + isolator
-    // live there), otherwise straight on the inverter's own DC inputs
-    const target = boxWorldPos(project, 'dcdb') ?? inverterWorldPos(project, placementIndex)!;
+    // home runs land on THIS inverter's DCDB when it has one (string fuses +
+    // isolator live there), otherwise straight on the inverter's own DC inputs
+    const target = dcdbForInverter(project, placementIndex) ?? inverterWorldPos(project, placementIndex)!;
     // a string needs BOTH conductors home: + from one end, − from the other
     ends.forEach((end, i) => {
+      // along the row to its end first — cables ride the tray under the
+      // modules, they never cut across the array — then on to the target
+      const exit = rowExitPoint(project, end, target);
+      const tail = routePath(exit ?? end.center, target, blockers, corridor, footprint);
       out.push({
         id: `${s.id}/hr/${i}`,
         kind: 'string_homerun',
         fromRef: s.id,
         toRef: `inverter/${placementIndex}`,
-        waypoints: routePath(end.center, target, blockers, corridor, footprint),
+        waypoints: exit ? [end.center, ...tail] : tail,
         verticalDropM: dropForRunM(project, 'dc', placementIndex),
         slackPct: rules.slackPct,
       });
@@ -450,29 +490,87 @@ export function autoRouteStrings(project: Project): CableRoute[] {
  */
 export function autoRouteAc(project: Project): CableRoute[] {
   const rules = resolveRules().cable;
-  const from = inverterWorldPos(project);
   const to = project.gridConnection?.pos;
-  if (!from || !to) return [];
+  if (!to || !inverterWorldPos(project)) return [];
   const kept = (project.cableRoutes ?? []).filter((r) => r.kind === 'inverter_ac' && r.manual);
-  if (kept.length > 0) return kept;
+  const out: CableRoute[] = [...kept];
   const roof = project.roofs.find((r) => r.id === project.inverterPlacements[0]?.roofId);
   const blockers = roof ? routeBlockers(project, roof) : [];
-  // through the ACDB when one is placed: inverter → ACDB → meter
-  const acdb = boxWorldPos(project, 'acdb');
-  const waypoints = acdb
-    ? [...routePath(from, acdb, blockers), ...routePath(acdb, to, blockers).slice(1)]
-    : routePath(from, to, blockers);
-  return [
-    {
+  const acdbBox = (project.electricalBoxes ?? []).find((b) => b.kind === 'acdb');
+  const acdb = acdbBox ? wallUnitPos(project, acdbBox) : null;
+  // EVERY inverter has its own AC run: to the ACDB when one is placed (the AC
+  // combiner, one MCCB per inverter), else straight to the meter
+  project.inverterPlacements.forEach((_, i) => {
+    const id = i === 0 && !acdb ? 'ac/main' : `ac/inv/${i}`;
+    if (kept.some((r) => r.id === id)) return;
+    const from = inverterWorldPos(project, i);
+    if (!from) return;
+    out.push({
+      id,
+      kind: 'inverter_ac',
+      fromRef: `inverter/${i}`,
+      toRef: acdb ? 'acdb' : 'grid',
+      waypoints: routePath(from, acdb ?? to, blockers),
+      verticalDropM: dropForRunM(project, 'ac', i),
+      slackPct: rules.slackPct,
+    });
+  });
+  // and one main run from the ACDB to the meter
+  if (acdb && acdbBox && !kept.some((r) => r.id === 'ac/main')) {
+    out.push({
       id: 'ac/main',
       kind: 'inverter_ac',
-      fromRef: 'inverter',
+      fromRef: 'acdb',
       toRef: 'grid',
-      waypoints,
-      verticalDropM: dropForRunM(project, 'ac'),
+      waypoints: routePath(acdb, to, blockers),
+      verticalDropM: Math.max(0, acdbBox.heightM),
       slackPct: rules.slackPct,
-    },
-  ];
+    });
+  }
+  return out;
+}
+
+/**
+ * Battery DC leads: each cabinet to the inverter it stands nearest to, along
+ * the wall base and up to the inverter's DC terminals. [] when no cabinet or
+ * no inverter is placed — the BOM then carries an allowance and says so.
+ */
+export function autoRouteBattery(project: Project): CableRoute[] {
+  const rules = resolveRules().cable;
+  const cabinets = project.batteryPlacements ?? [];
+  if (cabinets.length === 0 || !project.components.battery) return [];
+  const kept = (project.cableRoutes ?? []).filter(
+    (r) => r.kind === 'battery_dc' && r.manual && cabinets.some((b) => b.id === r.fromRef),
+  );
+  const invPos = project.inverterPlacements.map((ip) => wallUnitPos(project, ip));
+  if (!invPos.some(Boolean)) return kept;
+  const out: CableRoute[] = [...kept];
+  for (const bp of cabinets) {
+    if (kept.some((r) => r.fromRef === bp.id)) continue;
+    const pos = wallUnitPos(project, bp);
+    if (!pos) continue;
+    let bi = -1;
+    let bd = Infinity;
+    invPos.forEach((p, i) => {
+      if (!p) return;
+      const d = Math.hypot(p.x - pos.x, p.y - pos.y);
+      if (d < bd) {
+        bd = d;
+        bi = i;
+      }
+    });
+    if (bi < 0) continue;
+    out.push({
+      id: `${bp.id}/bat`,
+      kind: 'battery_dc',
+      fromRef: bp.id,
+      toRef: `inverter/${bi}`,
+      waypoints: routePath(pos, invPos[bi]!, []),
+      verticalDropM: Math.max(0, project.inverterPlacements[bi].heightM - bp.heightM),
+      slackPct: rules.slackPct,
+    });
+  }
+  return out;
 }
 
 /** AC conductor metres: routed when a service entry exists, else null. */

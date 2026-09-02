@@ -1,6 +1,6 @@
 // ─── Battery storage: where the cabinets stand and what cable they need ─────
 import type { BatteryPlacement, Project, XY } from '../types';
-import { inverterWorldPos } from './routing';
+import { inverterWorldPos, routeLengthM } from './routing';
 import { resolveRules } from '../data/rules/india';
 
 /**
@@ -62,6 +62,13 @@ export function batteryCableFromPlacements(project: Project): {
   const rules = resolveRules().cable;
   const count = Math.max(1, project.components.batteryCount ?? 1);
   const cabinets = project.batteryPlacements ?? [];
+  // routed leads win: the 3D model draws these same runs, so the sheet, the
+  // model and the BOM cannot disagree
+  const leads = (project.cableRoutes ?? []).filter((r) => r.kind === 'battery_dc');
+  if (leads.length > 0 && cabinets.length >= count && leads.length >= cabinets.length) {
+    const pathM = leads.reduce((s, r) => s + routeLengthM(r), 0);
+    return { meters: Math.round(pathM * 2), routed: true, runs: count }; // + and − per cabinet
+  }
   const inverters = project.inverterPlacements.map((_, i) => inverterWorldPos(project, i)).filter(Boolean) as XY[];
   const ALLOWANCE_M = 3; // a cabinet beside its inverter, when nothing is placed yet
   let pathM = 0;

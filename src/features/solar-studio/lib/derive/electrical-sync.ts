@@ -3,7 +3,7 @@
 // both call this, so the browser and the tests agree on what "fresh" means.
 import type { Project } from '../../types';
 import { deriveStringPlan, type DerivedStringPlan } from '../electrical/derive-strings';
-import { autoRouteAc, autoRouteStrings } from '../routing';
+import { autoRouteAc, autoRouteBattery, autoRouteStrings } from '../routing';
 import { routesInputFp, stringsInputFp } from './freshness';
 
 export interface ElectricalSyncReport {
@@ -44,7 +44,7 @@ export function syncElectrical(p: Project): ElectricalSyncResult | null {
   }
 
   if (next.derived.routesFp !== routesInputFp(next)) {
-    const routes = [...autoRouteStrings(next), ...autoRouteAc(next)];
+    const routes = [...autoRouteStrings(next), ...autoRouteAc(next), ...autoRouteBattery(next)];
     const had = next.cableRoutes ?? [];
     if (!same(routes, had)) {
       rerouted = true;

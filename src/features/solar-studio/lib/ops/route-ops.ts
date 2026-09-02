@@ -1,7 +1,7 @@
 // ─── Cable route operations beyond moving a corner ──────────────────────────
 import { defineOp } from './types';
 import { registerOp } from './registry';
-import { autoRouteAc, autoRouteStrings } from '../routing';
+import { autoRouteAc, autoRouteBattery, autoRouteStrings } from '../routing';
 
 /**
  * Give a hand-edited run back to the router. The route loses its `manual`
@@ -20,7 +20,7 @@ export const routeResetToAuto = defineOp<{ id: string }>({
   },
   apply: (p, a) => {
     const released = { ...p, cableRoutes: (p.cableRoutes ?? []).map((r) => (r.id === a.id ? { ...r, manual: false } : r)) };
-    return { cableRoutes: [...autoRouteStrings(released), ...autoRouteAc(released)] };
+    return { cableRoutes: [...autoRouteStrings(released), ...autoRouteAc(released), ...autoRouteBattery(released)] };
   },
 });
 

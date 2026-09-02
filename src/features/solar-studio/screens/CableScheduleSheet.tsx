@@ -5,7 +5,7 @@
 import { Sheet, TitleBlock } from '../components/drawing';
 import { useActiveProject } from '../store/store';
 import { dcCableSizeMm2, sizeAcCable } from '../lib/electrical-sizing';
-import { polylineLengthM } from '../lib/routing';
+import { dcdbForInverter, polylineLengthM } from '../lib/routing';
 import { resolveRules } from '../data/rules/india';
 
 const COLS = { tag: 40, from: 140, to: 300, size: 430, plan: 610, drop: 670, slack: 725, total: 785 } as const;
@@ -24,8 +24,12 @@ export function CableScheduleSheet() {
   const acKw = inv ? inv.acKw * Math.max(1, project.components.inverterCount) : 0;
 
   const pairIndex = new Map<string, number>();
+  const invNo = (ref: string) => {
+    const m = /^inverter\/(\d+)$/.exec(ref);
+    return m ? Number(m[1]) + 1 : 1;
+  };
   const rows = routes
-    .filter((r) => r.kind === 'string_homerun' || r.kind === 'inverter_ac')
+    .filter((r) => r.kind === 'string_homerun' || r.kind === 'inverter_ac' || r.kind === 'battery_dc')
     .map((r) => {
       const plan = polylineLengthM(r.waypoints);
       const total = (plan + r.verticalDropM) * (1 + r.slackPct);
@@ -34,11 +38,12 @@ export function CableScheduleSheet() {
         pairIndex.set(r.fromRef, k + 1);
         const s = project.strings.find((x) => x.id === r.fromRef);
         const sName = s?.name ?? 'String ?';
+        const inverter = invNo(r.toRef);
         return {
           id: r.id,
           tag: `DC-${sName.replace('String ', 'S')}${k === 0 ? '+' : '−'}`,
           from: `${sName} ${k === 0 ? '+ end' : '− end'}`,
-          to: hasDcdb ? 'DCDB' : `INV ${(s?.inverterIndex ?? 0) + 1}`,
+          to: hasDcdb && dcdbForInverter(project, inverter - 1) ? `DCDB of INV ${inverter}` : `INV ${inverter}`,
           size: dcMm2 ? `${dcMm2} sq.mm Cu 1.1 kV` : '—',
           plan,
           drop: r.verticalDropM,
@@ -46,14 +51,36 @@ export function CableScheduleSheet() {
           total,
           manual: !!r.manual,
           ac: false,
+          battery: false,
         };
       }
-      const acSize = inv ? sizeAcCable(acKw, inv.phases, plan + r.verticalDropM) : null;
+      if (r.kind === 'battery_dc') {
+        const n = (project.batteryPlacements ?? []).findIndex((b) => b.id === r.fromRef) + 1;
+        return {
+          id: r.id,
+          tag: `BAT-${n}`,
+          from: `Battery ${n}`,
+          to: `INV ${invNo(r.toRef)} DC`,
+          size: 'per battery OEM (+ and −)',
+          plan,
+          drop: r.verticalDropM,
+          slack: r.slackPct,
+          total,
+          manual: !!r.manual,
+          ac: false,
+          battery: true,
+        };
+      }
+      // AC: each inverter's own run is sized on that inverter; the ACDB → meter
+      // main carries every inverter and is sized on the total
+      const fromAcdb = r.fromRef === 'acdb';
+      const kw = inv ? (fromAcdb ? acKw : inv.acKw) : 0;
+      const acSize = inv ? sizeAcCable(kw, inv.phases, plan + r.verticalDropM) : null;
       return {
         id: r.id,
-        tag: 'AC-1',
-        from: 'Inverter',
-        to: hasAcdb ? 'ACDB → meter' : 'Meter',
+        tag: fromAcdb ? 'AC-MAIN' : `AC-INV${invNo(r.fromRef)}`,
+        from: fromAcdb ? 'ACDB' : `INV ${invNo(r.fromRef)}`,
+        to: r.toRef === 'acdb' ? 'ACDB' : hasAcdb && !fromAcdb ? 'ACDB' : 'Meter',
         size: acSize && inv ? `${inv.phases === 3 ? 4 : 3}-core ${acSize.mm2} sq.mm Cu` : '—',
         plan,
         drop: r.verticalDropM,
@@ -61,12 +88,19 @@ export function CableScheduleSheet() {
         total,
         manual: !!r.manual,
         ac: true,
+        battery: false,
       };
     });
   // read in string order, + before −, the AC run last
   const stringNo = (tag: string) => Number(tag.replace(/^DC-S/, '').replace(/[+−]$/, '')) || 0;
-  rows.sort((a, b) => Number(a.ac) - Number(b.ac) || stringNo(a.tag) - stringNo(b.tag) || a.tag.localeCompare(b.tag));
-  const dcTotal = rows.filter((r) => !r.ac).reduce((a, r) => a + r.total, 0);
+  rows.sort(
+    (a, b) =>
+      Number(a.ac) - Number(b.ac) ||
+      Number(a.battery) - Number(b.battery) ||
+      stringNo(a.tag) - stringNo(b.tag) ||
+      a.tag.localeCompare(b.tag),
+  );
+  const dcTotal = rows.filter((r) => !r.ac && !r.battery).reduce((a, r) => a + r.total, 0);
   const acRows = rows.filter((r) => r.ac);
   const acTotal = acRows.reduce((a, r) => a + r.total, 0);
   const shown = rows.slice(0, MAX_ROWS);
@@ -92,7 +126,7 @@ export function CableScheduleSheet() {
         {shown.map((r, i) => {
           const y = 88 + i * ROW_H;
           return (
-            <g key={r.id} fill={r.ac ? '#047857' : '#111'}>
+            <g key={r.id} fill={r.ac ? '#047857' : r.battery ? '#b45309' : '#111'}>
               <text x={COLS.tag} y={y}>{r.tag}{r.manual ? ' *' : ''}</text>
               <text x={COLS.from} y={y}>{r.from}</text>
               <text x={COLS.to} y={y}>{r.to}</text>
