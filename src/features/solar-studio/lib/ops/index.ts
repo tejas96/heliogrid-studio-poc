@@ -4,6 +4,7 @@ import './electrical-ops';
 import './site-ops';
 import './components-ops';
 import './battery-ops';
+import './string-ops';
 
 export * from './types';
 export * from './run';
@@ -14,3 +15,4 @@ export * from './electrical-ops';
 export * from './site-ops';
 export * from './components-ops';
 export * from './battery-ops';
+export * from './string-ops';

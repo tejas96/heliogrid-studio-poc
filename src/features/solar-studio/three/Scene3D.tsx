@@ -24,6 +24,7 @@ import { batteryRemove } from '../lib/ops/battery-ops';
 import { TableGizmo, WallGizmo } from './Gizmos';
 import { RealSurround } from './RealSurround';
 import { getRoofSurface } from './roof-textures';
+import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 
@@ -37,7 +38,10 @@ import { polygonArea } from '../lib/geo';
 import type { ObstructionType } from '../types';
 
 /** What the scene can pick besides modules (modules use the shared selection). */
-export type ScenePick = { kind: 'obstruction' | 'inverter' | 'battery' | 'roof' | 'table'; id: string };
+export type ScenePick = {
+  kind: 'obstruction' | 'inverter' | 'battery' | 'roof' | 'table' | 'string';
+  id: string;
+};
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
 
 const OBSTRUCTION_NAME: Record<ObstructionType, string> = {
@@ -199,6 +203,11 @@ export function Scene3D({
   // non-module picks (obstruction / inverter / roof) — view state, never persisted
   const [pick, setPick] = useState<ScenePick | null>(null);
   const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
+  // Phase 5: strings and cable runs on the model; `wiring` = module ids being
+  // wired by hand (module clicks toggle membership while it is set)
+  const [showElectrical, setShowElectrical] = useState(true);
+  const [wiring, setWiring] = useState<string[] | null>(null);
+  const wiringSet = useMemo(() => (wiring ? new Set(wiring) : null), [wiring]);
   // Google's data attribution for the streamed surroundings (terms of use)
   const [surroundAttribution, setSurroundAttribution] = useState('');
   const runOp: RunOp = (op, args) => ops.run(op, args);
@@ -272,7 +281,7 @@ export function Scene3D({
     if (r) patchProject(r, true); // ONE undoable patch
   };
   useEffect(() => {
-    if (!structEdit && !pick) return;
+    if (!structEdit && !pick && !wiring) return;
     const inCard = (t: EventTarget | null) =>
       t instanceof Element && !!t.closest('[data-struct-edit-card],[data-entity-label]');
     let down: { x: number; y: number; inCard: boolean } | null = null;
@@ -280,6 +289,7 @@ export function Scene3D({
       if (e.key === 'Escape') {
         closeStructEdit();
         setPick(null);
+        setWiring(null);
       }
     };
     // close ONLY on a true outside CLICK: R3F's onPointerMissed fires even
@@ -307,7 +317,7 @@ export function Scene3D({
       document.removeEventListener('pointerup', onUp, true);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [structEdit, pick]);
+  }, [structEdit, pick, wiring]);
   // the edited table can vanish under us (undo, delete in the 2D tab)
   useEffect(() => {
     if (structEdit && !project.segments.some((sg) => sg.id === structEdit.segId)) {
@@ -496,7 +506,7 @@ export function Scene3D({
     }
     // Escape peels one layer at a time: an open card closes first (its own
     // listener does that); only a bare scene leaves the 3D view
-    if (e.key === 'Escape' && onClose && !structEdit && !pick) {
+    if (e.key === 'Escape' && onClose && !structEdit && !pick && !wiring) {
       e.preventDefault();
       onClose();
     }
@@ -583,8 +593,11 @@ export function Scene3D({
           heatResult={heatResult}
           heatMonth={heatMonth}
           bounds={bounds}
-          selectedIds={selectedSet}
+          selectedIds={wiringSet ?? selectedSet}
           onSelectPanels={onSelectPanels}
+          showElectrical={showElectrical}
+          wiring={structInteractive ? wiring : null}
+          onWiringChange={setWiring}
           pick={structInteractive ? pick : null}
           hoverPick={structInteractive ? hoverPick : null}
           onPick={structInteractive ? pickEntity : () => {}}
@@ -693,6 +706,16 @@ export function Scene3D({
               onClick={() => setShowSunPath((v) => !v)}
             >
               <Route />
+            </button>
+            <button
+              className={`tool-btn ${showElectrical ? '' : 'on'}`}
+              data-tip={showElectrical ? 'Hide strings and cables' : 'Show strings and cables'}
+              data-tip-right=""
+              aria-label="Toggle strings and cables"
+              aria-pressed={!showElectrical}
+              onClick={() => setShowElectrical((v) => !v)}
+            >
+              <Link2 />
             </button>
           </>
         )}
@@ -1193,6 +1216,9 @@ function SceneContent({
   onHoverPick,
   runOp,
   onSurroundAttribution,
+  showElectrical,
+  wiring,
+  onWiringChange,
 }: {
   project: Project;
   bounds: SceneBounds;
@@ -1204,6 +1230,9 @@ function SceneContent({
   onHoverPick: (p: ScenePick | null) => void;
   runOp: RunOp;
   onSurroundAttribution?: (text: string) => void;
+  showElectrical: boolean;
+  wiring: string[] | null;
+  onWiringChange: (ids: string[] | null) => void;
   sunAltitude: number;
   sunAzimuth: number;
   solarAccessView: boolean;
@@ -1269,12 +1298,17 @@ function SceneContent({
   // every click, which turned "pick a module" into "a form pops up".
   const onPanelClickToEdit = useCallback(
     (panelId: string, additive: boolean) => {
+      // wiring by hand: a click puts the module into the string, or takes it out
+      if (wiring) {
+        onWiringChange(wiring.includes(panelId) ? wiring.filter((id) => id !== panelId) : [...wiring, panelId]);
+        return;
+      }
       onSelectPanels?.([panelId], additive);
       if (additive) return;
       const pp = project.panels.find((x) => x.id === panelId);
       onPick(pp?.segmentId ? { kind: 'table', id: pp.segmentId } : null);
     },
-    [project.panels, onPick, onSelectPanels],
+    [project.panels, onPick, onSelectPanels, wiring, onWiringChange],
   );
 
 
@@ -1335,6 +1369,13 @@ function SceneContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [project, spec, selectedSegId, view, focusRoof, eaveRefs],
   );
+  // module id → glass centre, for the string runs drawn on top of the modules
+  // (globalThis.Map: the lucide `Map` icon shadows the global in this file)
+  const panelPositions = useMemo(() => {
+    const m = new globalThis.Map<string, [number, number, number]>();
+    for (const p of [...panelParts.normal, ...panelParts.ghost]) m.set(p.id, p.position);
+    return m;
+  }, [panelParts]);
   // shift so the shown building(s)' collective center sits at the world origin
   const meshCenter =
     meshMode && shownRoofs.length > 0
@@ -1746,6 +1787,22 @@ function SceneContent({
             />
           );
         })()}
+
+      {/* strings + cable runs on the model, the string card, the wiring readout */}
+      {!meshMode && showElectrical && (
+        <ElectricalOverlay
+          project={project}
+          spec={spec}
+          panelPositions={panelPositions}
+          pick={pick}
+          hoverPick={hoverPick}
+          onPick={onPick}
+          onHoverPick={onHoverPick}
+          runOp={runOp}
+          wiring={wiring}
+          onWiringChange={onWiringChange}
+        />
+      )}
 
       {/* gizmos — direct manipulation of the picked thing through the ops kernel */}
       {!meshMode &&
