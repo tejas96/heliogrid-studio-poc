@@ -1267,3 +1267,25 @@ h3 {
   letter-spacing: 0.1px;
   max-width: 40px;
 }
+
+/* ── the sun figure written on each module (three/PanelLabels) ───────────── */
+/* Positioned by a single useFrame writing `transform` straight onto these
+   nodes, so they must be absolutely placed at the layer's origin and must not
+   take pointer events — the module underneath has to stay clickable. */
+.panel-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: rgba(12, 15, 20, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  will-change: transform;
+}

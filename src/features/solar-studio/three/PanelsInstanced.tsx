@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { useCursor } from '@react-three/drei';
 import { getPanelMaterials } from './textures';
 import { panelInstanceMatrix } from '../lib/scene-frame';
+import { accessHex } from '../lib/shade-ramp';
 import type { PanelSpec } from '../types';
 
 const WHITE = new THREE.Color('#ffffff');
@@ -35,8 +36,12 @@ export interface PanelInstance {
   access: number;
 }
 
+/**
+ * The modules used to be painted in three flat steps while the legend beside
+ * them drew a smooth gradient. Both now read the one scale in lib/shade-ramp.
+ */
 function accessColor(access: number): THREE.Color {
-  return new THREE.Color(access > 0.95 ? '#16a34a' : access > 0.85 ? '#ca8a04' : '#dc2626');
+  return new THREE.Color(accessHex(access));
 }
 
 // The matrix moved to lib/scene-frame.ts so the one-frame gate can exercise

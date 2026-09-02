@@ -28,9 +28,7 @@ import type {
 import { STRUCTURE_PROFILES } from '../lib/segment-ops';
 import { defaultStructureParams, projectStructures, resolveRacking } from '../lib/structure';
 import { panelFootprintM } from '../lib/layout';
-import { computePanelShadeDetail } from '../lib/shading';
-import { peekSurroundHeights } from '../lib/surround';
-import { panelEnergyShares } from '../lib/solar';
+import { PanelYieldCard, usePanelYield } from '../components/PanelYieldCard';
 import { foundationDeadLoadKg, foundationTooTall } from '../lib/foundation';
 import {
   foundationOptionsFor,
@@ -140,20 +138,7 @@ export function StructEditPanel({
   // Per-panel sun + energy, computed WHEN THE CARD OPENS: ~250 rays for one
   // module is cheap, so this needs no persistence, no fingerprint and no
   // staleness badge — it is always current with whatever it is describing.
-  const panelInfo = useMemo(() => {
-    if (!panelId) return null;
-    // the real neighbourhood counts here too, when its grid is already in memory
-    const detail = computePanelShadeDetail(project, panelId, {
-      surround: peekSurroundHeights(project.surround),
-    });
-    if (!detail) return null;
-    return {
-      detail,
-      kwh: panelEnergyShares(project).get(panelId) ?? null,
-      // same thresholds as the access tint on the modules themselves
-      tint: detail.access > 0.95 ? '#22c55e' : detail.access > 0.85 ? '#eab308' : '#ef4444',
-    };
-  }, [project, panelId]);
+  const panelInfo = usePanelYield(project, panelId);
   if (!seg || !roof || !spec) return null;
   const resolved = resolveRacking(project, roof, seg, spec);
   const isFlush = seg.racking.kind === 'flush';
@@ -240,64 +225,9 @@ export function StructEditPanel({
             ✕
           </button>
         </div>
-        {panelInfo && (
-          <div
-            style={{
-              margin: '8px 0',
-              padding: 8,
-              borderRadius: 8,
-              background: 'rgba(255,255,255,.04)',
-              border: '1px solid rgba(255,255,255,.08)',
-            }}
-          >
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, color: '#6b7280' }}>
-              THIS PANEL
-            </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 3 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: panelInfo.tint }}>
-                {Math.round(panelInfo.detail.access * 100)}%
-              </span>
-              <span style={{ color: '#9ca3af' }}>sun</span>
-              {panelInfo.kwh !== null && (
-                <span style={{ marginLeft: 'auto', fontWeight: 700 }}>
-                  ≈{Math.round(panelInfo.kwh)} kWh/yr
-                </span>
-              )}
-            </div>
-            {panelInfo.detail.blockers.length > 0 ? (
-              <div style={{ marginTop: 5 }}>
-                <div style={{ color: '#6b7280', fontSize: 10, marginBottom: 3 }}>
-                  Sun lost to — click to look
-                </div>
-                {panelInfo.detail.blockers.slice(0, 3).map((b) => (
-                  <button
-                    key={`${b.kind}:${b.id}`}
-                    onClick={() => onFocusBlocker?.(b.kind, b.id)}
-                    style={{
-                      ...structBtn,
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      width: '100%',
-                      marginTop: 3,
-                      textAlign: 'left',
-                    }}
-                    aria-label={`Focus ${b.label}`}
-                  >
-                    <span>{b.label}</span>
-                    <span style={{ color: '#9ca3af' }}>−{(b.lossFrac * 100).toFixed(1)}%</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div style={{ color: '#6b7280', fontSize: 10, marginTop: 4 }}>
-                Nothing blocks this module
-              </div>
-            )}
-            <div style={{ color: '#4b5563', fontSize: 9, marginTop: 5 }}>
-              Estimated share of the system total
-            </div>
-          </div>
-        )}
+        {/* the same readout the module card in the scene shows, so the two can
+            never disagree about what a module makes (components/PanelYieldCard) */}
+        {panelInfo && <PanelYieldCard info={panelInfo} onFocusBlocker={onFocusBlocker} compact />}
         <div style={{ color: '#6b7280', margin: '4px 0 8px', fontSize: 10 }}>
           {panelInfo ? 'TABLE — ' : ''}Click an option — it applies instantly (undo reverts)
         </div>

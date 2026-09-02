@@ -15,6 +15,9 @@ import * as THREE from 'three';
 import { designBounds, type SceneBounds } from './scene-bounds';
 import { projectForStage, stageShowsDesign } from '../lib/scene-stage';
 import { RadialMenu, type RadialGroup, type RadialItem } from '../components/RadialMenu';
+import { ACCESS_GRADIENT_CSS } from '../lib/shade-ramp';
+import { PanelYieldCard, usePanelYield } from '../components/PanelYieldCard';
+import { PanelLabels } from './PanelLabels';
 import { ScenePost } from './ScenePost';
 import { EntityLabel } from './EntityLabel';
 import { HOVER_COLOR, PICK_COLOR, PickHalo } from './PickHalo';
@@ -115,6 +118,47 @@ function PlantPad({ width, depth, baseOffset }: { width: number; depth: number; 
   );
 }
 
+/**
+ * The card for ONE module, anchored on it. Its own component because the hook
+ * that works the numbers out cannot be called conditionally, and the card only
+ * exists while a module is picked.
+ */
+function PanelCard({
+  project,
+  panelId,
+  positions,
+  onClose,
+  onFocusBlocker,
+}: {
+  project: Project;
+  panelId: string;
+  positions: globalThis.Map<string, { position: [number, number, number]; lift: number }>;
+  onClose: () => void;
+  onFocusBlocker?: (kind: string, id: string) => void;
+}) {
+  const info = usePanelYield(project, panelId);
+  const at = positions.get(panelId);
+  if (!info || !at) return null;
+  // Named the way the 2D editor names it: its table, then its cell. A bare
+  // "Module" tells you nothing on a roof holding two hundred of them.
+  const p = project.panels.find((x) => x.id === panelId);
+  const seg = p?.segmentId ? project.segments.find((s) => s.id === p.segmentId) : undefined;
+  const cell =
+    p?.cellIndex === undefined
+      ? null
+      : `R${Math.floor(p.cellIndex / COL_STRIDE) + 1}C${(p.cellIndex % COL_STRIDE) + 1}`;
+  return (
+    <EntityLabel
+      position={[at.position[0], at.position[1] + at.lift + 0.9, at.position[2]]}
+      title={seg ? `Module ${seg.label}${cell ? ` · ${cell}` : ''}` : 'Module'}
+      lines={[]}
+      onClose={onClose}
+    >
+      <PanelYieldCard info={info} onFocusBlocker={onFocusBlocker} />
+    </EntityLabel>
+  );
+}
+
 /** Installs the pick order on the fiber event manager (must live inside the Canvas). */
 function PickOrder() {
   const setEvents = useThree((s) => s.setEvents);
@@ -143,7 +187,7 @@ function DevSceneHandle() {
 }
 
 export type ScenePick = {
-  kind: 'obstruction' | 'inverter' | 'battery' | 'box' | 'roof' | 'table' | 'string' | 'route';
+  kind: 'obstruction' | 'inverter' | 'battery' | 'box' | 'roof' | 'table' | 'string' | 'route' | 'panel';
   id: string;
 };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
@@ -171,6 +215,7 @@ import {
   Check,
   Eye,
   Grid3x3,
+  Hash,
   Layers,
   Link2,
   Map,
@@ -202,7 +247,7 @@ import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../lib/units';
 import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
 import { STRUCTURE_PROFILES } from '../lib/segment-ops';
-import { panelFootprintM } from '../lib/layout';
+import { COL_STRIDE, panelFootprintM } from '../lib/layout';
 import { StructurePreview } from '../components/StructurePreview';
 import { shadingFingerprint } from '../lib/fingerprints';
 import {
@@ -538,6 +583,13 @@ export function Scene3D({
   const [hour, setHour] = useState(initial?.hour ?? 12);
   const [playing, setPlaying] = useState(false);
   const [solarAccessView, setSolarAccessView] = useState(initial?.solarAccess ?? false);
+  // the sun figure written on each module — OFF by default, because a 200
+  // module roof wearing 200 numbers is a wall of text, not an answer
+  const [showLabels, setShowLabels] = useState(false);
+  const labelLayer = useRef<HTMLDivElement>(null);
+  // false = the mode is on but the camera is too far out for any figure to be
+  // readable, so the scene says "zoom in" rather than looking broken
+  const [labelsVisible, setLabelsVisible] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'mesh'>(initialViewMode);
   // ONE switch for the real surroundings: the same flag hides them and takes
@@ -960,6 +1012,14 @@ export function Scene3D({
             onClick: () => setSolarAccessView((v) => !v),
           },
           {
+            id: 'labels',
+            icon: <Hash />,
+            label: 'Figures',
+            tip: 'Write each module’s sun figure on it',
+            active: showLabels,
+            onClick: () => setShowLabels((v) => !v),
+          },
+          {
             id: 'report',
             icon: <BarChart3 />,
             label: 'Report',
@@ -1206,6 +1266,9 @@ export function Scene3D({
           sunAltitude={sun.altitude}
           sunAzimuth={sceneSunAzimuth}
           solarAccessView={solarAccessView}
+          showLabels={showLabels}
+          labelLayer={labelLayer}
+          onLabelsVisible={setLabelsVisible}
           showBuildings={showBuildings}
           showSunPath={showSunPath}
           isolate={isolate && pick ? pick : null}
@@ -1269,6 +1332,14 @@ export function Scene3D({
         />
         {!heatmap && POST_ENABLED && <ScenePost />}
       </Canvas>
+
+      {/* the per-module figures live in ONE plain DOM node over the canvas —
+          see three/PanelLabels for why it is not an <Html> each */}
+      <div
+        ref={labelLayer}
+        aria-hidden
+        style={{ position: 'absolute', inset: 0, zIndex: 20, pointerEvents: 'none' }}
+      />
 
       {/* ── leaving the scene is not a tool, so it keeps its own button ── */}
       {onClose && (
@@ -1555,6 +1626,32 @@ export function Scene3D({
         </div>
       )}
 
+      {/* Figures are on, but the camera is too far out for a module to carry a
+          readable number. Saying so beats a toggle that appears to do nothing. */}
+      {showLabels && !labelsVisible && !heatmap && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 140,
+            transform: 'translateX(-50%)',
+            background: 'rgba(20,24,30,0.88)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid var(--editor-line)',
+            borderRadius: 999,
+            color: 'var(--editor-ink)',
+            padding: '6px 14px',
+            fontSize: 12,
+            zIndex: 30,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}
+        >
+          Zoom in to read the module figures
+        </div>
+      )}
+
       {/* ── solar access legend ── */}
       {solarAccessView && !heatmap && (
         <div
@@ -1572,12 +1669,14 @@ export function Scene3D({
           }}
         >
           <div style={{ fontWeight: 700, marginBottom: 6 }}>Solar access</div>
+          {/* the bar and the modules read the ONE scale in lib/shade-ramp — this
+              gradient used to promise a smooth ramp the modules never drew */}
           <div
             style={{
               width: 120,
               height: 8,
               borderRadius: 999,
-              background: 'linear-gradient(90deg,#dc2626,#ca8a04,#16a34a)',
+              background: ACCESS_GRADIENT_CSS,
             }}
           />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, color: 'var(--editor-ink-2)' }}>
@@ -1901,6 +2000,9 @@ function SceneContent({
   sunAltitude,
   sunAzimuth,
   solarAccessView,
+  showLabels,
+  labelLayer,
+  onLabelsVisible,
   showBuildings,
   showSunPath,
   isolate,
@@ -1947,6 +2049,12 @@ function SceneContent({
   sunAltitude: number;
   sunAzimuth: number;
   solarAccessView: boolean;
+  /** write each module's sun figure on it */
+  showLabels: boolean;
+  /** the DOM node over the canvas those figures are written into */
+  labelLayer: React.RefObject<HTMLDivElement | null>;
+  /** whether any figure is currently readable — drives the "zoom in" hint */
+  onLabelsVisible: (any: boolean) => void;
   showBuildings: boolean;
   showSunPath: boolean;
   /** show only this entity (and the roofs) — object isolation */
@@ -2032,10 +2140,18 @@ function SceneContent({
       }
       onSelectPanels?.([panelId], additive);
       if (additive) return;
+      // In shading view the question being asked is about THIS module — what it
+      // makes and what is taking the rest — so the click opens the module card
+      // rather than its table's. Everywhere else a module still stands for its
+      // table, which is what you are editing when you are laying modules out.
+      if (solarAccessView) {
+        onPick({ kind: 'panel', id: panelId });
+        return;
+      }
       const pp = project.panels.find((x) => x.id === panelId);
       onPick(pp?.segmentId ? { kind: 'table', id: pp.segmentId } : null);
     },
-    [project.panels, onPick, onSelectPanels, wiring, onWiringChange],
+    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView],
   );
 
 
@@ -2209,6 +2325,22 @@ function SceneContent({
   }, [pick, panelParts, project]);
   // module id → glass centre, for the string runs drawn on top of the modules
   // (globalThis.Map: the lucide `Map` icon shadows the global in this file)
+  // what the label layer needs, and nothing else — rebuilt only when the poses
+  // or the access figures change, never on a camera move
+  const panelLabelItems = useMemo(
+    () =>
+      showLabels
+        ? panelParts.normal.map((p) => ({
+            id: p.id,
+            position: p.position,
+            access: p.access,
+            lift: 0.1 + Math.sin(p.tiltRad) * (p.d / 2),
+            w: p.w,
+          }))
+        : [],
+    [panelParts, showLabels],
+  );
+
   const panelPositions = useMemo(() => {
     const m = new globalThis.Map<string, { position: [number, number, number]; lift: number }>();
     for (const p of [...panelParts.normal, ...panelParts.ghost]) {
@@ -2772,6 +2904,19 @@ function SceneContent({
           )}
         </>
       )}
+
+      {/* the sun figure on each module (three/PanelLabels) */}
+      <PanelLabels
+        layer={labelLayer}
+        enabled={showLabels}
+        items={panelLabelItems}
+        onAnyVisible={onLabelsVisible}
+      />
+
+      {/* module card — what THIS module makes, and what is taking the rest.
+          Anchored on the module itself: the numbers used to be buried three
+          clicks deep inside the racking editor, which is a card about rafters. */}
+      {pick?.kind === 'panel' && <PanelCard project={project} panelId={pick.id} positions={panelPositions} onClose={() => onPick(null)} onFocusBlocker={onFocusBlocker} />}
 
       {/* table chip — the picked table's two numbers and its two actions */}
       {pick?.kind === 'table' &&
