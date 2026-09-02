@@ -1137,6 +1137,12 @@ export interface Project {
    * number that depends on it says so.
    */
   ignoreSurround?: boolean;
+  /**
+   * The roof auto-trace (Step 2) already ran for this pin — whatever the user
+   * did with it. It runs once per pin, never again on every visit; moving the
+   * pin starts afresh.
+   */
+  roofAutoDetect?: { pinKey: string; at: number };
   /** decision log of the last auto-design run (renders the "why?" sheet) */
   designLog?: DesignDecision[];
   /**
