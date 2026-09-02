@@ -26,6 +26,7 @@ import { boxPlace, boxRemove } from '../lib/ops/box-ops';
 import { stringRemove } from '../lib/ops/string-ops';
 import { ObstructionGizmo, TableGizmo, WallGizmo } from './Gizmos';
 import { Measure, type MeasureMode } from './Measure';
+import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
@@ -271,6 +272,38 @@ export function Scene3D({
   const [measureCount, setMeasureCount] = useState(0);
   const [placeKind, setPlaceKind] = useState<PlaceKind | null>(null);
   const [showKeys, setShowKeys] = useState(false);
+  // box select: Shift-drag on the canvas. The rectangle lives here (DOM); the
+  // projection test lives inside the Canvas (MarqueeSelect).
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [marqueeCommit, setMarqueeCommit] = useState<MarqueeCommit | null>(null);
+  const marqueeRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const onWrapPointerDownCapture = (e: React.PointerEvent) => {
+    if (!e.shiftKey || e.button !== 0) return;
+    if ((e.target as HTMLElement).tagName !== 'CANVAS') return; // rails and cards keep their clicks
+    // the camera must not orbit under the box: the canvas never sees this press
+    e.stopPropagation();
+    e.preventDefault();
+    const start = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    marqueeRef.current = start;
+    setMarquee(start);
+    const onMove = (ev: PointerEvent) => {
+      const m = marqueeRef.current;
+      if (!m) return;
+      const next = { ...m, x1: ev.clientX, y1: ev.clientY };
+      marqueeRef.current = next;
+      setMarquee(next);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      const m = marqueeRef.current;
+      marqueeRef.current = null;
+      setMarquee(null);
+      if (m) setMarqueeCommit({ ...m, nonce: Date.now() });
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
   const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
   // Phase 5: strings and cable runs on the model; `wiring` = module ids being
   // wired by hand (module clicks toggle membership while it is set)
@@ -795,8 +828,9 @@ export function Scene3D({
       // unreachable by keyboard — you could open it and then not move it.
       tabIndex={0}
       role="application"
-      aria-label="3D scene. Arrow keys orbit, Shift for finer steps, plus and minus zoom, 1 top view, 2 isometric, 3 front, Escape closes."
+      aria-label="3D scene. Arrow keys orbit, Shift for finer steps, plus and minus zoom, 1 top view, 2 isometric, 3 front, Shift-drag box-selects modules, Escape closes."
       onKeyDown={onSceneKeyDown}
+      onPointerDownCapture={structInteractive ? onWrapPointerDownCapture : undefined}
       style={{
         position: 'absolute',
         inset: 0,
@@ -851,6 +885,7 @@ export function Scene3D({
           placeKind={structInteractive ? placeKind : null}
           onPlaced={() => setPlaceKind(null)}
           onPlaceKind={structInteractive ? setPlaceKind : null}
+          marqueeCommit={marqueeCommit}
           date={date}
           meshMode={meshMode}
           focusRoofId={focusRoofId}
@@ -1075,6 +1110,31 @@ export function Scene3D({
         </div>
       )}
 
+      {/* ── box select rectangle (Shift-drag) ── */}
+      {marquee &&
+        wrapRef.current &&
+        (() => {
+          const r = wrapRef.current.getBoundingClientRect();
+          const left = Math.min(marquee.x0, marquee.x1) - r.left;
+          const top = Math.min(marquee.y0, marquee.y1) - r.top;
+          return (
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left,
+                top,
+                width: Math.abs(marquee.x1 - marquee.x0),
+                height: Math.abs(marquee.y1 - marquee.y0),
+                border: '1px solid var(--accent, #c9a24a)',
+                background: 'rgba(201,162,74,0.14)',
+                pointerEvents: 'none',
+                zIndex: 25,
+              }}
+            />
+          );
+        })()}
+
       {/* ── walkthrough hint ── */}
       {walk && (
         <div
@@ -1225,6 +1285,8 @@ export function Scene3D({
           <div>1 2 3 4 5 6 — top · iso · front · back · left · right</div>
           <div>arrows · + − — orbit · zoom</div>
           <div>click · shift-click — select a module · add to the selection</div>
+          <div>shift-drag — box-select modules</div>
+          <div>table edge handles — drag out to add rows or columns, in to remove them</div>
           <div>F — fly to the selection · I — isolate it · W — walk the site</div>
           <div>M — measure a distance · ? — this sheet</div>
           <div>Delete — remove the selected modules or the picked thing</div>
@@ -1685,6 +1747,7 @@ function SceneContent({
   placeKind,
   onPlaced,
   onPlaceKind,
+  marqueeCommit,
   date,
   meshMode,
   focusRoofId,
@@ -1734,6 +1797,8 @@ function SceneContent({
   onPlaced: () => void;
   /** the roof card asks to start placing (null = read-only scene) */
   onPlaceKind: ((k: PlaceKind) => void) | null;
+  /** a released Shift-drag box, in client px */
+  marqueeCommit: MarqueeCommit | null;
   date: Date;
   meshMode: boolean;
   focusRoofId?: string;
@@ -2470,6 +2535,9 @@ function SceneContent({
           isolate={isolate}
         />
       )}
+
+      {/* box select: the released rectangle picks every module centre inside it */}
+      <MarqueeSelect commit={marqueeCommit} positions={panelPositions} onSelect={(ids) => onSelectPanels?.(ids, true)} />
 
       {/* measurements: distance / angle / area / elevation on the real geometry */}
       <Measure

@@ -122,7 +122,7 @@ export function segmentFrameAngle(
   return gridAngleFor(roof, segmentPose(seg, panels));
 }
 
-function segmentGrid(
+export function segmentGrid(
   roof: Roof,
   spec: PanelSpec,
   seg: ArraySegment,
@@ -291,6 +291,43 @@ export function growSegment(
   const added = growCandidates(project, roof, spec, seg, axis, side, count);
   const re = reindexSegment(roof, spec, seg, [...mine, ...added]);
   return { segment: re.segment, panels: re.panels, added: added.length };
+}
+
+/**
+ * Shrink a segment by `count` rows or columns on a given side — the mirror of
+ * growSegment, in the same lattice frame, so an edge dragged in and back out
+ * lands on the same cells. Never empties the table: the last row/column
+ * stays (remove the table instead).
+ */
+export function shrinkSegment(
+  project: Project,
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  axis: GrowAxis,
+  side: GrowSide,
+  count: number,
+): { segment: ArraySegment; panels: PlacedPanel[]; removed: number } {
+  const mine = project.panels.filter((p) => p.segmentId === seg.id);
+  if (mine.length === 0 || count < 1) return { segment: seg, panels: mine, removed: 0 };
+  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
+  const locals = mine.map((p) => ({ p, l: rotate(p.center, -angle) }));
+  const minX = Math.min(...locals.map(({ l }) => l.x));
+  const maxX = Math.max(...locals.map(({ l }) => l.x));
+  const minY = Math.min(...locals.map(({ l }) => l.y));
+  const maxY = Math.max(...locals.map(({ l }) => l.y));
+  const cut = (l: { x: number; y: number }): boolean =>
+    axis === 'row'
+      ? side === 'top'
+        ? l.y > maxY - count * pitchY + pitchY / 2
+        : l.y < minY + count * pitchY - pitchY / 2
+      : side === 'left'
+        ? l.x < minX + count * pitchX - pitchX / 2
+        : l.x > maxX - count * pitchX + pitchX / 2;
+  const keep = locals.filter(({ l }) => !cut(l)).map(({ p }) => p);
+  if (keep.length === 0) return { segment: seg, panels: mine, removed: 0 };
+  const re = reindexSegment(roof, spec, seg, keep);
+  return { segment: re.segment, panels: re.panels, removed: mine.length - keep.length };
 }
 
 /** The valid grow directions for a selection kind. */

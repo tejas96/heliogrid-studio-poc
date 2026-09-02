@@ -22,6 +22,7 @@ import {
   setSegmentRacking,
   setSegmentStructureFields,
   setSegmentTilt,
+  shrinkSegment,
   STRUCTURE_PROFILES,
   type ElevatedKind,
   type GrowAxis,
@@ -145,6 +146,29 @@ export const layoutGrow = defineOp<{ segmentId: string; axis: GrowAxis; side: Gr
     };
   },
 });
+
+export const layoutShrink = defineOp<{ segmentId: string; axis: GrowAxis; side: GrowSide; count: number }>({
+  id: 'layout.shrink',
+  layer: 'layout',
+  label: (a) => `Remove ${a.count} ${a.axis}${a.count === 1 ? '' : 's'} (${a.side})`,
+  validate: (p, a) => {
+    const v = needTable(p, a);
+    if (v) return v;
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    return shrinkSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count).removed === 0
+      ? { reason: 'A table keeps its last row and column — remove the table instead' }
+      : null;
+  },
+  apply: (p, a) => {
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    const res = shrinkSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count);
+    return {
+      panels: [...p.panels.filter((m) => m.segmentId !== segment!.id), ...res.panels],
+      segments: p.segments.map((s) => (s.id === segment!.id ? res.segment : s)),
+    };
+  },
+});
+registerOp(layoutShrink);
 
 export const segmentSetRacking = defineOp<{ segmentId: string; kind: 'flush' | ElevatedKind }>({
   id: 'segment.setRacking',

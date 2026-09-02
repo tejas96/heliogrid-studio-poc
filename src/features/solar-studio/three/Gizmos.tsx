@@ -13,7 +13,10 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { Html, useCursor } from '@react-three/drei';
 import { useThree } from '@react-three/fiber';
-import { Move, RotateCw, ArrowUpDown, PlugZap, BatteryCharging, Box } from 'lucide-react';
+import { Move, RotateCw, ArrowUpDown, PlugZap, BatteryCharging, Box, Rows3, Columns3 } from 'lucide-react';
+import { layoutGrow, layoutShrink } from '../lib/ops/layout-ops';
+import { segmentGrid, type GrowAxis, type GrowSide } from '../lib/segment-ops';
+import { rotate } from '../lib/geo';
 import type { ArraySegment, PanelSpec, Project, Roof, XY } from '../types';
 import type { DesignOp } from '../lib/ops/types';
 import { previewOp, type OpPreview } from '../lib/ops/run';
@@ -285,7 +288,9 @@ export function Readout({
 type TableDrag =
   | { kind: 'move'; start: XY; args: { ids: string[]; dx: number; dy: number } }
   | { kind: 'rotate'; startBearing: number; startAz: number; args: { segmentId: string; azimuthDeg: number } }
-  | { kind: 'tilt'; startY: number; startTilt: number; args: { segmentId: string; tiltDeg: number } };
+  | { kind: 'tilt'; startY: number; startTilt: number; args: { segmentId: string; tiltDeg: number } }
+  // an edge handle: whole rows/columns come and go with the drag (count > 0 grows, < 0 shrinks)
+  | { kind: 'edge'; axis: GrowAxis; side: GrowSide; start: XY; pitch: number; count: number };
 
 export function TableGizmo({
   project,
@@ -338,6 +343,48 @@ export function TableGizmo({
   const elevated = seg.racking.kind !== 'flush';
   const tilt0 = seg.racking.kind === 'flush' ? 0 : seg.racking.tiltDeg;
 
+  // edge handles sit just off the lattice's four sides, in the SAME frame
+  // layout.grow / layout.shrink use (segmentGrid), so a drag counts real cells
+  const grid = segmentGrid(roof, spec, seg, mine);
+  const locals = mine.map((p) => rotate(p.center, -grid.angle));
+  const lb = {
+    minX: Math.min(...locals.map((l) => l.x)),
+    maxX: Math.max(...locals.map((l) => l.x)),
+    minY: Math.min(...locals.map((l) => l.y)),
+    maxY: Math.max(...locals.map((l) => l.y)),
+  };
+  const midX = (lb.minX + lb.maxX) / 2;
+  const midY = (lb.minY + lb.maxY) / 2;
+  const edgeWorld = (side: GrowSide): XY =>
+    rotate(
+      side === 'top'
+        ? { x: midX, y: lb.maxY + grid.pitchY * 0.75 }
+        : side === 'bottom'
+          ? { x: midX, y: lb.minY - grid.pitchY * 0.75 }
+          : side === 'left'
+            ? { x: lb.minX - grid.pitchX * 0.75, y: midY }
+            : { x: lb.maxX + grid.pitchX * 0.75, y: midY },
+      grid.angle,
+    );
+  const edgeAt = (side: GrowSide): [number, number, number] => {
+    const w = edgeWorld(side);
+    return at(w.x, w.y);
+  };
+  /** cells the pointer has crossed, signed: outward = grow */
+  const edgeCount = (side: GrowSide, start: XY, now: XY): number => {
+    const s = rotate(start, -grid.angle);
+    const n = rotate(now, -grid.angle);
+    const raw =
+      side === 'top'
+        ? (n.y - s.y) / grid.pitchY
+        : side === 'bottom'
+          ? (s.y - n.y) / grid.pitchY
+          : side === 'left'
+            ? (s.x - n.x) / grid.pitchX
+            : (n.x - s.x) / grid.pitchX;
+    return Math.round(raw);
+  };
+
   const show = (op: DesignOp<never>, args: unknown) => {
     const pv = previewOp(project, op as DesignOp<unknown>, args);
     setPreview(pv);
@@ -365,6 +412,13 @@ export function TableGizmo({
     setDrag({ kind: 'tilt', startY: e.clientY, startTilt: tilt0, args: { segmentId: seg.id, tiltDeg: tilt0 } });
     setPreview(null);
   };
+  const startEdge = (side: GrowSide) => (e: React.PointerEvent) => {
+    const p = toPlane(e, handleY);
+    if (!p) return;
+    const axis: GrowAxis = side === 'top' || side === 'bottom' ? 'row' : 'column';
+    setDrag({ kind: 'edge', axis, side, start: p, pitch: axis === 'row' ? grid.pitchY : grid.pitchX, count: 0 });
+    setPreview(null);
+  };
 
   const move = (e: React.PointerEvent) => {
     if (!drag) return;
@@ -387,12 +441,22 @@ export function TableGizmo({
       const args = { ...drag.args, azimuthDeg: azimuth };
       setDrag({ ...drag, args });
       show(segmentSetAzimuth as DesignOp<never>, args);
-    } else {
+    } else if (drag.kind === 'tilt') {
       // lever: 4 px per degree, up = steeper; the setter clamps to 5–35°
       const tiltDeg = Math.max(5, Math.min(35, Math.round(drag.startTilt + (drag.startY - e.clientY) / 4)));
       const args = { ...drag.args, tiltDeg };
       setDrag({ ...drag, args });
       show(segmentSetTilt as DesignOp<never>, args);
+    } else {
+      const p = toPlane(e, handleY);
+      if (!p) return;
+      const count = edgeCount(drag.side, drag.start, p);
+      if (count === drag.count) return;
+      setDrag({ ...drag, count });
+      if (count > 0) show(layoutGrow as DesignOp<never>, { segmentId: seg.id, axis: drag.axis, side: drag.side, count });
+      else if (count < 0)
+        show(layoutShrink as DesignOp<never>, { segmentId: seg.id, axis: drag.axis, side: drag.side, count: -count });
+      else setPreview(null);
     }
   };
 
@@ -409,9 +473,13 @@ export function TableGizmo({
     } else if (drag.kind === 'rotate') {
       if (drag.args.azimuthDeg === seg.azimuthDeg) return;
       runOp(segmentSetAzimuth, drag.args);
-    } else {
+    } else if (drag.kind === 'tilt') {
       if (drag.args.tiltDeg === tilt0) return;
       runOp(segmentSetTilt, drag.args);
+    } else if (drag.count > 0) {
+      runOp(layoutGrow, { segmentId: seg.id, axis: drag.axis, side: drag.side, count: drag.count });
+    } else if (drag.count < 0) {
+      runOp(layoutShrink, { segmentId: seg.id, axis: drag.axis, side: drag.side, count: -drag.count });
     }
   };
 
@@ -454,9 +522,43 @@ export function TableGizmo({
           <ArrowUpDown size={20} aria-hidden />
         </Handle>
       )}
+      {/* edge handles: drag out for more rows/columns, in for fewer */}
+      {(['top', 'bottom', 'left', 'right'] as const).map((side) => {
+        const rowEdge = side === 'top' || side === 'bottom';
+        const live = drag?.kind === 'edge' && drag.side === side;
+        return (
+          <Handle
+            key={side}
+            position={edgeAt(side)}
+            title={
+              live
+                ? drag.count > 0
+                  ? `+${drag.count} ${rowEdge ? 'row' : 'column'}${drag.count === 1 ? '' : 's'}`
+                  : drag.count < 0
+                    ? `−${-drag.count} ${rowEdge ? 'row' : 'column'}${drag.count === -1 ? '' : 's'}`
+                    : 'Drag out to add, in to remove'
+                : `Drag to add or remove ${rowEdge ? 'rows' : 'columns'} on this side`
+            }
+            active={live}
+            onStart={startEdge(side)}
+            onMove={move}
+            onEnd={end}
+          >
+            {rowEdge ? <Rows3 size={18} aria-hidden /> : <Columns3 size={18} aria-hidden />}
+          </Handle>
+        );
+      })}
       <Readout
-        position={drag?.kind === 'rotate' ? rotAt : drag?.kind === 'tilt' ? tiltAt : moveAt}
-        offsetY={drag?.kind === 'move' || (!drag && notice) ? MOVE_HANDLE_OFFSET_PX + 44 : 0}
+        position={
+          drag?.kind === 'rotate'
+            ? rotAt
+            : drag?.kind === 'tilt'
+              ? tiltAt
+              : drag?.kind === 'edge'
+                ? edgeAt(drag.side)
+                : moveAt
+        }
+        offsetY={drag?.kind === 'move' || (!drag && notice) ? MOVE_HANDLE_OFFSET_PX + 44 : drag?.kind === 'edge' ? 44 : 0}
         preview={preview ?? notice}
       />
     </group>
