@@ -299,6 +299,8 @@ export function computeHealth(project: Project): HealthResult {
     ).length;
     if (ai > 0) context.push(`${ai} AI-detected entities — dimensions are detector estimates`);
     if (project.calibration.reference !== null) context.push('Scale calibrated against a known distance');
+    if (project.surround && project.ignoreSurround)
+      context.push('Neighbour shade is OFF by your choice — these numbers ignore the real neighbours');
   }
 
   return {

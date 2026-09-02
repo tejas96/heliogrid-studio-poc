@@ -36,6 +36,7 @@ import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
 import { SurroundRelief } from './SurroundRelief';
 import { ROOF_HEIGHT_TOLERANCE_M, roofReadings } from '../lib/surround-check';
+import { surroundSetIgnored } from '../lib/ops/site-ops';
 import { clockLabel } from '../lib/sun-chart';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
@@ -1462,25 +1463,35 @@ export function Scene3D({
 
       {/* ── provenance of the neighbour shade in the numbers (DESIGN-SYSTEM §12) ── */}
       {project.surround && !meshMode && !heatmap && (
-        <div
+        <button
+          type="button"
+          onClick={() => runOp(surroundSetIgnored, { ignore: !project.ignoreSurround })}
+          title={
+            project.ignoreSurround
+              ? 'Turn the real neighbours back on for shade'
+              : 'Turn the real neighbours off for shade — when the aerial data is wrong'
+          }
           style={{
+            font: 'inherit',
             position: 'absolute',
             right: 12,
             bottom: 124,
             zIndex: 12,
             fontSize: 9.5,
             lineHeight: 1.3,
-            color: 'rgba(255,255,255,0.78)',
+            color: project.ignoreSurround ? '#f5c16c' : 'rgba(255,255,255,0.78)',
             background: 'rgba(10,13,18,0.55)',
             padding: '2px 7px',
             borderRadius: 4,
-            pointerEvents: 'none',
+            border: 'none',
+            cursor: 'pointer',
             whiteSpace: 'nowrap',
           }}
         >
-          Neighbour shade: Google aerial height map · {project.surround.imageryDate} ·{' '}
-          {project.surround.stepM.toFixed(1)} m grid · {project.surround.radiusM} m
-        </div>
+          {project.ignoreSurround
+            ? 'Neighbour shade: OFF by your choice · tap to turn on'
+            : `Neighbour shade: Google aerial height map ${project.surround.imageryDate} · ${project.surround.stepM.toFixed(1)} m grid · tap to turn off`}
+        </button>
       )}
 
       {/* ── solar access legend ── */}
@@ -3087,7 +3098,7 @@ function SceneContent({
           {/* the tiles are flat where Google has no 3D buildings (all of India):
               the neighbours' real heights come from the same height map the
               shade engine casts against */}
-          {project.surround && <SurroundRelief project={project} />}
+          {project.surround && !project.ignoreSurround && <SurroundRelief project={project} />}
         </>
       )}
 

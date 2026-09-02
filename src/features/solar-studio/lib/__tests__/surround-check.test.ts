@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { Project, SiteSurround } from '../../types';
+import { shadingFp } from '../fingerprints';
 import { roofHeightIssues } from '../surround-check';
 import { cutSurroundForRoofs, roofReadingsFor, type SurroundHeights } from '../surround-geometry';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
@@ -33,6 +35,26 @@ describe('roofHeightIssues — the model held against the aerial height map', ()
   it('stays quiet within the tolerance or without a grid', () => {
     expect(roofHeightIssues(project(), flatGrid(4.2))).toEqual([]);
     expect(roofHeightIssues(project(), null)).toEqual([]);
+  });
+
+  it('turning the neighbours off for shade changes the shading fingerprint (the engine re-runs)', () => {
+    const surround = {
+      source: 'google-solar-dsm',
+      imageryDate: '2025-10-17',
+      radiusM: 100,
+      stepM: 0.5,
+      cols: 4,
+      rows: 4,
+      blobId: 'blob_1',
+    } as SiteSurround;
+    // the fingerprint is empty without a pin or modules: give it both
+    const location = { latLng: { lat: 16.85, lng: 74.56 } } as unknown as Project['location'];
+    const p = { ...fixtureProject(4), roofs: [fixtureRoof({ heightM: 3 })], surround, location };
+    const on = shadingFp(p);
+    const off = shadingFp({ ...p, ignoreSurround: true });
+    expect(on).toContain('|sur:google-solar-dsm');
+    expect(off).toContain('|sur:off');
+    expect(on).not.toBe(off);
   });
 
   it('reads the roof from the UNCUT grid and cuts the roof out for the casters', () => {

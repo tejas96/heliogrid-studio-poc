@@ -145,7 +145,12 @@ export function SurroundRelief({ project }: { project: Project }) {
         ? { tris: (geom.index?.count ?? 0) / 3 }
         : null;
     }
-    return () => geom?.dispose();
+    return () => {
+      geom?.dispose();
+      if (process.env.NODE_ENV !== 'production') {
+        (window as unknown as { __relief?: unknown }).__relief = null;
+      }
+    };
   }, [geom, invalidate]);
 
   if (!geom || !loc) return null;

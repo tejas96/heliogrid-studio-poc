@@ -216,7 +216,14 @@ export function computeEnergyReport(project: Project): EnergyReport {
   const reportLosses: LossItem[] = [
     ...losses,
     // includes obstruction AND row-on-row shading — one measured beam term
-    { key: 'shading', label: 'Shading (beam)', pct: Math.round(shadingLossPct * 10) / 10 },
+    {
+      key: 'shading',
+      label:
+        project.surround && project.ignoreSurround
+          ? 'Shading (beam) — neighbour shade OFF by your choice'
+          : 'Shading (beam)',
+      pct: Math.round(shadingLossPct * 10) / 10,
+    },
     ...(electricalPct !== null && electricalPct > 0
       ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
       : []),

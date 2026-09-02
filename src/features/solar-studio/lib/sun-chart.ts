@@ -144,7 +144,7 @@ export function horizonProfile(
     });
   }
   const offset = ((project.calibration?.northOffsetDeg ?? 0) * Math.PI) / 180;
-  const grid = peekSurroundHeights(project.surround);
+  const grid = project.ignoreSurround ? null : peekSurroundHeights(project.surround);
   const radius = project.surround?.radiusM ?? 100;
   const eyeRoofId = eyes[0].roofId;
   const own = eyeRoofId ? roofOf(eyeRoofId) : null;

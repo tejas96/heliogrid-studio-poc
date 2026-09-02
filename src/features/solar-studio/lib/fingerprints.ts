@@ -313,7 +313,7 @@ export function shadingFp(p: Project | null): string {
     ) +
     // Phase 4: the real neighbourhood is a caster — CONDITIONAL suffix, so a
     // project without it keeps its fingerprint (and its captures) byte-identical
-    (p.surround ? `|sur:${surroundKey(p.surround)}` : '')
+    (p.surround ? (p.ignoreSurround ? '|sur:off' : `|sur:${surroundKey(p.surround)}`) : '')
   );
 }
 

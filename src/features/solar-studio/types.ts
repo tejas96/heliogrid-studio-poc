@@ -1125,6 +1125,13 @@ export interface Project {
    * Absent = never fetched; null = checked, no data at this location.
    */
   surround?: SiteSurround | null;
+  /**
+   * The user switched the real neighbourhood OFF for shade: the height map
+   * stays stored (ground, roof readings) but casts nothing and is not drawn.
+   * For when the aerial data is wrong or the neighbour is coming down. Every
+   * number that depends on it says so.
+   */
+  ignoreSurround?: boolean;
   /** decision log of the last auto-design run (renders the "why?" sheet) */
   designLog?: DesignDecision[];
   /**

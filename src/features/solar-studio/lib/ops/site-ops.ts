@@ -157,6 +157,20 @@ export const obstructionSetCastsShadow = defineOp<{ id: string; castsShadow: boo
   }),
 });
 
+/**
+ * The real neighbourhood (Google's height map) on or off for shade. Off keeps
+ * the data — the ground, the roof readings — but it casts nothing and is not
+ * drawn, and every dependent number says so. For when the aerial data is
+ * wrong, or the neighbour is coming down.
+ */
+export const surroundSetIgnored = defineOp<{ ignore: boolean }>({
+  id: 'surround.setIgnored',
+  layer: 'geometry',
+  label: (a) => (a.ignore ? 'Neighbour shade off' : 'Neighbour shade on'),
+  validate: (p) => (p.surround ? null : { reason: 'No aerial height map for this site' }),
+  apply: (p, a) => ({ ignoreSurround: a.ignore ? true : undefined }),
+});
+
 for (const op of [
   arresterAdd,
   arresterRemove,
@@ -170,6 +184,7 @@ for (const op of [
   obstructionRotate,
   obstructionMove,
   obstructionSetCastsShadow,
+  surroundSetIgnored,
 ]) {
   registerOp(op);
 }

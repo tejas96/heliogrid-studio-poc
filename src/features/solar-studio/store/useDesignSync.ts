@@ -47,7 +47,7 @@ export function useDesignSync() {
       // panel count squared — inline it would drop frames on large roofs.
       // The real neighbourhood grid (Phase 4) is resolved from the blob store
       // first; it is part of the fingerprint, so its arrival re-runs this.
-      loadSurroundHeights(computedFor.surround)
+      loadSurroundHeights(computedFor.ignoreSurround ? null : computedFor.surround)
         .catch(() => null)
         .then((surround) => requestSolarAccess(computedFor, { cancelPrevious: true, surround }))
         .then((fresh) => {
