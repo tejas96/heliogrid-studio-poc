@@ -16,6 +16,7 @@ import { DAYS_IN_MONTH } from '../pvgis';
 import { peekShadeProfile } from '../shade-profile-cache';
 import { horizonProfile } from '../sun-chart';
 import { resolveRacking } from '../structure';
+import { acCableLossAtFullLoad, dcCableLossAtStc } from './cable-loss';
 import type { TmyYear } from './tmy';
 
 export interface EnginePanel {
@@ -282,7 +283,9 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
       eInv += acWh;
     }
     eClip += acWh;
-    const acFinal = acWh * (1 - input.acOhmicFrac);
+    // AC cable: I²R again — the full-load fraction scales with the load
+    const acLoad = inv ? Math.min(1.5, acWh / (inv.acW * inv.count)) : 1;
+    const acFinal = acWh * (1 - input.acOhmicFrac * acLoad);
     eAc += acFinal;
     monthlyWh[month] += acFinal;
   }
@@ -408,7 +411,14 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
     ? { acW: invSpec.acKw * 1000, count: Math.max(1, project.components.inverterCount || 1), etaMax: invSpec.efficiencyPct / 100 }
     : null;
   if (!inverter) assumed.push('no inverter chosen — a flat 97% conversion stands in');
-  assumed.push('soiling 3% dry months, 1% in the monsoon', 'module quality / LID 1.5%', 'mismatch 2%', 'DC wiring 1.5% at full load, AC wiring 0.5%', 'ground albedo 0.2');
+  // the wiring: the design's own runs where they exist, the assumed figure where not
+  const dc = dcCableLossAtStc(project);
+  const ac = acCableLossAtFullLoad(project);
+  assumed.push('soiling 3% dry months, 1% in the monsoon', 'module quality / LID 1.5%', 'mismatch 2%');
+  if (dc.source === 'assumed') assumed.push('DC wiring 1.5% at full load (no cable runs yet)');
+  else if (dc.stringsRouted < dc.strings) assumed.push(`DC wiring 1.5% for the ${dc.strings - dc.stringsRouted} string(s) not routed yet`);
+  if (ac.source === 'assumed') assumed.push('AC wiring 0.5% at full load (no AC run yet)');
+  assumed.push('ground albedo 0.2');
 
   const result = hourlyEnergyCore(
     {
@@ -420,12 +430,34 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
       soilingByMonth: Array.from({ length: 12 }, (_, m) => (MONSOON.has(m) ? SOILING_MONSOON : SOILING_DRY)),
       lidFrac: 0.015,
       mismatchFrac: 0.02,
-      dcOhmicStcFrac: 0.015,
-      acOhmicFrac: 0.005,
+      dcOhmicStcFrac: dc.fraction,
+      acOhmicFrac: ac.fraction,
       albedo: 0.2,
       skyView: skyViewFactor(project),
     },
     tmy,
   );
-  return { ...result, assumed };
+  // the wiring lines say where their figure came from
+  const losses = result.losses.map((l) => {
+    if (l.key === 'dc_wiring') {
+      return {
+        ...l,
+        label:
+          dc.source === 'routes'
+            ? `DC wiring — your cable runs (${dc.stringsRouted} string${dc.stringsRouted === 1 ? '' : 's'}, ${dc.conductorM} m of ${dc.mm2} mm² Cu, ${(dc.fraction * 100).toFixed(2)}% at full load)`
+            : 'DC wiring — assumed 1.5% at full load',
+      };
+    }
+    if (l.key === 'ac_wiring') {
+      return {
+        ...l,
+        label:
+          ac.source === 'routes'
+            ? `AC wiring — your ${ac.runs} run${ac.runs === 1 ? '' : 's'} (${(ac.fraction * 100).toFixed(2)}% at full load)`
+            : 'AC wiring — assumed 0.5% at full load',
+      };
+    }
+    return l;
+  });
+  return { ...result, losses, assumed };
 }
