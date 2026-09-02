@@ -478,6 +478,10 @@ export const INDIA_RULES: MarketRules = {
       // read over it: the shade, the drops and the structure all lean on it —
       // same tier as shade_mismatch (the number is uncertain, not yet wrong)
       roof_height_vs_map: 12,
+      // the yield is honest either way — what is wrong is paying a bifacial
+      // premium for a back that never sees the sun; a commercial slip, not a
+      // safety one, so it scores below the electrical faults
+      bifacial_wasted: 8,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },

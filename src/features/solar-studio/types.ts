@@ -305,6 +305,15 @@ export interface PanelSpec {
    * materially smaller and inflates the usable window.
    */
   tempCoeffPmaxPct?: number;
+  /**
+   * Bifaciality factor, % — the datasheet's rear efficiency as a share of the
+   * front (glass-glass PERC ≈ 70, TOPCon ≈ 80, HJT ≈ 90). Absent means the
+   * module makes no power from its back, which is the truth for every
+   * mono-facial module and the honest default for a bifacial one whose
+   * datasheet the user has not supplied. What the back is WORTH is never a
+   * property of the module — see lib/energy/bifacial.ts.
+   */
+  bifacialityPct?: number;
   almm: boolean;
   dcr: boolean;
   priceInr: number;
@@ -798,6 +807,10 @@ export interface EnergyReport {
     ghiKwhM2: number;
     /** kWh/m²/yr in the modules' planes (unshaded), area-weighted */
     poaKwhM2: number;
+    /** kWh/m²/yr reaching the BACKS of the modules, before the bifaciality factor */
+    rearKwhM2?: number;
+    /** what the rear side adds to the year, % — 0 for a mono-facial module */
+    rearGainPct?: number;
     dcKwh: number;
     clippedKwh: number;
     /** hours in the year the inverter was clipping */

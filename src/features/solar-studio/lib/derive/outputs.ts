@@ -8,6 +8,7 @@ import { computeFinancials } from '../finance';
 import { layoutIssues, structureIssues } from '../drc';
 import { routeIssues } from '../routing';
 import { roofHeightIssues } from '../surround-check';
+import { bifacialIssues } from '../bifacial-check';
 import { validateSystem } from '../stringing';
 import { resolveDesignTemps } from '../electrical/temps';
 
@@ -31,6 +32,7 @@ export const designIssues = memoByKey(outputKey, (p): ValidationIssue[] => {
   const enabled = p.panels.filter((x) => x.enabled);
   return [
     ...roofHeightIssues(p),
+    ...bifacialIssues(p),
     ...layoutIssues(p, spec),
     ...structureIssues(p, spec),
     ...routeIssues(p, spec),

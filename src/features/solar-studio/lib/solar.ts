@@ -222,6 +222,8 @@ export function computeEnergyReport(project: Project): EnergyReport {
         yearMax: meta.yearMax,
         ghiKwhM2: hourly.ghiKwhM2,
         poaKwhM2: hourly.poaKwhM2,
+        rearKwhM2: hourly.rearKwhM2,
+        rearGainPct: hourly.rearGainPct,
         dcKwh: hourly.dcKwh,
         clippedKwh: hourly.clippedKwh,
         clippingHours: hourly.clippingHours,

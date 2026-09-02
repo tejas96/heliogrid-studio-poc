@@ -102,6 +102,7 @@ export function EnergyReportSheet({
                 r.hourly.yearMin && r.hourly.yearMax ? ` ${r.hourly.yearMin}–${r.hourly.yearMax}` : ''
               }), 8760 hours × every module: Perez sky, shade by the hour, module temperature, inverter curve and clipping · ` +
               `${r.hourly.ghiKwhM2} kWh/m² horizontal → ${r.hourly.poaKwhM2} kWh/m² in plane` +
+              (r.hourly.rearGainPct ? ` (+ ${r.hourly.rearKwhM2} kWh/m² on the backs)` : '') +
               (r.hourly.clippingHours > 0 ? ` · clipping ${r.hourly.clippingHours} h/yr (${r.hourly.clippedKwh} kWh)` : '') +
               ` · assumed: ${r.hourly.assumed.join('; ')}`
             : r.irradianceSource === 'PVGIS'
@@ -143,6 +144,30 @@ export function EnergyReportSheet({
 
       <SectionLabel>LOSSES BREAKDOWN</SectionLabel>
       <div style={{ marginBottom: 6 }}>
+        {/* The back of a bifacial module GIVES: it belongs above the losses, as
+            its own step, not buried as a negative loss. Shown only when the
+            modules actually have a rear yield — a mono-facial design says
+            nothing about bifaciality at all. */}
+        {!!r.hourly?.rearGainPct && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ width: 86, fontSize: 11.5, color: 'var(--ink-2)' }}>
+              Bifacial gain (rear side)
+            </span>
+            <div style={{ flex: 1, height: 7, background: 'var(--paper-3)', borderRadius: 999 }}>
+              <div
+                style={{
+                  width: `${Math.min(100, (r.hourly.rearGainPct / 12) * 100)}%`,
+                  height: '100%',
+                  borderRadius: 999,
+                  background: '#10b981',
+                }}
+              />
+            </div>
+            <b style={{ fontSize: 11.5, width: 40, textAlign: 'right', color: '#10b981' }}>
+              +{r.hourly.rearGainPct}%
+            </b>
+          </div>
+        )}
         {r.losses.map((l) => (
           <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <span style={{ width: 86, fontSize: 11.5, color: 'var(--ink-2)' }}>{l.label}</span>
