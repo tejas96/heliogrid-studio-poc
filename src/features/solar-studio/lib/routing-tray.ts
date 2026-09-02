@@ -27,12 +27,18 @@ export function rowExitPoint(project: Project, end: PlacedPanel, target: XY): XY
   const halfAlong = (seg.orientation === 'portrait' ? spec.widthMm : spec.lengthMm) / 2000;
   const minX = Math.min(...locals.map((l) => l.x)) - halfAlong - 0.3;
   const maxX = Math.max(...locals.map((l) => l.x)) + halfAlong + 0.3;
+  const tL = rotate(target, -angle);
+  // Target within the array's span along the row (an inverter on a stand
+  // among the tables, a box on the far wall): run along the row to the
+  // target's column and turn there — a tray along the row, a cross tray down
+  // the column. Never a diagonal across the glass.
+  if (tL.x > minX + 0.05 && tL.x < maxX - 0.05) return rotate({ x: tL.x, y: endL.y }, angle);
   const west = rotate({ x: minX, y: endL.y }, angle);
   const east = rotate({ x: maxX, y: endL.y }, angle);
-  // the tail follows the array edge and the parapet, never a diagonal: judge
-  // it as a Manhattan distance in the lattice frame, or a run that could go
-  // straight to the west end picks the east end and walks the whole perimeter
-  const tL = rotate(target, -angle);
+  // otherwise leave at the row end nearer the target. The tail follows the
+  // array edge and the parapet, never a diagonal: judge it as a Manhattan
+  // distance in the lattice frame, or a run that could go straight to the
+  // west end picks the east end and walks the whole perimeter
   const viaWest = endL.x - minX + Math.abs(tL.x - minX) + Math.abs(tL.y - endL.y);
   const viaEast = maxX - endL.x + Math.abs(tL.x - maxX) + Math.abs(tL.y - endL.y);
   return viaWest <= viaEast ? west : east;

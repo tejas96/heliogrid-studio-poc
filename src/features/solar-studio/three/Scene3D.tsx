@@ -26,6 +26,7 @@ import { boxPlace, boxRemove } from '../lib/ops/box-ops';
 import { stringRemove } from '../lib/ops/string-ops';
 import { ObstructionGizmo, TableGizmo, WallGizmo } from './Gizmos';
 import { Measure, type MeasureMode } from './Measure';
+import { unitBaseY, unitWhere } from '../lib/unit-pos';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
 import { getRoofSurface } from './roof-textures';
@@ -54,6 +55,30 @@ function pickFilter(items: THREE.Intersection[]): THREE.Intersection[] {
   const pri = (i: THREE.Intersection) => (i.object.userData?.pickPriority as number | undefined) ?? 0;
   if (!items.some((i) => pri(i) > 0)) return items;
   return [...items].sort((a, b) => pri(b) - pri(a) || a.distance - b.distance);
+}
+
+/**
+ * The steel stand under a free-standing unit: two posts from the surface it
+ * stands on up to the unit's base. Drawn in the unit's own group, whose
+ * origin is the unit's base at `height` above that surface.
+ */
+function UnitStand({ width, height }: { width: number; height: number }) {
+  if (height < 0.15) return null;
+  const legs = [-width * 0.35, width * 0.35];
+  return (
+    <group>
+      {legs.map((x) => (
+        <mesh key={x} position={[x, -height / 2, 0]} castShadow userData={{ shadowCaster: false }}>
+          <boxGeometry args={[0.05, height, 0.05]} />
+          <meshStandardMaterial color="#6b7280" roughness={0.6} metalness={0.5} />
+        </mesh>
+      ))}
+      <mesh position={[0, -height + 0.02, 0]} userData={{ shadowCaster: false }}>
+        <boxGeometry args={[width * 0.9, 0.04, 0.3]} />
+        <meshStandardMaterial color="#6b7280" roughness={0.6} metalness={0.5} />
+      </mesh>
+    </group>
+  );
 }
 
 /** Installs the pick order on the fiber event manager (must live inside the Canvas). */
@@ -1247,7 +1272,7 @@ export function Scene3D({
           {notice
             ? notice
             : placeKind
-              ? `Tap a wall of the building to hang the ${PLACE_NAME[placeKind]} · Esc cancels`
+              ? `Tap a wall to hang the ${PLACE_NAME[placeKind]}, or the roof deck to stand it there · Esc cancels`
               : measure === 'distance'
                 ? 'Distance · click two points on the model · Esc stops'
                 : measure === 'angle'
@@ -2262,7 +2287,14 @@ function SceneContent({
                   if (!best || d < best.d) best = { edgeIndex: i, t, d };
                 }
                 if (best) {
-                  const at = { roofId: r.id, edgeIndex: best.edgeIndex, t: best.t };
+                  // near the edge → on that wall; further onto the deck → free-standing on a stand
+                  const onWall = best.d < 1.5;
+                  const at = {
+                    roofId: r.id,
+                    edgeIndex: best.edgeIndex,
+                    t: best.t,
+                    ...(onWall ? {} : { pos: { x: lx, y: ly }, level: 'roof' as const }),
+                  };
                   const res =
                     placeKind === 'inverter'
                       ? runOp(inverterPlace, { ...at, heightM: 1.5 })
@@ -2671,18 +2703,21 @@ function SceneContent({
         if (!roof) return null;
         const a = roof.polygon[ip.edgeIndex];
         const b = roof.polygon[(ip.edgeIndex + 1) % roof.polygon.length];
-        const px = a.x + (b.x - a.x) * ip.t;
-        const py = a.y + (b.y - a.y) * ip.t;
-        const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
+        const free = !!ip.pos;
+        const px = free ? ip.pos!.x : a.x + (b.x - a.x) * ip.t;
+        const py = free ? ip.pos!.y : a.y + (b.y - a.y) * ip.t;
+        const wallAng = free ? 0 : Math.atan2(-(b.y - a.y), b.x - a.x);
         const picked = pick?.kind === 'inverter' && pick.id === ip.id;
         const hovered = !picked && hoverPick?.kind === 'inverter' && hoverPick.id === ip.id;
         const inv = project.components.inverter;
-        // hangs on the OUTSIDE face of the wall, not straddling the wall line
-        const out = wallOutward(roof, ip.edgeIndex);
+        // hangs on the OUTSIDE face of the wall, not straddling the wall line;
+        // a free-standing unit sits on a stand on the deck or at ground level
+        const out = free ? { x: 0, y: 0 } : wallOutward(roof, ip.edgeIndex);
+        const baseY = unitBaseY(project, ip);
         return (
           <group
             key={ip.id}
-            position={[px + out.x * 0.12, ip.heightM, -(py + out.y * 0.12)]}
+            position={[px + out.x * 0.12, baseY + ip.heightM, -(py + out.y * 0.12)]}
             rotation={[0, -wallAng, 0]}
             onClick={(e) => {
               if (e.delta > 4) return;
@@ -2695,6 +2730,7 @@ function SceneContent({
             }}
             onPointerOut={() => onHoverPick(null)}
           >
+            {free && <UnitStand width={0.5} height={ip.heightM} />}
             {(picked || hovered) && <PickHalo center={[0, 0, 0]} size={[0.68, 0.86, 0.4]} picked={picked} />}
             {picked && (
               <EntityLabel
@@ -2702,7 +2738,7 @@ function SceneContent({
                 title={`Inverter ${idx + 1}`}
                 lines={[
                   inv ? `${inv.brand} ${inv.model} · ${inv.acKw} kW` : 'No inverter selected',
-                  `${fmtLen(ip.heightM, 1)} up the wall · strings route here`,
+                  `${unitWhere(ip)} · ${fmtLen(ip.heightM, 1)} up · its strings route here`,
                 ]}
                 onClose={() => onPick(null)}
                 actions={[
@@ -2756,22 +2792,24 @@ function SceneContent({
         if (!roof || !spec) return null;
         const a = roof.polygon[bp.edgeIndex];
         const b = roof.polygon[(bp.edgeIndex + 1) % roof.polygon.length];
-        const px = a.x + (b.x - a.x) * bp.t;
-        const py = a.y + (b.y - a.y) * bp.t;
-        const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
+        const free = !!bp.pos;
+        const px = free ? bp.pos!.x : a.x + (b.x - a.x) * bp.t;
+        const py = free ? bp.pos!.y : a.y + (b.y - a.y) * bp.t;
+        const wallAng = free ? 0 : Math.atan2(-(b.y - a.y), b.x - a.x);
         const w = spec.widthMm / 1000;
         const d = spec.depthMm / 1000;
         const h = spec.heightMm / 1000;
         const picked = pick?.kind === 'battery' && pick.id === bp.id;
         const hovered = !picked && hoverPick?.kind === 'battery' && hoverPick.id === bp.id;
         const coupling = project.components.batteryCoupling ?? 'dc_hybrid';
-        // stands against the OUTSIDE face of the wall
-        const out = wallOutward(roof, bp.edgeIndex);
+        // stands against the OUTSIDE face of the wall, or free on the deck / the ground
+        const out = free ? { x: 0, y: 0 } : wallOutward(roof, bp.edgeIndex);
         const off = d / 2 + 0.03;
+        const baseY = unitBaseY(project, bp);
         return (
           <group
             key={bp.id}
-            position={[px + out.x * off, bp.heightM + h / 2, -(py + out.y * off)]}
+            position={[px + out.x * off, baseY + bp.heightM + h / 2, -(py + out.y * off)]}
             rotation={[0, -wallAng, 0]}
             onClick={(e) => {
               if (e.delta > 4) return;
@@ -2846,10 +2884,12 @@ function SceneContent({
         if (!roof) return null;
         const a = roof.polygon[bx.edgeIndex];
         const b = roof.polygon[(bx.edgeIndex + 1) % roof.polygon.length];
-        const px = a.x + (b.x - a.x) * bx.t;
-        const py = a.y + (b.y - a.y) * bx.t;
-        const wallAng = Math.atan2(-(b.y - a.y), b.x - a.x);
-        const out = wallOutward(roof, bx.edgeIndex);
+        const free = !!bx.pos;
+        const px = free ? bx.pos!.x : a.x + (b.x - a.x) * bx.t;
+        const py = free ? bx.pos!.y : a.y + (b.y - a.y) * bx.t;
+        const wallAng = free ? 0 : Math.atan2(-(b.y - a.y), b.x - a.x);
+        const out = free ? { x: 0, y: 0 } : wallOutward(roof, bx.edgeIndex);
+        const baseY = unitBaseY(project, bx);
         const picked = pick?.kind === 'box' && pick.id === bx.id;
         const hovered = !picked && hoverPick?.kind === 'box' && hoverPick.id === bx.id;
         const dc = bx.kind === 'dcdb';
@@ -2858,7 +2898,7 @@ function SceneContent({
         return (
           <group
             key={bx.id}
-            position={[px + out.x * 0.12, bx.heightM, -(py + out.y * 0.12)]}
+            position={[px + out.x * 0.12, baseY + bx.heightM, -(py + out.y * 0.12)]}
             rotation={[0, -wallAng, 0]}
             onClick={(e) => {
               if (e.delta > 4) return;
@@ -2878,9 +2918,9 @@ function SceneContent({
                 title={dc ? 'DCDB' : 'ACDB'}
                 lines={[
                   dc
-                    ? 'String fuses, DC SPD, DC isolator — the home runs land here'
-                    : 'MCCB, AC SPD, isolator — the AC run passes through here',
-                  `${fmtLen(bx.heightM, 1)} up the wall`,
+                    ? 'String fuses, DC SPD, DC isolator — its inverter’s home runs land here'
+                    : 'MCCB, AC SPD, isolator — the AC runs pass through here',
+                  `${unitWhere(bx)} · ${fmtLen(bx.heightM, 1)} up`,
                 ]}
                 onClose={() => onPick(null)}
                 actions={[
@@ -2899,6 +2939,7 @@ function SceneContent({
               <boxGeometry args={[w, h, 0.22]} />
               <meshStandardMaterial color="#8e959d" roughness={0.5} metalness={0.4} />
             </mesh>
+            {free && <UnitStand width={w} height={bx.heightM} />}
             <mesh position={[0, 0, 0.114]}>
               <boxGeometry args={[w * 0.9, h * 0.9, 0.01]} />
               <meshStandardMaterial color="#b8bfc7" roughness={0.45} metalness={0.35} />

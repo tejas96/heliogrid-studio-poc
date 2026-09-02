@@ -158,6 +158,7 @@ import {
 } from '../lib/ops/electrical-ops';
 import { batteryPlace, batteryRemove } from '../lib/ops/battery-ops';
 import { boxPlace, boxRemove } from '../lib/ops/box-ops';
+import { unitPlanPos } from '../lib/unit-pos';
 import { batteryWorldPos } from '../lib/battery';
 import {
   arresterAdd,
@@ -195,7 +196,7 @@ const TOOL_HINTS: Record<Exclude<Tool, 'select' | 'walkway'>, string> = {
     'Click to erase a panel, walkway, safety rail, arrester, inverter or meter · hover highlights the target in red',
   rail: 'Drag along a roof edge to add a safety rail',
   arrester: 'Click to place a lightning arrester (2.0 m)',
-  inverter: 'Click near a roof edge to mount the inverter',
+  inverter: 'Tap a wall to hang it, the roof to stand it, or beside the building for ground level',
   keepout: 'Drag a no-build zone (fire lane, access, reserved area) · click one to remove it',
 };
 
@@ -721,27 +722,32 @@ export function Step6Editor() {
             if (!best || d < best.d) best = { roofId: roof.id, edgeIndex: i, t, d };
           }
         }
-        if (best && best.d < 4 && (placeKind === 'dcdb' || placeKind === 'acdb')) {
-          report(ops.run(boxPlace, { kind: placeKind, roofId: best.roofId, edgeIndex: best.edgeIndex, t: best.t, heightM: 1.2 }));
+        // Where the tap lands decides the mount: within arm's reach of a wall
+        // → on that wall; inside a roof → free-standing on the deck (a stand);
+        // outside → free-standing at ground level (the plant room, the yard).
+        if (!best || best.d > 80) return;
+        const roofUnder = pickRoofAt(m, project.roofs);
+        const onWall = best.d < 1.5;
+        const at = {
+          roofId: roofUnder && !onWall ? roofUnder.id : best.roofId,
+          edgeIndex: best.edgeIndex,
+          t: best.t,
+          ...(onWall ? {} : { pos: m, level: (roofUnder ? 'roof' : 'ground') as 'roof' | 'ground' }),
+        };
+        if (placeKind === 'dcdb' || placeKind === 'acdb') {
+          report(ops.run(boxPlace, { kind: placeKind, ...at, heightM: 1.2 }));
           setTool('select');
           return;
         }
-        if (best && best.d < 4 && placeKind === 'battery') {
-          // a cabinet stands on the floor at the foot of the same wall
-          report(ops.run(batteryPlace, { roofId: best.roofId, edgeIndex: best.edgeIndex, t: best.t, heightM: 0 }));
+        if (placeKind === 'battery') {
+          // a cabinet stands on the floor at the foot of the wall, or free on the surface it is put on
+          report(ops.run(batteryPlace, { ...at, heightM: 0 }));
           const wanted = Math.max(1, project.components.batteryCount ?? 1);
           if ((project.batteryPlacements ?? []).length + 1 >= wanted) setTool('select');
           return;
         }
-        if (best && best.d < 4) {
-          report(
-            ops.run(inverterPlace, {
-              roofId: best.roofId,
-              edgeIndex: best.edgeIndex,
-              t: best.t,
-              heightM: 1.5,
-            }),
-          );
+        {
+          report(ops.run(inverterPlace, { ...at, heightM: 1.5 }));
           // stay in the tool until every inverter in the design hangs on a
           // wall — a 3-inverter design used to drop back to Select after the
           // first one, which read as "only one inverter allowed"
@@ -1631,13 +1637,13 @@ export function Step6Editor() {
               ? (() => {
                   const wanted = Math.max(1, project.components.inverterCount);
                   const placed = project.inverterPlacements.length;
-                  if (wanted === 1) return 'Tap a roof edge to hang the inverter';
+                  if (wanted === 1) return 'Tap a wall, the roof, or beside the building to place the inverter';
                   return placed < wanted
-                    ? `Tap a roof edge to hang inverter ${placed + 1} of ${wanted}`
+                    ? `Tap a wall, the roof, or beside the building for inverter ${placed + 1} of ${wanted}`
                     : `All ${wanted} inverters mounted · tap an edge to move the oldest one`;
                 })()
               : placeKind === 'dcdb' || placeKind === 'acdb'
-                ? `Tap a wall to hang the ${placeKind.toUpperCase()} — ${placeKind === 'dcdb' ? 'home runs will land on it' : 'the AC run will pass through it'}`
+                ? `Tap a wall, the roof or the ground for the ${placeKind.toUpperCase()} — ${placeKind === 'dcdb' ? 'its inverter’s home runs will land on it' : 'the AC runs will pass through it'}`
               : placeKind === 'battery'
                 ? (() => {
                     const wanted = Math.max(1, project.components.batteryCount ?? 1);
@@ -3170,14 +3176,9 @@ function EditorLayers({
         })()}
 
       {project.inverterPlacements.map((ip) => {
-        const roof = project.roofs.find((r) => r.id === ip.roofId);
-        if (!roof) return null;
-        const a = roof.polygon[ip.edgeIndex];
-        const b = roof.polygon[(ip.edgeIndex + 1) % roof.polygon.length];
-        const pos = frame.toPx({
-          x: a.x + (b.x - a.x) * ip.t,
-          y: a.y + (b.y - a.y) * ip.t,
-        });
+        const wp = unitPlanPos(project, ip);
+        if (!wp) return null;
+        const pos = frame.toPx(wp);
         return (
           <g key={ip.id} transform={`translate(${pos.x}, ${pos.y}) scale(${1 / frame.zoom})`}>
             <rect

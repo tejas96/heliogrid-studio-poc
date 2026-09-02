@@ -30,6 +30,7 @@ import type {
 import { pointInPolygon, polygonCentroid } from './geo';
 import { roofGridAngle } from './layout';
 import { rowExitPoint } from './routing-tray';
+import { unitBaseY, unitPlanPos, type PlacedUnit } from './unit-pos';
 import { resolveCapabilities } from './capabilities';
 import { resolveRules } from '../data/rules/india';
 
@@ -45,17 +46,15 @@ export function dropForRunM(project: Project, kind: 'dc' | 'ac', placementIndex 
   const pl = project.inverterPlacements[placementIndex] ?? project.inverterPlacements[0];
   if (!pl) return resolveRules().cable.defaultVerticalDropM;
   const roofH = project.roofs.find((r) => r.id === pl.roofId)?.heightM ?? 0;
-  const invH = pl.heightM;
+  // the terminals' absolute height: on the wall or at ground level that is the
+  // mounting height; on a roof stand it is the deck plus the mounting height
+  const invH = unitBaseY(project, pl) + pl.heightM;
   return kind === 'dc' ? Math.max(0, roofH - invH) : Math.max(0, invH);
 }
 
-/** Plan position of any wall-mounted unit (inverter, battery cabinet, DCDB, ACDB). */
-export function wallUnitPos(project: Project, u: { roofId: string; edgeIndex: number; t: number }): XY | null {
-  const roof = project.roofs.find((r) => r.id === u.roofId);
-  if (!roof || roof.polygon.length < 2) return null;
-  const a = roof.polygon[u.edgeIndex % roof.polygon.length];
-  const b = roof.polygon[(u.edgeIndex + 1) % roof.polygon.length];
-  return { x: a.x + (b.x - a.x) * u.t, y: a.y + (b.y - a.y) * u.t };
+/** Plan position of any placed unit (inverter, battery cabinet, DCDB, ACDB): wall point or free position. */
+export function wallUnitPos(project: Project, u: PlacedUnit): XY | null {
+  return unitPlanPos(project, u);
 }
 
 /** Plan position of the first DCDB / ACDB enclosure of a kind. */
@@ -99,11 +98,7 @@ export function dcdbForInverter(project: Project, i: number): XY | null {
 export function inverterWorldPos(project: Project, placementIndex = 0): XY | null {
   const pl = project.inverterPlacements[placementIndex] ?? project.inverterPlacements[0];
   if (!pl) return null;
-  const roof = project.roofs.find((r) => r.id === pl.roofId);
-  if (!roof || roof.polygon.length < 2) return null;
-  const a = roof.polygon[pl.edgeIndex % roof.polygon.length];
-  const b = roof.polygon[(pl.edgeIndex + 1) % roof.polygon.length];
-  return { x: a.x + (b.x - a.x) * pl.t, y: a.y + (b.y - a.y) * pl.t };
+  return unitPlanPos(project, pl);
 }
 
 /** Plan-frame length of a polyline (m). */

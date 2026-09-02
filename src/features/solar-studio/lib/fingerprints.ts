@@ -195,15 +195,21 @@ export function designFp(p: Project): string {
       ],
       p.rails.map((x) => [x.id, x.a, x.b]),
       p.arresters.map((x) => [x.id, x.pos]),
-      p.inverterPlacements.map((x) => [x.id, x.roofId, x.edgeIndex, x.t]),
+      p.inverterPlacements.map((x) => [x.id, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
     ]) +
     // battery cabinets — conditional suffix, so battery-less projects keep
     // their fingerprint byte-identical
     ((p.batteryPlacements?.length ?? 0) > 0
-      ? '|batp:' + JSON.stringify(p.batteryPlacements!.map((x) => [x.id, x.roofId, x.edgeIndex, x.t]))
+      ? '|batp:' +
+        JSON.stringify(
+          p.batteryPlacements!.map((x) => [x.id, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
+        )
       : '') +
     ((p.electricalBoxes?.length ?? 0) > 0
-      ? '|box:' + JSON.stringify(p.electricalBoxes!.map((x) => [x.id, x.kind, x.roofId, x.edgeIndex, x.t]))
+      ? '|box:' +
+        JSON.stringify(
+          p.electricalBoxes!.map((x) => [x.id, x.kind, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
+        )
       : '') +
     // structure defaults (Phase 7) — CONDITIONAL suffix: absent fields add
     // NOTHING, so every pre-Phase-7 project's fingerprint (and its captures)

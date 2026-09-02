@@ -5,6 +5,7 @@
 // small point targets win over long strip targets that may pass under them.
 import type { Project, XY } from '../types';
 import { pointSegDist } from '../lib/geo';
+import { unitPlanPos } from '../lib/unit-pos';
 
 export type EraseTarget =
   | { kind: 'panel'; id: string }
@@ -27,12 +28,7 @@ export function inverterPlacementPos(
   project: Project,
   ip: Project['inverterPlacements'][number],
 ): XY | null {
-  const roof = project.roofs.find((r) => r.id === ip.roofId);
-  if (!roof || roof.polygon.length === 0) return null;
-  const a = roof.polygon[ip.edgeIndex];
-  const b = roof.polygon[(ip.edgeIndex + 1) % roof.polygon.length];
-  if (!a || !b) return null;
-  return { x: a.x + (b.x - a.x) * ip.t, y: a.y + (b.y - a.y) * ip.t };
+  return unitPlanPos(project, ip);
 }
 
 /** What the eraser at plan point `m` would remove, or null over empty roof. */

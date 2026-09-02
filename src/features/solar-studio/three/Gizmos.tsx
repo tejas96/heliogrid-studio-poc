@@ -16,7 +16,8 @@ import { useThree } from '@react-three/fiber';
 import { Move, RotateCw, ArrowUpDown, PlugZap, BatteryCharging, Box, Rows3, Columns3 } from 'lucide-react';
 import { layoutGrow, layoutShrink } from '../lib/ops/layout-ops';
 import { segmentGrid, type GrowAxis, type GrowSide } from '../lib/segment-ops';
-import { rotate } from '../lib/geo';
+import { pointInPolygon, rotate } from '../lib/geo';
+import { unitBaseY } from '../lib/unit-pos';
 import type { ArraySegment, PanelSpec, Project, Roof, XY } from '../types';
 import type { DesignOp } from '../lib/ops/types';
 import { previewOp, type OpPreview } from '../lib/ops/run';
@@ -586,7 +587,14 @@ export function WallGizmo({
   onDragging?: (dragging: boolean) => void;
 }) {
   const toPlane = usePlanePointer();
-  const [drag, setDrag] = useState<{ roofId: string; edgeIndex: number; t: number; pos: XY } | null>(null);
+  const [drag, setDrag] = useState<{
+    roofId: string;
+    edgeIndex: number;
+    t: number;
+    pos: XY;
+    /** set when the pointer is away from every wall: the unit becomes free-standing there */
+    free?: { level: 'roof' | 'ground' };
+  } | null>(null);
   const [preview, setPreview] = useState<OpPreview | null>(null);
   // the grab point on the plane at pointer-down: the drag is RELATIVE to it, so
   // a handle that hangs below the unit does not throw the unit to wherever the
@@ -608,12 +616,14 @@ export function WallGizmo({
   const out = wallOutward(roof, unit.edgeIndex);
   const outOff =
     kind === 'battery' ? (project.components.battery?.depthMm ?? 250) / 2000 + 0.03 : 0.12;
-  const px = a.x + (b.x - a.x) * unit.t + out.x * outOff;
-  const py = a.y + (b.y - a.y) * unit.t + out.y * outOff;
+  const isFree = !!unit.pos;
+  const baseY = unitBaseY(project, unit);
+  const px = isFree ? unit.pos!.x : a.x + (b.x - a.x) * unit.t + out.x * outOff;
+  const py = isFree ? unit.pos!.y : a.y + (b.y - a.y) * unit.t + out.y * outOff;
   const spec = project.components.battery;
   const topY =
-    kind === 'battery' ? unit.heightM + (spec ? spec.heightMm / 1000 : 0.9) + 0.25 : unit.heightM + 0.55;
-  const planeY = kind === 'battery' ? unit.heightM + 0.4 : unit.heightM;
+    baseY + (kind === 'battery' ? unit.heightM + (spec ? spec.heightMm / 1000 : 0.9) + 0.25 : unit.heightM + 0.55);
+  const planeY = baseY + (kind === 'battery' ? unit.heightM + 0.4 : unit.heightM);
 
   /** nearest point on any roof edge to the plan point — the wall the unit will hang on */
   const snapToWall = (m: XY) => {
@@ -634,26 +644,49 @@ export function WallGizmo({
     roofId: string;
     edgeIndex: number;
     t: number;
+    pos?: XY;
+    level?: 'roof' | 'ground';
   }>;
 
   const wallPt = { x: a.x + (b.x - a.x) * unit.t, y: a.y + (b.y - a.y) * unit.t };
   const start = (e: React.PointerEvent) => {
     const p0 = toPlane(e, planeY);
     if (!p0) return;
-    grab.current = { p0, base: wallPt };
-    setDrag({ roofId: unit.roofId, edgeIndex: unit.edgeIndex, t: unit.t, pos: wallPt });
+    grab.current = { p0, base: unit.pos ?? wallPt };
+    setDrag({ roofId: unit.roofId, edgeIndex: unit.edgeIndex, t: unit.t, pos: unit.pos ?? wallPt });
     setPreview(null);
   };
   const move = (e: React.PointerEvent) => {
     if (!drag || !grab.current) return;
     const p = toPlane(e, planeY);
     if (!p) return;
-    const m = { x: grab.current.base.x + (p.x - grab.current.p0.x), y: grab.current.base.y + (p.y - grab.current.p0.y) };
+    let m = { x: grab.current.base.x + (p.x - grab.current.p0.x), y: grab.current.base.y + (p.y - grab.current.p0.y) };
+    if (e.shiftKey) m = { x: Math.round(m.x * 10) / 10, y: Math.round(m.y * 10) / 10 };
     const s = snapToWall(m);
-    if (!s || s.d > 6) return; // too far from any wall: hold the last good spot
-    const next = { roofId: s.roofId, edgeIndex: s.edgeIndex, t: s.t, pos: s.pos };
+    if (!s || s.d > 80) return; // nowhere near the site: hold the last good spot
+    // the same rule as placing: within arm's reach of a wall it hangs there;
+    // further onto a roof it stands on the deck; outside it goes to ground level
+    const roofUnder = project.roofs.find((r) => pointInPolygon(m, r.polygon));
+    const next =
+      s.d < 1.2
+        ? { roofId: s.roofId, edgeIndex: s.edgeIndex, t: s.t, pos: s.pos }
+        : {
+            roofId: roofUnder?.id ?? s.roofId,
+            edgeIndex: s.edgeIndex,
+            t: s.t,
+            pos: m,
+            free: { level: (roofUnder ? 'roof' : 'ground') as 'roof' | 'ground' },
+          };
     setDrag(next);
-    setPreview(previewOp(project, op, { id, roofId: s.roofId, edgeIndex: s.edgeIndex, t: s.t }));
+    setPreview(
+      previewOp(project, op, {
+        id,
+        roofId: next.roofId,
+        edgeIndex: next.edgeIndex,
+        t: next.t,
+        ...(next.free ? { pos: next.pos, level: next.free.level } : {}),
+      }),
+    );
   };
   const end = (_e: React.PointerEvent, cancelled: boolean) => {
     if (!drag) return;
@@ -662,8 +695,20 @@ export function WallGizmo({
     setDrag(null);
     setPreview(null);
     if (cancelled || !pv || !pv.ok) return;
-    if (d.roofId === unit.roofId && d.edgeIndex === unit.edgeIndex && Math.abs(d.t - unit.t) < 1e-4) return;
-    runOp(op, { id, roofId: d.roofId, edgeIndex: d.edgeIndex, t: d.t });
+    const unchanged =
+      !d.free &&
+      !unit.pos &&
+      d.roofId === unit.roofId &&
+      d.edgeIndex === unit.edgeIndex &&
+      Math.abs(d.t - unit.t) < 1e-4;
+    if (unchanged) return;
+    runOp(op, {
+      id,
+      roofId: d.roofId,
+      edgeIndex: d.edgeIndex,
+      t: d.t,
+      ...(d.free ? { pos: d.pos, level: d.free.level } : {}),
+    });
   };
 
   const handleAt: [number, number, number] = [px, topY, -py];
@@ -680,13 +725,7 @@ export function WallGizmo({
       <Handle
         position={handleAt}
         offsetY={WALL_HANDLE_OFFSET_PX}
-        title={
-          kind === 'inverter'
-            ? 'Drag along a wall to move the inverter'
-            : kind === 'box'
-              ? 'Drag along a wall to move the box'
-              : 'Drag along a wall to move the battery'
-        }
+        title={`Drag to move the ${kind === 'inverter' ? 'inverter' : kind === 'box' ? 'box' : 'battery'} — near a wall it hangs there, on the roof it stands, outside it goes to ground level (Shift snaps 0.1 m)`}
         active={!!drag}
         onStart={start}
         onMove={move}

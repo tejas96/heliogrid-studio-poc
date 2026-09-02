@@ -1,6 +1,7 @@
 // ─── Battery storage: where the cabinets stand and what cable they need ─────
 import type { BatteryPlacement, Project, XY } from '../types';
 import { inverterWorldPos, routeLengthM } from './routing';
+import { unitPlanPos } from './unit-pos';
 import { resolveRules } from '../data/rules/india';
 
 /**
@@ -30,12 +31,7 @@ export function wallOutward(roof: { polygon: XY[] }, edgeIndex: number): XY {
 
 /** Plan position of a cabinet: the point on its wall edge (same frame as inverters). */
 export function batteryWorldPos(project: Project, bp: BatteryPlacement): XY | null {
-  const roof = project.roofs.find((r) => r.id === bp.roofId);
-  if (!roof) return null;
-  const a = roof.polygon[bp.edgeIndex];
-  const b = roof.polygon[(bp.edgeIndex + 1) % roof.polygon.length];
-  if (!a || !b) return null;
-  return { x: a.x + (b.x - a.x) * bp.t, y: a.y + (b.y - a.y) * bp.t };
+  return unitPlanPos(project, bp);
 }
 
 /** Usable energy and power of the whole bank, from the selected spec × count. */

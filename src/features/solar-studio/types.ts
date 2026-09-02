@@ -350,6 +350,9 @@ export interface ElectricalBox {
   /** 0..1 along the edge */
   t: number;
   heightM: number;
+  /** free-standing instead of on the wall: plan position */
+  pos?: XY;
+  level?: 'roof' | 'ground';
 }
 
 /** A battery cabinet standing at the foot of a wall (same edge frame as the inverter). */
@@ -361,6 +364,9 @@ export interface BatteryPlacement {
   t: number;
   /** base height above grade — 0 = floor-standing */
   heightM: number;
+  /** free-standing instead of at the wall foot: plan position */
+  pos?: XY;
+  level?: 'roof' | 'ground';
 }
 
 /**
@@ -626,6 +632,10 @@ export interface InverterPlacement {
   /** 0..1 along the edge */
   t: number;
   heightM: number;
+  /** free-standing instead of on the wall: plan position (the edge then only names the nearest wall) */
+  pos?: XY;
+  /** where a free-standing unit stands: on a stand on the roof deck, or at ground level */
+  level?: 'roof' | 'ground';
 }
 
 /**

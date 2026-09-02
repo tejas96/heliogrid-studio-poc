@@ -91,7 +91,15 @@ export const routesMoveWaypoint = defineOp<{ routeId: string; index: number; pos
   }),
 });
 
-export const inverterPlace = defineOp<{ roofId: string; edgeIndex: number; t: number; heightM: number }>({
+export const inverterPlace = defineOp<{
+  roofId: string;
+  edgeIndex: number;
+  t: number;
+  heightM: number;
+  /** free-standing: on a roof stand or at ground level, instead of on the wall */
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}>({
   id: 'inverter.place',
   layer: 'electrical',
   label: () => 'Place inverter',
@@ -105,14 +113,32 @@ export const inverterPlace = defineOp<{ roofId: string; edgeIndex: number; t: nu
   },
 });
 
-export const inverterMove = defineOp<{ id: string; roofId: string; edgeIndex: number; t: number; heightM?: number }>({
+export const inverterMove = defineOp<{
+  id: string;
+  roofId: string;
+  edgeIndex: number;
+  t: number;
+  heightM?: number;
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}>({
   id: 'inverter.move',
   layer: 'electrical',
   label: () => 'Move inverter',
   validate: (p, a) => (p.inverterPlacements.some((i) => i.id === a.id) ? null : { reason: 'Inverter not found' }),
   apply: (p, a) => ({
     inverterPlacements: p.inverterPlacements.map((i) =>
-      i.id === a.id ? { ...i, roofId: a.roofId, edgeIndex: a.edgeIndex, t: a.t, heightM: a.heightM ?? i.heightM } : i,
+      i.id === a.id
+        ? {
+            ...i,
+            roofId: a.roofId,
+            edgeIndex: a.edgeIndex,
+            t: a.t,
+            heightM: a.heightM ?? i.heightM,
+            pos: a.pos,
+            level: a.pos ? (a.level ?? i.level ?? 'roof') : undefined,
+          }
+        : i,
     ),
   }),
 });

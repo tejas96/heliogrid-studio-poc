@@ -1,10 +1,18 @@
 // ─── Battery storage operations: cabinets at the foot of a wall ─────────────
 import type { BatteryPlacement } from '../../types';
+import type { XY } from '../../types';
 import { defineOp } from './types';
 import { registerOp } from './registry';
 import { genId } from '../geo';
 
-export const batteryPlace = defineOp<{ roofId: string; edgeIndex: number; t: number; heightM: number }>({
+export const batteryPlace = defineOp<{
+  roofId: string;
+  edgeIndex: number;
+  t: number;
+  heightM: number;
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}>({
   id: 'battery.place',
   layer: 'electrical',
   label: () => 'Place battery',
@@ -21,7 +29,15 @@ export const batteryPlace = defineOp<{ roofId: string; edgeIndex: number; t: num
   },
 });
 
-export const batteryMove = defineOp<{ id: string; roofId: string; edgeIndex: number; t: number; heightM?: number }>({
+export const batteryMove = defineOp<{
+  id: string;
+  roofId: string;
+  edgeIndex: number;
+  t: number;
+  heightM?: number;
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}>({
   id: 'battery.move',
   layer: 'electrical',
   label: () => 'Move battery',
@@ -29,7 +45,17 @@ export const batteryMove = defineOp<{ id: string; roofId: string; edgeIndex: num
     (p.batteryPlacements ?? []).some((b) => b.id === a.id) ? null : { reason: 'Battery not found' },
   apply: (p, a) => ({
     batteryPlacements: (p.batteryPlacements ?? []).map((b) =>
-      b.id === a.id ? { ...b, roofId: a.roofId, edgeIndex: a.edgeIndex, t: a.t, heightM: a.heightM ?? b.heightM } : b,
+      b.id === a.id
+        ? {
+            ...b,
+            roofId: a.roofId,
+            edgeIndex: a.edgeIndex,
+            t: a.t,
+            heightM: a.heightM ?? b.heightM,
+            pos: a.pos,
+            level: a.pos ? (a.level ?? b.level ?? 'ground') : undefined,
+          }
+        : b,
     ),
   }),
 });
