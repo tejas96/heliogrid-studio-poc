@@ -23,6 +23,7 @@ import { segmentDelete } from '../lib/ops/layout-ops';
 import { batteryRemove } from '../lib/ops/battery-ops';
 import { TableGizmo, WallGizmo } from './Gizmos';
 import { RealSurround } from './RealSurround';
+import { getRoofSurface } from './roof-textures';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 
@@ -414,29 +415,27 @@ export function Scene3D({
   }
 
   // open framed on the design (a 300 m site no longer opens off-screen), and
-  // re-frame when the design's footprint changes shape
+  // re-frame when the design's footprint changes shape.
+  // <Canvas> mounts its children in its own React root, so the controls arrive
+  // AFTER this component's effects — a fixed 2 s poll used to give up on a slow
+  // first open (tile streaming, texture bakes) and leave the camera at the raw
+  // default pose: a horizon view with the building off to one side. The
+  // controls now announce themselves through state instead.
+  const [controlsReady, setControlsReady] = useState(false);
+  const attachControls = useCallback((c: CameraControlsImpl | null) => {
+    controlsRef.current = c;
+    if (c) setControlsReady(true);
+  }, []);
   const framedFor = useRef<string>('');
   useEffect(() => {
+    if (!controlsReady || !controlsRef.current) return;
     const key = `${bounds.cx.toFixed(1)}|${bounds.cz.toFixed(1)}|${bounds.r.toFixed(1)}`;
     if (framedFor.current === key) return;
-    // <Canvas> mounts its children in its own React root, so the controls ref
-    // can still be null in this effect — poll a few frames until it exists
-    let tries = 0;
-    let raf = 0;
-    const attempt = () => {
-      if (framedFor.current === key) return;
-      if (controlsRef.current) {
-        const first = framedFor.current === '';
-        framedFor.current = key;
-        goView('iso', !first);
-        return;
-      }
-      if (tries++ < 120) raf = requestAnimationFrame(attempt);
-    };
-    attempt();
-    return () => cancelAnimationFrame(raf);
+    const first = framedFor.current === '';
+    framedFor.current = key;
+    goView('iso', !first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bounds]);
+  }, [bounds, controlsReady]);
 
   /**
    * Orbit the camera from the keyboard (Phase 22p).
@@ -597,7 +596,7 @@ export function Scene3D({
             fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
             and every preset/focus is a tween rather than a jump. */}
         <CameraControls
-          ref={controlsRef}
+          ref={attachControls}
           makeDefault
           minDistance={1.5}
           maxDistance={600}
@@ -1694,6 +1693,7 @@ function SceneContent({
             selectedIds={selectedIds}
             hoverId={hoverId}
             items={panelParts.normal}
+            spec={spec}
           />
           {panelParts.ghost.length > 0 && (
             <PanelsInstanced
@@ -1704,6 +1704,7 @@ function SceneContent({
               selectedIds={selectedIds}
               hoverId={hoverId}
               items={panelParts.ghost}
+              spec={spec}
             />
           )}
         </>
@@ -2103,16 +2104,32 @@ function RoofMesh({
   const colorIndex = allRoofs.findIndex((r) => r.id === roof.id);
   // weathered RCC reads at ~40% albedo; a near-white deck blows out under sun + sky
   const surfaceColor = photoreal ? '#a8a39a' : lightenHex(roofColor(colorIndex), 0.5);
+  // the real covering — concrete, coated sheet or clay tile — drawn at true
+  // size on the deck's plan-metre UVs (three/roof-textures)
+  const surface = photoreal ? getRoofSurface(roof.roofType) : null;
 
   return (
     <group>
       <mesh geometry={geom} castShadow receiveShadow userData={{ shadowCaster: true }}>
-        <meshStandardMaterial
-          color={surfaceColor}
-          roughness={0.9}
-          envMapIntensity={0.55}
-          side={THREE.DoubleSide}
-        />
+        {surface ? (
+          <meshStandardMaterial
+            color={surface.color}
+            map={surface.map}
+            normalMap={surface.normalMap ?? undefined}
+            normalScale={new THREE.Vector2(surface.normalScale, surface.normalScale)}
+            roughness={surface.roughness}
+            metalness={surface.metalness}
+            envMapIntensity={surface.metalness > 0.3 ? 0.9 : 0.45}
+            side={THREE.DoubleSide}
+          />
+        ) : (
+          <meshStandardMaterial
+            color={surfaceColor}
+            roughness={0.9}
+            envMapIntensity={0.55}
+            side={THREE.DoubleSide}
+          />
+        )}
       </mesh>
       <lineLoop geometry={topRing} raycast={() => null}>
         <lineBasicMaterial color={outline ?? '#8f8a82'} toneMapped={!outline} />

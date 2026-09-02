@@ -48,25 +48,39 @@ export function buildRoofSolidGeometry(roof: Roof, eaveProj?: number): THREE.Buf
   const ground = poly.map((p) => new THREE.Vector3(p.x, 0, -p.y));
 
   const pos: number[] = [];
-  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) =>
+  const uv: number[] = [];
+  // UVs in PLAN METRES (caps) / metres along the wall × height (walls), so a
+  // covering texture repeats at true size whatever the roof's extent
+  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, ta: [number, number], tb: [number, number], tc: [number, number]) => {
     pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    uv.push(ta[0], ta[1], tb[0], tb[1], tc[0], tc[1]);
+  };
+  const planUv = (v: THREE.Vector3): [number, number] => [v.x, -v.z];
 
   // top + bottom caps share the plan triangulation
   const contour = poly.map((p) => new THREE.Vector2(p.x, p.y));
   const faces = THREE.ShapeUtils.triangulateShape(contour, []);
   for (const [i, j, k] of faces) {
-    tri(top[i], top[k], top[j]); // top: up-facing
-    tri(ground[i], ground[j], ground[k]); // bottom: down-facing
+    tri(top[i], top[k], top[j], planUv(top[i]), planUv(top[k]), planUv(top[j])); // top: up-facing
+    tri(ground[i], ground[j], ground[k], planUv(ground[i]), planUv(ground[j]), planUv(ground[k])); // bottom
   }
   // vertical walls, one quad per edge
+  let along = 0;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    tri(top[i], top[j], ground[j]);
-    tri(top[i], ground[j], ground[i]);
+    const len = top[i].distanceTo(top[j]);
+    const a0: [number, number] = [along, top[i].y];
+    const a1: [number, number] = [along + len, top[j].y];
+    const g0: [number, number] = [along, 0];
+    const g1: [number, number] = [along + len, 0];
+    tri(top[i], top[j], ground[j], a0, a1, g1);
+    tri(top[i], ground[j], ground[i], a0, g1, g0);
+    along += len;
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.computeVertexNormals();
   return geo;
 }
