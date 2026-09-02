@@ -242,9 +242,10 @@ describe('shading over bridged obstructions (the fixed-0.45m sample bug)', () =>
   });
 
   it('shadingFp re-keys when the structure clearance changes (v6 engine)', async () => {
-    const { shadingFp } = await import('../fingerprints');
+    const { shadingFp, SHADING_ENGINE_VERSION } = await import('../fingerprints');
     const grade = bridgedAt(undefined);
-    expect(shadingFp(grade)).toContain('e7|');
+    // the prefix is the CURRENT engine version — the pin must move with it
+    expect(shadingFp(grade)).toContain(`e${SHADING_ENGINE_VERSION}|`);
     const walk: Project = { ...grade, structureDefaults: { clearanceM: 2.2 } };
     expect(shadingFp(walk)).not.toBe(shadingFp(grade)); // sample points moved
   });
