@@ -277,6 +277,14 @@ const WALK_EYE_M = 1.7;
 
 /** Side of the scene's ground plane, metres — the aerial picture must cover it. */
 const GROUND_PLANE_M = 300;
+/**
+ * Gap between the stacked ground pictures. Not cosmetic: two coplanar surfaces
+ * closer than the depth buffer can resolve alternate as the camera moves, and
+ * the bottom one here is near black. Depth precision runs about z²/(near·2²⁴),
+ * so at 600 m it is already 8 cm — half a metre keeps a comfortable margin at
+ * every distance the studio is used at.
+ */
+const GROUND_STACK_M = 0.75;
 
 const ACTION = CameraControlsImpl.ACTION;
 
@@ -2432,13 +2440,21 @@ function SceneContent({
         </group>
       ) : (
         <>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -0.02, 0]} receiveShadow>
+          {/* The three ground pictures are STACKED, and how far apart they sit
+              is load-bearing. They used to be a CENTIMETRE apart with the
+              surround off (−0.02 / −0.01 / 0): at any normal viewing distance
+              the depth buffer cannot separate two surfaces that close — at
+              160 m it resolves about 5 mm, at 600 m about 8 cm — so the
+              near-black base plane fought through the aerial photo and painted
+              the map with black patches and stripes (owner, 2026-09-03). They
+              are half a metre apart now, whether the surround is on or off. */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -GROUND_STACK_M * 2, 0]} receiveShadow>
             <planeGeometry args={[GROUND_PLANE_M, GROUND_PLANE_M]} />
             <meshStandardMaterial color="#151a21" roughness={1} envMapIntensity={0.2} />
           </mesh>
           {/* the wide, coarse picture: the neighbourhood is still a map when
               the streamed surroundings are off */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.0 : -0.01, 0]} receiveShadow>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.0 : -GROUND_STACK_M, 0]} receiveShadow>
             <planeGeometry args={[wideSpanM, wideSpanM]} />
             <meshStandardMaterial map={wideGroundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
           </mesh>
