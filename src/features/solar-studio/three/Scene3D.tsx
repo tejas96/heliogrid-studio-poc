@@ -27,6 +27,8 @@ import { stringRemove } from '../lib/ops/string-ops';
 import { ObstructionGizmo, TableGizmo, WallGizmo } from './Gizmos';
 import { Measure, type MeasureMode } from './Measure';
 import { unitBaseY, unitWhere } from '../lib/unit-pos';
+import { clockHour, seasonDates } from '../lib/sun-chart';
+import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
 import { getRoofSurface } from './roof-textures';
@@ -466,6 +468,7 @@ export function Scene3D({
   const [viewMode, setViewMode] = useState<'map' | 'mesh'>(initialViewMode);
   const [showBuildings, setShowBuildings] = useState(true);
   const [showSunPath, setShowSunPath] = useState(true);
+  const [showSunChart, setShowSunChart] = useState(false);
   // ── inspect: isolate the picked entity, fly to it, walk the site ──────────
   // View state only: never persisted, never fingerprinted.
   const [isolate, setIsolate] = useState(false);
@@ -1337,7 +1340,17 @@ export function Scene3D({
           zIndex: 30,
           minWidth: 96,
         }}
-        aria-label={`Sun position: azimuth ${azDeg} degrees, altitude ${Math.max(0, altDeg)} degrees`}
+        aria-label={`Sun position: azimuth ${azDeg} degrees, altitude ${Math.max(0, altDeg)} degrees. Click for the sun chart.`}
+        role="button"
+        tabIndex={0}
+        title="Sun chart: the year's sun paths over this site's own skyline"
+        onClick={() => setShowSunChart((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setShowSunChart((v) => !v);
+          }
+        }}
       >
         <svg width="46" height="46" viewBox="0 0 46 46" aria-hidden style={{ display: 'block', margin: '0 auto' }}>
           <circle cx="23" cy="23" r="20" fill="none" stroke="var(--editor-line)" strokeWidth="1.5" />
@@ -1369,9 +1382,22 @@ export function Scene3D({
           Az {azDeg}° · Alt {Math.max(0, altDeg)}°
         </div>
         <div style={{ fontSize: 9.5, color: 'var(--editor-ink-2)', marginTop: 2 }}>
-          {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(hour)}
+          {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(clockHour(hour, loc.latLng.lng))} IST
         </div>
+        <div style={{ fontSize: 9, color: 'var(--editor-ink-2)', marginTop: 3, fontFamily: 'var(--mono)' }}>
+          {Math.abs(loc.latLng.lat).toFixed(4)}°{loc.latLng.lat >= 0 ? 'N' : 'S'} {Math.abs(loc.latLng.lng).toFixed(4)}°
+          {loc.latLng.lng >= 0 ? 'E' : 'W'}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--editor-ink-2)', marginTop: 1 }}>
+          {project.surround ? `≈ ${Math.round(project.surround.gradeM)} m above sea level` : 'elevation: fetch the surroundings'}
+        </div>
+        <div style={{ fontSize: 9, color: '#f5b942', marginTop: 4, opacity: 0.9 }}>{showSunChart ? 'close sun chart' : 'sun chart ▸'}</div>
       </div>
+      )}
+
+      {/* ── sun chart: the year's sun paths over the site's own skyline ── */}
+      {showSunChart && !meshMode && !heatmap && (
+        <SunChart project={project} date={simDate} hour={hour} onClose={() => setShowSunChart(false)} />
       )}
 
       {/* ── Google attribution for the real surroundings (required) ── */}
@@ -1533,7 +1559,9 @@ export function Scene3D({
           >
             {playing ? <Pause /> : <Play />}
           </button>
-          <span style={{ fontSize: 11, color: 'var(--editor-ink-2)', flex: 'none' }}>5 AM</span>
+          <span style={{ fontSize: 11, color: 'var(--editor-ink-2)', flex: 'none' }}>
+            {fmtHour(clockHour(5, loc.latLng.lng)).replace(':', ':')}
+          </span>
           <input
             type="range"
             min={5}
@@ -1544,7 +1572,9 @@ export function Scene3D({
             onChange={(e) => setHour(Number(e.target.value))}
             style={{ flex: 1, accentColor: '#f59e0b', height: 26 }}
           />
-          <span style={{ fontSize: 11, color: 'var(--editor-ink-2)', flex: 'none' }}>7 PM</span>
+          <span style={{ fontSize: 11, color: 'var(--editor-ink-2)', flex: 'none' }}>
+            {fmtHour(clockHour(19, loc.latLng.lng))}
+          </span>
         </div>
         <div
           style={{
@@ -1557,12 +1587,14 @@ export function Scene3D({
             alignItems: 'center',
           }}
         >
-          <b style={{ color: '#f5b942', fontVariantNumeric: 'tabular-nums' }}>{fmtHour(hour)}</b>
+          <b style={{ color: '#f5b942', fontVariantNumeric: 'tabular-nums' }} title={`solar time ${fmtHour(hour)}`}>
+            {fmtHour(clockHour(hour, loc.latLng.lng))} IST
+          </b>
           <span style={{ color: 'var(--editor-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <Sunrise size={13} /> {fmtHour(sunrise)}
+            <Sunrise size={13} /> {fmtHour(clockHour(sunrise, loc.latLng.lng))}
           </span>
           <span style={{ color: 'var(--editor-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <Sunset size={13} /> {fmtHour(sunset)}
+            <Sunset size={13} /> {fmtHour(clockHour(sunset, loc.latLng.lng))}
           </span>
         </div>
       </div>
@@ -2969,13 +3001,29 @@ function SceneContent({
       )}
 
       {!meshMode && showSunPath && (
-        <SunPath
-          lat={loc.latLng.lat}
-          lng={loc.latLng.lng}
-          date={date}
-          radius={R * 0.75}
-          northOffsetDeg={project.calibration.northOffsetDeg}
-        />
+        <>
+          {/* the year's envelope: solstices and the equinox, faint, so a
+              glance shows how far the sun swings between seasons */}
+          {seasonDates(date.getFullYear()).map((s) => (
+            <SunPath
+              key={s.label}
+              lat={loc.latLng.lat}
+              lng={loc.latLng.lng}
+              date={s.date}
+              radius={R * 0.75}
+              northOffsetDeg={project.calibration.northOffsetDeg}
+              faint
+              label={s.label}
+            />
+          ))}
+          <SunPath
+            lat={loc.latLng.lat}
+            lng={loc.latLng.lng}
+            date={date}
+            radius={R * 0.75}
+            northOffsetDeg={project.calibration.northOffsetDeg}
+          />
+        </>
       )}
       {!meshMode && sunVisible && (
         <mesh position={sunDir.clone().multiplyScalar(R * 0.75)}>
@@ -3101,12 +3149,17 @@ function SunPath({
   date,
   radius,
   northOffsetDeg = 0,
+  faint = false,
+  label,
 }: {
   lat: number;
   lng: number;
   date: Date;
   radius: number;
   northOffsetDeg?: number;
+  /** a season's arc: thin, no hour marks, one label at its top */
+  faint?: boolean;
+  label?: string;
 }) {
   const { points, hours } = useMemo(() => {
     const pts: THREE.Vector3[] = [];
@@ -3132,6 +3185,34 @@ function SunPath({
   }, [lat, lng, date, radius, northOffsetDeg]);
 
   if (points.length < 2) return null;
+  if (faint) {
+    const top = points.reduce((a, p) => (p.y > a.y ? p : a), points[0]);
+    return (
+      <group>
+        <Line points={points} color="#d4a017" lineWidth={1} transparent opacity={0.45} dashed dashSize={0.8} gapSize={0.8} />
+        {label && (
+          <Html position={[top.x, top.y + 1.5, top.z]} center zIndexRange={[10, 0]}>
+            <span
+              style={{
+                fontSize: 9.5,
+                color: '#d4a017',
+                background: 'rgba(0,0,0,0.45)',
+                borderRadius: 4,
+                padding: '1px 5px',
+                fontFamily: 'var(--mono)',
+                pointerEvents: 'none',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+                opacity: 0.85,
+              }}
+            >
+              {label}
+            </span>
+          </Html>
+        )}
+      </group>
+    );
+  }
   return (
     <group>
       <Line points={points} color="#d4a017" lineWidth={1.6} dashed dashSize={1.2} gapSize={0.6} />

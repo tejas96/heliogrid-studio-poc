@@ -9,8 +9,10 @@ import { roofsUnionAreaM2 } from './roof-topology';
 export { sunPosition, solarHourDate, sunriseSunset, type SunPos } from './sun';
 
 export function fmtHour(h: number): string {
-  const hh = Math.floor(h);
-  const mm = Math.round((h - hh) * 60);
+  // round to the minute FIRST: rounding the fraction alone gave "7:60 AM" at 7.995
+  const total = Math.round(h * 60);
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
   const ampm = hh >= 12 ? 'PM' : 'AM';
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
   return `${h12}:${String(mm).padStart(2, '0')} ${ampm}`;
