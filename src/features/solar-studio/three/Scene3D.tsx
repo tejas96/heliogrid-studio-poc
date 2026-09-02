@@ -19,11 +19,13 @@ import { HOVER_COLOR, PICK_COLOR, PickHalo } from './PickHalo';
 import { useOps } from '../store/useOps';
 import type { DesignOp } from '../lib/ops/types';
 import type { OpPreview } from '../lib/ops/run';
-import { inverterRemove } from '../lib/ops/electrical-ops';
-import { segmentDelete } from '../lib/ops/layout-ops';
-import { batteryRemove } from '../lib/ops/battery-ops';
-import { boxRemove } from '../lib/ops/box-ops';
-import { TableGizmo, WallGizmo } from './Gizmos';
+import { inverterPlace, inverterRemove } from '../lib/ops/electrical-ops';
+import { layoutGrow, panelsDelete, segmentDelete, segmentDuplicate } from '../lib/ops/layout-ops';
+import { batteryPlace, batteryRemove } from '../lib/ops/battery-ops';
+import { boxPlace, boxRemove } from '../lib/ops/box-ops';
+import { stringRemove } from '../lib/ops/string-ops';
+import { ObstructionGizmo, TableGizmo, WallGizmo } from './Gizmos';
+import { Measure, type MeasureMode } from './Measure';
 import { RealSurround } from './RealSurround';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
@@ -34,7 +36,7 @@ import type { PanelInstance } from './PanelsInstanced';
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
   return mine.find((p) => selected.has(p.id))?.id;
 }
-import { obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
+import { obstructionDuplicate, obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
 import { castsAnalyticalShadow } from '../lib/capabilities';
 import { polygonArea } from '../lib/geo';
 import type { ObstructionType } from '../types';
@@ -108,8 +110,14 @@ import {
   Footprints,
   Maximize2,
   Minimize2,
+  Ruler,
+  Triangle,
+  Shapes,
+  MoveVertical,
+  Eraser,
+  Keyboard,
 } from 'lucide-react';
-import { useActiveProject, useProjectPatch } from '../store/store';
+import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../lib/units';
 import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
 import { STRUCTURE_PROFILES } from '../lib/segment-ops';
@@ -184,6 +192,10 @@ const VIEW_DIRS: Record<ViewPreset, [number, number, number]> = {
 /** What the F key flies to: a sphere around the picked entity, in scene units. */
 export type FocusSphere = { x: number; y: number; z: number; r: number };
 
+/** What a wall click hangs while a place mode is on. */
+export type PlaceKind = 'inverter' | 'battery' | 'dcdb' | 'acdb';
+const PLACE_NAME: Record<PlaceKind, string> = { inverter: 'inverter', battery: 'battery', dcdb: 'DCDB', acdb: 'ACDB' };
+
 /** Eye height of the walkthrough camera above the deck it stands on. */
 const WALK_EYE_M = 1.7;
 
@@ -244,6 +256,21 @@ export function Scene3D({
   const ops = useOps();
   // non-module picks (obstruction / inverter / roof) — view state, never persisted
   const [pick, setPick] = useState<ScenePick | null>(null);
+  // a refused op says why, briefly, next to the rails
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showNotice = (text: string) => {
+    setNotice(text);
+    if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    noticeTimer.current = setTimeout(() => setNotice(null), 2600);
+  };
+  const { dispatch } = useStore();
+  // measure / place / keyboard help — view state only
+  const [measure, setMeasure] = useState<MeasureMode>('off');
+  const [measureClear, setMeasureClear] = useState(0);
+  const [measureCount, setMeasureCount] = useState(0);
+  const [placeKind, setPlaceKind] = useState<PlaceKind | null>(null);
+  const [showKeys, setShowKeys] = useState(false);
   const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
   // Phase 5: strings and cable runs on the model; `wiring` = module ids being
   // wired by hand (module clicks toggle membership while it is set)
@@ -252,7 +279,11 @@ export function Scene3D({
   const wiringSet = useMemo(() => (wiring ? new Set(wiring) : null), [wiring]);
   // Google's data attribution for the streamed surroundings (terms of use)
   const [surroundAttribution, setSurroundAttribution] = useState('');
-  const runOp: RunOp = (op, args) => ops.run(op, args);
+  const runOp: RunOp = (op, args) => {
+    const r = ops.run(op, args);
+    if (!r.ok) showNotice(r.refusal.reason);
+    return r;
+  };
   // Resolved HERE, outside <Canvas>. Anything inside the Canvas lives in the
   // react-three-fiber reconciler, which is a separate React root: store
   // context does not cross into it and `useStore()` throws there. Hooks stay
@@ -661,15 +692,64 @@ export function Scene3D({
     map.i = () => {
       if (pick) setIsolate((v) => !v);
     };
+    map.m = () => setMeasure((v) => (v === 'distance' ? 'off' : 'distance'));
+    map['?'] = () => setShowKeys((v) => !v);
+    map['/'] = map['?'];
+    map.h = map['?'];
+    // undo / redo, as in the 2D editor
+    if ((e.metaKey || e.ctrlKey) && key === 'z' && !inControl) {
+      e.preventDefault();
+      dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
+      return;
+    }
+    // Delete removes the selected modules, else the picked thing
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !inControl && structInteractive) {
+      e.preventDefault();
+      if (selectedSet.size > 0 && !wiring) {
+        runOp(panelsDelete, { ids: [...selectedSet] });
+        onSelectPanels?.([], false);
+        setPick(null);
+        return;
+      }
+      if (!pick) return;
+      const done = (() => {
+        switch (pick.kind) {
+          case 'table':
+            return runOp(segmentDelete, { segmentId: pick.id }).ok;
+          case 'obstruction':
+            return runOp(obstructionRemove, { id: pick.id }).ok;
+          case 'inverter':
+            return runOp(inverterRemove, { id: pick.id }).ok;
+          case 'battery':
+            return runOp(batteryRemove, { id: pick.id }).ok;
+          case 'box':
+            return runOp(boxRemove, { id: pick.id }).ok;
+          case 'string':
+            return runOp(stringRemove, { id: pick.id }).ok;
+          default:
+            showNotice('That cannot be deleted — a roof is drawn in Step 2, a run is re-routed from its card');
+            return false;
+        }
+      })();
+      if (done) setPick(null);
+      return;
+    }
     const fn = inControl ? undefined : map[key];
     if (fn) {
       e.preventDefault();
       fn();
       return;
     }
-    // Escape peels one layer at a time: walking stops first, then isolation,
-    // then an open card (its own listener does that); only a bare scene
-    // leaves the 3D view
+    // Escape peels one layer at a time: a tool mode stops first (measure,
+    // place, the key sheet), then walking, then isolation, then an open card
+    // (its own listener does that); only a bare scene leaves the 3D view
+    if (e.key === 'Escape' && (measure !== 'off' || placeKind || showKeys)) {
+      e.preventDefault();
+      setMeasure('off');
+      setPlaceKind(null);
+      setShowKeys(false);
+      return;
+    }
     if (e.key === 'Escape' && walk) {
       e.preventDefault();
       exitWalk();
@@ -765,6 +845,12 @@ export function Scene3D({
           onPickFocus={(f) => {
             pickFocusRef.current = f;
           }}
+          measure={measure}
+          measureClear={measureClear}
+          onMeasureCount={setMeasureCount}
+          placeKind={structInteractive ? placeKind : null}
+          onPlaced={() => setPlaceKind(null)}
+          onPlaceKind={structInteractive ? setPlaceKind : null}
           date={date}
           meshMode={meshMode}
           focusRoofId={focusRoofId}
@@ -942,50 +1028,51 @@ export function Scene3D({
         <button className="tool-btn" data-tip="Right view" data-tip-right="" aria-label="Right view" onClick={() => goView('right')}>
           <ChevronsRight />
         </button>
-        <div className="tool-sep" />
-        <div className="tool-group-label">Inspect</div>
-        <button
-          className="tool-btn"
-          data-tip={pick ? 'Fly to the selection (F)' : 'Select something, then fly to it (F)'}
-          data-tip-right=""
-          aria-label="Fly to the selection"
-          disabled={!pick}
-          onClick={focusPick}
-        >
-          <Crosshair />
-        </button>
-        <button
-          className={`tool-btn ${isolate && pick ? 'on' : ''}`}
-          data-tip={isolate && pick ? 'Show everything again (I)' : pick ? 'Isolate the selection (I)' : 'Select something, then isolate it (I)'}
-          data-tip-right=""
-          aria-label="Isolate the selection"
-          aria-pressed={isolate && !!pick}
-          disabled={!pick}
-          onClick={() => setIsolate((v) => !v)}
-        >
-          <Focus />
-        </button>
-        <button
-          className={`tool-btn ${walk ? 'on' : ''}`}
-          data-tip={walk ? 'Leave the walkthrough (Esc)' : 'Walk the site (W)'}
-          data-tip-right=""
-          aria-label="Walk the site"
-          aria-pressed={walk}
-          onClick={() => (walk ? exitWalk() : enterWalk())}
-        >
-          <Footprints />
-        </button>
-        <button
-          className={`tool-btn ${fullscreen ? 'on' : ''}`}
-          data-tip={fullscreen ? 'Leave full screen' : 'Full screen'}
-          data-tip-right=""
-          aria-label="Toggle full screen"
-          aria-pressed={fullscreen}
-          onClick={toggleFullscreen}
-        >
-          {fullscreen ? <Minimize2 /> : <Maximize2 />}
-        </button>
       </div>
+      )}
+
+      {/* ── inspect rail (right, below the sun widget) ── */}
+      {!heatmap && (
+        <div className="tool-rail dark" style={{ right: 14, top: 150 }} role="toolbar" aria-label="Inspect">
+          <div className="tool-group-label">Inspect</div>
+          <button
+            className="tool-btn"
+            data-tip={pick ? 'Fly to the selection (F)' : 'Select something, then fly to it (F)'}
+            aria-label="Fly to the selection"
+            disabled={!pick}
+            onClick={focusPick}
+          >
+            <Crosshair />
+          </button>
+          <button
+            className={`tool-btn ${isolate && pick ? 'on' : ''}`}
+            data-tip={isolate && pick ? 'Show everything again (I)' : pick ? 'Isolate the selection (I)' : 'Select something, then isolate it (I)'}
+            aria-label="Isolate the selection"
+            aria-pressed={isolate && !!pick}
+            disabled={!pick}
+            onClick={() => setIsolate((v) => !v)}
+          >
+            <Focus />
+          </button>
+          <button
+            className={`tool-btn ${walk ? 'on' : ''}`}
+            data-tip={walk ? 'Leave the walkthrough (Esc)' : 'Walk the site (W)'}
+            aria-label="Walk the site"
+            aria-pressed={walk}
+            onClick={() => (walk ? exitWalk() : enterWalk())}
+          >
+            <Footprints />
+          </button>
+          <button
+            className={`tool-btn ${fullscreen ? 'on' : ''}`}
+            data-tip={fullscreen ? 'Leave full screen' : 'Full screen'}
+            aria-label="Toggle full screen"
+            aria-pressed={fullscreen}
+            onClick={toggleFullscreen}
+          >
+            {fullscreen ? <Minimize2 /> : <Maximize2 />}
+          </button>
+        </div>
       )}
 
       {/* ── walkthrough hint ── */}
@@ -1010,6 +1097,139 @@ export function Scene3D({
           }}
         >
           Walking · W A S D move · Q E climb · drag to look · Shift = small steps · Esc leaves
+        </div>
+      )}
+
+      {/* ── tool rail: measure, place, keys (right side, above the timeline) ── */}
+      {!heatmap && !meshMode && (
+        <div className="tool-rail dark" style={{ right: 14, bottom: 96 }} role="toolbar" aria-label="Measure and place">
+          <div className="tool-group-label">Measure</div>
+          <button
+            className={`tool-btn ${measure === 'distance' ? 'on' : ''}`}
+            data-tip={measure === 'distance' ? 'Stop measuring (Esc)' : 'Measure a distance (M)'}
+            aria-label="Measure a distance"
+            aria-pressed={measure === 'distance'}
+            onClick={() => setMeasure((v) => (v === 'distance' ? 'off' : 'distance'))}
+          >
+            <Ruler />
+          </button>
+          <button
+            className={`tool-btn ${measure === 'angle' ? 'on' : ''}`}
+            data-tip={measure === 'angle' ? 'Stop measuring (Esc)' : 'Measure an angle: arm, corner, arm'}
+            aria-label="Measure an angle"
+            aria-pressed={measure === 'angle'}
+            onClick={() => setMeasure((v) => (v === 'angle' ? 'off' : 'angle'))}
+          >
+            <Triangle />
+          </button>
+          <button
+            className={`tool-btn ${measure === 'area' ? 'on' : ''}`}
+            data-tip={measure === 'area' ? 'Stop measuring (Esc)' : 'Measure an area: click the corners'}
+            aria-label="Measure an area"
+            aria-pressed={measure === 'area'}
+            onClick={() => setMeasure((v) => (v === 'area' ? 'off' : 'area'))}
+          >
+            <Shapes />
+          </button>
+          <button
+            className={`tool-btn ${measure === 'elevation' ? 'on' : ''}`}
+            data-tip={measure === 'elevation' ? 'Stop measuring (Esc)' : 'Read a height above ground and deck'}
+            aria-label="Measure an elevation"
+            aria-pressed={measure === 'elevation'}
+            onClick={() => setMeasure((v) => (v === 'elevation' ? 'off' : 'elevation'))}
+          >
+            <MoveVertical />
+          </button>
+          {measureCount > 0 && (
+            <button
+              className="tool-btn"
+              data-tip={`Clear ${measureCount} measurement${measureCount === 1 ? '' : 's'}`}
+              aria-label="Clear measurements"
+              onClick={() => setMeasureClear((n) => n + 1)}
+            >
+              <Eraser />
+            </button>
+          )}
+          <div className="tool-sep" />
+          <button
+            className={`tool-btn ${showKeys ? 'on' : ''}`}
+            data-tip="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+            aria-pressed={showKeys}
+            onClick={() => setShowKeys((v) => !v)}
+          >
+            <Keyboard />
+          </button>
+        </div>
+      )}
+
+      {/* ── mode hints and refusals ── */}
+      {(measure !== 'off' || placeKind || notice) && !walk && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 140,
+            transform: 'translateX(-50%)',
+            background: notice ? 'rgba(120,32,32,0.92)' : 'rgba(20,24,30,0.88)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid var(--editor-line)',
+            borderRadius: 999,
+            color: 'var(--editor-ink)',
+            padding: '6px 14px',
+            fontSize: 12,
+            zIndex: 30,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}
+        >
+          {notice
+            ? notice
+            : placeKind
+              ? `Tap a wall of the building to hang the ${PLACE_NAME[placeKind]} · Esc cancels`
+              : measure === 'distance'
+                ? 'Distance · click two points on the model · Esc stops'
+                : measure === 'angle'
+                  ? 'Angle · click an arm, the corner, the other arm · Esc stops'
+                  : measure === 'area'
+                    ? 'Area · click the corners, then the first corner again (or double-click) · Esc stops'
+                    : 'Elevation · click a point to read its height · Esc stops'}
+        </div>
+      )}
+
+      {/* ── keyboard sheet ── */}
+      {showKeys && (
+        <div
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(20,24,30,0.94)',
+            backdropFilter: 'blur(12px)',
+            border: '1px solid var(--editor-line)',
+            borderRadius: 12,
+            color: 'var(--editor-ink)',
+            padding: '14px 18px',
+            fontSize: 12,
+            lineHeight: 1.7,
+            zIndex: 40,
+            minWidth: 300,
+            fontFamily: 'var(--mono)',
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Keys · Esc closes</div>
+          <div>1 2 3 4 5 6 — top · iso · front · back · left · right</div>
+          <div>arrows · + − — orbit · zoom</div>
+          <div>click · shift-click — select a module · add to the selection</div>
+          <div>F — fly to the selection · I — isolate it · W — walk the site</div>
+          <div>M — measure a distance · ? — this sheet</div>
+          <div>Delete — remove the selected modules or the picked thing</div>
+          <div>⌘/Ctrl Z · ⇧⌘ Z — undo · redo</div>
+          <div>Shift while dragging a handle — snap (0.1 m · 5° · 15°)</div>
         </div>
       )}
 
@@ -1459,6 +1679,12 @@ function SceneContent({
   showSunPath,
   isolate,
   onPickFocus,
+  measure,
+  measureClear,
+  onMeasureCount,
+  placeKind,
+  onPlaced,
+  onPlaceKind,
   date,
   meshMode,
   focusRoofId,
@@ -1500,6 +1726,14 @@ function SceneContent({
   isolate: ScenePick | null;
   /** where the F key should fly: a sphere around the picked entity */
   onPickFocus: (f: FocusSphere | null) => void;
+  measure: MeasureMode;
+  measureClear: number;
+  onMeasureCount: (n: number) => void;
+  /** a wall click hangs this instead of picking the roof */
+  placeKind: PlaceKind | null;
+  onPlaced: () => void;
+  /** the roof card asks to start placing (null = read-only scene) */
+  onPlaceKind: ((k: PlaceKind) => void) | null;
   date: Date;
   meshMode: boolean;
   focusRoofId?: string;
@@ -1948,6 +2182,32 @@ function SceneContent({
             onClick={(e) => {
               if (e.delta > 4) return;
               e.stopPropagation();
+              if (placeKind) {
+                // hang the unit on the wall edge nearest the click
+                const lx = e.point.x - originShift[0];
+                const ly = -(e.point.z - originShift[2]);
+                let best: { edgeIndex: number; t: number; d: number } | null = null;
+                for (let i = 0; i < r.polygon.length; i++) {
+                  const a = r.polygon[i];
+                  const b = r.polygon[(i + 1) % r.polygon.length];
+                  const vx = b.x - a.x;
+                  const vy = b.y - a.y;
+                  const t = Math.max(0.02, Math.min(0.98, ((lx - a.x) * vx + (ly - a.y) * vy) / (vx * vx + vy * vy || 1)));
+                  const d = Math.hypot(a.x + vx * t - lx, a.y + vy * t - ly);
+                  if (!best || d < best.d) best = { edgeIndex: i, t, d };
+                }
+                if (best) {
+                  const at = { roofId: r.id, edgeIndex: best.edgeIndex, t: best.t };
+                  const res =
+                    placeKind === 'inverter'
+                      ? runOp(inverterPlace, { ...at, heightM: 1.5 })
+                      : placeKind === 'battery'
+                        ? runOp(batteryPlace, { ...at, heightM: 0 })
+                        : runOp(boxPlace, { ...at, kind: placeKind, heightM: 1.2 });
+                  if (res.ok) onPlaced();
+                }
+                return;
+              }
               onPick({ kind: 'roof', id: r.id });
             }}
             onPointerOver={(e) => {
@@ -1973,6 +2233,45 @@ function SceneContent({
                   `${project.panels.filter((p) => p.roofId === r.id && p.enabled).length} modules`,
                 ]}
                 onClose={() => onPick(null)}
+                // on-object placement: choose here, then tap the wall it goes on
+                actions={
+                  onPlaceKind && !meshMode
+                    ? [
+                        {
+                          label: 'Hang inverter',
+                          onClick: () => {
+                            onPlaceKind('inverter');
+                            onPick(null);
+                          },
+                        },
+                        ...(project.components.battery
+                          ? [
+                              {
+                                label: 'Stand battery',
+                                onClick: () => {
+                                  onPlaceKind('battery');
+                                  onPick(null);
+                                },
+                              },
+                            ]
+                          : []),
+                        {
+                          label: 'Hang DCDB',
+                          onClick: () => {
+                            onPlaceKind('dcdb');
+                            onPick(null);
+                          },
+                        },
+                        {
+                          label: 'Hang ACDB',
+                          onClick: () => {
+                            onPlaceKind('acdb');
+                            onPick(null);
+                          },
+                        },
+                      ]
+                    : []
+                }
               />
             )}
           </group>
@@ -2021,6 +2320,9 @@ function SceneContent({
                 picked={picked}
               />
             )}
+            {picked && !meshMode && structEdit === null && (
+              <ObstructionGizmo project={project} id={o.id} planeY={baseY} runOp={runOp} />
+            )}
             {picked && (
               <EntityLabel
                 position={[o.center.x, baseY + o.heightM + 0.7, -o.center.y]}
@@ -2032,6 +2334,7 @@ function SceneContent({
                 onClose={() => onPick(null)}
                 actions={[
                   { label: 'Rotate 90°', onClick: () => runOp(obstructionRotate, { id: o.id, deltaDeg: 90 }) },
+                  { label: 'Duplicate', onClick: () => runOp(obstructionDuplicate, { id: o.id }) },
                   {
                     label: casts ? 'Stop casting' : 'Cast shadow',
                     onClick: () => runOp(obstructionSetCastsShadow, { id: o.id, castsShadow: !casts }),
@@ -2133,6 +2436,10 @@ function SceneContent({
               onClose={() => onPick(null)}
               actions={[
                 { label: 'Edit table', onClick: () => onStructOpen(seg.id, selectedPanelOf(mine, selectedIds)) },
+                // grow the table in place; the kernel refuses when the roof has no room
+                { label: '+ row', onClick: () => runOp(layoutGrow, { segmentId: seg.id, axis: 'row', side: 'bottom', count: 1 }) },
+                { label: '+ column', onClick: () => runOp(layoutGrow, { segmentId: seg.id, axis: 'column', side: 'right', count: 1 }) },
+                { label: 'Duplicate', onClick: () => runOp(segmentDuplicate, { segmentId: seg.id }) },
                 {
                   label: 'Remove table',
                   danger: true,
@@ -2163,6 +2470,26 @@ function SceneContent({
           isolate={isolate}
         />
       )}
+
+      {/* measurements: distance / angle / area / elevation on the real geometry */}
+      <Measure
+        mode={measure}
+        clearSignal={measureClear}
+        onCount={onMeasureCount}
+        deckHeightAt={(p) => {
+          for (const r of project.roofs) {
+            const poly = r.polygon;
+            let inside = false;
+            for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+              const a = poly[i];
+              const b = poly[j];
+              if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+            }
+            if (inside) return surfAt(r.id, p);
+          }
+          return null;
+        }}
+      />
 
       {/* gizmos — direct manipulation of the picked thing through the ops kernel */}
       {!meshMode &&

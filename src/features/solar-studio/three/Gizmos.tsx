@@ -22,11 +22,127 @@ import { panelsNudge, segmentSetAzimuth, segmentSetTilt } from '../lib/ops/layou
 import { inverterMove } from '../lib/ops/electrical-ops';
 import { batteryMove } from '../lib/ops/battery-ops';
 import { boxMove } from '../lib/ops/box-ops';
+import { obstructionMove, obstructionRotate } from '../lib/ops/site-ops';
 import { wallOutward } from '../lib/battery';
 import { pointSegDist } from '../lib/geo';
 import { PanelsInstanced, type PanelInstance } from './PanelsInstanced';
 
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
+
+/**
+ * Obstruction gizmo: a move handle (drag it across the roof) and a rotate
+ * handle (drag it around the centre; Shift snaps to 15°). Every drag previews
+ * obstruction.move / obstruction.rotate and runs it on release, like the
+ * table gizmo — the kernel decides, the handle only asks.
+ */
+export function ObstructionGizmo({
+  project,
+  id,
+  planeY,
+  runOp,
+}: {
+  project: Project;
+  id: string;
+  /** the roof surface under the obstruction — the drag plane */
+  planeY: number;
+  runOp: RunOp;
+}) {
+  const toPlane = usePlanePointer();
+  const [drag, setDrag] = useState<{ kind: 'move' | 'rotate'; grabAng: number; startDeg: number; pos: XY } | null>(null);
+  const [preview, setPreview] = useState<OpPreview | null>(null);
+  const o = project.obstructions.find((x) => x.id === id);
+  if (!o) return null;
+  const size = o.shape === 'circle' ? o.diameterM : Math.max(o.lengthM, o.widthM);
+  const top = planeY + o.heightM;
+  const angleAt = (p: XY) => Math.atan2(p.y - o.center.y, p.x - o.center.x);
+
+  const startMove = (e: React.PointerEvent) => {
+    const p = toPlane(e, planeY);
+    if (!p) return;
+    setDrag({ kind: 'move', grabAng: 0, startDeg: o.rotationDeg, pos: p });
+    setPreview(previewOp(project, obstructionMove, { id, center: o.center }));
+  };
+  const startRotate = (e: React.PointerEvent) => {
+    const p = toPlane(e, planeY);
+    if (!p) return;
+    setDrag({ kind: 'rotate', grabAng: angleAt(p), startDeg: o.rotationDeg, pos: p });
+    setPreview(previewOp(project, obstructionRotate, { id, deltaDeg: 0 }));
+  };
+  const move = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const p = toPlane(e, planeY);
+    if (!p) return;
+    if (drag.kind === 'move') {
+      // the grab point rides with the pointer; the obstruction keeps its offset
+      const center = { x: o.center.x + (p.x - drag.pos.x), y: o.center.y + (p.y - drag.pos.y) };
+      const snapped = e.shiftKey ? { x: Math.round(center.x * 10) / 10, y: Math.round(center.y * 10) / 10 } : center;
+      setPreview(previewOp(project, obstructionMove, { id, center: snapped }));
+    } else {
+      let delta = ((angleAt(p) - drag.grabAng) * 180) / Math.PI;
+      if (e.shiftKey) delta = Math.round(delta / 15) * 15;
+      setPreview(previewOp(project, obstructionRotate, { id, deltaDeg: Math.round(delta) }));
+    }
+  };
+  const end = (_e: React.PointerEvent, cancelled: boolean) => {
+    const pv = preview;
+    const d = drag;
+    setDrag(null);
+    setPreview(null);
+    if (cancelled || !pv || !pv.ok || !d) return;
+    const next = pv.next.obstructions.find((x) => x.id === id);
+    if (!next) return;
+    if (d.kind === 'move') {
+      if (next.center.x !== o.center.x || next.center.y !== o.center.y) runOp(obstructionMove, { id, center: next.center });
+    } else {
+      const delta = next.rotationDeg - o.rotationDeg;
+      if (delta) runOp(obstructionRotate, { id, deltaDeg: delta });
+    }
+  };
+
+  // ghost: the previewed footprint
+  const ghost = preview?.ok ? preview.next.obstructions.find((x) => x.id === id) : null;
+  const gx = ghost ? ghost.center.x : o.center.x;
+  const gy = ghost ? ghost.center.y : o.center.y;
+  const gr = ghost ? ghost.rotationDeg : o.rotationDeg;
+
+  return (
+    <group>
+      {ghost && (
+        <mesh position={[gx, planeY + o.heightM / 2, -gy]} rotation={[0, (-gr * Math.PI) / 180, 0]}>
+          {o.shape === 'circle' ? (
+            <cylinderGeometry args={[o.diameterM / 2, o.diameterM / 2, o.heightM, 24]} />
+          ) : (
+            <boxGeometry args={[o.lengthM, o.heightM, o.widthM]} />
+          )}
+          <meshBasicMaterial color="#ffc766" transparent opacity={0.35} depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
+      <Handle
+        position={[o.center.x, top + 0.5, -o.center.y]}
+        title="Drag to move the obstruction (Shift snaps to 0.1 m)"
+        active={drag?.kind === 'move'}
+        onStart={startMove}
+        onMove={move}
+        onEnd={end}
+      >
+        <Move size={20} aria-hidden />
+      </Handle>
+      <Handle
+        position={[o.center.x + size / 2 + 0.9, top + 0.5, -o.center.y]}
+        title="Drag to turn the obstruction (Shift snaps to 15°)"
+        active={drag?.kind === 'rotate'}
+        onStart={startRotate}
+        onMove={move}
+        onEnd={end}
+      >
+        <RotateCw size={20} aria-hidden />
+      </Handle>
+      {drag && preview && (
+        <Readout position={[gx + size / 2 + 0.6, top + 0.6, -gy]} preview={preview} />
+      )}
+    </group>
+  );
+}
 
 /** plan point (x east, y north-ish) from a pointer event, on the plane y = planeY */
 export function usePlanePointer() {

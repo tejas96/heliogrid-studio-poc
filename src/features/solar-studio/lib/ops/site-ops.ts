@@ -88,6 +88,32 @@ export const obstructionRotate = defineOp<{ id: string; deltaDeg: number }>({
   }),
 });
 
+/** A copy of an obstruction, set one width beside the original on the same roof. */
+export const obstructionDuplicate = defineOp<{ id: string }>({
+  id: 'obstruction.duplicate',
+  layer: 'design',
+  label: () => 'Duplicate obstruction',
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) => {
+    const o = p.obstructions.find((x) => x.id === a.id)!;
+    const step = (o.shape === 'circle' ? o.diameterM : o.widthM) + 0.5;
+    const rad = (o.rotationDeg * Math.PI) / 180;
+    return {
+      obstructions: [
+        ...p.obstructions,
+        {
+          ...o,
+          id: genId('obs'),
+          label: `${o.label} copy`,
+          center: { x: o.center.x + Math.cos(rad) * step, y: o.center.y + Math.sin(rad) * step },
+          provenance: { source: 'manual' as const },
+        },
+      ],
+    };
+  },
+});
+registerOp(obstructionDuplicate);
+
 export const obstructionMove = defineOp<{ id: string; center: XY; roofId?: string | null }>({
   id: 'obstruction.move',
   layer: 'geometry',

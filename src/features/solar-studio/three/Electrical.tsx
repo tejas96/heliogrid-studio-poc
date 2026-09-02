@@ -311,9 +311,11 @@ export function ElectricalOverlay({
             {r.tube && (
               <mesh
                 geometry={r.tube}
-                // runs lie under the modules; the raycaster filter in Scene3D
-                // lets this sleeve win the click even when glass is in front
-                userData={{ pickPriority: 1 }}
+                // Runs lie under the modules. Letting the sleeve win through
+                // the glass (pickPriority) stole a third of every module's
+                // clicks, so a run is picked only where it is exposed — the
+                // string card's "Cable run" and the inverter's "AC run" reach
+                // the rest.
                 onClick={(e) => {
                   if (e.delta > 4) return;
                   e.stopPropagation();
