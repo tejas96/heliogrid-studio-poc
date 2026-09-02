@@ -24,6 +24,10 @@ export interface RadialItem {
   active?: boolean;
   /** an engaged tool that deserves the brand colour rather than plain white */
   accent?: boolean;
+  /** a destructive tool (erase) — engaged, it goes red rather than white */
+  danger?: boolean;
+  /** how many of this thing the design already has, as a small badge */
+  count?: number;
   disabled?: boolean;
   /**
    * A one-shot action (open a sheet, fly the camera, copy a link) — the menu
@@ -53,6 +57,11 @@ const ARC_END = 68;
 const R_INNER = 88;
 /** the tool arc */
 const R_OUTER = 178;
+/**
+ * One group needs no group ring, so its tools come in close on a single arc —
+ * a lone hub sitting between the trigger and its own tools would say nothing.
+ */
+const R_SOLO = 132;
 /** the widest a tool may sit from its neighbour before the arc tightens */
 const STEP_MAX = 24;
 
@@ -151,6 +160,9 @@ export function RadialMenu({
   const hubAngles = useMemo(() => hubArcAngles(live.length), [live.length]);
   const toolAngles = useMemo(() => toolArcAngles(current?.items.length ?? 0), [current]);
 
+  // one group carries no hub ring, so its tools take the inner radius instead
+  const solo = live.length < 2;
+  const toolRadius = solo ? R_SOLO : R_OUTER;
   const total = live.length + (current?.items.length ?? 0);
 
   return (
@@ -164,7 +176,7 @@ export function RadialMenu({
       {open && <div className="halo-glow" aria-hidden />}
 
       <div className="halo-ring" role="menu" aria-label={ariaLabel} aria-hidden={!open}>
-        {live.map((g, i) => {
+        {(solo ? [] : live).map((g, i) => {
           const at = place(hubAngles[i], R_INNER);
           const on = current?.id === g.id;
           return (
@@ -185,14 +197,19 @@ export function RadialMenu({
         })}
 
         {current?.items.map((it, i) => {
-          const at = place(toolAngles[i], R_OUTER);
+          const at = place(toolAngles[i], toolRadius);
+          const state = it.active ? (it.danger ? 'danger' : it.accent ? 'accent' : 'on') : '';
           return (
             <button
               key={`${current.id}:${it.id}`}
               role="menuitem"
-              className={`halo-item ${it.active ? (it.accent ? 'accent' : 'on') : ''}`}
+              className={`halo-item ${state}`}
               style={
-                { '--x': `${at.x}px`, '--y': `${at.y}px`, '--i': live.length + i } as React.CSSProperties
+                {
+                  '--x': `${at.x}px`,
+                  '--y': `${at.y}px`,
+                  '--i': (solo ? 0 : live.length) + i,
+                } as React.CSSProperties
               }
               tabIndex={open ? 0 : -1}
               disabled={it.disabled}
@@ -206,6 +223,7 @@ export function RadialMenu({
             >
               <span className="halo-icon">{it.icon}</span>
               <span className="halo-label">{it.label}</span>
+              {it.count !== undefined && it.count > 0 && <span className="count">{it.count}</span>}
             </button>
           );
         })}

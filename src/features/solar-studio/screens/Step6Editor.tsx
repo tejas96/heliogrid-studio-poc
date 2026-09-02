@@ -17,6 +17,7 @@ import {
   ChevronsDown,
   ChevronsUp,
   Eraser,
+  Eye,
   Ban,
   Fence,
   Footprints,
@@ -48,6 +49,7 @@ import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { SatCanvas, type SatCanvasHandle, polyPath, useCanvasFrame } from '../components/SatCanvas';
 import { MeasureOverlay, useMeasure } from '../components/MeasureTool';
 import { Dialog, EmptyState, OptionCard, Sheet } from '../components/ui';
+import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { ObstructionLayer } from './Step3Obstructions';
 import type {
   ArraySegment,
@@ -1061,6 +1063,188 @@ export function Step6Editor() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
+  // ── the Halo menu's contents ──────────────────────────────────────────────
+  // The same four groups the vertical rail carried as headings, now the inner
+  // ring. Every shortcut still works from the keyboard whether the menu is
+  // open or shut, so the ring is a way IN, never the only way.
+  const editorGroups: RadialGroup[] = useMemo(
+    () => [
+      {
+        id: 'view',
+        label: 'View',
+        icon: <Eye />,
+        items: [
+          {
+            id: 'heatmap',
+            icon: <Sun />,
+            label: 'Heat',
+            tip: 'Irradiance heatmap\nH',
+            active: heatmap,
+            accent: true,
+            onClick: () => setHeatmap((v) => !v),
+          },
+          {
+            id: 'strings',
+            icon: <Cable />,
+            label: 'Strings',
+            tip: 'Show strings\nS',
+            active: showStrings,
+            onClick: () => setShowStrings((v) => !v),
+          },
+          {
+            id: 'why',
+            icon: <ListChecks />,
+            label: 'Why',
+            tip: 'Why this layout?\nDecision log + Copilot suggestions',
+            active: whySheet,
+            onClick: () => setWhySheet((v) => !v),
+          },
+          {
+            id: 'measure',
+            icon: <PencilRuler />,
+            label: 'Measure',
+            tip: 'Measure distance\nClick two points',
+            active: measure.active,
+            onClick: measure.toggle,
+          },
+        ],
+      },
+      {
+        id: 'build',
+        label: 'Build',
+        icon: <Grid3x3 />,
+        items: [
+          {
+            id: 'select',
+            icon: <MousePointer2 />,
+            label: 'Select',
+            tip: 'Select\nV',
+            active: tool === 'select' && !manualString,
+            onClick: () => activate('select'),
+          },
+          {
+            id: 'panels',
+            icon: <Grid3x3 />,
+            label: 'Table',
+            tip: 'Table — drag to draw rows of modules · click adds one\nP',
+            active: tool === 'panels',
+            disabled: locked,
+            onClick: () => activate('panels'),
+          },
+          {
+            id: 'erase',
+            icon: <Eraser />,
+            label: 'Erase',
+            tip: 'Erase — panels, walkways, rails, arresters, inverter, meter\nE',
+            active: tool === 'erase',
+            danger: true,
+            disabled: locked,
+            onClick: () => activate('erase'),
+          },
+        ],
+      },
+      {
+        id: 'safety',
+        label: 'Safety',
+        icon: <Fence />,
+        items: [
+          {
+            id: 'walkway',
+            icon: <Footprints />,
+            label: 'Walkway',
+            tip: 'Walkway\nW',
+            active: tool === 'walkway',
+            disabled: locked,
+            count: project.walkways.length,
+            onClick: () => activate('walkway'),
+          },
+          {
+            id: 'keepout',
+            icon: <Ban />,
+            label: 'Zone',
+            tip: 'No-build zone — drag an area panels must avoid\nK',
+            active: tool === 'keepout',
+            disabled: locked,
+            count: project.keepouts.length,
+            onClick: () => activate('keepout'),
+          },
+          {
+            id: 'rail',
+            icon: <Fence />,
+            label: 'Rail',
+            tip: 'Safety rail\nR',
+            active: tool === 'rail',
+            disabled: locked,
+            count: project.rails.length,
+            onClick: () => activate('rail'),
+          },
+          {
+            id: 'arrester',
+            icon: <Zap />,
+            label: 'Arrester',
+            tip: 'Lightning arrester\nL',
+            active: tool === 'arrester',
+            disabled: locked,
+            count: project.arresters.length,
+            onClick: () => activate('arrester'),
+          },
+        ],
+      },
+      {
+        id: 'electrical',
+        label: 'Electrical',
+        icon: <PlugZap />,
+        items: [
+          {
+            id: 'inverter',
+            icon: <PlugZap />,
+            label: 'Inverter',
+            tip: 'Mount inverter\nI',
+            active: tool === 'inverter',
+            disabled: locked,
+            count: project.inverterPlacements.length,
+            onClick: () => activate('inverter'),
+          },
+          {
+            id: 'stringing',
+            icon: <Cable />,
+            label: 'String',
+            tip: 'Stringing\nG',
+            active: manualString !== null,
+            disabled: locked,
+            onClick: openStringing,
+          },
+          {
+            id: 'string-info',
+            icon: <Info />,
+            label: 'Info',
+            tip: 'String connections',
+            oneShot: true,
+            onClick: () => setStringInfo(true),
+          },
+        ],
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      heatmap,
+      showStrings,
+      whySheet,
+      measure.active,
+      measure.toggle,
+      tool,
+      manualString,
+      locked,
+      project.walkways.length,
+      project.keepouts.length,
+      project.rails.length,
+      project.arresters.length,
+      project.inverterPlacements.length,
+      activate,
+      openStringing,
+    ],
+  );
+
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       {/* The 3D scene is a persistent layer, not a replacement: once opened it
@@ -1373,146 +1557,8 @@ export function Step6Editor() {
         </div>
       )}
 
-      {/* left tool rail */}
-      <div
-        className="tool-rail dark"
-        style={{ left: 14, top: chromeTop }}
-        role="toolbar"
-        aria-label="Editor tools"
-        aria-orientation="vertical"
-      >
-        <div className="tool-group-label">View</div>
-        <RailBtn
-          icon={<Sun />}
-          label="Irradiance heatmap"
-          tip={'Irradiance heatmap\nH'}
-          active={heatmap}
-          accent
-          pressed={heatmap}
-          onClick={() => setHeatmap((v) => !v)}
-        />
-        <RailBtn
-          icon={<Cable />}
-          label="Show strings"
-          tip={'Show strings\nS'}
-          active={showStrings}
-          pressed={showStrings}
-          onClick={() => setShowStrings((v) => !v)}
-        />
-        <RailBtn
-          icon={<ListChecks />}
-          label="Why this layout?"
-          tip={'Why this layout?\nDecision log + Copilot suggestions'}
-          active={whySheet}
-          pressed={whySheet}
-          onClick={() => setWhySheet((v) => !v)}
-        />
-        <RailBtn
-          icon={<PencilRuler />}
-          label="Measure distance"
-          tip={'Measure distance\nClick two points'}
-          active={measure.active}
-          pressed={measure.active}
-          onClick={measure.toggle}
-        />
-        <div className="tool-sep" />
-        <div className="tool-group-label">Build</div>
-        <RailBtn
-          icon={<MousePointer2 />}
-          label="Select"
-          tip={'Select\nV'}
-          active={tool === 'select' && !manualString}
-          pressed={tool === 'select' && !manualString}
-          onClick={() => activate('select')}
-        />
-        <RailBtn
-          icon={<Grid3x3 />}
-          label="Table"
-          tip={'Table — drag to draw rows of modules · click adds one\nP'}
-          active={tool === 'panels'}
-          pressed={tool === 'panels'}
-          disabled={locked}
-          onClick={() => activate('panels')}
-        />
-        <RailBtn
-          icon={<Eraser />}
-          label="Erase"
-          tip={'Erase — panels, walkways, rails, arresters, inverter, meter\nE'}
-          active={tool === 'erase'}
-          pressed={tool === 'erase'}
-          danger
-          disabled={locked}
-          onClick={() => activate('erase')}
-        />
-        <div className="tool-sep" />
-        <div className="tool-group-label">Safety</div>
-        <RailBtn
-          icon={<Footprints />}
-          label="Walkway"
-          tip={'Walkway\nW'}
-          active={tool === 'walkway'}
-          pressed={tool === 'walkway'}
-          disabled={locked}
-          count={project.walkways.length}
-          onClick={() => activate('walkway')}
-        />
-        <RailBtn
-          icon={<Ban />}
-          label="No-build zone"
-          tip={'No-build zone — drag an area panels must avoid\nK'}
-          active={tool === 'keepout'}
-          pressed={tool === 'keepout'}
-          disabled={locked}
-          count={project.keepouts.length}
-          onClick={() => activate('keepout')}
-        />
-        <RailBtn
-          icon={<Fence />}
-          label="Safety rail"
-          tip={'Safety rail\nR'}
-          active={tool === 'rail'}
-          pressed={tool === 'rail'}
-          disabled={locked}
-          count={project.rails.length}
-          onClick={() => activate('rail')}
-        />
-        <RailBtn
-          icon={<Zap />}
-          label="Lightning arrester"
-          tip={'Lightning arrester\nL'}
-          active={tool === 'arrester'}
-          pressed={tool === 'arrester'}
-          disabled={locked}
-          count={project.arresters.length}
-          onClick={() => activate('arrester')}
-        />
-        <div className="tool-sep" />
-        <div className="tool-group-label">Electrical</div>
-        <RailBtn
-          icon={<PlugZap />}
-          label="Mount inverter"
-          tip={'Mount inverter\nI'}
-          active={tool === 'inverter'}
-          pressed={tool === 'inverter'}
-          disabled={locked}
-          count={project.inverterPlacements.length}
-          onClick={() => activate('inverter')}
-        />
-        <RailBtn
-          icon={<Cable />}
-          label="Stringing"
-          tip={'Stringing\nG'}
-          active={manualString !== null}
-          disabled={locked}
-          onClick={openStringing}
-        />
-        <RailBtn
-          icon={<Info />}
-          label="String connections"
-          tip="String connections"
-          onClick={() => setStringInfo(true)}
-        />
-      </div>
+      {/* every editor tool, in one radial menu (see components/RadialMenu) */}
+      <RadialMenu groups={editorGroups} ariaLabel="Editor tools" style={{ left: 64, top: '50%' }} />
 
       {/* top-right rail: history + layout actions */}
       <div
@@ -1830,15 +1876,14 @@ export function Step6Editor() {
         className="tool-btn light"
         style={{
           position: 'absolute',
-          // CLEAR OF THE TOOL RAIL. At left:14 this pill sat in the rail's own
-          // column and, on a ~860px-tall viewport, landed exactly on top of
-          // "Mount inverter" (both y≈730–768, zIndex 30) — elementFromPoint
-          // returned this button, so the tool was UNREACHABLE and no inverter
-          // could ever be placed (which in turn blocks cable routing and makes
-          // the AC side unquotable). The rail fills the viewport top to bottom,
-          // so there is no free slot in that column: the pill has to move out
-          // of it, not just up or down.
-          left: 76,
+          // This pill used to be pushed out to left:76 to escape the tool
+          // rail, which filled the viewport top to bottom and, on a ~860px
+          // screen, buried "Mount inverter" underneath it — the tool was
+          // unreachable and no inverter could be placed, which blocks cable
+          // routing and makes the AC side unquotable. The rail is now the
+          // Halo menu, which lives on one small trigger half way up, so the
+          // bottom-left corner is free again and the pill can have it.
+          left: 14,
           bottom: 96,
           zIndex: 30,
           width: 'auto',

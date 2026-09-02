@@ -37,6 +37,7 @@ import {
 } from '../components/SatCanvas';
 import { EdgeLabels } from '../components/EdgeLabels';
 import { MeasureOverlay, useMeasure } from '../components/MeasureTool';
+import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { applyKnownDistance } from '../lib/calibration';
 import {
   Dialog,
@@ -1147,6 +1148,100 @@ export function Step2Roof() {
     // Roof Setup owns the roofs and nothing else — no obstructions, no array
     return <Scene3D onClose={() => setShow3D(false)} initialViewMode="mesh" stage={2} />;
 
+  // ── the Halo menu's contents ──────────────────────────────────────────────
+  // The rail's five headings collapse to three groups: "Snap" and "Measure"
+  // held one and two buttons, and a group ring hub that opens a single tool
+  // is a tap that buys nothing. Opening the 3D is the step's flagship action,
+  // so it keeps its own pill rather than being buried a ring deep.
+  const roofGroups: RadialGroup[] = [
+    {
+      id: 'draw',
+      label: 'Draw',
+      icon: <PenLine />,
+      items: [
+        {
+          id: 'select',
+          icon: <MousePointer2 />,
+          label: 'Select',
+          tip: 'Select\nV',
+          active: !draft,
+          onClick: cancelDraw,
+        },
+        {
+          id: 'draw',
+          icon: <PenLine />,
+          label: 'Roof',
+          tip: 'Draw roof\nD',
+          active: !!draft,
+          onClick: () => (draft ? cancelDraw() : startDraw()),
+        },
+        {
+          id: 'detect',
+          icon: <Sparkles />,
+          label: 'Detect',
+          tip: 'Detect roofs (AI)\nAerial DSM + building mask —\nreview before anything is added',
+          active: !!aiReview,
+          disabled: aiBusy,
+          onClick: () => (aiReview ? setAiReview(null) : void runAiDetect()),
+        },
+      ],
+    },
+    {
+      id: 'measure',
+      label: 'Measure',
+      icon: <Ruler />,
+      items: [
+        {
+          id: 'ortho',
+          icon: <Ruler />,
+          label: 'Ortho',
+          tip: 'Ortho snap\nO — hold Shift temporarily while drawing',
+          active: ortho,
+          onClick: () => setOrtho((v) => !v),
+        },
+        {
+          id: 'dims',
+          icon: <RulerDimensionLine />,
+          label: 'Dims',
+          tip: 'Measurements\nShow every roof edge length',
+          active: showMeasurements,
+          onClick: () => setShowMeasurements((v) => !v),
+        },
+        {
+          id: 'distance',
+          icon: <PencilRuler />,
+          label: 'Distance',
+          tip: 'Measure distance\nClick two points — then calibrate\nthe imagery from a known length',
+          active: measure.active,
+          onClick: measure.toggle,
+        },
+      ],
+    },
+    {
+      id: 'history',
+      label: 'History',
+      icon: <Undo2 />,
+      items: [
+        {
+          id: 'undo',
+          icon: <Undo2 />,
+          label: 'Undo',
+          tip: 'Undo\nCtrl/⌘ Z',
+          disabled: undoDisabled,
+          onClick: doUndo,
+        },
+        {
+          id: 'redo',
+          icon: <Redo2 />,
+          label: 'Redo',
+          tip: 'Redo\nCtrl/⌘ ⇧ Z',
+          disabled: redoDisabled,
+          onClick: () => dispatch({ type: 'redo' }),
+        },
+      ],
+    },
+  ];
+
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
       <SatCanvas
@@ -1496,120 +1591,35 @@ export function Step2Roof() {
         />
       )}
 
-      {/* left tool rail */}
-      <div
-        className="tool-rail dark"
-        style={{ left: 14, top: '50%', transform: 'translateY(-50%)' }}
-        role="toolbar"
-        aria-label="Roof tools"
-        aria-orientation="vertical"
+      {/* every roof tool, in one radial menu (see components/RadialMenu) */}
+      <RadialMenu groups={roofGroups} ariaLabel="Roof tools" style={{ left: 64, top: '50%' }} />
+
+      {/* opening the 3D is this step's flagship action — it keeps its own pill,
+          in the corner the vertical rail used to fill */}
+      <button
+        className="tool-btn light"
+        style={{
+          position: 'absolute',
+          left: 14,
+          bottom: 96,
+          zIndex: 30,
+          width: 'auto',
+          padding: '0 13px',
+          gap: 7,
+          fontWeight: 800,
+          fontSize: 12.5,
+          borderRadius: 12,
+          opacity: project.roofs.length === 0 ? 0.35 : 1,
+        }}
+        aria-label="View in 3D"
+        data-tip={'View in 3D\nWhole design'}
+        data-tip-right=""
+        disabled={project.roofs.length === 0}
+        onClick={() => setShow3D(true)}
       >
-        <div className="tool-group-label">Tools</div>
-        <button
-          className={`tool-btn ${!draft ? 'on' : ''}`}
-          aria-label="Select"
-          aria-pressed={!draft}
-          data-tip={'Select\nV'}
-          data-tip-right=""
-          onClick={cancelDraw}
-        >
-          <MousePointer2 />
-        </button>
-        <button
-          className={`tool-btn ${draft ? 'on' : ''}`}
-          aria-label="Draw roof"
-          aria-pressed={!!draft}
-          data-tip={'Draw roof\nD'}
-          data-tip-right=""
-          onClick={() => (draft ? cancelDraw() : startDraw())}
-        >
-          <PenLine />
-        </button>
-        <button
-          className={`tool-btn ${aiReview ? 'on' : ''}`}
-          aria-label="Detect roofs automatically"
-          aria-pressed={!!aiReview}
-          disabled={aiBusy}
-          data-tip={'Detect roofs (AI)\nAerial DSM + building mask —\nreview before anything is added'}
-          data-tip-right=""
-          onClick={() => (aiReview ? setAiReview(null) : void runAiDetect())}
-          style={aiBusy ? { opacity: 0.5 } : undefined}
-        >
-          <Sparkles />
-        </button>
-        <div className="tool-sep" />
-        <div className="tool-group-label">Snap</div>
-        <button
-          className={`tool-btn ${ortho ? 'on' : ''}`}
-          aria-label="Ortho snap"
-          aria-pressed={ortho}
-          aria-keyshortcuts="O"
-          data-tip={'Ortho snap\nO — hold Shift temporarily while drawing'}
-          data-tip-right=""
-          onClick={() => setOrtho((v) => !v)}
-        >
-          <Ruler />
-        </button>
-        <div className="tool-sep" />
-        <div className="tool-group-label">Measure</div>
-        <button
-          className={`tool-btn ${showMeasurements ? 'on' : ''}`}
-          aria-label="Show all measurements"
-          aria-pressed={showMeasurements}
-          data-tip={'Measurements\nShow every roof edge length'}
-          data-tip-right=""
-          onClick={() => setShowMeasurements((v) => !v)}
-        >
-          <RulerDimensionLine />
-        </button>
-        <button
-          className={`tool-btn ${measure.active ? 'on' : ''}`}
-          aria-label="Measure distance"
-          aria-pressed={measure.active}
-          data-tip={'Measure distance\nClick two points — then calibrate\nthe imagery from a known length'}
-          data-tip-right=""
-          onClick={measure.toggle}
-        >
-          <PencilRuler />
-        </button>
-        <div className="tool-sep" />
-        <div className="tool-group-label">View</div>
-        <button
-          className="tool-btn"
-          aria-label="View in 3D"
-          data-tip={'View in 3D\nWhole design'}
-          data-tip-right=""
-          disabled={project.roofs.length === 0}
-          style={project.roofs.length === 0 ? { opacity: 0.35 } : undefined}
-          onClick={() => setShow3D(true)}
-        >
-          <Box />
-        </button>
-        <div className="tool-sep" />
-        <div className="tool-group-label">History</div>
-        <button
-          className="tool-btn"
-          aria-label="Undo"
-          data-tip={'Undo\nCtrl/⌘ Z'}
-          data-tip-right=""
-          disabled={undoDisabled}
-          style={undoDisabled ? { opacity: 0.35 } : undefined}
-          onClick={doUndo}
-        >
-          <Undo2 />
-        </button>
-        <button
-          className="tool-btn"
-          aria-label="Redo"
-          data-tip={'Redo\nCtrl/⌘ ⇧ Z'}
-          data-tip-right=""
-          disabled={redoDisabled}
-          style={redoDisabled ? { opacity: 0.35 } : undefined}
-          onClick={() => dispatch({ type: 'redo' })}
-        >
-          <Redo2 />
-        </button>
-      </div>
+        <Box />
+        3D
+      </button>
 
       {/* roof chips */}
       <div

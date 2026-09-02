@@ -33,6 +33,7 @@ import {
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { SatCanvas, polyPath, useCanvasFrame } from '../components/SatCanvas';
 import { MeasureOverlay, useMeasure } from '../components/MeasureTool';
+import { RadialMenu } from '../components/RadialMenu';
 import { OBSTRUCTION_PRESETS, makeObstruction } from '../lib/roof-factory';
 import { EdgeLabels } from '../components/EdgeLabels';
 import { Sheet, SliderRow, ToggleRow, OptionCard, UnitToggle } from '../components/ui';
@@ -398,68 +399,83 @@ export function Step3Obstructions() {
         </div>
       )}
 
-      {/* bottom-left tools */}
-      <div
-        className="tool-rail dark"
-        style={{ left: 14, bottom: 92 }}
-        role="group"
-        aria-label="Obstruction tools"
+      {/* every obstruction tool, in one radial menu. Four tools need no group
+          ring, so they come in close on a single arc (components/RadialMenu). */}
+      <RadialMenu
+        ariaLabel="Obstruction tools"
+        style={{ left: 64, top: '50%' }}
+        groups={[
+          {
+            id: 'obstructions',
+            label: 'Tools',
+            icon: <Plus />,
+            items: [
+              {
+                id: 'add',
+                icon: <Plus />,
+                label: 'Add',
+                tip: 'Add obstruction',
+                active: !!placing,
+                accent: true,
+                count: project.obstructions.length,
+                onClick: () => setSheet('pick'),
+              },
+              {
+                id: 'hide',
+                icon: hidden ? <EyeOff /> : <Eye />,
+                label: hidden ? 'Show' : 'Hide',
+                tip: hidden ? 'Show obstructions' : 'Hide obstructions',
+                active: hidden,
+                onClick: () => {
+                  setHidden((v) => !v);
+                  setSelectedId(null);
+                },
+              },
+              {
+                id: 'dims',
+                icon: <RulerDimensionLine />,
+                label: 'Dims',
+                tip: 'Measurements\nShow every roof edge length',
+                active: showMeasurements,
+                onClick: () => setShowMeasurements((v) => !v),
+              },
+              {
+                id: 'distance',
+                icon: <PencilRuler />,
+                label: 'Distance',
+                tip: 'Measure distance\nClick two points',
+                active: measure.active,
+                onClick: measure.toggle,
+              },
+            ],
+          },
+        ]}
+      />
+
+      {/* opening the 3D is this step's flagship action — its own pill, in the
+          corner the vertical rail used to fill */}
+      <button
+        className="tool-btn light"
+        style={{
+          position: 'absolute',
+          left: 14,
+          bottom: 92,
+          zIndex: 30,
+          width: 'auto',
+          padding: '0 13px',
+          gap: 7,
+          fontWeight: 800,
+          fontSize: 12.5,
+          borderRadius: 12,
+        }}
+        data-tip="3D view"
+        data-tip-right=""
+        aria-label="Open 3D view"
+        onClick={() => setShow3D(true)}
       >
-        <button
-          className={`tool-btn ${placing ? 'accent' : ''}`}
-          data-tip="Add obstruction"
-          data-tip-right=""
-          aria-label="Add obstruction"
-          onClick={() => setSheet('pick')}
-        >
-          <Plus />
-          {project.obstructions.length > 0 && (
-            <span className="count">{project.obstructions.length}</span>
-          )}
-        </button>
-        <button
-          className={`tool-btn ${hidden ? 'on' : ''}`}
-          data-tip={hidden ? 'Show obstructions' : 'Hide obstructions'}
-          data-tip-right=""
-          aria-label={hidden ? 'Show obstructions' : 'Hide obstructions'}
-          aria-pressed={hidden}
-          onClick={() => {
-            setHidden((v) => !v);
-            setSelectedId(null);
-          }}
-        >
-          {hidden ? <EyeOff /> : <Eye />}
-        </button>
-        <button
-          className={`tool-btn ${showMeasurements ? 'on' : ''}`}
-          data-tip={'Measurements\nShow every roof edge length'}
-          data-tip-right=""
-          aria-label="Show all measurements"
-          aria-pressed={showMeasurements}
-          onClick={() => setShowMeasurements((v) => !v)}
-        >
-          <RulerDimensionLine />
-        </button>
-        <button
-          className={`tool-btn ${measure.active ? 'on' : ''}`}
-          data-tip={'Measure distance\nClick two points'}
-          data-tip-right=""
-          aria-label="Measure distance"
-          aria-pressed={measure.active}
-          onClick={measure.toggle}
-        >
-          <PencilRuler />
-        </button>
-        <button
-          className="tool-btn"
-          data-tip="3D view"
-          data-tip-right=""
-          aria-label="Open 3D view"
-          onClick={() => setShow3D(true)}
-        >
-          <Box />
-        </button>
-      </div>
+        <Box />
+        3D
+      </button>
 
       {sheet === 'pick' && (
         <Sheet title="Add obstruction" icon={<Plus size={16} />} onClose={() => setSheet(null)}>
