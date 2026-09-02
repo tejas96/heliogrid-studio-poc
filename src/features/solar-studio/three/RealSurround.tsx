@@ -145,11 +145,13 @@ const MIN_STREET_SAMPLES = 200;
  * height map calls grade (< 0.5 m) is a street sample; the median of those is
  * where the ground is. Null until enough fine tiles are in.
  */
-function groundFromFineTiles(t: TilesRenderer, grid: SurroundHeights): { y: number | null; n: number } {
+function groundFromFineTiles(t: TilesRenderer, grid: SurroundHeights): { y: number | null; n: number; fine: number } {
   const ys: number[] = [];
   const v = new THREE.Vector3();
+  let fine = 0;
   t.forEachLoadedModel((scene, tile) => {
     if (!t.visibleTiles.has(tile) || tile.geometricError >= FINE_TILE_ERROR_M) return;
+    fine++;
     scene.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh || !mesh.geometry) return;
@@ -165,7 +167,43 @@ function groundFromFineTiles(t: TilesRenderer, grid: SurroundHeights): { y: numb
     });
   });
   ys.sort((a, b) => a - b);
-  return { y: ys.length >= MIN_STREET_SAMPLES ? ys[Math.floor(ys.length / 2)] : null, n: ys.length };
+  return { y: ys.length >= MIN_STREET_SAMPLES ? ys[Math.floor(ys.length / 2)] : null, n: ys.length, fine };
+}
+
+/**
+ * The street level WITHOUT a height map: the visible fine-tile vertices in a
+ * band outside the footprint, of which the lowest sixth are the streets —
+ * buildings and trees only ever raise the rest of the distribution. Null
+ * until enough fine tiles are in.
+ */
+function groundFromFineTilesNoMap(t: TilesRenderer, project: Project): { y: number | null; n: number; fine: number } {
+  const pts = project.roofs.flatMap((r) => r.polygon);
+  const cx = pts.length ? pts.reduce((a, p) => a + p.x, 0) / pts.length : 0;
+  const cy = pts.length ? pts.reduce((a, p) => a + p.y, 0) / pts.length : 0;
+  const reach = pts.length ? Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) : 0;
+  const inner = reach + 3;
+  const outer = reach + 45;
+  const ys: number[] = [];
+  const v = new THREE.Vector3();
+  let fine = 0;
+  t.forEachLoadedModel((scene, tile) => {
+    if (!t.visibleTiles.has(tile) || tile.geometricError >= FINE_TILE_ERROR_M) return;
+    fine++;
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      const pos = mesh.geometry.getAttribute('position');
+      if (!pos) return;
+      mesh.updateWorldMatrix(true, false);
+      for (let i = 0; i < pos.count; i += 3) {
+        v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
+        const d = Math.hypot(v.x - cx, -v.z - cy);
+        if (d >= inner && d <= outer) ys.push(v.y);
+      }
+    });
+  });
+  ys.sort((a, b) => a - b);
+  return { y: ys.length >= MIN_STREET_SAMPLES ? ys[Math.floor(ys.length * 0.15)] : null, n: ys.length, fine };
 }
 
 function groundRing(project: Project): { x: number; y: number }[] {
@@ -271,6 +309,17 @@ export function RealSurround({
       if (probing) tiles.maxDepth = probeDepth;
       tiles.setCamera(camera);
       tiles.setResolutionFromRenderer(camera, gl);
+      // A second, fixed camera straight above the site: tiles refine only
+      // inside a camera's view, so with the user's camera alone the site's own
+      // surroundings stayed coarse whenever they looked away or zoomed in —
+      // and the ground could never be read off fine tiles. This one keeps the
+      // 100 m around the pin at full detail whatever the user does.
+      const siteCam = new THREE.PerspectiveCamera(50, 1, 20, 3000);
+      siteCam.position.set(0, 320, 0);
+      siteCam.lookAt(0, 0, 0);
+      siteCam.updateMatrixWorld(true);
+      tiles.setCamera(siteCam);
+      tiles.setResolution(siteCam, 1024, 1024);
       tiles.group.name = 'real-surround';
       // The design lives in the IMAGE frame; the tiles come in true-north
       // ENU. Turn the mesh by the calibration's north offset so a site whose
@@ -321,6 +370,7 @@ export function RealSurround({
       // guess above is within the geoid's slack; the mesh settles the rest.
       let measured = 0;
       let fineMisses = 0;
+      let waitTimer: ReturnType<typeof setTimeout> | null = null;
       const ray = new THREE.Raycaster();
       const onLoadEnd = () => {
         // Google's terms: show the data attribution of what is on screen
@@ -375,11 +425,40 @@ export function RealSurround({
             if (fine.y !== null) {
               h = fine.y;
               source = 'fine-tiles';
-            } else if (++fineMisses < 6) {
+            } else if (fine.fine > 0 && ++fineMisses < 6) {
+              // fine tiles exist here but too few are in yet; where NONE exist
+              // (no photogrammetry at this site) the ring on the terrain is right
               // not enough fine tiles around the site yet: wait for the next load
               if (process.env.NODE_ENV !== 'production') {
                 (window as unknown as { __surroundGround?: unknown }).__surroundGround = { measured, groundH, waiting: true, samples };
               }
+              // a bounded wait: look again in a moment even if no tile event comes
+              if (waitTimer) clearTimeout(waitTimer);
+              waitTimer = setTimeout(() => {
+                waitTimer = null;
+                if (!disposed) onLoadEnd();
+              }, 2500);
+              return;
+            }
+          }
+          if (!grid && h === null) {
+            // no height map for this site: the streets are still the lowest
+            // sixth of the fine tiles' vertices around the footprint
+            const fine = groundFromFineTilesNoMap(t, prj);
+            samples = fine.n;
+            if (fine.y !== null) {
+              h = fine.y;
+              source = 'fine-tiles-lowest';
+            } else if (fine.fine > 0 && ++fineMisses < 6) {
+              if (process.env.NODE_ENV !== 'production') {
+                (window as unknown as { __surroundGround?: unknown }).__surroundGround = { measured, groundH, waiting: true, samples };
+              }
+              // a bounded wait: look again in a moment even if no tile event comes
+              if (waitTimer) clearTimeout(waitTimer);
+              waitTimer = setTimeout(() => {
+                waitTimer = null;
+                if (!disposed) onLoadEnd();
+              }, 2500);
               return;
             }
           }
@@ -428,6 +507,7 @@ export function RealSurround({
       t.addEventListener('load-error', onLoadError as never);
       t.addEventListener('tiles-load-end', onLoadEnd);
       cleanupEvents = () => {
+        if (waitTimer) clearTimeout(waitTimer);
         t.removeEventListener('load-model', onLoadModel as never);
         t.removeEventListener('load-error', onLoadError as never);
         t.removeEventListener('tiles-load-end', onLoadEnd);

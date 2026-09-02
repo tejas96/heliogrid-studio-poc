@@ -1434,15 +1434,19 @@ export function Scene3D({
           Az {azDeg}° · Alt {Math.max(0, altDeg)}°
         </div>
         <div style={{ fontSize: 9.5, color: 'var(--editor-ink-2)', marginTop: 2 }}>
-          {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(clockHour(hour, loc.latLng.lng, loc.latLng.lat))}{' '}
-          {clockLabel(loc.latLng)}
+          {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(clockHour(hour, loc.latLng.lng, loc.latLng.lat, simDate))}{' '}
+          {clockLabel(loc.latLng, simDate)}
         </div>
         <div style={{ fontSize: 9, color: 'var(--editor-ink-2)', marginTop: 3, fontFamily: 'var(--mono)' }}>
           {Math.abs(loc.latLng.lat).toFixed(4)}°{loc.latLng.lat >= 0 ? 'N' : 'S'} {Math.abs(loc.latLng.lng).toFixed(4)}°
           {loc.latLng.lng >= 0 ? 'E' : 'W'}
         </div>
         <div style={{ fontSize: 9, color: 'var(--editor-ink-2)', marginTop: 1 }}>
-          {project.surround ? `≈ ${Math.round(project.surround.gradeM)} m above sea level` : 'elevation: fetch the surroundings'}
+          {project.surround
+            ? `≈ ${Math.round(project.surround.gradeM)} m above sea level`
+            : project.surround === null
+              ? 'elevation: no aerial data for this site'
+              : 'elevation: reading the surroundings…'}
         </div>
         <div style={{ fontSize: 9, color: '#f5b942', marginTop: 4, opacity: 0.9 }}>{showSunChart ? 'close sun chart' : 'sun chart ▸'}</div>
       </div>
@@ -1509,6 +1513,26 @@ export function Scene3D({
             ? 'Neighbour shade: OFF by your choice · tap to turn on'
             : `Neighbour shade: Google aerial height map ${project.surround.imageryDate} · ${project.surround.stepM.toFixed(1)} m grid · tap to turn off`}
         </button>
+      )}
+      {/* no aerial height map here: say so, or a reader assumes the neighbours are in the numbers */}
+      {project.surround === null && !meshMode && !heatmap && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 64,
+            bottom: 124,
+            zIndex: 12,
+            fontSize: 9.5,
+            lineHeight: 1.3,
+            color: '#f5c16c',
+            background: 'rgba(10,13,18,0.55)',
+            padding: '2px 7px',
+            borderRadius: 4,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Neighbour shade: no aerial height map for this site · only the neighbours you draw shade the design
+        </div>
       )}
 
       {/* ── solar access legend ── */}
@@ -1623,7 +1647,7 @@ export function Scene3D({
             {playing ? <Pause /> : <Play />}
           </button>
           <span style={{ fontSize: 11, color: 'var(--editor-ink-2)', flex: 'none' }}>
-            {fmtHour(clockHour(5, loc.latLng.lng)).replace(':', ':')}
+            {fmtHour(clockHour(5, loc.latLng.lng, loc.latLng.lat, simDate)).replace(':', ':')}
           </span>
           <input
             type="range"
@@ -1636,7 +1660,7 @@ export function Scene3D({
             style={{ flex: 1, accentColor: '#f59e0b', height: 26 }}
           />
           <span style={{ fontSize: 11, color: 'var(--editor-ink-2)', flex: 'none' }}>
-            {fmtHour(clockHour(19, loc.latLng.lng))}
+            {fmtHour(clockHour(19, loc.latLng.lng, loc.latLng.lat, simDate))}
           </span>
         </div>
         <div
@@ -1651,13 +1675,13 @@ export function Scene3D({
           }}
         >
           <b style={{ color: '#f5b942', fontVariantNumeric: 'tabular-nums' }} title={`solar time ${fmtHour(hour)}`}>
-            {fmtHour(clockHour(hour, loc.latLng.lng, loc.latLng.lat))} {clockLabel(loc.latLng)}
+            {fmtHour(clockHour(hour, loc.latLng.lng, loc.latLng.lat, simDate))} {clockLabel(loc.latLng, simDate)}
           </b>
           <span style={{ color: 'var(--editor-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <Sunrise size={13} /> {fmtHour(clockHour(sunrise, loc.latLng.lng))}
+            <Sunrise size={13} /> {fmtHour(clockHour(sunrise, loc.latLng.lng, loc.latLng.lat, simDate))}
           </span>
           <span style={{ color: 'var(--editor-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-            <Sunset size={13} /> {fmtHour(clockHour(sunset, loc.latLng.lng))}
+            <Sunset size={13} /> {fmtHour(clockHour(sunset, loc.latLng.lng, loc.latLng.lat, simDate))}
           </span>
         </div>
       </div>

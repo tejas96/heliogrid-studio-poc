@@ -5,6 +5,7 @@
 // angle it subtends from the array. Where a sun curve dips below that line
 // the array is in shade. All pure maths; the panel only draws it.
 import type { Project, XY } from '../types';
+import tzLookup from 'tz-lookup';
 import { sunPosition } from './sun';
 import { simTimeDate } from './sim-time';
 import { peekSurroundHeights, type SurroundHeights } from './surround';
@@ -13,24 +14,68 @@ import { pointInPolygon } from './geo';
 /** India runs on one clock; solar time at the site differs by the longitude. */
 export const CLOCK_OFFSET_H = 5.5;
 
-/** Inside India's clock zone (the product's market); elsewhere no zone table is bundled. */
-export function inIndia(p: { lat: number; lng: number }): boolean {
-  return p.lat >= 6 && p.lat <= 37.5 && p.lng >= 68 && p.lng <= 97.5;
+const zoneCache = new Map<string, string>();
+
+/** The site's IANA time zone, from an offline table (tz-lookup) — Nepal is +5:45, not IST. */
+export function siteZone(p: { lat: number; lng: number }): string {
+  const key = `${p.lat.toFixed(2)},${p.lng.toFixed(2)}`;
+  let z = zoneCache.get(key);
+  if (!z) {
+    try {
+      z = tzLookup(p.lat, p.lng);
+    } catch {
+      z = 'Etc/UTC';
+    }
+    zoneCache.set(key, z);
+  }
+  return z;
+}
+
+/** The zone's offset from UTC in hours at `at` (daylight saving included). */
+export function zoneOffsetHours(zone: string, at: Date): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: zone,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(at);
+    const n = (t: string) => Number(parts.find((x) => x.type === t)?.value ?? 0);
+    const asUtc = Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second'));
+    return Math.round(((asUtc - at.getTime()) / 3_600_000) * 4) / 4;
+  } catch {
+    return 0;
+  }
 }
 
 /**
- * Mean solar hour at `lng` → the hour the site's clock shows. India: IST.
- * Anywhere else the app has no time-zone table, so it shows SOLAR time and
- * says so (`clockLabel`) instead of stamping a wrong zone on the day.
+ * Mean solar hour at `lng` → the hour the site's clock shows, in the site's
+ * own time zone at the simulated date (so summer time is right too).
  */
-export function clockHour(solarHour: number, lng: number, lat = 20): number {
-  if (!inIndia({ lat, lng })) return solarHour;
-  return solarHour - lng / 15 + CLOCK_OFFSET_H;
+export function clockHour(solarHour: number, lng: number, lat = 20, at: Date = new Date()): number {
+  return solarHour - lng / 15 + zoneOffsetHours(siteZone({ lat, lng }), at);
 }
 
-/** What the hours on screen are: the clock (IST) or solar time. */
-export function clockLabel(p: { lat: number; lng: number }): string {
-  return inIndia(p) ? 'IST' : 'solar time';
+/** What the hours on screen are: the zone's short name (IST, EDT) or its UTC offset. */
+export function clockLabel(p: { lat: number; lng: number }, at: Date = new Date()): string {
+  const zone = siteZone(p);
+  try {
+    const name = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'short' })
+      .formatToParts(at)
+      .find((x) => x.type === 'timeZoneName')?.value;
+    if (name && !/^GMT|^UTC/.test(name)) return name;
+  } catch {
+    /* fall through to the offset */
+  }
+  const off = zoneOffsetHours(zone, at);
+  const sign = off >= 0 ? '+' : '−';
+  const h = Math.floor(Math.abs(off));
+  const m = Math.round((Math.abs(off) - h) * 60);
+  return `local time (UTC${sign}${h}${m ? `:${String(m).padStart(2, '0')}` : ''})`;
 }
 
 export interface SunSample {
