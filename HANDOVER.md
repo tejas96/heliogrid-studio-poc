@@ -1,7 +1,16 @@
 # Solar Studio — session handover
 
-**Branch:** `studio-next` (pushed). Never push `main` — `origin/main` is the unrelated HelioGrid
-history.
+**You are on `main`.** Batch C was merged in at `82b7ebc`; `main`, `studio-next` and
+`origin/studio-next` all point at it.
+
+**GIT — read this before pushing anything.** This repo's `origin` is
+`github.com-personal:tejas96/HelioGrid` — the SaaS **monorepo** (`apps/`, `infra/`, Temporal,
+Postgres). It shares **no commits and no files** with this POC. Never open a PR from here into
+`origin/main`, and never push `main`: a PR would read as "delete the SaaS product, replace it
+with the POC". Land work by merging into local `main`, re-running the gates on `main`, then
+fast-forwarding `studio-next` and pushing **only** `studio-next` as the off-machine backup.
+If this POC ever needs real PRs, it needs its own GitHub repo first.
+
 **Ledger:** `.superpowers/sdd/2026-09-02-phase1-design-kernel/progress.md` (untracked, never commit).
 **Gates before every commit:** `npx tsc --noEmit` and `set -o pipefail; npx vitest run`.
 Currently **1819 tests green, tsc clean.**
