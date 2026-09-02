@@ -14,6 +14,7 @@ import {
 import * as THREE from 'three';
 import { designBounds, type SceneBounds } from './scene-bounds';
 import { projectForStage, stageShowsDesign } from '../lib/scene-stage';
+import { RadialMenu, type RadialGroup, type RadialItem } from '../components/RadialMenu';
 import { ScenePost } from './ScenePost';
 import { EntityLabel } from './EntityLabel';
 import { HOVER_COLOR, PICK_COLOR, PickHalo } from './PickHalo';
@@ -168,7 +169,9 @@ import {
   Building2,
   Camera,
   Check,
+  Eye,
   Grid3x3,
+  Layers,
   Link2,
   Map,
   Orbit,
@@ -927,6 +930,229 @@ export function Scene3D({
 
   const meshMode = viewMode === 'mesh';
 
+  // ── the Halo menu's contents ──────────────────────────────────────────────
+  // These four groups were four separate vertical rails, one per corner of the
+  // scene. Every condition below is the condition that used to hide a button
+  // or a whole rail; a group with no items left is dropped by the menu, so the
+  // heatmap still collapses the controls down to the heatmap toggle itself.
+  const haloGroups: RadialGroup[] = useMemo(() => {
+    const scene: RadialItem[] = [
+      {
+        id: 'heatmap',
+        icon: <Grid3x3 />,
+        label: 'Heat',
+        tip: 'Solar access heatmap\nSun-hours on the roof, by month',
+        active: heatmap,
+        accent: true,
+        onClick: () => setHeatmap((v) => !v),
+      },
+    ];
+    if (!heatmap) {
+      if (designStage) {
+        scene.push(
+          {
+            id: 'access',
+            icon: <SunMedium />,
+            label: 'Access',
+            tip: 'Solar access view\nPer-panel shading %',
+            active: solarAccessView,
+            accent: true,
+            onClick: () => setSolarAccessView((v) => !v),
+          },
+          {
+            id: 'report',
+            icon: <BarChart3 />,
+            label: 'Report',
+            tip: 'Energy report',
+            oneShot: true,
+            onClick: () => setShowReport(true),
+          },
+        );
+      }
+      scene.push({
+        id: 'view-mode',
+        icon: meshMode ? <Map /> : <Box />,
+        label: meshMode ? 'Map' : 'Mesh',
+        tip: meshMode ? 'Switch to map view' : 'Switch to mesh view\nIsolated studio render',
+        active: meshMode,
+        onClick: () => setViewMode((v) => (v === 'mesh' ? 'map' : 'mesh')),
+      });
+      if (!meshMode) {
+        scene.push({
+          id: 'surround',
+          icon: <Building2 />,
+          label: 'Around',
+          tip: showBuildings
+            ? 'Hide the real surroundings — they stop shading the design too'
+            : 'Show the real surroundings — they shade the design again',
+          active: !showBuildings,
+          onClick: () => runOp(surroundSetIgnored, { ignore: showBuildings }),
+        });
+      }
+      scene.push({
+        id: 'sun-path',
+        icon: <Route />,
+        label: 'Sun',
+        tip: showSunPath ? 'Hide sun path' : 'Show sun path',
+        active: !showSunPath,
+        onClick: () => setShowSunPath((v) => !v),
+      });
+      if (designStage) {
+        scene.push({
+          id: 'electrical',
+          icon: <Link2 />,
+          label: 'Wiring',
+          tip: showElectrical ? 'Hide strings and cables' : 'Show strings and cables',
+          active: !showElectrical,
+          onClick: () => setShowElectrical((v) => !v),
+        });
+      }
+    }
+    if (!readOnly && !heatmap) {
+      scene.push({
+        id: 'share',
+        icon: copied ? <Check /> : <Share2 />,
+        label: copied ? 'Copied' : 'Share',
+        tip: copied ? 'Link copied' : 'Copy customer share link',
+        onClick: () => {
+          const url = `${location.origin}/share/${project.shareId}`;
+          navigator.clipboard.writeText(url).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1800);
+          });
+        },
+      });
+    }
+
+    const views: RadialItem[] = heatmap
+      ? []
+      : (
+          [
+            { id: 'top', icon: <ArrowDown />, label: 'Top', tip: 'Top view' },
+            { id: 'iso', icon: <Axis3d />, label: 'Iso', tip: 'Isometric view' },
+            { id: 'front', icon: <Orbit />, label: 'Front', tip: 'Front view' },
+            { id: 'back', icon: <ChevronsUp />, label: 'Back', tip: 'Back view' },
+            { id: 'left', icon: <ChevronsLeft />, label: 'Left', tip: 'Left view' },
+            { id: 'right', icon: <ChevronsRight />, label: 'Right', tip: 'Right view' },
+          ] as const
+        ).map((v) => ({ ...v, oneShot: true, onClick: () => goView(v.id as ViewPreset) }));
+
+    const inspect: RadialItem[] = heatmap
+      ? []
+      : [
+          {
+            id: 'fly',
+            icon: <Crosshair />,
+            label: 'Fly',
+            tip: pick ? 'Fly to the selection (F)' : 'Select something, then fly to it (F)',
+            disabled: !pick,
+            oneShot: true,
+            onClick: focusPick,
+          },
+          {
+            id: 'isolate',
+            icon: <Focus />,
+            label: 'Isolate',
+            tip: isolate && pick
+              ? 'Show everything again (I)'
+              : pick
+                ? 'Isolate the selection (I)'
+                : 'Select something, then isolate it (I)',
+            active: isolate && !!pick,
+            disabled: !pick,
+            onClick: () => setIsolate((v) => !v),
+          },
+          {
+            id: 'walk',
+            icon: <Footprints />,
+            label: 'Walk',
+            tip: walk ? 'Leave the walkthrough (Esc)' : 'Walk the site (W)',
+            active: walk,
+            onClick: () => (walk ? exitWalk() : enterWalk()),
+          },
+          {
+            id: 'fullscreen',
+            icon: fullscreen ? <Minimize2 /> : <Maximize2 />,
+            label: 'Screen',
+            tip: fullscreen ? 'Leave full screen' : 'Full screen',
+            active: fullscreen,
+            onClick: toggleFullscreen,
+          },
+        ];
+
+    const measureItems: RadialItem[] =
+      heatmap || meshMode
+        ? []
+        : [
+            ...(
+              [
+                { id: 'distance', icon: <Ruler />, label: 'Dist', on: 'Measure a distance (M)' },
+                { id: 'angle', icon: <Triangle />, label: 'Angle', on: 'Measure an angle: arm, corner, arm' },
+                { id: 'area', icon: <Shapes />, label: 'Area', on: 'Measure an area: click the corners' },
+                {
+                  id: 'elevation',
+                  icon: <MoveVertical />,
+                  label: 'Height',
+                  on: 'Read a height above ground and deck',
+                },
+              ] as const
+            ).map((m) => ({
+              id: m.id,
+              icon: m.icon,
+              label: m.label,
+              tip: measure === m.id ? 'Stop measuring (Esc)' : m.on,
+              active: measure === m.id,
+              onClick: () => setMeasure((v) => (v === m.id ? 'off' : (m.id as MeasureMode))),
+            })),
+            ...(measureCount > 0
+              ? [
+                  {
+                    id: 'clear',
+                    icon: <Eraser />,
+                    label: 'Clear',
+                    tip: `Clear ${measureCount} measurement${measureCount === 1 ? '' : 's'}`,
+                    oneShot: true,
+                    onClick: () => setMeasureClear((n) => n + 1),
+                  } satisfies RadialItem,
+                ]
+              : []),
+            {
+              id: 'keys',
+              icon: <Keyboard />,
+              label: 'Keys',
+              tip: 'Keyboard shortcuts (?)',
+              active: showKeys,
+              onClick: () => setShowKeys((v) => !v),
+            },
+          ];
+
+    return [
+      { id: 'scene', label: 'Scene', icon: <Layers />, items: scene },
+      { id: 'view', label: 'View', icon: <Axis3d />, items: views },
+      { id: 'inspect', label: 'Inspect', icon: <Eye />, items: inspect },
+      { id: 'measure', label: 'Measure', icon: <Ruler />, items: measureItems },
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    heatmap,
+    designStage,
+    solarAccessView,
+    meshMode,
+    showBuildings,
+    showSunPath,
+    showElectrical,
+    readOnly,
+    copied,
+    project.shareId,
+    pick,
+    isolate,
+    walk,
+    fullscreen,
+    measure,
+    measureCount,
+    showKeys,
+  ]);
+
   return (
     <div
       ref={wrapRef}
@@ -1044,192 +1270,17 @@ export function Scene3D({
         {!heatmap && POST_ENABLED && <ScenePost />}
       </Canvas>
 
-      {/* ── left rail: scene toggles ── */}
-      <div className="tool-rail dark" style={{ left: 14, top: 14 }} role="toolbar" aria-label="Scene options">
-        {onClose && (
-          <>
-            <button className="tool-btn" data-tip="Back to 2D editor" data-tip-right="" aria-label="Back to 2D editor" onClick={onClose}>
-              <X />
-            </button>
-            <div className="tool-sep" />
-          </>
-        )}
-        <button
-          className={`tool-btn ${heatmap ? 'accent' : ''}`}
-          data-tip={'Solar access heatmap\nSun-hours on the roof, by month'}
-          data-tip-right=""
-          aria-label="Toggle solar access heatmap"
-          aria-pressed={heatmap}
-          onClick={() => setHeatmap((v) => !v)}
-        >
-          <Grid3x3 />
-        </button>
-        {!heatmap && (
-          <>
-            {/* per-module shading and the energy report need an array — an
-                earlier step has none, and a dead control is a lie */}
-            {designStage && (
-              <>
-            <button
-              className={`tool-btn ${solarAccessView ? 'accent' : ''}`}
-              data-tip={'Solar access view\nPer-panel shading %'}
-              data-tip-right=""
-              aria-label="Toggle solar access view"
-              aria-pressed={solarAccessView}
-              onClick={() => setSolarAccessView((v) => !v)}
-            >
-              <SunMedium />
-            </button>
-            <button className="tool-btn" data-tip="Energy report" data-tip-right="" aria-label="Energy report" onClick={() => setShowReport(true)}>
-              <BarChart3 />
-            </button>
-              </>
-            )}
-            <div className="tool-sep" />
-            <button
-              className={`tool-btn ${meshMode ? 'on' : ''}`}
-              data-tip={meshMode ? 'Switch to map view' : 'Switch to mesh view\nIsolated studio render'}
-              data-tip-right=""
-              aria-label="Toggle map / mesh view"
-              aria-pressed={meshMode}
-              onClick={() => setViewMode((v) => (v === 'mesh' ? 'map' : 'mesh'))}
-            >
-              {meshMode ? <Map /> : <Box />}
-            </button>
-            {!meshMode && (
-              <>
-                <button
-                  className={`tool-btn ${showBuildings ? '' : 'on'}`}
-                  data-tip={
-                    showBuildings
-                      ? 'Hide the real surroundings — they stop shading the design too'
-                      : 'Show the real surroundings — they shade the design again'
-                  }
-                  data-tip-right=""
-                  aria-label="Toggle the real surroundings"
-                  aria-pressed={!showBuildings}
-                  onClick={() => runOp(surroundSetIgnored, { ignore: showBuildings })}
-                >
-                  <Building2 />
-                </button>
-              </>
-            )}
-            <button
-              className={`tool-btn ${showSunPath ? '' : 'on'}`}
-              data-tip={showSunPath ? 'Hide sun path' : 'Show sun path'}
-              data-tip-right=""
-              aria-label="Toggle sun path"
-              aria-pressed={!showSunPath}
-              onClick={() => setShowSunPath((v) => !v)}
-            >
-              <Route />
-            </button>
-            {designStage && (
-            <button
-              className={`tool-btn ${showElectrical ? '' : 'on'}`}
-              data-tip={showElectrical ? 'Hide strings and cables' : 'Show strings and cables'}
-              data-tip-right=""
-              aria-label="Toggle strings and cables"
-              aria-pressed={!showElectrical}
-              onClick={() => setShowElectrical((v) => !v)}
-            >
-              <Link2 />
-            </button>
-            )}
-          </>
-        )}
-        {!readOnly && !heatmap && (
-          <>
-            <div className="tool-sep" />
-            <button
-              className="tool-btn"
-              data-tip={copied ? 'Link copied' : 'Copy customer share link'}
-              data-tip-right=""
-              aria-label="Copy share link"
-              onClick={() => {
-                const url = `${location.origin}/share/${project.shareId}`;
-                navigator.clipboard.writeText(url).then(() => {
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1800);
-                });
-              }}
-            >
-              {/* Share2, not Link2 — the strings-and-cables toggle sits a few
-                  pixels above in the same rail and owns the chain link */}
-              {copied ? <Check /> : <Share2 />}
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* ── view presets ── */}
-      {!heatmap && (
-      <div className="tool-rail dark" style={{ left: 14, bottom: 96 }} role="toolbar" aria-label="View presets">
-        <div className="tool-group-label">View</div>
-        <button className="tool-btn" data-tip="Top view" data-tip-right="" aria-label="Top view" onClick={() => goView('top')}>
-          <ArrowDown />
-        </button>
-        <button className="tool-btn" data-tip="Isometric view" data-tip-right="" aria-label="Isometric view" onClick={() => goView('iso')}>
-          <Axis3d />
-        </button>
-        <button className="tool-btn" data-tip="Front view" data-tip-right="" aria-label="Front view" onClick={() => goView('front')}>
-          <Orbit />
-        </button>
-        <button className="tool-btn" data-tip="Back view" data-tip-right="" aria-label="Back view" onClick={() => goView('back')}>
-          <ChevronsUp />
-        </button>
-        <button className="tool-btn" data-tip="Left view" data-tip-right="" aria-label="Left view" onClick={() => goView('left')}>
-          <ChevronsLeft />
-        </button>
-        <button className="tool-btn" data-tip="Right view" data-tip-right="" aria-label="Right view" onClick={() => goView('right')}>
-          <ChevronsRight />
-        </button>
-      </div>
-      )}
-
-      {/* ── inspect rail (right, below the sun widget) ── */}
-      {!heatmap && (
-        <div className="tool-rail dark" style={{ right: 14, top: 150 }} role="toolbar" aria-label="Inspect">
-          <div className="tool-group-label">Inspect</div>
-          <button
-            className="tool-btn"
-            data-tip={pick ? 'Fly to the selection (F)' : 'Select something, then fly to it (F)'}
-            aria-label="Fly to the selection"
-            disabled={!pick}
-            onClick={focusPick}
-          >
-            <Crosshair />
-          </button>
-          <button
-            className={`tool-btn ${isolate && pick ? 'on' : ''}`}
-            data-tip={isolate && pick ? 'Show everything again (I)' : pick ? 'Isolate the selection (I)' : 'Select something, then isolate it (I)'}
-            aria-label="Isolate the selection"
-            aria-pressed={isolate && !!pick}
-            disabled={!pick}
-            onClick={() => setIsolate((v) => !v)}
-          >
-            <Focus />
-          </button>
-          <button
-            className={`tool-btn ${walk ? 'on' : ''}`}
-            data-tip={walk ? 'Leave the walkthrough (Esc)' : 'Walk the site (W)'}
-            aria-label="Walk the site"
-            aria-pressed={walk}
-            onClick={() => (walk ? exitWalk() : enterWalk())}
-          >
-            <Footprints />
-          </button>
-          <button
-            className={`tool-btn ${fullscreen ? 'on' : ''}`}
-            data-tip={fullscreen ? 'Leave full screen' : 'Full screen'}
-            aria-label="Toggle full screen"
-            aria-pressed={fullscreen}
-            onClick={toggleFullscreen}
-          >
-            {fullscreen ? <Minimize2 /> : <Maximize2 />}
+      {/* ── leaving the scene is not a tool, so it keeps its own button ── */}
+      {onClose && (
+        <div className="tool-rail dark" style={{ left: 14, top: 14 }}>
+          <button className="tool-btn" data-tip="Back to 2D editor" data-tip-right="" aria-label="Back to 2D editor" onClick={onClose}>
+            <X />
           </button>
         </div>
       )}
+
+      {/* ── every scene tool, in one radial menu (see components/RadialMenu) ── */}
+      <RadialMenu groups={haloGroups} ariaLabel="Scene tools" style={{ left: 64, top: '50%' }} />
 
       {/* ── box select rectangle (Shift-drag) ── */}
       {marquee &&
@@ -1278,69 +1329,6 @@ export function Scene3D({
           }}
         >
           Walking · W A S D move · Q E climb · drag to look · Shift = small steps · Esc leaves
-        </div>
-      )}
-
-      {/* ── tool rail: measure, place, keys (right side, above the timeline) ── */}
-      {!heatmap && !meshMode && (
-        <div className="tool-rail dark" style={{ right: 14, bottom: 96 }} role="toolbar" aria-label="Measure and place">
-          <div className="tool-group-label">Measure</div>
-          <button
-            className={`tool-btn ${measure === 'distance' ? 'on' : ''}`}
-            data-tip={measure === 'distance' ? 'Stop measuring (Esc)' : 'Measure a distance (M)'}
-            aria-label="Measure a distance"
-            aria-pressed={measure === 'distance'}
-            onClick={() => setMeasure((v) => (v === 'distance' ? 'off' : 'distance'))}
-          >
-            <Ruler />
-          </button>
-          <button
-            className={`tool-btn ${measure === 'angle' ? 'on' : ''}`}
-            data-tip={measure === 'angle' ? 'Stop measuring (Esc)' : 'Measure an angle: arm, corner, arm'}
-            aria-label="Measure an angle"
-            aria-pressed={measure === 'angle'}
-            onClick={() => setMeasure((v) => (v === 'angle' ? 'off' : 'angle'))}
-          >
-            <Triangle />
-          </button>
-          <button
-            className={`tool-btn ${measure === 'area' ? 'on' : ''}`}
-            data-tip={measure === 'area' ? 'Stop measuring (Esc)' : 'Measure an area: click the corners'}
-            aria-label="Measure an area"
-            aria-pressed={measure === 'area'}
-            onClick={() => setMeasure((v) => (v === 'area' ? 'off' : 'area'))}
-          >
-            <Shapes />
-          </button>
-          <button
-            className={`tool-btn ${measure === 'elevation' ? 'on' : ''}`}
-            data-tip={measure === 'elevation' ? 'Stop measuring (Esc)' : 'Read a height above ground and deck'}
-            aria-label="Measure an elevation"
-            aria-pressed={measure === 'elevation'}
-            onClick={() => setMeasure((v) => (v === 'elevation' ? 'off' : 'elevation'))}
-          >
-            <MoveVertical />
-          </button>
-          {measureCount > 0 && (
-            <button
-              className="tool-btn"
-              data-tip={`Clear ${measureCount} measurement${measureCount === 1 ? '' : 's'}`}
-              aria-label="Clear measurements"
-              onClick={() => setMeasureClear((n) => n + 1)}
-            >
-              <Eraser />
-            </button>
-          )}
-          <div className="tool-sep" />
-          <button
-            className={`tool-btn ${showKeys ? 'on' : ''}`}
-            data-tip="Keyboard shortcuts (?)"
-            aria-label="Keyboard shortcuts"
-            aria-pressed={showKeys}
-            onClick={() => setShowKeys((v) => !v)}
-          >
-            <Keyboard />
-          </button>
         </div>
       )}
 

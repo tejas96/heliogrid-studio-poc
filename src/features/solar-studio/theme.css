@@ -914,3 +914,303 @@ h3 {
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
+/* ── Halo: the radial control menu ───────────────────────────────────────── */
+/* One trigger in the bottom-left thumb zone. Opening it blooms an inner ring
+   of groups and an outer arc of that group's tools, both fanning up and to
+   the right. Positions arrive from the component as --x / --y in px; --i is
+   the item's place in the bloom order. See components/RadialMenu.tsx. */
+.halo {
+  position: absolute;
+  z-index: 32;
+  width: 0;
+  height: 0;
+}
+/* the light the menu throws on the scene behind it */
+.halo-glow {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 440px;
+  height: 440px;
+  margin: -220px 0 0 -220px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle,
+    rgba(245, 158, 11, 0.13) 0%,
+    rgba(20, 24, 30, 0.42) 38%,
+    rgba(20, 24, 30, 0) 68%
+  );
+  animation: halo-glow-in 420ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+@keyframes halo-glow-in {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+}
+.halo-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* ── the two kinds of satellite ── */
+.halo-hub,
+.halo-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 50%;
+  border: 1px solid var(--editor-line);
+  background: rgba(20, 24, 30, 0.92);
+  backdrop-filter: blur(10px);
+  color: var(--editor-ink);
+  /* every satellite starts folded into the trigger and flies to --x / --y */
+  transform: translate(-50%, -50%) scale(0.2);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 0 0 rgba(245, 158, 11, 0);
+  transition:
+    transform 340ms cubic-bezier(0.22, 1.4, 0.36, 1),
+    opacity 200ms cubic-bezier(0.2, 0, 0.2, 1),
+    background var(--t-fast),
+    color var(--t-fast),
+    box-shadow var(--t-med);
+  /* closing folds back fastest-last, so the ring zips shut rather than sagging */
+  transition-delay: calc(var(--i) * 12ms);
+}
+.halo.open .halo-hub,
+.halo.open .halo-item {
+  transform: translate(-50%, -50%) translate(var(--x), var(--y)) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: calc(var(--i) * 26ms);
+}
+.halo-hub {
+  width: 50px;
+  height: 50px;
+}
+.halo-item {
+  width: 56px;
+  height: 56px;
+}
+.halo-icon {
+  display: flex;
+}
+.halo-hub svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.9;
+}
+.halo-item svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.9;
+}
+.halo-label {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--editor-ink-2);
+  line-height: 1;
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ── states ── */
+.halo-hub:hover,
+.halo-item:hover:not(:disabled) {
+  background: rgba(38, 46, 58, 0.96);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 20px 2px rgba(255, 255, 255, 0.16);
+}
+.halo-hub:focus-visible,
+.halo-item:focus-visible,
+.halo-trigger:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+/* the group whose tools are on the outer arc */
+.halo-hub.on {
+  background: #fff;
+  color: #10141a;
+  border-color: #fff;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 22px 3px rgba(255, 255, 255, 0.28);
+}
+.halo-hub.on .halo-label {
+  color: #4a515b;
+}
+/* an engaged toggle */
+.halo-item.on {
+  background: #fff;
+  color: #10141a;
+  border-color: #fff;
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 22px 3px rgba(255, 255, 255, 0.28);
+}
+.halo-item.on .halo-label {
+  color: #4a515b;
+}
+/* an engaged toggle that owns the brand colour (the heatmap, solar access) */
+.halo-item.accent {
+  background: var(--brand);
+  color: #191204;
+  border-color: var(--brand);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 24px 4px rgba(245, 158, 11, 0.42);
+}
+.halo-item.accent .halo-label {
+  color: #4a3708;
+}
+.halo-item:disabled {
+  opacity: 0.4;
+}
+.halo.open .halo-item:disabled {
+  opacity: 0.34;
+}
+
+/* ── the trigger ── */
+.halo-trigger {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 52px;
+  height: 52px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid var(--editor-line);
+  background: rgba(20, 24, 30, 0.92);
+  backdrop-filter: blur(10px);
+  color: var(--editor-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+  transition:
+    background var(--t-fast),
+    box-shadow var(--t-med),
+    transform var(--t-med);
+}
+.halo-trigger:hover {
+  background: rgba(38, 46, 58, 0.96);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 22px 3px rgba(245, 158, 11, 0.3);
+}
+/* the mark is a ring with a gap; it spins a quarter turn and lights up when
+   the menu is open, so the trigger reads as the thing the ring came out of */
+.halo-trigger-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2.5px solid currentColor;
+  border-right-color: transparent;
+  transition: transform 340ms cubic-bezier(0.22, 1.4, 0.36, 1);
+}
+.halo.open .halo-trigger {
+  background: var(--brand);
+  color: #191204;
+  border-color: var(--brand);
+  box-shadow:
+    0 6px 20px rgba(0, 0, 0, 0.55),
+    0 0 26px 5px rgba(245, 158, 11, 0.45);
+}
+.halo.open .halo-trigger-mark {
+  transform: rotate(225deg);
+}
+
+/* Motion is the whole point of this control, but it is not worth a headache:
+   with reduce set, the ring simply appears where it belongs. */
+@media (prefers-reduced-motion: reduce) {
+  .halo-hub,
+  .halo-item,
+  .halo-trigger-mark,
+  .halo-glow {
+    transition-duration: 1ms;
+    transition-delay: 0ms;
+    animation: none;
+  }
+  .halo.open .halo-hub,
+  .halo.open .halo-item {
+    transition-delay: 0ms;
+  }
+}
+
+/* The ring is a 0 × 0 box pinned on the trigger, so scaling it pivots exactly
+   on the trigger. A short or narrow viewport gets a smaller ring rather than
+   one that reaches off the edge — the whole point of replacing the rails. */
+@media (max-height: 640px) {
+  .halo-ring {
+    transform: scale(0.82);
+  }
+}
+@media (max-width: 520px) {
+  .halo-ring {
+    transform: scale(0.78);
+  }
+}
+
+/* ── Halo, second pass: the two rings must read as two rings ─────────────── */
+/* The group ring is smaller, dimmer and unlabelled-by-default so the eye goes
+   to the tools; the chosen group lights up and holds its place. */
+.halo-hub {
+  width: 44px;
+  height: 44px;
+  opacity: 0.82;
+}
+.halo.open .halo-hub {
+  opacity: 0.82;
+}
+.halo.open .halo-hub:hover,
+.halo.open .halo-hub.on {
+  opacity: 1;
+}
+.halo-hub svg {
+  width: 15px;
+  height: 15px;
+}
+/* the label is allowed to reach past its circle — "MEASURE" does not fit
+   inside 44px and an ellipsised group name is no name at all */
+.halo-hub .halo-label {
+  font-size: 6.5px;
+  letter-spacing: 0.3px;
+  max-width: 62px;
+}
+/* the tools carry the work, so they read brightest */
+.halo-item .halo-label {
+  color: var(--editor-ink);
+}
+.halo-item {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(16, 19, 24, 0.94);
+}
+/* a faint ring of light around the trigger, so the menu has a source */
+.halo-trigger::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px solid rgba(245, 158, 11, 0);
+  transition: border-color var(--t-med);
+}
+.halo.open .halo-trigger::before {
+  border-color: rgba(245, 158, 11, 0.55);
+}
