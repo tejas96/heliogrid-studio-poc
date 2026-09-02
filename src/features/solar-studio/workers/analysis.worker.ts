@@ -10,12 +10,15 @@
 // spending. The worker holds NO state between messages — the project arrives
 // whole (structured clone) and the reply is plain data.
 import { computeSolarAccess } from '../lib/shading';
+import type { SurroundHeights } from '../lib/surround-geometry';
 import type { Project } from '../types';
 
 export interface AnalysisRequest {
   id: number;
   kind: 'access';
   project: Project;
+  /** the real neighbourhood grid (lib/surround), resolved by the caller */
+  surround?: SurroundHeights | null;
 }
 
 export type AnalysisResponse =
@@ -23,10 +26,10 @@ export type AnalysisResponse =
   | { id: number; ok: false; error: string };
 
 self.onmessage = (e: MessageEvent<AnalysisRequest>) => {
-  const { id, kind, project } = e.data;
+  const { id, kind, project, surround } = e.data;
   try {
     if (kind === 'access') {
-      const map = computeSolarAccess(project);
+      const map = computeSolarAccess(project, { surround: surround ?? null });
       const res: AnalysisResponse = { id, ok: true, kind: 'access', access: [...map.entries()] };
       (self as unknown as Worker).postMessage(res);
       return;

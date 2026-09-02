@@ -18,6 +18,7 @@ import type { Project, ShadowCapture } from '../types';
 import { panelSampleHeightM } from './panel-pose';
 import { resolveCatalog } from '../data/catalog';
 import { structureModelVersion } from './structure';
+import { surroundKey } from './surround-geometry';
 
 const r = (v: number, f: number) => Math.round(v * f);
 
@@ -297,7 +298,10 @@ export function shadingFp(p: Project | null): string {
         x.orientation,
         x.enabled,
       ]),
-    )
+    ) +
+    // Phase 4: the real neighbourhood is a caster — CONDITIONAL suffix, so a
+    // project without it keeps its fingerprint (and its captures) byte-identical
+    (p.surround ? `|sur:${surroundKey(p.surround)}` : '')
   );
 }
 

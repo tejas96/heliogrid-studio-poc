@@ -10,6 +10,7 @@ import { useActiveProject, useProjectPatch } from './store';
 import { accessChanged } from '../lib/shading';
 import { AnalysisSuperseded, requestSolarAccess } from '../lib/analysis-client';
 import { shadingFp } from '../lib/fingerprints';
+import { loadSurroundHeights } from '../lib/surround';
 
 export function useDesignSync() {
   const project = useActiveProject();
@@ -38,8 +39,12 @@ export function useDesignSync() {
       // `computedFor` may already be newer than the debounced `fingerprint`.
       const stamp = shadingFp(computedFor);
       // off the main thread (Phase 8): Tier-2 casters made this pass grow with
-      // panel count squared — inline it would drop frames on large roofs
-      requestSolarAccess(computedFor, { cancelPrevious: true })
+      // panel count squared — inline it would drop frames on large roofs.
+      // The real neighbourhood grid (Phase 4) is resolved from the blob store
+      // first; it is part of the fingerprint, so its arrival re-runs this.
+      loadSurroundHeights(computedFor.surround)
+        .catch(() => null)
+        .then((surround) => requestSolarAccess(computedFor, { cancelPrevious: true, surround }))
         .then((fresh) => {
           // The store may have moved on while the worker ran. Re-read it and
           // apply the result to the LATEST panels, but only stamp what this

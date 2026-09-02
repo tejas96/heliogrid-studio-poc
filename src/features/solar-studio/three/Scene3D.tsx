@@ -814,6 +814,29 @@ export function Scene3D({
         </div>
       )}
 
+      {/* ── provenance of the neighbour shade in the numbers (DESIGN-SYSTEM §12) ── */}
+      {project.surround && !meshMode && !heatmap && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 12,
+            bottom: 124,
+            zIndex: 12,
+            fontSize: 9.5,
+            lineHeight: 1.3,
+            color: 'rgba(255,255,255,0.78)',
+            background: 'rgba(10,13,18,0.55)',
+            padding: '2px 7px',
+            borderRadius: 4,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Neighbour shade: Google aerial height map · {project.surround.imageryDate} ·{' '}
+          {project.surround.stepM.toFixed(1)} m grid · {project.surround.radiusM} m
+        </div>
+      )}
+
       {/* ── solar access legend ── */}
       {solarAccessView && !heatmap && (
         <div

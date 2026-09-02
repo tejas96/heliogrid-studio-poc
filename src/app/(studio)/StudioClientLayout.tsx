@@ -7,6 +7,7 @@ import { StoreProvider, useStore, useActiveProject } from '@/features/solar-stud
 import { useDesignSync } from '@/features/solar-studio/store/useDesignSync';
 import { useElectricalSync } from '@/features/solar-studio/store/useElectricalSync';
 import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
+import { useSurroundSync } from '@/features/solar-studio/store/useSurroundSync';
 
 /**
  * Recompute host for derived design data (per-panel shading). Lives at the
@@ -14,6 +15,7 @@ import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
  * which route it is opened on (/proposal, /share, /projects, deep links).
  */
 function DesignSync() {
+  useSurroundSync();
   useDesignSync();
   useElectricalSync();
   useHealthSync();

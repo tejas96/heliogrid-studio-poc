@@ -94,6 +94,8 @@ export async function deleteImages(ids: string[]): Promise<void> {
 export function projectBlobIds(p: Project): string[] {
   const ids = p.captures.map((c) => c.imageBlobId).filter((x): x is string => !!x);
   if (p.coverImageBlobId) ids.push(p.coverImageBlobId);
+  // the real-surroundings height grid (lib/surround) lives here too
+  if (p.surround?.blobId) ids.push(p.surround.blobId);
   return ids;
 }
 

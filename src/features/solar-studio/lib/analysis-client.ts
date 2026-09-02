@@ -9,6 +9,7 @@
 // is identical either way — only WHERE it runs changes.
 import type { Project } from '../types';
 import { computeSolarAccess } from './shading';
+import type { SurroundHeights } from './surround-geometry';
 import type { AnalysisResponse } from '../workers/analysis.worker';
 
 type Pending = {
@@ -58,10 +59,11 @@ function ensureWorker(): Worker | null {
  */
 export function requestSolarAccess(
   project: Project,
-  opts: { cancelPrevious?: boolean } = {},
+  opts: { cancelPrevious?: boolean; surround?: SurroundHeights | null } = {},
 ): Promise<Map<string, number>> {
+  const surround = opts.surround ?? null;
   const w = ensureWorker();
-  if (!w) return Promise.resolve(computeSolarAccess(project));
+  if (!w) return Promise.resolve(computeSolarAccess(project, { surround }));
   if (opts.cancelPrevious) {
     for (const [id, p] of pending) {
       p.reject(new AnalysisSuperseded());
@@ -71,12 +73,12 @@ export function requestSolarAccess(
   const id = nextId++;
   return new Promise<Map<string, number>>((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    w.postMessage({ id, kind: 'access', project });
+    w.postMessage({ id, kind: 'access', project, surround });
   }).catch((err) => {
     if (err instanceof AnalysisSuperseded) throw err;
     // worker path failed for this request — answer inline so the user still
     // gets fresh numbers (slower, but never silently stale)
-    return computeSolarAccess(project);
+    return computeSolarAccess(project, { surround });
   });
 }
 

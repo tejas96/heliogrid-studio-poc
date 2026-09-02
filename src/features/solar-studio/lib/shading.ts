@@ -40,6 +40,13 @@ import { panelPose, panelSampleHeightM } from './panel-pose';
 import { solarHourDate, sunPosition } from './solar';
 import { buildShadowCasters, disposeGroup } from './scene-model';
 import { computeEaveRefs, surfaceHeightAt } from './roof-plane';
+import type { SurroundHeights } from './surround-geometry';
+
+/** Extra casters the caller resolved outside the engine (the real neighbourhood). */
+export interface ShadingOptions {
+  /** lib/surround grid — null/undefined = no real-surroundings data */
+  surround?: SurroundHeights | null;
+}
 
 /** Sample dates (21st of EVERY month) — full seasonal coverage, aligned with
  *  the heatmap's month set (the old 5-month subset under-weighted shoulders). */
@@ -158,7 +165,7 @@ function panelRayOrigins(
  * year during which the panel's plane has a clear line to the sun, averaged
  * over its sample points (partial shade ⇒ fractional access).
  */
-export function computeSolarAccess(project: Project): Map<string, number> {
+export function computeSolarAccess(project: Project, opts: ShadingOptions = {}): Map<string, number> {
   const access = new Map<string, number>();
   const loc = project.location;
   if (!loc || project.panels.length === 0) return access;
@@ -173,7 +180,8 @@ export function computeSolarAccess(project: Project): Map<string, number> {
 
   // Tier-2 (Phase 8): the modules are casters too — row-on-row self-shading is
   // real delivered-energy loss and the scene already draws those shadows.
-  const { group, meshes } = buildShadowCasters(project, { includePanels: true });
+  // Phase 4: the real neighbourhood (Google DSM) casts as well when present.
+  const { group, meshes } = buildShadowCasters(project, { includePanels: true, surround: opts.surround });
   const eaveRefs = computeEaveRefs(project.roofs);
   const raycaster = new THREE.Raycaster();
   raycaster.far = 250;
@@ -230,7 +238,7 @@ export function computeSolarAccess(project: Project): Map<string, number> {
 // ─── Per-panel shade attribution (Phase 8 task 27c) ─────────────────────────
 
 export interface ShadeBlocker {
-  kind: 'panel' | 'obstruction' | 'roof' | 'parapet';
+  kind: 'panel' | 'obstruction' | 'roof' | 'parapet' | 'arrester' | 'surround';
   id: string;
   label: string;
   /** share of the panel's ANNUAL beam budget this caster costs, 0..1 */
@@ -257,6 +265,7 @@ export interface PanelShadeDetail {
 export function computePanelShadeDetail(
   project: Project,
   panelId: string,
+  opts: ShadingOptions = {},
 ): PanelShadeDetail | null {
   const loc = project.location;
   const panel = project.panels.find((p) => p.id === panelId);
@@ -269,7 +278,7 @@ export function computePanelShadeDetail(
   if (samples.length === 0) return null;
   const totalW = samples.reduce((s, x) => s + x.weight, 0);
 
-  const { group, meshes } = buildShadowCasters(project, { includePanels: true });
+  const { group, meshes } = buildShadowCasters(project, { includePanels: true, surround: opts.surround });
   const eaveRefs = computeEaveRefs(project.roofs);
   const raycaster = new THREE.Raycaster();
   raycaster.far = 250;

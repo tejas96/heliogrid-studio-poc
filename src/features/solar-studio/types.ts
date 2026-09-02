@@ -983,6 +983,37 @@ export interface HealthSnapshotEntry {
   categories: { key: 'energy' | 'electrical' | 'utilization'; score: number | null; codes: string[] }[];
 }
 
+// ─── Real surroundings for the shading engine ───────────────────────────────
+
+/**
+ * The neighbourhood's REAL heights (Google Solar API digital surface model)
+ * as a grid of metres above grade, so the shading engine sees the actual
+ * trees and buildings around the site — not only the objects the user drew.
+ * Metadata only: the height samples live in the blob store under `blobId`.
+ */
+export interface SiteSurround {
+  source: 'google-solar-dsm';
+  /** ISO date of the aerial imagery the DSM was derived from */
+  imageryDate: string;
+  quality: string;
+  /** the pin the raster was requested around — a moved pin invalidates it */
+  pin: LatLng;
+  radiusM: number;
+  /** grid spacing after downsampling, metres */
+  stepM: number;
+  cols: number;
+  rows: number;
+  /** plan (EN) position of grid cell (0,0) and the per-column / per-row step vectors */
+  originEN: XY;
+  stepCol: XY;
+  stepRow: XY;
+  /** DSM elevation taken as ground at the site, metres (median of non-building pixels) */
+  gradeM: number;
+  /** blob id of the Int16 heights (centimetres above grade, row-major) */
+  blobId: string;
+  fetchedAt: number;
+}
+
 // ─── Project root ───────────────────────────────────────────────────────────
 
 export interface Project {
@@ -1048,6 +1079,11 @@ export interface Project {
    * projects saved before it existed — see lib/__tests__/site-migration.test.ts.
    */
   siteFrame: SiteFrame | null;
+  /**
+   * Real neighbourhood heights for the shading engine (see SiteSurround).
+   * Absent = never fetched; null = checked, no data at this location.
+   */
+  surround?: SiteSurround | null;
   /** decision log of the last auto-design run (renders the "why?" sheet) */
   designLog?: DesignDecision[];
   /**

@@ -17,6 +17,8 @@ import {
 import { effectiveParapetEdges } from './roof-topology';
 import { panelPose } from './panel-pose';
 import { castsAnalyticalShadow } from './capabilities';
+import { buildSurroundGeometry, type SurroundHeights } from './surround-geometry';
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 
 /**
  * Parapet bands for a roof as extrudable THREE.Shapes, one entry per distinct
@@ -150,7 +152,7 @@ export function buildParapetGeometries(
  */
 export function buildShadowCasters(
   project: Project,
-  opts: { includePanels?: boolean } = {},
+  opts: { includePanels?: boolean; surround?: SurroundHeights | null } = {},
 ): {
   group: THREE.Group;
   meshes: THREE.Object3D[];
@@ -260,6 +262,25 @@ export function buildShadowCasters(
       group.add(mesh);
       meshes.push(mesh);
     }
+  }
+
+  // ── the REAL neighbourhood (Google DSM, lib/surround): trees, sheds, the
+  // building next door — everything the user did not draw but the sun sees.
+  // The site's own roofs are already cut out of the grid at fetch time.
+  if (opts.surround) {
+    const geom = buildSurroundGeometry(opts.surround);
+    // ~40k triangles × 150k rays per run: brute-force raycasting would take
+    // minutes. A BVH makes each ray a handful of box tests.
+    (geom as THREE.BufferGeometry & { boundsTree?: MeshBVH }).boundsTree = new MeshBVH(geom);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.raycast = acceleratedRaycast as unknown as typeof mesh.raycast;
+    mesh.userData = {
+      casterKind: 'surround',
+      casterId: 'surround',
+      casterLabel: 'Neighbourhood (Google aerial height map)',
+    };
+    group.add(mesh);
+    meshes.push(mesh);
   }
 
   group.updateMatrixWorld(true);
