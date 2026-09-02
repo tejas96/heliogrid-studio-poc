@@ -72,41 +72,57 @@ function heightAt(g: SurroundHeights, p: XY): number | null {
 }
 
 /**
- * The horizon as the array sees it: from the array's centre, a little above
- * the module plane, in every compass direction. Plan geometry is in the image
- * frame; compass azimuths are turned by the calibration's north offset.
+ * The horizon as the array sees it, in every compass direction. A long array
+ * has a different skyline at each end, so the profile is the WORST case over
+ * five eyes — the array's centre and its four extreme modules — each a
+ * little above the module plane: what shades any part of the array shows.
+ * Plan geometry is in the image frame; compass azimuths are turned by the
+ * calibration's north offset.
  */
 export function horizonProfile(project: Project, stepDeg = 3): HorizonProfile {
   const n = Math.round(360 / stepDeg);
   const elev = new Array<number>(n).fill(0);
   const panels = project.panels.filter((p) => p.enabled);
   const roofOf = (id: string) => project.roofs.find((r) => r.id === id);
-  // eye: the array centre, or the first roof's centroid when nothing is placed yet
-  let eye: XY;
-  let eyeH: number;
-  let eyeRoofId: string | null;
+  // eyes: the array centre and its four corners, or the first roof's centroid
+  // when nothing is placed yet
+  const eyes: { p: XY; h: number; roofId: string | null }[] = [];
   if (panels.length) {
-    eye = {
+    const roof = roofOf(panels[0].roofId);
+    const h = (roof?.heightM ?? 0) + 1.2;
+    const c = {
       x: panels.reduce((a, p) => a + p.center.x, 0) / panels.length,
       y: panels.reduce((a, p) => a + p.center.y, 0) / panels.length,
     };
-    const roof = roofOf(panels[0].roofId);
-    eyeRoofId = roof?.id ?? null;
-    eyeH = (roof?.heightM ?? 0) + 1.2;
+    eyes.push({ p: c, h, roofId: roof?.id ?? null });
+    const far = (score: (p: XY) => number) =>
+      panels.reduce((best, p) => (score(p.center) > score(best.center) ? p : best), panels[0]);
+    for (const corner of [
+      far((p) => p.x + p.y),
+      far((p) => p.x - p.y),
+      far((p) => -p.x + p.y),
+      far((p) => -p.x - p.y),
+    ]) {
+      const r = roofOf(corner.roofId);
+      eyes.push({ p: corner.center, h: (r?.heightM ?? 0) + 1.2, roofId: r?.id ?? null });
+    }
   } else {
     const roof = project.roofs[0];
     if (!roof) return { stepDeg, elevDeg: elev, sources: { surround: false, obstructions: 0, otherRoofs: 0 } };
-    eye = {
-      x: roof.polygon.reduce((a, p) => a + p.x, 0) / roof.polygon.length,
-      y: roof.polygon.reduce((a, p) => a + p.y, 0) / roof.polygon.length,
-    };
-    eyeRoofId = roof.id;
-    eyeH = roof.heightM + 1.2;
+    eyes.push({
+      p: {
+        x: roof.polygon.reduce((a, p) => a + p.x, 0) / roof.polygon.length,
+        y: roof.polygon.reduce((a, p) => a + p.y, 0) / roof.polygon.length,
+      },
+      h: roof.heightM + 1.2,
+      roofId: roof.id,
+    });
   }
   const offset = ((project.calibration?.northOffsetDeg ?? 0) * Math.PI) / 180;
   const grid = peekSurroundHeights(project.surround);
-  const grade = 0; // grid heights are metres above the site's grade, the model's ground
   const radius = project.surround?.radiusM ?? 100;
+  const eyeRoofId = eyes[0].roofId;
+  const own = eyeRoofId ? roofOf(eyeRoofId) : null;
   const others = project.roofs.filter((r) => r.id !== eyeRoofId);
   const obstructions = project.obstructions.filter((o) => o.roofId === eyeRoofId || !o.roofId);
 
@@ -115,46 +131,46 @@ export function horizonProfile(project: Project, stepDeg = 3): HorizonProfile {
     const az = (azDeg * Math.PI) / 180 + offset; // compass → image frame
     const dir = { x: Math.sin(az), y: Math.cos(az) };
     let best = 0;
-    // the real surround: march out along the ray, keep the steepest sight line
-    if (grid) {
-      for (let d = 3; d <= radius; d += 0.5) {
-        const p = { x: eye.x + dir.x * d, y: eye.y + dir.y * d };
-        // inside the array's own roof the DSM is cut out; nothing there blocks
-        const own = eyeRoofId ? roofOf(eyeRoofId) : null;
-        if (own && pointInPolygon(p, own.polygon)) continue;
-        const h = heightAt(grid, p);
-        if (h === null) continue;
-        const ang = (Math.atan2(h + grade - eyeH, d) * 180) / Math.PI;
+    for (const eye of eyes) {
+      // the real surround: march out along the ray, keep the steepest sight line
+      if (grid) {
+        for (let d = 3; d <= radius; d += 0.5) {
+          const p = { x: eye.p.x + dir.x * d, y: eye.p.y + dir.y * d };
+          // inside the array's own roof the DSM is cut out; nothing there blocks
+          if (own && pointInPolygon(p, own.polygon)) continue;
+          const h = heightAt(grid, p); // metres above the site's grade, the model's ground
+          if (h === null) continue;
+          const ang = (Math.atan2(h - eye.h, d) * 180) / Math.PI;
+          if (ang > best) best = ang;
+        }
+      }
+      // the project's other roofs, as solid blocks
+      for (const r of others) {
+        for (let d = 3; d <= 150; d += 0.5) {
+          const p = { x: eye.p.x + dir.x * d, y: eye.p.y + dir.y * d };
+          if (!pointInPolygon(p, r.polygon)) continue;
+          const ang = (Math.atan2(r.heightM - eye.h, d) * 180) / Math.PI;
+          if (ang > best) best = ang;
+          break;
+        }
+      }
+      // obstructions on the array's roof: a box seen from the eye
+      for (const o of obstructions) {
+        const roof = o.roofId ? roofOf(o.roofId) : undefined;
+        const base = roof?.heightM ?? 0;
+        const half = o.shape === 'circle' ? o.diameterM / 2 : Math.max(o.lengthM, o.widthM) / 2;
+        const dx = o.center.x - eye.p.x;
+        const dy = o.center.y - eye.p.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.5) continue;
+        const toward = Math.atan2(dx, dy); // image-frame bearing of the obstruction
+        const dAng = Math.abs(((toward - az + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        const halfSpan = Math.atan2(half, dist);
+        if (dAng > halfSpan) continue;
+        const near = Math.max(0.5, dist - half);
+        const ang = (Math.atan2(base + o.heightM - eye.h, near) * 180) / Math.PI;
         if (ang > best) best = ang;
       }
-    }
-    // the project's other roofs, as solid blocks
-    for (const r of others) {
-      for (let d = 3; d <= 150; d += 0.5) {
-        const p = { x: eye.x + dir.x * d, y: eye.y + dir.y * d };
-        if (!pointInPolygon(p, r.polygon)) continue;
-        const ang = (Math.atan2(r.heightM - eyeH, d) * 180) / Math.PI;
-        if (ang > best) best = ang;
-        break;
-      }
-    }
-    // obstructions on the array's roof: a box seen from the eye
-    for (const o of obstructions) {
-      const roof = o.roofId ? roofOf(o.roofId) : undefined;
-      const base = roof?.heightM ?? 0;
-      const half = o.shape === 'circle' ? o.diameterM / 2 : Math.max(o.lengthM, o.widthM) / 2;
-      const dx = o.center.x - eye.x;
-      const dy = o.center.y - eye.y;
-      const dist = Math.hypot(dx, dy);
-      if (dist < 0.5) continue;
-      const toward = Math.atan2(dx, dy); // image-frame bearing of the obstruction
-      const bearing = az;
-      let dAng = Math.abs(((toward - bearing + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-      const halfSpan = Math.atan2(half, dist);
-      if (dAng > halfSpan) continue;
-      const near = Math.max(0.5, dist - half);
-      const ang = (Math.atan2(base + o.heightM - eyeH, near) * 180) / Math.PI;
-      if (ang > best) best = ang;
     }
     elev[i] = Math.max(0, Math.min(89, best));
   }

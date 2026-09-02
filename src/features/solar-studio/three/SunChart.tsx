@@ -101,7 +101,9 @@ export function SunChart({
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-        <div style={{ fontWeight: 700, fontSize: 12 }}>Sun paths over this site · clock time (IST)</div>
+        <div style={{ fontWeight: 700, fontSize: 12 }} title="The skyline is the worst case seen from the array's centre and its four corners">
+          Sun paths over this site · clock time (IST)
+        </div>
         <button
           type="button"
           onClick={onClose}
@@ -181,7 +183,7 @@ export function SunChart({
           <div key={s.label}>{words(s.label, s.curve)}</div>
         ))}
         <div style={{ marginTop: 4, fontSize: 10, opacity: 0.8 }}>
-          Skyline from{' '}
+          Skyline seen from the array’s centre and corners, from{' '}
           {[
             profile.sources.surround ? 'Google’s height map' : null,
             profile.sources.obstructions ? `${profile.sources.obstructions} obstruction${profile.sources.obstructions === 1 ? '' : 's'}` : null,

@@ -172,8 +172,11 @@ export function routePath(
   corridors?: Corridor[],
   /** array footprint a run must not be dragged across (module glass) */
   footprint?: XY[],
+  /** the roof the run must stay on: a corner or corridor point outside it is not a place a cable can be */
+  within?: XY[],
 ): XY[] {
   const rules = resolveRules().cable;
+  const onRoof = (p: XY) => !within || pointInPolygon(p, within) || nearPolygonEdge(p, within, 0.6);
   const direct = !segmentHitsAny(from, to, blockers);
   // No corridor to follow ⇒ the straight line IS the answer when it is clear.
   if (!corridors || corridors.length === 0) {
@@ -192,7 +195,7 @@ export function routePath(
       const dy = v.y - c.y;
       const m = Math.hypot(dx, dy) || 1;
       const corner = { x: v.x + (dx / m) * PAD, y: v.y + (dy / m) * PAD };
-      if (!blocked(corner, blockers)) {
+      if (!blocked(corner, blockers) && onRoof(corner)) {
         nodes.push(corner);
         cPoly.push(-1);
         cVert.push(-1);
@@ -201,7 +204,7 @@ export function routePath(
   }
   (corridors ?? []).forEach((c, ci) => {
     c.pts.forEach((v, vi) => {
-      if (blocked(v, blockers)) return;
+      if (blocked(v, blockers) || !onRoof(v)) return;
       nodes.push(v);
       cPoly.push(ci);
       cVert.push(vi);
@@ -261,6 +264,19 @@ export function routePath(
   const path: XY[] = [];
   for (let at = 1; at !== -1; at = prev[at]) path.unshift(nodes[at]);
   return dedupeCollinear(path);
+}
+
+/** within `tol` metres of any edge of the polygon (the parapet band) */
+function nearPolygonEdge(p: XY, poly: XY[], tol: number): boolean {
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1)));
+    if (Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y) <= tol) return true;
+  }
+  return false;
 }
 
 /** Drop points that add nothing: three collinear waypoints are one run. */
@@ -464,7 +480,7 @@ export function autoRouteStrings(project: Project): CableRoute[] {
       // along the row to its end first — cables ride the tray under the
       // modules, they never cut across the array — then on to the target
       const exit = rowExitPoint(project, end, target);
-      const tail = routePath(exit ?? end.center, target, blockers, corridor, footprint);
+      const tail = routePath(exit ?? end.center, target, blockers, corridor, footprint, roof?.polygon);
       out.push({
         id: `${s.id}/hr/${i}`,
         kind: 'string_homerun',

@@ -163,6 +163,7 @@ import type { Roof } from '../types';
 import { rotate as rotateXY } from '../lib/geo';
 import { COL_STRIDE, roofGridAngle as gridAngleOfRoof } from '../lib/layout';
 import { segmentGrid } from '../lib/segment-ops';
+import { layoutShrink } from '../lib/ops/layout-ops';
 import { batteryWorldPos } from '../lib/battery';
 import {
   arresterAdd,
@@ -213,6 +214,14 @@ function dragArea(a: XY, b: XY, roof: Roof | undefined): XY[] {
     { x: maxX, y: maxY },
     { x: minX, y: maxY },
   ].map((c) => rotateXY(c, ang));
+}
+
+/** a table edge being dragged in the plan: count > 0 grows, < 0 shrinks, by whole rows/columns */
+interface TableDragState {
+  segId: string;
+  side: 'top' | 'bottom' | 'left' | 'right';
+  count: number;
+  start: XY;
 }
 
 /** rows × columns of a set of grid-filled modules (cellIndex encodes row and column) */
@@ -351,6 +360,8 @@ export function Step6Editor() {
   const [tableSheet, setTableSheet] = useState(false);
   const canvasRef = useRef<SatCanvasHandle>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // a table edge handle mid-drag (view state; the op runs on release)
+  const [tableDrag, setTableDrag] = useState<TableDragState | null>(null);
   const [walkwayWidthMm, setWalkwayWidthMm] = useState(800);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeTimer = useRef<number | undefined>(undefined);
@@ -1260,6 +1271,18 @@ export function Step6Editor() {
           manualString={manualString}
           dragLine={dragLine}
           onSelectTable={setSelectedIds}
+          tableDrag={tableDrag}
+          onTableDrag={setTableDrag}
+          onTableDragEnd={(d) => {
+            setTableDrag(null);
+            if (d.count === 0) return;
+            const axis = d.side === 'top' || d.side === 'bottom' ? 'row' : 'column';
+            report(
+              d.count > 0
+                ? ops.run(layoutGrow, { segmentId: d.segId, axis, side: d.side, count: d.count })
+                : ops.run(layoutShrink, { segmentId: d.segId, axis, side: d.side, count: -d.count }),
+            );
+          }}
           panelDrag={panelDrag}
           marquee={marquee}
           hoverPoint={hoverPoint}
@@ -2832,6 +2855,9 @@ function EditorLayers({
   selected,
   tool,
   onSelectTable,
+  tableDrag,
+  onTableDrag,
+  onTableDragEnd,
 }: {
   heatmap: boolean;
   heatResult: HeatmapResult | null;
@@ -2848,6 +2874,10 @@ function EditorLayers({
   tool: Tool;
   /** a table label was tapped: select its modules */
   onSelectTable: (ids: string[]) => void;
+  /** an edge handle being dragged: whole cells crossed so far */
+  tableDrag: TableDragState | null;
+  onTableDrag: (d: TableDragState | null) => void;
+  onTableDragEnd: (d: TableDragState) => void;
 }) {
   const project = useActiveProject()!;
   const frame = useCanvasFrame();
@@ -3255,6 +3285,27 @@ function EditorLayers({
           const allSelected = mine.every((p) => selected.includes(p.id));
           const lp = frame.toPx(corners[3]);
           const text = `${seg.label} · ${rows}×${cols}`;
+          const live = tableDrag?.segId === seg.id ? tableDrag : null;
+          // the outline while an edge is dragged: grown or shrunk by whole cells
+          const dragCorners = live
+            ? [
+                { x: minX - (live.side === 'left' ? live.count * pitchX : 0), y: minY - (live.side === 'bottom' ? live.count * pitchY : 0) },
+                { x: maxX + (live.side === 'right' ? live.count * pitchX : 0), y: minY - (live.side === 'bottom' ? live.count * pitchY : 0) },
+                { x: maxX + (live.side === 'right' ? live.count * pitchX : 0), y: maxY + (live.side === 'top' ? live.count * pitchY : 0) },
+                { x: minX - (live.side === 'left' ? live.count * pitchX : 0), y: maxY + (live.side === 'top' ? live.count * pitchY : 0) },
+              ].map((c) => rotateXY(c, angle))
+            : null;
+          const edgeMid = (side: 'top' | 'bottom' | 'left' | 'right'): XY =>
+            rotateXY(
+              side === 'top'
+                ? { x: (minX + maxX) / 2, y: maxY }
+                : side === 'bottom'
+                  ? { x: (minX + maxX) / 2, y: minY }
+                  : side === 'left'
+                    ? { x: minX, y: (minY + maxY) / 2 }
+                    : { x: maxX, y: (minY + maxY) / 2 },
+              angle,
+            );
           return (
             <g key={seg.id}>
               <path
@@ -3266,6 +3317,57 @@ function EditorLayers({
                 opacity={0.9}
                 pointerEvents="none"
               />
+              {dragCorners && (
+                <path d={polyPath(frame, dragCorners)} fill="rgba(253,230,138,0.12)" stroke="#fde68a" strokeWidth={1.6} pointerEvents="none" />
+              )}
+              {/* edge handles when the table is selected: drag out for more rows/columns, in for fewer */}
+              {allSelected &&
+                (['top', 'bottom', 'left', 'right'] as const).map((side) => {
+                  const mp = frame.toPx(edgeMid(side));
+                  const rowEdge = side === 'top' || side === 'bottom';
+                  const isLive = live?.side === side;
+                  return (
+                    <g
+                      key={side}
+                      transform={`translate(${mp.x}, ${mp.y}) scale(${1 / frame.zoom})`}
+                      style={{ cursor: rowEdge ? 'ns-resize' : 'ew-resize' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
+                        // client px at the press; the move turns px deltas into metres
+                        onTableDrag({ segId: seg.id, side, count: 0, start: { x: e.clientX, y: e.clientY } });
+                      }}
+                      onPointerMove={(e) => {
+                        if (!live || live.side !== side) return;
+                        // screen px → plan metres (north is up on screen) → the table's lattice frame
+                        const dm = rotateXY(
+                          { x: (e.clientX - live.start.x) / frame.pxPerM, y: -(e.clientY - live.start.y) / frame.pxPerM },
+                          -angle,
+                        );
+                        const raw =
+                          side === 'top'
+                            ? dm.y / pitchY
+                            : side === 'bottom'
+                              ? -dm.y / pitchY
+                              : side === 'left'
+                                ? -dm.x / pitchX
+                                : dm.x / pitchX;
+                        const count = Math.round(raw);
+                        if (count !== live.count) onTableDrag({ ...live, count });
+                      }}
+                      onPointerUp={(e) => {
+                        e.stopPropagation();
+                        if (live) onTableDragEnd(live);
+                      }}
+                      onPointerCancel={() => onTableDrag(null)}
+                    >
+                      <circle r={9} fill={isLive ? '#fde68a' : '#1f2937'} stroke="#c9a24a" strokeWidth={1.5} />
+                      <text x={0} y={3.5} textAnchor="middle" fontSize={9} fontWeight={800} fill={isLive ? '#1f2937' : '#fde68a'}>
+                        {isLive && live.count !== 0 ? (live.count > 0 ? `+${live.count}` : `${live.count}`) : rowEdge ? '↕' : '↔'}
+                      </text>
+                    </g>
+                  );
+                })}
               <g
                 transform={`translate(${lp.x}, ${lp.y}) scale(${1 / frame.zoom})`}
                 style={{ cursor: 'pointer' }}

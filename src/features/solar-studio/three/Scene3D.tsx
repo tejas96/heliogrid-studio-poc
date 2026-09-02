@@ -28,6 +28,7 @@ import { ObstructionGizmo, TableGizmo, WallGizmo } from './Gizmos';
 import { Measure, type MeasureMode } from './Measure';
 import { unitBaseY, unitWhere } from '../lib/unit-pos';
 import { clockHour, seasonDates } from '../lib/sun-chart';
+import { groundLiftAt, useTerrainGeneration } from './terrain-probe';
 import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
@@ -78,6 +79,26 @@ function UnitStand({ width, height }: { width: number; height: number }) {
       <mesh position={[0, -height + 0.02, 0]} userData={{ shadowCaster: false }}>
         <boxGeometry args={[width * 0.9, 0.04, 0.3]} />
         <meshStandardMaterial color="#6b7280" roughness={0.6} metalness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * A ground-level unit stands in the plant room: a concrete pad with a thin
+ * kerb under it, drawn in the unit's group at its base. Says "this is a
+ * place on the ground, not a thing floating beside the wall".
+ */
+function PlantPad({ width, depth, baseOffset }: { width: number; depth: number; baseOffset: number }) {
+  return (
+    <group position={[0, baseOffset, 0]}>
+      <mesh position={[0, 0.05, 0]} receiveShadow userData={{ shadowCaster: false }}>
+        <boxGeometry args={[width, 0.1, depth]} />
+        <meshStandardMaterial color="#9a9a94" roughness={0.9} metalness={0} />
+      </mesh>
+      <mesh position={[0, 0.11, 0]} userData={{ shadowCaster: false }}>
+        <boxGeometry args={[width + 0.12, 0.02, depth + 0.12]} />
+        <meshStandardMaterial color="#6b6b66" roughness={0.9} metalness={0} />
       </mesh>
     </group>
   );
@@ -1943,6 +1964,8 @@ function SceneContent({
       : null;
   const shownRoofs = focusRoof ? [focusRoof] : project.roofs;
   const inScope = (roofId: string | null) => !focusRoof || roofId === focusRoof.id;
+  // ground-level things re-read the photomesh height whenever more tiles land
+  useTerrainGeneration();
   // object isolation: only the picked entity (and the roofs) stay drawn
   const isoOk = (kind: ScenePick['kind'], id: string) => !isolate || (isolate.kind === kind && isolate.id === id);
   // isolating a table keeps its modules; a string keeps its own modules; a
@@ -2416,7 +2439,9 @@ function SceneContent({
         // roof's plane at the new spot instead of failing. That is what left
         // turbine vents hanging over a pitched roof. `obstructionBaseY` still
         // honours an explicit `roofId: null` as "stands on grade".
-        const baseY = obstructionBaseY(o, project.roofs, eaveRefs);
+        const groundBase = obstructionBaseY(o, project.roofs, eaveRefs);
+        // on grade: stand on the photomesh where it actually is (visual only)
+        const baseY = groundBase === 0 ? groundLiftAt(o.center.x, -o.center.y) : groundBase;
         const picked = pick?.kind === 'obstruction' && pick.id === o.id;
         const hovered = !picked && hoverPick?.kind === 'obstruction' && hoverPick.id === o.id;
         const sx = o.shape === 'circle' ? o.diameterM : o.lengthM;
@@ -2449,9 +2474,7 @@ function SceneContent({
                 picked={picked}
               />
             )}
-            {picked && !meshMode && structEdit === null && (
-              <ObstructionGizmo project={project} id={o.id} planeY={baseY} runOp={runOp} />
-            )}
+            {picked && !meshMode && <ObstructionGizmo project={project} id={o.id} planeY={baseY} runOp={runOp} />}
             {picked && (
               <EntityLabel
                 position={[o.center.x, baseY + o.heightM + 0.7, -o.center.y]}
@@ -2745,7 +2768,7 @@ function SceneContent({
         // hangs on the OUTSIDE face of the wall, not straddling the wall line;
         // a free-standing unit sits on a stand on the deck or at ground level
         const out = free ? { x: 0, y: 0 } : wallOutward(roof, ip.edgeIndex);
-        const baseY = unitBaseY(project, ip);
+        const baseY = unitBaseY(project, ip) + (free && ip.level === 'ground' ? groundLiftAt(px, -py) : 0);
         return (
           <group
             key={ip.id}
@@ -2763,6 +2786,7 @@ function SceneContent({
             onPointerOut={() => onHoverPick(null)}
           >
             {free && <UnitStand width={0.5} height={ip.heightM} />}
+            {free && ip.level === 'ground' && <PlantPad width={1.6} depth={1.2} baseOffset={-ip.heightM} />}
             {(picked || hovered) && <PickHalo center={[0, 0, 0]} size={[0.68, 0.86, 0.4]} picked={picked} />}
             {picked && (
               <EntityLabel
@@ -2797,8 +2821,15 @@ function SceneContent({
               <boxGeometry args={[0.3, 0.18, 0.012]} />
               <meshStandardMaterial color="#22262c" roughness={0.3} />
             </mesh>
+            {/* the tag is the click target: a half-metre box is hard to hit from any distance */}
             <Html center distanceFactor={30}>
               <div
+                role="button"
+                title="Select this inverter"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPick({ kind: 'inverter', id: ip.id });
+                }}
                 style={{
                   fontSize: 10,
                   background: 'rgba(20,24,30,0.85)',
@@ -2806,7 +2837,8 @@ function SceneContent({
                   padding: '1px 6px',
                   borderRadius: 4,
                   whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
                   fontFamily: 'var(--mono)',
                 }}
               >
@@ -2837,7 +2869,7 @@ function SceneContent({
         // stands against the OUTSIDE face of the wall, or free on the deck / the ground
         const out = free ? { x: 0, y: 0 } : wallOutward(roof, bp.edgeIndex);
         const off = d / 2 + 0.03;
-        const baseY = unitBaseY(project, bp);
+        const baseY = unitBaseY(project, bp) + (free && bp.level === 'ground' ? groundLiftAt(px, -py) : 0);
         return (
           <group
             key={bp.id}
@@ -2854,6 +2886,7 @@ function SceneContent({
             }}
             onPointerOut={() => onHoverPick(null)}
           >
+            {free && bp.level === 'ground' && <PlantPad width={w + 0.8} depth={d + 0.8} baseOffset={-h / 2} />}
             {(picked || hovered) && <PickHalo center={[0, 0, 0]} size={[w + 0.2, h + 0.2, d + 0.2]} picked={picked} />}
             {picked && (
               <EntityLabel
@@ -2891,6 +2924,12 @@ function SceneContent({
             </mesh>
             <Html center distanceFactor={30} position={[0, h / 2 + 0.18, 0]}>
               <div
+                role="button"
+                title="Select this battery"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPick({ kind: 'battery', id: bp.id });
+                }}
                 style={{
                   fontSize: 10,
                   background: 'rgba(20,24,30,0.85)',
@@ -2898,7 +2937,8 @@ function SceneContent({
                   padding: '1px 6px',
                   borderRadius: 4,
                   whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
                   fontFamily: 'var(--mono)',
                 }}
               >
@@ -2921,7 +2961,7 @@ function SceneContent({
         const py = free ? bx.pos!.y : a.y + (b.y - a.y) * bx.t;
         const wallAng = free ? 0 : Math.atan2(-(b.y - a.y), b.x - a.x);
         const out = free ? { x: 0, y: 0 } : wallOutward(roof, bx.edgeIndex);
-        const baseY = unitBaseY(project, bx);
+        const baseY = unitBaseY(project, bx) + (free && bx.level === 'ground' ? groundLiftAt(px, -py) : 0);
         const picked = pick?.kind === 'box' && pick.id === bx.id;
         const hovered = !picked && hoverPick?.kind === 'box' && hoverPick.id === bx.id;
         const dc = bx.kind === 'dcdb';
@@ -2972,12 +3012,19 @@ function SceneContent({
               <meshStandardMaterial color="#8e959d" roughness={0.5} metalness={0.4} />
             </mesh>
             {free && <UnitStand width={w} height={bx.heightM} />}
+            {free && bx.level === 'ground' && <PlantPad width={1.2} depth={1.0} baseOffset={-bx.heightM} />}
             <mesh position={[0, 0, 0.114]}>
               <boxGeometry args={[w * 0.9, h * 0.9, 0.01]} />
               <meshStandardMaterial color="#b8bfc7" roughness={0.45} metalness={0.35} />
             </mesh>
             <Html center distanceFactor={30} position={[0, h / 2 + 0.16, 0]}>
               <div
+                role="button"
+                title={dc ? 'Select the DCDB' : 'Select the ACDB'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPick({ kind: 'box', id: bx.id });
+                }}
                 style={{
                   fontSize: 10,
                   background: 'rgba(20,24,30,0.85)',
@@ -2985,7 +3032,8 @@ function SceneContent({
                   padding: '1px 6px',
                   borderRadius: 4,
                   whiteSpace: 'nowrap',
-                  pointerEvents: 'none',
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
                   fontFamily: 'var(--mono)',
                 }}
               >

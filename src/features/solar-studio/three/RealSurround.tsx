@@ -31,6 +31,7 @@ import {
 } from '3d-tiles-renderer/plugins';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { Project } from '../types';
+import { setTerrainSampler } from './terrain-probe';
 
 const ROOT_URL = 'https://tile.googleapis.com/v1/3dtiles/root.json';
 /**
@@ -278,6 +279,7 @@ export function RealSurround({
         } else if (Math.abs(h) < 0.15) {
           measured = 8;
           onStatus?.('ready');
+          setTerrainSampler((x, z) => hitY(x, z));
           return;
         }
         groundH += h;
@@ -285,6 +287,8 @@ export function RealSurround({
         reorient.transformLatLonHeightToOrigin((lat * Math.PI) / 180, (lng * Math.PI) / 180, groundH);
         onStatus?.('ready');
         invalidate();
+        // ground-level objects stand on the mesh: hand out a sampler
+        setTerrainSampler((x, z) => hitY(x, z));
       };
       t.addEventListener('load-model', onLoadModel as never);
       t.addEventListener('load-error', onLoadError as never);
@@ -299,6 +303,7 @@ export function RealSurround({
     return () => {
       disposed = true;
       cleanupEvents?.();
+      setTerrainSampler(null);
       if (tiles) {
         scene.remove(tiles.group);
         tiles.dispose();

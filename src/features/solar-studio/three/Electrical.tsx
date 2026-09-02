@@ -253,8 +253,11 @@ export function ElectricalOverlay({
         continue;
       }
       let tube: THREE.TubeGeometry | null = null;
-      if (pts.length >= 2) {
-        const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal', 0);
+      // the pick sleeve stops short of the landing drop: a sleeve down the
+      // wall sat on the inverter / box and stole every click meant for it
+      const sleevePts = pts.length > r.waypoints.length ? pts.slice(0, r.waypoints.length) : pts;
+      if (sleevePts.length >= 2) {
+        const curve = new THREE.CatmullRomCurve3(sleevePts.map((p) => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal', 0);
         // a fat, faint sleeve: the drawn line stays thin, the click target is a hand's width
         tube = new THREE.TubeGeometry(curve, Math.max(8, pts.length * 4), 0.2, 6, false);
       }

@@ -121,8 +121,11 @@ export function ObstructionGizmo({
           <meshBasicMaterial color="#ffc766" transparent opacity={0.35} depthWrite={false} toneMapped={false} />
         </mesh>
       )}
+      {/* the card floats above the obstruction; both handles hang below the
+          card, like the table's — a handle under a card cannot be grabbed */}
       <Handle
-        position={[o.center.x, top + 0.5, -o.center.y]}
+        position={[o.center.x, top + 0.7, -o.center.y]}
+        offsetY={MOVE_HANDLE_OFFSET_PX}
         title="Drag to move the obstruction (Shift snaps to 0.1 m)"
         active={drag?.kind === 'move'}
         onStart={startMove}
@@ -132,7 +135,8 @@ export function ObstructionGizmo({
         <Move size={20} aria-hidden />
       </Handle>
       <Handle
-        position={[o.center.x + size / 2 + 0.9, top + 0.5, -o.center.y]}
+        position={[o.center.x, top + 0.7, -o.center.y]}
+        offsetY={MOVE_HANDLE_OFFSET_PX + 50}
         title="Drag to turn the obstruction (Shift snaps to 15°)"
         active={drag?.kind === 'rotate'}
         onStart={startRotate}
@@ -142,7 +146,7 @@ export function ObstructionGizmo({
         <RotateCw size={20} aria-hidden />
       </Handle>
       {drag && preview && (
-        <Readout position={[gx + size / 2 + 0.6, top + 0.6, -gy]} preview={preview} />
+        <Readout position={[gx, top + 0.7, -gy]} offsetY={MOVE_HANDLE_OFFSET_PX + 44} preview={preview} />
       )}
     </group>
   );
