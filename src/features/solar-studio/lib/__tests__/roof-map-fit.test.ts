@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { guessObstructionType, roofMapFit, roofRaisedObjects } from '../roof-map-fit';
+import { guessObstructionType, roofMapFit, roofRaisedObjects, roofsAdoptingMap } from '../roof-map-fit';
 import type { SurroundHeights } from '../surround-geometry';
+import { fixtureRoof } from './fixtures/project';
 
 /** 60 × 60 m at 0.5 m; height from a function of plan (x, y). */
 function grid(h: (x: number, y: number) => number): SurroundHeights {
@@ -63,5 +64,44 @@ describe('roofMapFit — the traced roof as the height map sees it', () => {
     const g = grid((x, y) => 6 + parapet(x, y));
     const fit = roofMapFit(g, rect)!;
     expect(roofRaisedObjects(g, rect, fit)).toEqual([]);
+  });
+});
+
+describe('roofsAdoptingMap — roofs not set by hand follow the map', () => {
+  const g = grid(() => 6.4);
+  const parent = fixtureRoof({ id: 'roof_1', polygon: rect.polygon, heightM: 3 });
+  // a 2 × 2 m stair room on the parent, 1.5 m above it: too small for the map to read
+  const mumty = fixtureRoof({
+    id: 'roof_2',
+    name: 'Mumty',
+    polygon: [
+      { x: 1, y: 1 },
+      { x: 3, y: 1 },
+      { x: 3, y: 3 },
+      { x: 1, y: 3 },
+    ],
+    heightM: 4.5,
+  });
+  const mine = fixtureRoof({
+    id: 'roof_3',
+    polygon: [
+      { x: -25, y: -25 },
+      { x: -15, y: -25 },
+      { x: -15, y: -15 },
+      { x: -25, y: -15 },
+    ],
+    heightM: 3,
+    heightSource: 'user',
+  });
+
+  it('takes the map height, keeps a stair room above its roof, leaves the user’s roof alone', () => {
+    const out = roofsAdoptingMap([parent, mumty, mine], g)!;
+    expect(out[0].heightM).toBe(6.4);
+    expect(out[0].heightSource).toBe('aerial_map');
+    expect(out[1].heightM).toBeCloseTo(7.9, 5); // 6.4 + the 1.5 m rise it had
+    expect(out[1].heightSource).toBe('aerial_map');
+    expect(out[2]).toBe(mine);
+    // settled: a second pass changes nothing (the sync must not loop)
+    expect(roofsAdoptingMap(out, g)).toBeNull();
   });
 });

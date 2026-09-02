@@ -2236,7 +2236,7 @@ function SceneContent({
   lightTarget.position.set(bounds.cx, 0, bounds.cz);
   const shadowHalf = Math.max(20, bounds.r * 1.2);
   const sunPos = useMemo(
-    () => sunDir.clone().multiplyScalar(Math.max(80, bounds.r * 3)).add(new THREE.Vector3(bounds.cx, 0, bounds.cz)),
+    () => sunDir.clone().multiplyScalar(Math.max(80, bounds.r * 3)).add(new THREE.Vector3(bounds.cx, bounds.yMax, bounds.cz)),
     [sunDir, bounds],
   );
 
@@ -3175,8 +3175,9 @@ function SceneContent({
 
       {!meshMode && showSunPath && (
         // centred on the DESIGN, not the scene origin: a building 25 m from
-        // the origin had its sun arc drawn 25 m beside it
-        <group position={[bounds.cx, 0, bounds.cz]}>
+        // the origin had its sun arc drawn 25 m beside it — and at the design's
+        // TOP, so a 75 m tower does not swallow its own sun path
+        <group position={[bounds.cx, bounds.yMax, bounds.cz]}>
           {/* the year's envelope: solstices and the equinox, faint, so a
               glance shows how far the sun swings between seasons */}
           {seasonDates(date.getFullYear()).map((s) => (
@@ -3410,7 +3411,19 @@ function SunPath({
     const top = points.reduce((a, p) => (p.y > a.y ? p : a), points[0]);
     return (
       <group>
-        <Line points={points} color="#d4a017" lineWidth={1} transparent opacity={0.45} dashed dashSize={0.8} gapSize={0.8} />
+        <Line
+          points={points}
+          color="#d4a017"
+          lineWidth={1}
+          transparent
+          opacity={0.45}
+          dashed
+          dashSize={0.8}
+          gapSize={0.8}
+          // an overlay: the sun's path is never hidden behind a tower or a tree
+          depthTest={false}
+          renderOrder={20}
+        />
         {label && (
           <Html position={[top.x, top.y + 1.5, top.z]} center zIndexRange={[10, 0]}>
             <span
@@ -3436,7 +3449,16 @@ function SunPath({
   }
   return (
     <group>
-      <Line points={points} color="#d4a017" lineWidth={1.6} dashed dashSize={1.2} gapSize={0.6} />
+      <Line
+        points={points}
+        color="#d4a017"
+        lineWidth={1.6}
+        dashed
+        dashSize={1.2}
+        gapSize={0.6}
+        depthTest={false}
+        renderOrder={20}
+      />
       {hours.map((h, i) => (
         <Html key={i} position={h.pos.toArray()} center zIndexRange={[10, 0]}>
           <span

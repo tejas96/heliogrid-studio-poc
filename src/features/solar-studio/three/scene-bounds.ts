@@ -48,6 +48,8 @@ export function designBounds(project: Project, roofs: Roof[] = project.roofs): S
   if (!Number.isFinite(xMin)) return FALLBACK;
   const cx = (xMin + xMax) / 2;
   const cz = -(yMin + yMax) / 2;
-  const r = Math.max(8, Math.max(xMax - xMin, yMax - yMin) / 2 + 4);
+  // the sphere the camera fits must hold the design's HEIGHT too: a 75 m
+  // tower framed by its footprint alone put the camera inside the next one
+  const r = Math.max(8, Math.max(xMax - xMin, yMax - yMin) / 2 + 4, hMax / 2 + 4);
   return { cx, cy: hMax / 2, cz, r, yMin: 0, yMax: hMax };
 }

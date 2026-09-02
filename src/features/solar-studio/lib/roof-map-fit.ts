@@ -129,9 +129,26 @@ export function roofsWithMapFit(roofs: Roof[], g: SurroundHeights, roofId: strin
       .filter((r) => r.id === target.id || r.polygon.every((v) => pointInPolygon(v, target.polygon)))
       .map((r) => r.id),
   );
+  const parentFit = roofMapFit(g, target, northOffsetDeg);
   return roofs.map((r) => {
     if (!family.has(r.id)) return r;
     const fit = roofMapFit(g, r, northOffsetDeg);
+    if (r.id !== target.id && parentFit) {
+      // A roof standing ON the parent must stand above it. The map reads a
+      // small stair room at the deck's own height (its cells are the deck's)
+      // or not at all (too few cells); a mumty flush with its roof — or left
+      // 60 m down inside the building — is no mumty. It keeps the rise it had.
+      const own = r.heightM - target.heightM;
+      const rise = own > CHILD_MIN_RISE_M ? own : CHILD_DEFAULT_RISE_M;
+      const readAbove = fit !== null && fit.heightM > parentFit.heightM + CHILD_MIN_RISE_M;
+      const heightM = readAbove ? fit.heightM : parentFit.heightM + rise;
+      const next: Roof = { ...r, heightM, heightSource: 'aerial_map' };
+      if (fit && fit.rmseM <= TRUSTED_RMSE_M) {
+        next.pitchDeg = fit.pitchDeg;
+        if (fit.slopeAzimuthDeg !== null) next.slopeAzimuthDeg = fit.slopeAzimuthDeg;
+      }
+      return next;
+    }
     if (!fit) return r;
     const next: Roof = { ...r, heightM: fit.heightM, heightSource: 'aerial_map' };
     if (fit.rmseM <= TRUSTED_RMSE_M) {
@@ -140,6 +157,64 @@ export function roofsWithMapFit(roofs: Roof[], g: SurroundHeights, roofId: strin
     }
     return next;
   });
+}
+
+/** A roof standing on another is at least this much higher than it. */
+export const CHILD_MIN_RISE_M = 0.5;
+/** A stair room the map cannot read stands this high — the roof factory's own default. */
+export const CHILD_DEFAULT_RISE_M = 2.2;
+
+/** A roof within this of the map's reading is "the same"; further off, it takes the reading. */
+export const ADOPT_TOLERANCE_M = 1.5;
+
+/**
+ * Every roof the map can read and the user has not set by hand (no
+ * `heightSource`, or 'aerial_map') brought to what the map measures: a
+ * measurement beats a typed guess or a factory default. A roof the user set
+ * ('user') is theirs and is left alone. Returns null when nothing changes.
+ */
+export function roofsAdoptingMap(roofs: Roof[], g: SurroundHeights, northOffsetDeg = 0): Roof[] | null {
+  let out = roofs;
+  for (const id of roofs.map((r) => r.id)) {
+    const r = out.find((x) => x.id === id)!;
+    if (r.heightSource === 'user' || r.roofType === 'ground') continue;
+    const fit = roofMapFit(g, r, northOffsetDeg);
+    if (!fit) continue;
+    const heightOff = Math.abs(fit.heightM - r.heightM) > ADOPT_TOLERANCE_M;
+    const pitchOff = fit.rmseM <= TRUSTED_RMSE_M && Math.abs(fit.pitchDeg - r.pitchDeg) >= 1;
+    if (!heightOff && !pitchOff) {
+      if (r.heightSource !== 'aerial_map') {
+        // already what the map says: only record that it is measured
+        out = out.map((x) => (x.id === id ? { ...x, heightSource: 'aerial_map' as const } : x));
+      }
+      continue;
+    }
+    // this roof and every roof standing on it (a mumty follows its parent)
+    out = roofsWithMapFit(out, g, id, northOffsetDeg);
+  }
+  // a roof standing on another but not above it (a stair room the map read
+  // at the deck's height) is no roof: bring the family back with its rise
+  for (const c of out) {
+    if (c.heightSource === 'user' || c.roofType === 'ground') continue;
+    const parent = out.find(
+      (p) => p.id !== c.id && p.polygon.length >= 3 && c.polygon.every((v) => pointInPolygon(v, p.polygon)),
+    );
+    if (!parent || c.heightM > parent.heightM + CHILD_MIN_RISE_M) continue;
+    if (!roofMapFit(g, parent, northOffsetDeg)) continue;
+    out = roofsWithMapFit(out, g, parent.id, northOffsetDeg);
+  }
+  // only a real difference is a change — the sync that calls this patches the
+  // project, and a patch that changes nothing would call it again for ever
+  const differs = out.some((r, i) => {
+    const was = roofs[i];
+    return (
+      r.heightM !== was.heightM ||
+      r.pitchDeg !== was.pitchDeg ||
+      r.slopeAzimuthDeg !== was.slopeAzimuthDeg ||
+      r.heightSource !== was.heightSource
+    );
+  });
+  return differs ? out : null;
 }
 
 export interface RaisedObject {

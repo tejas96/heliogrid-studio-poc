@@ -8,6 +8,7 @@ import { useDesignSync } from '@/features/solar-studio/store/useDesignSync';
 import { useElectricalSync } from '@/features/solar-studio/store/useElectricalSync';
 import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
 import { useSurroundSync } from '@/features/solar-studio/store/useSurroundSync';
+import { useRoofMapSync } from '@/features/solar-studio/store/useRoofMapSync';
 
 /**
  * Recompute host for derived design data (per-panel shading). Lives at the
@@ -16,6 +17,8 @@ import { useSurroundSync } from '@/features/solar-studio/store/useSurroundSync';
  */
 function DesignSync() {
   useSurroundSync();
+  // the roofs the user did not set by hand take the height map's measurement
+  useRoofMapSync();
   useDesignSync();
   useElectricalSync();
   useHealthSync();
