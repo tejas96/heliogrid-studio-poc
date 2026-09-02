@@ -148,7 +148,6 @@ import {
   Box,
   Building2,
   Camera,
-  Image as ImageIcon,
   Check,
   Grid3x3,
   Link2,
@@ -498,8 +497,6 @@ export function Scene3D({
   const [showReport, setShowReport] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'mesh'>(initialViewMode);
   const [showBuildings, setShowBuildings] = useState(true);
-  // the real roof (satellite photo on the deck) or the covering material
-  const [showRoofPhoto, setShowRoofPhoto] = useState(true);
   const [showSunPath, setShowSunPath] = useState(true);
   const [showSunChart, setShowSunChart] = useState(false);
   // ── inspect: isolate the picked entity, fly to it, walk the site ──────────
@@ -939,7 +936,6 @@ export function Scene3D({
           sunAzimuth={sceneSunAzimuth}
           solarAccessView={solarAccessView}
           showBuildings={showBuildings}
-          showRoofPhoto={showRoofPhoto}
           showSunPath={showSunPath}
           isolate={isolate && pick ? pick : null}
           onPickFocus={(f) => {
@@ -1064,16 +1060,6 @@ export function Scene3D({
                   onClick={() => setShowBuildings((v) => !v)}
                 >
                   <Building2 />
-                </button>
-                <button
-                  className={`tool-btn ${showRoofPhoto ? '' : 'on'}`}
-                  data-tip={showRoofPhoto ? 'Roof: show the covering material' : 'Roof: show the aerial photo'}
-                  data-tip-right=""
-                  aria-label="Toggle the roof photo"
-                  aria-pressed={!showRoofPhoto}
-                  onClick={() => setShowRoofPhoto((v) => !v)}
-                >
-                  <ImageIcon />
                 </button>
               </>
             )}
@@ -1882,7 +1868,6 @@ function SceneContent({
   sunAzimuth,
   solarAccessView,
   showBuildings,
-  showRoofPhoto,
   showSunPath,
   isolate,
   onPickFocus,
@@ -1929,8 +1914,6 @@ function SceneContent({
   sunAzimuth: number;
   solarAccessView: boolean;
   showBuildings: boolean;
-  /** the satellite photo on every deck (the real roof) instead of the covering material */
-  showRoofPhoto: boolean;
   showSunPath: boolean;
   /** show only this entity (and the roofs) — object isolation */
   isolate: ScenePick | null;
@@ -2473,7 +2456,7 @@ function SceneContent({
               allRoofs={project.roofs}
               eaveProj={eaveRefs.get(r.id)}
               photoreal={!meshMode}
-              photo={showRoofPhoto && !meshMode ? roofPhoto : null}
+              photo={meshMode ? null : roofPhoto}
               outline={picked ? PICK_COLOR : hovered ? HOVER_COLOR : undefined}
             />
             {picked && (

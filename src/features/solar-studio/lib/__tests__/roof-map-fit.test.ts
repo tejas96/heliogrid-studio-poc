@@ -104,4 +104,29 @@ describe('roofsAdoptingMap — roofs not set by hand follow the map', () => {
     // settled: a second pass changes nothing (the sync must not loop)
     expect(roofsAdoptingMap(out, g)).toBeNull();
   });
+
+  it('a stair room the map reads at the deck height settles instead of oscillating', () => {
+    // the London case: a mumty big enough for the map to read, but the map
+    // reads the DECK under it. Adopting that reading sank it into the roof and
+    // the rise rule lifted it out again — one flip per render, for ever.
+    const big = fixtureRoof({
+      id: 'roof_2',
+      name: 'Mumty',
+      polygon: [
+        { x: -4, y: -4 },
+        { x: 4, y: -4 },
+        { x: 4, y: 4 },
+        { x: -4, y: 4 },
+      ],
+      heightM: 4.5,
+    });
+    let out = roofsAdoptingMap([parent, big], g)!;
+    expect(out[1].heightM).toBeCloseTo(7.9, 5);
+    // and it stays there: no second answer, no loop
+    for (let i = 0; i < 3; i++) {
+      const again = roofsAdoptingMap(out, g);
+      expect(again).toBeNull();
+      out = again ?? out;
+    }
+  });
 });

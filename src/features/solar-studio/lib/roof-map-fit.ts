@@ -174,10 +174,19 @@ export const ADOPT_TOLERANCE_M = 1.5;
  * ('user') is theirs and is left alone. Returns null when nothing changes.
  */
 export function roofsAdoptingMap(roofs: Roof[], g: SurroundHeights, northOffsetDeg = 0): Roof[] | null {
+  /** the roof this one stands on, if any — polygons never move, so this is stable */
+  const parentOf = (c: Roof) =>
+    roofs.find((p) => p.id !== c.id && p.polygon.length >= 3 && c.polygon.every((v) => pointInPolygon(v, p.polygon)));
+
   let out = roofs;
   for (const id of roofs.map((r) => r.id)) {
     const r = out.find((x) => x.id === id)!;
     if (r.heightSource === 'user' || r.roofType === 'ground') continue;
+    // A roof standing on another NEVER takes its own reading. The map reads a
+    // small stair room at the deck's height (its cells are the deck's), so
+    // adopting it would sink the mumty into the roof — and the rule below
+    // would lift it out again, every render, for ever.
+    if (parentOf(r)) continue;
     const fit = roofMapFit(g, r, northOffsetDeg);
     if (!fit) continue;
     const heightOff = Math.abs(fit.heightM - r.heightM) > ADOPT_TOLERANCE_M;
@@ -192,17 +201,20 @@ export function roofsAdoptingMap(roofs: Roof[], g: SurroundHeights, northOffsetD
     // this roof and every roof standing on it (a mumty follows its parent)
     out = roofsWithMapFit(out, g, id, northOffsetDeg);
   }
-  // a roof standing on another but not above it (a stair room the map read
-  // at the deck's height) is no roof: bring the family back with its rise
-  for (const c of out) {
-    if (c.heightSource === 'user' || c.roofType === 'ground') continue;
-    const parent = out.find(
-      (p) => p.id !== c.id && p.polygon.length >= 3 && c.polygon.every((v) => pointInPolygon(v, p.polygon)),
-    );
-    if (!parent || c.heightM > parent.heightM + CHILD_MIN_RISE_M) continue;
-    if (!roofMapFit(g, parent, northOffsetDeg)) continue;
-    out = roofsWithMapFit(out, g, parent.id, northOffsetDeg);
-  }
+  // Every roof standing on another sits above it, by the rise it had before
+  // the parent moved. One pass, from the ORIGINAL heights, so it cannot fight
+  // the loop above.
+  out = out.map((c) => {
+    if (c.heightSource === 'user' || c.roofType === 'ground') return c;
+    const was = roofs.find((x) => x.id === c.id)!;
+    const wasParent = parentOf(was);
+    if (!wasParent) return c;
+    const parent = out.find((p) => p.id === wasParent.id)!;
+    if (c.heightM > parent.heightM + CHILD_MIN_RISE_M) return c;
+    const own = was.heightM - wasParent.heightM;
+    const rise = own > CHILD_MIN_RISE_M ? own : CHILD_DEFAULT_RISE_M;
+    return { ...c, heightM: Math.round((parent.heightM + rise) * 10) / 10, heightSource: 'aerial_map' as const };
+  });
   // only a real difference is a change — the sync that calls this patches the
   // project, and a patch that changes nothing would call it again for ever
   const differs = out.some((r, i) => {
