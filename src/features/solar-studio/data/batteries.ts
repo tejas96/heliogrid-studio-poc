@@ -1,0 +1,96 @@
+// ─── Battery storage catalog — representative Indian-market entries ─────────
+// Same honesty rule as the module and inverter DBs: these are representative
+// 2026 list prices and datasheet figures, not confirmed vendor quotes. The
+// catalog envelope labels them 'mock-representative' until a real pricebook
+// import lands. `kwh` is USABLE energy (what the customer can cycle), not the
+// nameplate — lead-acid in particular sells its nameplate and delivers half.
+import type { BatterySpec } from '../types';
+
+export const BATTERY_DB: BatterySpec[] = [
+  {
+    id: 'bat_tata_lfp_5',
+    brand: 'Tata Power Solar',
+    model: 'Solaroof LFP 5.1 kWh · 48 V',
+    kwh: 5.12,
+    nominalV: 51.2,
+    chemistry: 'lfp',
+    powerKw: 2.5,
+    cycleLife: 6000,
+    warrantyYears: 10,
+    widthMm: 480,
+    depthMm: 250,
+    heightMm: 620,
+    weightKg: 48,
+    priceInr: 195000,
+  },
+  {
+    id: 'bat_luminous_lion_5',
+    brand: 'Luminous',
+    model: 'LiON 5 kWh · 48 V',
+    kwh: 5.0,
+    nominalV: 51.2,
+    chemistry: 'lfp',
+    powerKw: 2.5,
+    cycleLife: 4000,
+    warrantyYears: 5,
+    widthMm: 500,
+    depthMm: 230,
+    heightMm: 600,
+    weightKg: 52,
+    priceInr: 180000,
+  },
+  {
+    id: 'bat_exide_hv_10',
+    brand: 'Exide',
+    model: 'Li-Tron HV 10.2 kWh',
+    kwh: 10.24,
+    nominalV: 409.6,
+    chemistry: 'lfp',
+    powerKw: 5,
+    cycleLife: 6000,
+    warrantyYears: 10,
+    widthMm: 600,
+    depthMm: 270,
+    heightMm: 900,
+    weightKg: 105,
+    priceInr: 390000,
+  },
+  {
+    id: 'bat_huawei_luna_5',
+    brand: 'Huawei',
+    model: 'LUNA2000-5-S0 · HV',
+    kwh: 5.0,
+    nominalV: 450,
+    chemistry: 'lfp',
+    powerKw: 2.5,
+    cycleLife: 6000,
+    warrantyYears: 10,
+    widthMm: 670,
+    depthMm: 150,
+    heightMm: 600,
+    weightKg: 63,
+    priceInr: 245000,
+  },
+  {
+    id: 'bat_amaron_tubular_48',
+    brand: 'Amaron',
+    model: 'Tubular 4 × 200 Ah · 48 V (4.8 kWh usable)',
+    kwh: 4.8,
+    nominalV: 48,
+    chemistry: 'lead_acid',
+    powerKw: 2.0,
+    cycleLife: 1500,
+    warrantyYears: 3,
+    widthMm: 520,
+    depthMm: 280,
+    heightMm: 900,
+    weightKg: 240,
+    priceInr: 72000,
+  },
+];
+
+export const CHEMISTRY_LABEL: Record<BatterySpec['chemistry'], string> = {
+  lfp: 'LFP lithium',
+  nmc: 'NMC lithium',
+  lead_acid: 'Tubular lead-acid',
+};

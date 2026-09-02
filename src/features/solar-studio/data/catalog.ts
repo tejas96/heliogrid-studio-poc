@@ -8,6 +8,8 @@
 import type { InverterSpec, PanelSpec } from '../types';
 import { PANEL_DB } from './panels';
 import { INVERTER_DB } from './inverters';
+import { BATTERY_DB } from './batteries';
+import type { BatterySpec } from '../types';
 import { PRICE_BOOK } from './pricebook';
 
 /** Where a catalog entry's numbers came from — honest-labeling requirement. */
@@ -27,6 +29,7 @@ export interface CatalogEnvelope {
   entryProvenance: Record<string, CatalogProvenance>;
   panels: PanelSpec[];
   inverters: InverterSpec[];
+  batteries: BatterySpec[];
   pricebook: typeof PRICE_BOOK;
 }
 
@@ -39,6 +42,7 @@ const ACTIVE_CATALOG: CatalogEnvelope = {
   entryProvenance: {},
   panels: PANEL_DB,
   inverters: INVERTER_DB,
+  batteries: BATTERY_DB,
   pricebook: PRICE_BOOK,
 };
 

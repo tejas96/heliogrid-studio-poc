@@ -83,18 +83,36 @@ export function EnergyReportSheet({
             <b>×{r.poaFactor}</b>
           </div>
         </div>
+        {/* how sure: the figure above is the P50; a bank reads the P90 */}
+        {r.uncertainty && (
+          <div style={{ marginTop: 10, fontSize: 11.5, opacity: 0.9, lineHeight: 1.4 }}>
+            <b>P90 {Math.round(r.uncertainty.p90Kwh / 100) / 10} MWh</b> — nine years in ten beat this · P99{' '}
+            {Math.round(r.uncertainty.p99Kwh / 100) / 10} MWh · one sigma {r.uncertainty.sigmaPct}% = years ±
+            {r.uncertainty.interannualPct}%{' '}
+            {r.uncertainty.yearsOfRecord > 0 ? `(${r.uncertainty.yearsOfRecord}-yr record)` : '(assumed — record not kept yet)'} ⊕
+            model ±{r.uncertainty.modelPct}% (assumed until the PVsyst comparison)
+          </div>
+        )}
         <div style={{ fontSize: 10, opacity: 0.7, marginTop: 8 }}>
           {/* provenance follows the ACTUAL numbers (r.irradianceSource), not the
               persisted dataSource string — which can read 'PVGIS' on a rehydrated
               project whose weather was rejected/stale and fell back to estimate */}
-          {r.irradianceSource === 'PVGIS'
-            ? `Real irradiance — PVGIS ${project.location?.weather?.raddatabase ?? '(measured)'}${
-                project.location?.weather?.yearsOfRecord
-                  ? ` (${project.location.weather.yearsOfRecord}-yr record)`
-                  : ''
-              }`
-            : 'Built-in irradiance model (latitude fit, ±10%)'}{' '}
-          · POA = beam-weighted plane-of-array estimate · shading auto-updates on edits
+          {r.engine === 'hourly' && r.hourly
+            ? `Hourly engine — PVGIS typical year (${r.hourly.radiationDb}${
+                r.hourly.yearMin && r.hourly.yearMax ? ` ${r.hourly.yearMin}–${r.hourly.yearMax}` : ''
+              }), 8760 hours × every module: Perez sky, shade by the hour, module temperature, inverter curve and clipping · ` +
+              `${r.hourly.ghiKwhM2} kWh/m² horizontal → ${r.hourly.poaKwhM2} kWh/m² in plane` +
+              (r.hourly.rearGainPct ? ` (+ ${r.hourly.rearKwhM2} kWh/m² on the backs)` : '') +
+              (r.hourly.clippingHours > 0 ? ` · clipping ${r.hourly.clippingHours} h/yr (${r.hourly.clippedKwh} kWh)` : '') +
+              ` · assumed: ${r.hourly.assumed.join('; ')}`
+            : r.irradianceSource === 'PVGIS'
+              ? `Real irradiance — PVGIS ${project.location?.weather?.raddatabase ?? '(measured)'}${
+                  project.location?.weather?.yearsOfRecord
+                    ? ` (${project.location.weather.yearsOfRecord}-yr record)`
+                    : ''
+                } · monthly estimate until the typical year loads · POA = beam-weighted plane-of-array estimate`
+              : 'Built-in irradiance model (latitude fit, ±10%) · POA = beam-weighted plane-of-array estimate'}{' '}
+          · shading auto-updates on edits
         </div>
       </div>
 
@@ -126,6 +144,30 @@ export function EnergyReportSheet({
 
       <SectionLabel>LOSSES BREAKDOWN</SectionLabel>
       <div style={{ marginBottom: 6 }}>
+        {/* The back of a bifacial module GIVES: it belongs above the losses, as
+            its own step, not buried as a negative loss. Shown only when the
+            modules actually have a rear yield — a mono-facial design says
+            nothing about bifaciality at all. */}
+        {!!r.hourly?.rearGainPct && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <span style={{ width: 86, fontSize: 11.5, color: 'var(--ink-2)' }}>
+              Bifacial gain (rear side)
+            </span>
+            <div style={{ flex: 1, height: 7, background: 'var(--paper-3)', borderRadius: 999 }}>
+              <div
+                style={{
+                  width: `${Math.min(100, (r.hourly.rearGainPct / 12) * 100)}%`,
+                  height: '100%',
+                  borderRadius: 999,
+                  background: '#10b981',
+                }}
+              />
+            </div>
+            <b style={{ fontSize: 11.5, width: 40, textAlign: 'right', color: '#10b981' }}>
+              +{r.hourly.rearGainPct}%
+            </b>
+          </div>
+        )}
         {r.losses.map((l) => (
           <div key={l.key} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <span style={{ width: 86, fontSize: 11.5, color: 'var(--ink-2)' }}>{l.label}</span>

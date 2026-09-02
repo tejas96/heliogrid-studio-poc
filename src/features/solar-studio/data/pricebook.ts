@@ -43,6 +43,14 @@ export const PRICE_BOOK = {
   perimeterFencePerM: 850, // chain-link on HDG posts
   fenceGate: 14000, // single vehicle gate
   steelPerKg: 92, // HDG structural steel, fabricated — drives member-model tonnage lines
+  // ── Single-axis tracker hardware. ALL ASSUMED market rates: this tool has no
+  // tracker supplier pricebook, and a real tender prices the whole system per
+  // MW against a named vendor. Every line that uses these says so, so nobody
+  // reads them as a quotation.
+  trackerTubePerM: 2650, // HDG torque tube, section + fabrication
+  trackerBearingPerPost: 3200, // bearing housing + fasteners at each post
+  trackerDrivePerTube: 78000, // slew drive + motor + damper for one row
+  trackerControllerPerPlant: 145000, // NCU, wind sensor, wiring, commissioning
   anchorBoltPc: 38, // chemical/expansion anchor per pc
   basePlatePc: 120, // HDG base plate per pc
   structureBoltPc: 14, // M10 SS bolt+nut+washer set per pc
@@ -77,6 +85,13 @@ export const PRICE_BOOK = {
   earthingPit: 2650,
   dcdb: 4200,
   acdb: 5200,
+  // ── battery storage (representative 2026 rates)
+  /** 2 × 35 sq.mm Cu battery leads, per metre of pair */
+  batteryCablePerM: 850,
+  /** DC isolator + fuse between battery and inverter, per battery */
+  batteryDcIsolator: 3200,
+  /** AC-coupled battery inverter / interface kit, per kW of battery power */
+  batteryAcInterfacePerKw: 9000,
   combinerBox: 8500, // string combiner box (SCB/AJB) with busbar + isolator + SPD
   stringFuse: 120, // gPV string fuse (per pole)
   dcOptimizer: 3400, // per-module DC optimiser (MLPE)

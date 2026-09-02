@@ -29,6 +29,7 @@ import { STRUCTURE_PROFILES } from '../lib/segment-ops';
 import { defaultStructureParams, projectStructures, resolveRacking } from '../lib/structure';
 import { panelFootprintM } from '../lib/layout';
 import { computePanelShadeDetail } from '../lib/shading';
+import { peekSurroundHeights } from '../lib/surround';
 import { panelEnergyShares } from '../lib/solar';
 import { foundationDeadLoadKg, foundationTooTall } from '../lib/foundation';
 import {
@@ -141,7 +142,10 @@ export function StructEditPanel({
   // staleness badge — it is always current with whatever it is describing.
   const panelInfo = useMemo(() => {
     if (!panelId) return null;
-    const detail = computePanelShadeDetail(project, panelId);
+    // the real neighbourhood counts here too, when its grid is already in memory
+    const detail = computePanelShadeDetail(project, panelId, {
+      surround: peekSurroundHeights(project.surround),
+    });
     if (!detail) return null;
     return {
       detail,

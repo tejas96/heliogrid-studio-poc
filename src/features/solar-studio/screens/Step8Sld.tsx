@@ -3,6 +3,7 @@ import { BookOpen, Cable, Download, Grid3x3, PencilLine, RotateCcw, Sparkles, Za
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { Sheet, TitleBlock } from '../components/drawing';
 import { StructureSheet } from '../components/drawing/StructureSheet';
+import { CableScheduleSheet } from './CableScheduleSheet';
 import { engineeringStatus, STRUCTURE_DISCLAIMER, windZoneInfo } from '../lib/structure';
 import { Dialog } from '../components/ui';
 import type { Project, SldParams } from '../types';
@@ -16,7 +17,7 @@ import { resetStringsToAuto } from '../lib/derive/electrical-sync';
 import { layoutToDxf, dxfFileName } from '../lib/export-dxf';
 import { navigate } from '../router';
 
-type Tab = 'sld' | 'layout' | 'strings' | 'structure';
+type Tab = 'sld' | 'layout' | 'strings' | 'cables' | 'structure';
 
 export function Step8Sld() {
   const project = useActiveProject()!;
@@ -86,6 +87,7 @@ export function Step8Sld() {
               ['sld', 'SLD', <Zap key="sld" size={13} aria-hidden />],
               ['layout', 'PV Layout', <Grid3x3 key="layout" size={13} aria-hidden />],
               ['strings', 'String Route', <Cable key="strings" size={13} aria-hidden />],
+              ['cables', 'Cable Schedule', <Cable key="cables" size={13} aria-hidden />],
               ['structure', 'Structure', <Grid3x3 key="structure" size={13} aria-hidden />],
             ] as [Tab, string, ReactNode][]
           ).map(([t, label, icon]) => (
@@ -210,6 +212,7 @@ export function Step8Sld() {
         {tab === 'sld' && (hasStrings ? <SldSheet sld={sld} threeLine={threeLine} /> : <UnstrungState />)}
         {tab === 'layout' && <LayoutSheet />}
         {tab === 'strings' && (hasStrings ? <StringSheet /> : <UnstrungState />)}
+        {tab === 'cables' && <CableScheduleSheet />}
         {/* Phase 22o: the structure has been modelled since 22a and priced
             throughout, and nothing printed it until now. */}
         {tab === 'structure' && <StructureSheet project={project} />}
@@ -511,6 +514,26 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
         <text x={700} y={325} textAnchor="middle" fontSize={8.5}>Isolator {sld.acIsolatorA}A</text>
         <line x1={752} y1={305} x2={800} y2={305} stroke="#047857" strokeWidth={1.6} />
       </g>
+
+      {/* battery storage — under the inverter; DC-coupled hangs off the
+          inverter's DC bus, AC-coupled off the AC bus to the ACDB */}
+      {sld.batteryLabel && (
+        <g fontFamily="monospace">
+          {sld.batteryCoupling === 'ac_coupled' ? (
+            <line x1={580} y1={305} x2={580} y2={352} stroke="#6d28d9" strokeWidth={1.4} strokeDasharray="4 3" />
+          ) : (
+            <line x1={540} y1={345} x2={540} y2={352} stroke="#6d28d9" strokeWidth={1.4} />
+          )}
+          <rect x={512} y={352} width={150} height={46} rx={2} fill="#f5f3ff" stroke="#6d28d9" strokeWidth={1.4} />
+          <text x={587} y={365} textAnchor="middle" fontSize={9} fontWeight={800} fill="#6d28d9">
+            BATTERY {sld.batteryCoupling === 'ac_coupled' ? '· AC-COUPLED' : '· DC (HYBRID)'}
+          </text>
+          <text x={587} y={378} textAnchor="middle" fontSize={7}>{sld.batteryLabel.slice(0, 38)}</text>
+          <text x={587} y={390} textAnchor="middle" fontSize={6.5} fill="#555">
+            DC isolator + fuse per cabinet · IEC 62619
+          </text>
+        </g>
+      )}
 
       {/* meters + grid */}
       <g fontFamily="monospace">

@@ -18,6 +18,7 @@ import type { Project, ShadowCapture } from '../types';
 import { panelSampleHeightM } from './panel-pose';
 import { resolveCatalog } from '../data/catalog';
 import { structureModelVersion } from './structure';
+import { surroundKey } from './surround-geometry';
 
 const r = (v: number, f: number) => Math.round(v * f);
 
@@ -143,7 +144,16 @@ export function electricalFp(p: Project): string {
     // CONDITIONAL suffix: only central topology appends — 'string' (default)
     // serialises identically to before, so existing projects don't go stale.
     (p.components.inverterTopology === 'central' ? '|central' : '') +
-    (p.components.mlpe === 'optimizer' ? '|mlpe' : '')
+    (p.components.mlpe === 'optimizer' ? '|mlpe' : '') +
+    // battery storage — CONDITIONAL for the same reason: no battery, no suffix
+    (p.components.battery
+      ? '|bat:' +
+        JSON.stringify([
+          p.components.battery.id,
+          p.components.batteryCount ?? 1,
+          p.components.batteryCoupling ?? 'dc_hybrid',
+        ])
+      : '')
   );
 }
 
@@ -185,8 +195,22 @@ export function designFp(p: Project): string {
       ],
       p.rails.map((x) => [x.id, x.a, x.b]),
       p.arresters.map((x) => [x.id, x.pos]),
-      p.inverterPlacements.map((x) => [x.id, x.roofId, x.edgeIndex, x.t]),
+      p.inverterPlacements.map((x) => [x.id, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
     ]) +
+    // battery cabinets — conditional suffix, so battery-less projects keep
+    // their fingerprint byte-identical
+    ((p.batteryPlacements?.length ?? 0) > 0
+      ? '|batp:' +
+        JSON.stringify(
+          p.batteryPlacements!.map((x) => [x.id, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
+        )
+      : '') +
+    ((p.electricalBoxes?.length ?? 0) > 0
+      ? '|box:' +
+        JSON.stringify(
+          p.electricalBoxes!.map((x) => [x.id, x.kind, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
+        )
+      : '') +
     // structure defaults (Phase 7) — CONDITIONAL suffix: absent fields add
     // NOTHING, so every pre-Phase-7 project's fingerprint (and its captures)
     // survives the upgrade byte-identical
@@ -244,7 +268,10 @@ export function designFp(p: Project): string {
 //   v7 (Phase 1 design kernel): a FIXED sample year (defect #16 — the wall-clock
 //       year silently re-sampled the sun every January) and lightning arresters
 //       cast in the engine as the scene always showed (defect #12).
-export const SHADING_ENGINE_VERSION = 7;
+// 8: the engine now also reports per-sample access and per-caster loss (the
+// in-memory shade profile); stored access values are unchanged, but a saved
+// project must run once more so the profile exists this session
+export const SHADING_ENGINE_VERSION = 8;
 
 /**
  * Recompute/stamp key for per-panel solar access (Class-A derived data).
@@ -283,7 +310,10 @@ export function shadingFp(p: Project | null): string {
         x.orientation,
         x.enabled,
       ]),
-    )
+    ) +
+    // Phase 4: the real neighbourhood is a caster — CONDITIONAL suffix, so a
+    // project without it keeps its fingerprint (and its captures) byte-identical
+    (p.surround ? (p.ignoreSurround ? '|sur:off' : `|sur:${surroundKey(p.surround)}`) : '')
   );
 }
 

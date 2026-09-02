@@ -242,9 +242,10 @@ describe('shading over bridged obstructions (the fixed-0.45m sample bug)', () =>
   });
 
   it('shadingFp re-keys when the structure clearance changes (v6 engine)', async () => {
-    const { shadingFp } = await import('../fingerprints');
+    const { shadingFp, SHADING_ENGINE_VERSION } = await import('../fingerprints');
     const grade = bridgedAt(undefined);
-    expect(shadingFp(grade)).toContain('e7|');
+    // the prefix is the CURRENT engine version — the pin must move with it
+    expect(shadingFp(grade)).toContain(`e${SHADING_ENGINE_VERSION}|`);
     const walk: Project = { ...grade, structureDefaults: { clearanceM: 2.2 } };
     expect(shadingFp(walk)).not.toBe(shadingFp(grade)); // sample points moved
   });
@@ -348,6 +349,22 @@ describe('reconcileBridgedPanels — bridged panels track clearance changes', ()
     expect(reconcileBridgedPanels(p, {})).toBeNull(); // already consistent
     const empty = siteProject(null);
     expect(reconcileBridgedPanels(empty, {})).toBeNull();
+  });
+
+  it('removing the tank brings back the modules it blocked; a hand-disabled one stays off', () => {
+    const p = bridged();
+    const closed = p.obstructions.map((o) => ({
+      ...o,
+      capabilities: { ...o.capabilities, panelsMayCross: false },
+    }));
+    const blocked = reconcileBridgedPanels(p, { obstructions: closed })!;
+    expect(blocked.filter((x) => x.blockedBy === 'ob_wt1').length).toBe(overTank(p.panels));
+    // one module away from the tank, turned off by hand (no blockedBy mark)
+    const byHand = blocked.find((x) => x.enabled)!.id;
+    const panels = blocked.map((x) => (x.id === byHand ? { ...x, enabled: false } : x));
+    const back = reconcileBridgedPanels({ ...p, panels, obstructions: closed }, { obstructions: [] })!;
+    expect(back.filter((x) => !x.enabled).map((x) => x.id)).toEqual([byHand]);
+    expect(back.every((x) => x.blockedBy === undefined)).toBe(true);
   });
 
   it('tilt/profile choices leave bridged panels enabled (clearance unchanged)', () => {

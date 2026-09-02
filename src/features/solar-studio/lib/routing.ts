@@ -29,8 +29,11 @@ import type {
 } from '../types';
 import { pointInPolygon, polygonCentroid } from './geo';
 import { roofGridAngle } from './layout';
+import { rowExitPoint } from './routing-tray';
+import { unitBaseY, unitPlanPos, type PlacedUnit } from './unit-pos';
 import { resolveCapabilities } from './capabilities';
 import { resolveRules } from '../data/rules/india';
+import { sizeDcCable } from './electrical-sizing';
 
 /**
  * How far a run drops vertically, FROM THE MODEL — not a constant.
@@ -44,19 +47,59 @@ export function dropForRunM(project: Project, kind: 'dc' | 'ac', placementIndex 
   const pl = project.inverterPlacements[placementIndex] ?? project.inverterPlacements[0];
   if (!pl) return resolveRules().cable.defaultVerticalDropM;
   const roofH = project.roofs.find((r) => r.id === pl.roofId)?.heightM ?? 0;
-  const invH = pl.heightM;
+  // the terminals' absolute height: on the wall or at ground level that is the
+  // mounting height; on a roof stand it is the deck plus the mounting height
+  const invH = unitBaseY(project, pl) + pl.heightM;
   return kind === 'dc' ? Math.max(0, roofH - invH) : Math.max(0, invH);
+}
+
+/** Plan position of any placed unit (inverter, battery cabinet, DCDB, ACDB): wall point or free position. */
+export function wallUnitPos(project: Project, u: PlacedUnit): XY | null {
+  return unitPlanPos(project, u);
+}
+
+/** Plan position of the first DCDB / ACDB enclosure of a kind. */
+export function boxWorldPos(project: Project, kind: 'dcdb' | 'acdb'): XY | null {
+  const box = (project.electricalBoxes ?? []).find((b) => b.kind === kind);
+  return box ? wallUnitPos(project, box) : null;
+}
+
+/**
+ * The DCDB that serves inverter `i`: every DCDB belongs to the inverter it
+ * stands nearest to (one string box per inverter — a shared box would mix
+ * two inverters' DC inputs), so inverter `i` lands its home runs on the
+ * nearest of the boxes that chose it, or straight on its own inputs when
+ * none did.
+ */
+export function dcdbForInverter(project: Project, i: number): XY | null {
+  const invPos = project.inverterPlacements.map((ip) => wallUnitPos(project, ip));
+  const mine = invPos[i];
+  if (!mine) return null;
+  let best: { p: XY; d: number } | null = null;
+  for (const box of (project.electricalBoxes ?? []).filter((b) => b.kind === 'dcdb')) {
+    const bp = wallUnitPos(project, box);
+    if (!bp) continue;
+    let owner = -1;
+    let od = Infinity;
+    invPos.forEach((p, j) => {
+      if (!p) return;
+      const d = Math.hypot(p.x - bp.x, p.y - bp.y);
+      if (d < od) {
+        od = d;
+        owner = j;
+      }
+    });
+    if (owner !== i) continue;
+    if (!best || od < best.d) best = { p: bp, d: od };
+  }
+  return best?.p ?? null;
 }
 
 /** World position of a wall-mounted inverter, in the plan frame. */
 export function inverterWorldPos(project: Project, placementIndex = 0): XY | null {
   const pl = project.inverterPlacements[placementIndex] ?? project.inverterPlacements[0];
   if (!pl) return null;
-  const roof = project.roofs.find((r) => r.id === pl.roofId);
-  if (!roof || roof.polygon.length < 2) return null;
-  const a = roof.polygon[pl.edgeIndex % roof.polygon.length];
-  const b = roof.polygon[(pl.edgeIndex + 1) % roof.polygon.length];
-  return { x: a.x + (b.x - a.x) * pl.t, y: a.y + (b.y - a.y) * pl.t };
+  return unitPlanPos(project, pl);
 }
 
 /** Plan-frame length of a polyline (m). */
@@ -130,8 +173,11 @@ export function routePath(
   corridors?: Corridor[],
   /** array footprint a run must not be dragged across (module glass) */
   footprint?: XY[],
+  /** the roof the run must stay on: a corner or corridor point outside it is not a place a cable can be */
+  within?: XY[],
 ): XY[] {
   const rules = resolveRules().cable;
+  const onRoof = (p: XY) => !within || pointInPolygon(p, within) || nearPolygonEdge(p, within, 0.6);
   const direct = !segmentHitsAny(from, to, blockers);
   // No corridor to follow ⇒ the straight line IS the answer when it is clear.
   if (!corridors || corridors.length === 0) {
@@ -150,7 +196,7 @@ export function routePath(
       const dy = v.y - c.y;
       const m = Math.hypot(dx, dy) || 1;
       const corner = { x: v.x + (dx / m) * PAD, y: v.y + (dy / m) * PAD };
-      if (!blocked(corner, blockers)) {
+      if (!blocked(corner, blockers) && onRoof(corner)) {
         nodes.push(corner);
         cPoly.push(-1);
         cVert.push(-1);
@@ -159,7 +205,7 @@ export function routePath(
   }
   (corridors ?? []).forEach((c, ci) => {
     c.pts.forEach((v, vi) => {
-      if (blocked(v, blockers)) return;
+      if (blocked(v, blockers) || !onRoof(v)) return;
       nodes.push(v);
       cPoly.push(ci);
       cVert.push(vi);
@@ -219,6 +265,19 @@ export function routePath(
   const path: XY[] = [];
   for (let at = 1; at !== -1; at = prev[at]) path.unshift(nodes[at]);
   return dedupeCollinear(path);
+}
+
+/** within `tol` metres of any edge of the polygon (the parapet band) */
+function nearPolygonEdge(p: XY, poly: XY[], tol: number): boolean {
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1)));
+    if (Math.hypot(a.x + vx * t - p.x, a.y + vy * t - p.y) <= tol) return true;
+  }
+  return false;
 }
 
 /** Drop points that add nothing: three collinear waypoints are one run. */
@@ -402,7 +461,13 @@ export function autoRouteStrings(project: Project): CableRoute[] {
   const out: CableRoute[] = [...kept];
 
   for (const s of project.strings) {
-    if (kept.some((r) => r.fromRef === s.id)) continue; // user owns this one
+    // The user owns a hand-routed LEG, not the whole string: its sibling still
+    // gets routed (a corner dragged on the + run used to make the − run vanish,
+    // and the BOM with it). Legs are told apart by the router's own ids; a
+    // hand-routed run with some other id keeps the old rule and owns the string.
+    const owned = kept.filter((r) => r.fromRef === s.id);
+    if (owned.some((r) => !/\/hr\/\d+$/.test(r.id))) continue;
+    const ownedLegs = new Set(owned.map((r) => r.id));
     const ends = [s.panelIds[0], s.panelIds[s.panelIds.length - 1]]
       .map((id) => byId.get(id))
       .filter((p): p is NonNullable<typeof p> => !!p);
@@ -414,15 +479,22 @@ export function autoRouteStrings(project: Project): CableRoute[] {
     // the placement THIS string lands on — `inverterWorldPos` falls back to [0]
     // when the design names more inverters than the user has placed (defect #3)
     const placementIndex = project.inverterPlacements[s.inverterIndex] ? s.inverterIndex : 0;
-    const target = inverterWorldPos(project, placementIndex)!;
+    // home runs land on THIS inverter's DCDB when it has one (string fuses +
+    // isolator live there), otherwise straight on the inverter's own DC inputs
+    const target = dcdbForInverter(project, placementIndex) ?? inverterWorldPos(project, placementIndex)!;
     // a string needs BOTH conductors home: + from one end, − from the other
     ends.forEach((end, i) => {
+      if (ownedLegs.has(`${s.id}/hr/${i}`)) return; // hand-routed: already in `kept`
+      // along the row to its end first — cables ride the tray under the
+      // modules, they never cut across the array — then on to the target
+      const exit = rowExitPoint(project, end, target);
+      const tail = routePath(exit ?? end.center, target, blockers, corridor, footprint, roof?.polygon);
       out.push({
         id: `${s.id}/hr/${i}`,
         kind: 'string_homerun',
         fromRef: s.id,
         toRef: `inverter/${placementIndex}`,
-        waypoints: routePath(end.center, target, blockers, corridor, footprint),
+        waypoints: exit ? [end.center, ...tail] : tail,
         verticalDropM: dropForRunM(project, 'dc', placementIndex),
         slackPct: rules.slackPct,
       });
@@ -437,23 +509,87 @@ export function autoRouteStrings(project: Project): CableRoute[] {
  */
 export function autoRouteAc(project: Project): CableRoute[] {
   const rules = resolveRules().cable;
-  const from = inverterWorldPos(project);
   const to = project.gridConnection?.pos;
-  if (!from || !to) return [];
+  if (!to || !inverterWorldPos(project)) return [];
   const kept = (project.cableRoutes ?? []).filter((r) => r.kind === 'inverter_ac' && r.manual);
-  if (kept.length > 0) return kept;
+  const out: CableRoute[] = [...kept];
   const roof = project.roofs.find((r) => r.id === project.inverterPlacements[0]?.roofId);
-  return [
-    {
+  const blockers = roof ? routeBlockers(project, roof) : [];
+  const acdbBox = (project.electricalBoxes ?? []).find((b) => b.kind === 'acdb');
+  const acdb = acdbBox ? wallUnitPos(project, acdbBox) : null;
+  // EVERY inverter has its own AC run: to the ACDB when one is placed (the AC
+  // combiner, one MCCB per inverter), else straight to the meter
+  project.inverterPlacements.forEach((_, i) => {
+    const id = i === 0 && !acdb ? 'ac/main' : `ac/inv/${i}`;
+    if (kept.some((r) => r.id === id)) return;
+    const from = inverterWorldPos(project, i);
+    if (!from) return;
+    out.push({
+      id,
+      kind: 'inverter_ac',
+      fromRef: `inverter/${i}`,
+      toRef: acdb ? 'acdb' : 'grid',
+      waypoints: routePath(from, acdb ?? to, blockers),
+      verticalDropM: dropForRunM(project, 'ac', i),
+      slackPct: rules.slackPct,
+    });
+  });
+  // and one main run from the ACDB to the meter
+  if (acdb && acdbBox && !kept.some((r) => r.id === 'ac/main')) {
+    out.push({
       id: 'ac/main',
       kind: 'inverter_ac',
-      fromRef: 'inverter',
+      fromRef: 'acdb',
       toRef: 'grid',
-      waypoints: routePath(from, to, roof ? routeBlockers(project, roof) : []),
-      verticalDropM: dropForRunM(project, 'ac'),
+      waypoints: routePath(acdb, to, blockers),
+      verticalDropM: Math.max(0, acdbBox.heightM),
       slackPct: rules.slackPct,
-    },
-  ];
+    });
+  }
+  return out;
+}
+
+/**
+ * Battery DC leads: each cabinet to the inverter it stands nearest to, along
+ * the wall base and up to the inverter's DC terminals. [] when no cabinet or
+ * no inverter is placed — the BOM then carries an allowance and says so.
+ */
+export function autoRouteBattery(project: Project): CableRoute[] {
+  const rules = resolveRules().cable;
+  const cabinets = project.batteryPlacements ?? [];
+  if (cabinets.length === 0 || !project.components.battery) return [];
+  const kept = (project.cableRoutes ?? []).filter(
+    (r) => r.kind === 'battery_dc' && r.manual && cabinets.some((b) => b.id === r.fromRef),
+  );
+  const invPos = project.inverterPlacements.map((ip) => wallUnitPos(project, ip));
+  if (!invPos.some(Boolean)) return kept;
+  const out: CableRoute[] = [...kept];
+  for (const bp of cabinets) {
+    if (kept.some((r) => r.fromRef === bp.id)) continue;
+    const pos = wallUnitPos(project, bp);
+    if (!pos) continue;
+    let bi = -1;
+    let bd = Infinity;
+    invPos.forEach((p, i) => {
+      if (!p) return;
+      const d = Math.hypot(p.x - pos.x, p.y - pos.y);
+      if (d < bd) {
+        bd = d;
+        bi = i;
+      }
+    });
+    if (bi < 0) continue;
+    out.push({
+      id: `${bp.id}/bat`,
+      kind: 'battery_dc',
+      fromRef: bp.id,
+      toRef: `inverter/${bi}`,
+      waypoints: routePath(pos, invPos[bi]!, []),
+      verticalDropM: Math.max(0, project.inverterPlacements[bi].heightM - bp.heightM),
+      slackPct: rules.slackPct,
+    });
+  }
+  return out;
 }
 
 /** AC conductor metres: routed when a service entry exists, else null. */
@@ -464,42 +600,41 @@ export function acCableFromRoutes(project: Project): { meters: number; routed: b
 }
 
 /**
- * Voltage drop on each routed DC home run.
- *
- *   Vdrop = 2 · L · I · ρ / A     (2 = out and back on the conductor pair)
- *
- * Reported against the string's Vmp at STC. Long runs on thin cable quietly
- * burn yield the energy model never sees — the plan asked for this check
- * precisely because a routed length finally makes it computable.
- *
- * ENGINEER VALIDATION REQUIRED: the LIMIT is policy (industry ~1–2% DC; the
- * binding figure is whatever the DISCOM/consultant adopts) — see CableRules.
+ * The electrical length of a string's home-run LOOP: both legs, roof path plus
+ * the wall drop, without the purchase slack. null until a leg is routed; a
+ * lone leg stands for the pair (the + and − run home together).
+ */
+export function stringLoopM(project: Project, stringId: string): number | null {
+  const legs = (project.cableRoutes ?? []).filter((r) => r.kind === 'string_homerun' && r.fromRef === stringId);
+  if (legs.length === 0) return null;
+  const sum = legs.reduce((acc, r) => acc + polylineLengthM(r.waypoints) + r.verticalDropM, 0);
+  return legs.length === 1 ? 2 * sum : sum;
+}
+
+/**
+ * The drop check AFTER the cable has been sized for it. The cable the BOM
+ * quotes is already the section the drop demanded (`sizeDcCable`), so this
+ * warns only when no standard section keeps the loop inside the limit — a
+ * string that passes here passes on paper and on the roof.
  */
 export function routeIssues(project: Project, panel: PanelSpec | null): ValidationIssue[] {
   const rules = resolveRules().cable;
-  const routes = (project.cableRoutes ?? []).filter((r) => r.kind === 'string_homerun');
-  if (!panel || routes.length === 0) return [];
+  if (!panel) return [];
   const out: ValidationIssue[] = [];
   for (const s of project.strings) {
-    const mine = routes.filter((r) => r.fromRef === s.id);
-    if (mine.length === 0) continue;
-    // the worst conductor of the pair governs the string
-    const longest = Math.max(...mine.map((r) => polylineLengthM(r.waypoints) + r.verticalDropM));
-    const vDrop =
-      (2 * longest * panel.impA * rules.copperResistivity) / Math.max(0.1, rules.dcCableMm2);
-    const vString = panel.vmpV * s.panelIds.length;
-    const pct = vString > 0 ? (vDrop / vString) * 100 : 0;
-    if (pct > rules.maxDcDropPct) {
-      out.push({
-        level: 'warn',
-        code: 'dc_voltage_drop',
-        message:
-          `${s.name}: ${pct.toFixed(1)}% DC voltage drop over its ${Math.round(longest)} m run ` +
-          `(${rules.dcCableMm2} sq.mm Cu) — above the ${rules.maxDcDropPct}% design limit. ` +
-          `Shorten the run, move the inverter closer, or size the cable up.`,
-        focusPanelIds: s.panelIds,
-      });
-    }
+    const loopM = stringLoopM(project, s.id);
+    if (loopM === null) continue;
+    const sized = sizeDcCable(panel, s.panelIds.length, loopM);
+    if (sized.withinLimit) continue;
+    out.push({
+      level: 'warn',
+      code: 'dc_voltage_drop',
+      message:
+        `${s.name}: ${sized.dropPct.toFixed(2)}% DC voltage drop over its ${Math.round(loopM)} m loop ` +
+        `even at ${sized.mm2} sq.mm Cu — above the ${rules.maxDcDropPct}% design limit. ` +
+        `Shorten the run or move the inverter closer.`,
+      focusPanelIds: s.panelIds,
+    });
   }
   return out;
 }

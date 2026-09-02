@@ -23,6 +23,8 @@ import { resolveDesignTemps } from './electrical/temps';
 import type { HealthSnapshotEntry, Project, ValidationIssue } from '../types';
 import { resolveRules } from '../data/rules/india';
 import { layoutIssues, structureIssues } from './drc';
+import { roofHeightIssues } from './surround-check';
+import { bifacialIssues } from './bifacial-check';
 import { validateSystem } from './stringing';
 import { listAnalyzers, memoizedInsights } from './insights/registry';
 import { registerAllAnalyzers } from './insights/analyzers';
@@ -95,6 +97,16 @@ export const VALIDATION_CATEGORY: Record<string, HealthCategoryKey> = {
   foundation_too_tall: 'utilization',
   // ── Phase 1 design kernel: defect #2 (a module wired into two strings) ───
   panel_in_two_strings: 'electrical',
+  // ── Phase 5: per-inverter Pnom ratio (PVsyst sizes EACH inverter) ────────
+  // one unit at 1.9 beside idle ones is a defect even when the fleet total is fine
+  inverter_dc_ac_high: 'electrical',
+  inverter_unused: 'electrical',
+  // ── the model against the aerial height map: a roof drawn 3 m tall that the
+  // map reads at 6 m shades wrong first — every energy number leans on it ───
+  roof_height_vs_map: 'energy',
+  // a bifacial module mounted flush throws its whole rear yield away: the
+  // number the report prints is honest, the energy left on the table is not
+  bifacial_wasted: 'energy',
 };
 
 /**
@@ -114,6 +126,8 @@ export const EXCLUDED_VALIDATION = new Set([
   'dc_ac_low',
   'temp_coeff_estimated',
   'foundation_dead_load',
+  // a lightly loaded inverter is the same design choice as dc_ac_low, per unit
+  'inverter_dc_ac_low',
 ]);
 
 /** Short human labels for deduction codes — the "What changed" panel persists
@@ -133,6 +147,10 @@ const CODE_LABEL: Record<string, string> = {
   unstrung_panels: 'Panels not wired into any string',
   panel_in_keepout: 'Panels inside a no-build zone',
   isc_high: 'String current above MPPT limit',
+  inverter_dc_ac_high: 'One inverter overloaded (DC/AC above 1.35)',
+  inverter_unused: 'An inverter has no strings',
+  roof_height_vs_map: 'Roof height differs from the aerial height map',
+  bifacial_wasted: 'Bifacial modules mounted where their backs earn nothing',
   mppt_capacity: 'Not enough MPPT capacity',
   string_window_empty: 'No legal string length for this array',
   dc_voltage_drop: 'DC voltage drop above limit',
@@ -195,6 +213,8 @@ export function computeHealth(project: Project): HealthResult {
   // ── collect validation issues, dedupe by code (imp_high inflation guard) ──
   const issues: ValidationIssue[] = spec
     ? [
+        ...roofHeightIssues(project),
+        ...bifacialIssues(project),
         ...layoutIssues(project, spec),
         ...structureIssues(project, spec),
         ...validateSystem(
@@ -285,6 +305,10 @@ export function computeHealth(project: Project): HealthResult {
     ).length;
     if (ai > 0) context.push(`${ai} AI-detected entities — dimensions are detector estimates`);
     if (project.calibration.reference !== null) context.push('Scale calibrated against a known distance');
+    if (project.surround === null)
+      context.push('No aerial height map for this site — only the neighbours you drew shade these numbers');
+    if (project.surround && project.ignoreSurround)
+      context.push('Neighbour shade is OFF by your choice — these numbers ignore the real neighbours');
   }
 
   return {

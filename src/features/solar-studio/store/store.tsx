@@ -43,6 +43,12 @@ export interface AppState {
   quarantinedIds: string[];
   /** the active project was replaced by a newer version from another tab */
   externalConflictAt: number | null;
+  /**
+   * Bumped when derived data held OUTSIDE the project lands in memory (the
+   * site's typical year for the hourly engine): nothing in the project
+   * changes, but every report must re-derive. Never persisted.
+   */
+  derivedTick?: number;
   /** simple undo stack of project snapshots for the active project */
   undoStack: Project[];
   redoStack: Project[];
@@ -68,7 +74,7 @@ export type Action =
       type: 'hydrate';
       state: Omit<
         AppState,
-        'hydrated' | 'undoStack' | 'redoStack' | 'undoLabels' | 'redoLabels' | 'externalConflictAt'
+        'hydrated' | 'undoStack' | 'redoStack' | 'undoLabels' | 'redoLabels' | 'externalConflictAt' | 'derivedTick'
       >;
     }
   | { type: 'update-project'; patch: Partial<Project>; undoable?: boolean; label?: string }
@@ -84,7 +90,8 @@ export type Action =
   | { type: 'external-project-update'; project: Project }
   | { type: 'external-project-delete'; id: string }
   | { type: 'external-user'; user: AppUser | null }
-  | { type: 'dismiss-external-conflict' };
+  | { type: 'dismiss-external-conflict' }
+  | { type: 'tick-derived' };
 
 export function newShareId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -155,6 +162,7 @@ const INITIAL_STATE: AppState = {
   hydrated: false,
   quarantinedIds: [],
   externalConflictAt: null,
+  derivedTick: 0,
   undoStack: [],
   redoStack: [],
   undoLabels: [],
@@ -216,6 +224,7 @@ export function reducer(state: AppState, action: Action): AppState {
         ...action.state,
         hydrated: true,
         externalConflictAt: null,
+        derivedTick: state.derivedTick ?? 0,
         undoStack: [],
         redoStack: [],
         undoLabels: [],
@@ -332,6 +341,8 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, user: action.user };
     case 'dismiss-external-conflict':
       return { ...state, externalConflictAt: null };
+    case 'tick-derived':
+      return { ...state, derivedTick: (state.derivedTick ?? 0) + 1 };
     default:
       return state;
   }

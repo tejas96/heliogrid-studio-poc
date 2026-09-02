@@ -4,6 +4,8 @@ import { defineOp } from './types';
 import { registerOp } from './registry';
 import { resetStringsToAuto } from '../derive/electrical-sync';
 import { STRING_COLORS } from '../electrical/window';
+import { parallelPerMppt } from '../electrical/autostring';
+import { assignStrings, inverterLoadsKwp } from '../electrical/balance';
 import { genId } from '../geo';
 import { stringIdFor } from '../hash';
 
@@ -34,12 +36,31 @@ export const stringsAddManual = defineOp<{ panelIds: string[] }>({
   },
   apply: (p, a) => {
     const inverter = p.components.inverter!;
+    const panel = p.components.panel;
+    const count = Math.max(1, p.components.inverterCount);
     const idx = p.strings.length;
+    // The hand-made string lands on the LIGHTEST inverter with a free tracker
+    // (same balancing rule as the planner), not on a slot counted off by
+    // index — that put every manual string on inverter 1 until it overflowed.
+    let inverterIndex = Math.floor(idx / inverter.mppt.count) % count;
+    let mpptIndex = idx % inverter.mppt.count;
+    if (panel) {
+      const { assignments } = assignStrings(
+        [{ ids: a.panelIds, groupKey: 'manual' }],
+        panel,
+        inverter,
+        count,
+        parallelPerMppt(panel, inverter).allowed,
+        p.strings.map((s) => ({ inverterIndex: s.inverterIndex, mpptIndex: s.mpptIndex })),
+        inverterLoadsKwp(p.strings, panel, count),
+      );
+      if (assignments[0]) ({ inverterIndex, mpptIndex } = assignments[0]);
+    }
     const s: StringDef = {
       id: stringIdFor(a.panelIds),
       name: `String ${idx + 1}`,
-      inverterIndex: Math.floor(idx / inverter.mppt.count) % Math.max(1, p.components.inverterCount),
-      mpptIndex: idx % inverter.mppt.count,
+      inverterIndex,
+      mpptIndex,
       panelIds: a.panelIds,
       color: STRING_COLORS[idx % STRING_COLORS.length],
       manual: true,
@@ -70,7 +91,15 @@ export const routesMoveWaypoint = defineOp<{ routeId: string; index: number; pos
   }),
 });
 
-export const inverterPlace = defineOp<{ roofId: string; edgeIndex: number; t: number; heightM: number }>({
+export const inverterPlace = defineOp<{
+  roofId: string;
+  edgeIndex: number;
+  t: number;
+  heightM: number;
+  /** free-standing: on a roof stand or at ground level, instead of on the wall */
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}>({
   id: 'inverter.place',
   layer: 'electrical',
   label: () => 'Place inverter',
@@ -84,14 +113,32 @@ export const inverterPlace = defineOp<{ roofId: string; edgeIndex: number; t: nu
   },
 });
 
-export const inverterMove = defineOp<{ id: string; roofId: string; edgeIndex: number; t: number; heightM?: number }>({
+export const inverterMove = defineOp<{
+  id: string;
+  roofId: string;
+  edgeIndex: number;
+  t: number;
+  heightM?: number;
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}>({
   id: 'inverter.move',
   layer: 'electrical',
   label: () => 'Move inverter',
   validate: (p, a) => (p.inverterPlacements.some((i) => i.id === a.id) ? null : { reason: 'Inverter not found' }),
   apply: (p, a) => ({
     inverterPlacements: p.inverterPlacements.map((i) =>
-      i.id === a.id ? { ...i, roofId: a.roofId, edgeIndex: a.edgeIndex, t: a.t, heightM: a.heightM ?? i.heightM } : i,
+      i.id === a.id
+        ? {
+            ...i,
+            roofId: a.roofId,
+            edgeIndex: a.edgeIndex,
+            t: a.t,
+            heightM: a.heightM ?? i.heightM,
+            pos: a.pos,
+            level: a.pos ? (a.level ?? i.level ?? 'roof') : undefined,
+          }
+        : i,
     ),
   }),
 });

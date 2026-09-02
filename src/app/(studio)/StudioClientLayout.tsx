@@ -7,6 +7,9 @@ import { StoreProvider, useStore, useActiveProject } from '@/features/solar-stud
 import { useDesignSync } from '@/features/solar-studio/store/useDesignSync';
 import { useElectricalSync } from '@/features/solar-studio/store/useElectricalSync';
 import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
+import { useSurroundSync } from '@/features/solar-studio/store/useSurroundSync';
+import { useRoofMapSync } from '@/features/solar-studio/store/useRoofMapSync';
+import { useTmySync } from '@/features/solar-studio/store/useTmySync';
 
 /**
  * Recompute host for derived design data (per-panel shading). Lives at the
@@ -14,6 +17,11 @@ import { useHealthSync } from '@/features/solar-studio/store/useHealthSync';
  * which route it is opened on (/proposal, /share, /projects, deep links).
  */
 function DesignSync() {
+  useSurroundSync();
+  // the roofs the user did not set by hand take the height map's measurement
+  useRoofMapSync();
+  // the site's typical year, for the hourly engine
+  useTmySync();
   useDesignSync();
   useElectricalSync();
   useHealthSync();

@@ -5,6 +5,9 @@ import { STRUCTURE_DISCLAIMER, type SegmentStructure } from '../../structure';
 import type { BomContext, SlopedCovering } from '../context';
 import { line, soleSource } from '../line';
 import { foundationDeadLoadKg, foundationVolumeM3, ruleFor } from '../../foundation';
+import { resolveTrackerAxis, trackerRowsFrom } from '../../energy/tracker';
+import { panelFootprintM } from '../../layout';
+import { resolveRacking } from '../../structure';
 
 /** Plural-safe member phrase, e.g. "12 legs 4.2m". Omits absent kinds. */
 function memberBreakdown(st: SegmentStructure): string {
@@ -541,6 +544,86 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
       formula: 'Per site kit (wiring/misc — structure anchors counted separately)',
     }),
   );
+
+  // ── Single-axis trackers ─────────────────────────────────────────────────
+  // The posts, steel and foundations above already carry a tracker's static
+  // structure — it stands on the same table model. What a tracker adds is the
+  // part that MOVES: a torque tube down each row, a bearing at every post, a
+  // drive to turn it and a controller to tell it where the sun is. Left out,
+  // the quote for a tracker plant is missing its most expensive mechanical
+  // item, so they are emitted — and every one of them is priced at an ASSUMED
+  // market rate, because this tool carries no tracker supplier's pricebook.
+  if (spec) {
+    const rows = { tubes: 0, tubeM: 0, posts: 0, modules: 0 };
+    for (const seg of project.segments) {
+      if (seg.racking.kind !== 'tracker_hsat') continue;
+      const roof = project.roofs.find((r) => r.id === seg.roofId);
+      if (!roof) continue;
+      const resolved = resolveRacking(project, roof, seg, spec);
+      if (!resolved) continue;
+      const centres = project.panels.filter((p) => p.enabled && p.segmentId === seg.id).map((p) => p.center);
+      if (centres.length === 0) continue;
+      const axis = resolveTrackerAxis(seg.racking, panelFootprintM(spec, seg.orientation).h, seg.azimuthDeg);
+      // along the tube the modules sit side by side, so it is their WIDTH that
+      // fills it, not the dimension the tilt runs along
+      const alongTubeM = panelFootprintM(spec, seg.orientation).w;
+      const r = trackerRowsFrom(centres, axis.axisAzimuthDeg, alongTubeM, resolved.legSpacingM);
+      rows.tubes += r.tubes;
+      rows.tubeM += r.tubeM;
+      rows.posts += r.posts;
+      rows.modules += r.modules;
+    }
+    if (rows.tubes > 0) {
+      const assumedNote =
+        'ASSUMED market rate — no tracker supplier pricebook is loaded, and a real tender prices the tracker system per MW against a named vendor. Replace before quoting.';
+      out.push(
+        line({
+          key: 'mech.tracker_tube',
+          category: 'Mechanical BOS',
+          item: 'Tracker Torque Tube',
+          spec: 'HDG steel tube, single-axis tracker',
+          qty: Math.round(rows.tubeM * 10) / 10,
+          unit: 'm',
+          unitPriceInr: PRICE_BOOK.trackerTubePerM,
+          confidence: 'assumed',
+          formula: `${rows.tubes} tracker row(s) carrying ${rows.modules} modules, measured end to end off where the modules stand. ${assumedNote}`,
+        }),
+        line({
+          key: 'mech.tracker_bearing',
+          category: 'Mechanical BOS',
+          item: 'Tracker Bearing Assembly',
+          spec: 'bearing housing + fasteners, one per post',
+          qty: rows.posts,
+          unit: 'nos',
+          unitPriceInr: PRICE_BOOK.trackerBearingPerPost,
+          confidence: 'assumed',
+          formula: `One per post: ${rows.posts} posts over ${rows.tubes} row(s) at the structure's leg spacing. ${assumedNote}`,
+        }),
+        line({
+          key: 'mech.tracker_drive',
+          category: 'Mechanical BOS',
+          item: 'Tracker Drive Unit',
+          spec: 'slew drive + motor + damper',
+          qty: rows.tubes,
+          unit: 'nos',
+          unitPriceInr: PRICE_BOOK.trackerDrivePerTube,
+          confidence: 'assumed',
+          formula: `One drive per independently driven row (${rows.tubes}). A shared driveline across rows would need fewer — vendor-dependent. ${assumedNote}`,
+        }),
+        line({
+          key: 'mech.tracker_controller',
+          category: 'Mechanical BOS',
+          item: 'Tracker Control Unit',
+          spec: 'NCU + wind sensor + commissioning',
+          qty: 1,
+          unit: 'set',
+          unitPriceInr: PRICE_BOOK.trackerControllerPerPlant,
+          confidence: 'assumed',
+          formula: `One per plant, whatever the row count. ${assumedNote}`,
+        }),
+      );
+    }
+  }
 
   return out;
 }

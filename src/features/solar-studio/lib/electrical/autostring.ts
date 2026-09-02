@@ -21,6 +21,7 @@ import { stringIdFor } from '../hash';
 import { groupPanels, orderGroup, type PanelGroup } from './grouping';
 import type { DesignTemps } from './temps';
 import { stringSizing, STRING_COLORS } from './window';
+import { assignStrings } from './balance';
 
 export interface AutoStringResult {
   strings: StringDef[];
@@ -167,6 +168,8 @@ export function splitGroup(
 export interface AutoStringOptions {
   /** MPPT inputs already taken (by manual strings) — never planned onto */
   reservedSlots?: { inverterIndex: number; mpptIndex: number }[];
+  /** DC kWp those manual strings already put on each inverter — the balancer counts it */
+  reservedKwp?: number[];
   /** first auto string is named `String ${nameOffset + 1}` */
   nameOffset?: number;
 }
@@ -238,34 +241,28 @@ export function autoStringPlan(
     }
   }
 
-  // ── fit them into the MPPT inputs we actually have ───────────────────────
-  const slots: Array<{ inverterIndex: number; mpptIndex: number; strings: string[][]; groupKey?: string }> = [];
-  const reserved = new Set((opts.reservedSlots ?? []).map((s) => `${s.inverterIndex}/${s.mpptIndex}`));
-  for (let inv = 0; inv < inverterCount; inv++) {
-    for (let m = 0; m < inverter.mppt.count; m++) {
-      if (reserved.has(`${inv}/${m}`)) continue;
-      slots.push({ inverterIndex: inv, mpptIndex: m, strings: [] });
-    }
-  }
+  // ── place them on inverters / MPPT inputs (lib/electrical/balance) ───────
+  // Balanced DC power per inverter, one tracker per string while trackers are
+  // free, identical strings only in parallel. Filling inverter 1 to its last
+  // input before touching inverter 2 gave a 1.9 Pnom ratio next to two idle
+  // units — the very thing PVsyst's per-inverter sizing check exists to catch.
+  const { assignments } = assignStrings(
+    planned.map((p) => ({ ids: p.ids, groupKey: p.group.key })),
+    panel,
+    inverter,
+    inverterCount,
+    par.allowed,
+    opts.reservedSlots ?? [],
+    opts.reservedKwp ?? [],
+  );
   const strings: StringDef[] = [];
   const overflow: string[] = [];
-  for (const item of planned) {
-    // parallel strings must be SAME GROUP and SAME LENGTH — unequal strings in
-    // parallel fight each other and the shorter one bleeds power
-    const slot =
-      slots.find(
-        (s) =>
-          s.strings.length > 0 &&
-          s.groupKey === item.group.key &&
-          s.strings.length < par.allowed &&
-          s.strings[0].length === item.ids.length,
-      ) ?? slots.find((s) => s.strings.length === 0);
+  planned.forEach((item, i) => {
+    const slot = assignments[i];
     if (!slot) {
       overflow.push(...item.ids);
-      continue;
+      return;
     }
-    slot.groupKey = item.group.key;
-    slot.strings.push(item.ids);
     const ordinal = (opts.nameOffset ?? 0) + strings.length;
     strings.push({
       id: stringIdFor(item.ids),
@@ -275,7 +272,7 @@ export function autoStringPlan(
       panelIds: item.ids,
       color: STRING_COLORS[ordinal % STRING_COLORS.length],
     });
-  }
+  });
 
   if (overflow.length > 0) {
     const slotsTotal = inverter.mppt.count * inverterCount;

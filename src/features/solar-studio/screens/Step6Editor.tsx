@@ -106,6 +106,12 @@ import { cascadeDeletePanels } from '../lib/cascade';
 import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
 import { estimateDcCableM, stringSizing, vocAtTemp } from '../lib/stringing';
+import {
+  measuredRowPitchM,
+  TRACKER_DEFAULT_GCR,
+  TRACKER_DEFAULT_MAX_ROTATION_DEG,
+  trackerAxisFromSegment,
+} from '../lib/energy/tracker';
 import { dcCableFromRoutes } from '../lib/routing';
 import { autoDesign } from '../lib/auto-design';
 import { resolveDesignTemps } from '../lib/electrical/temps';
@@ -144,6 +150,7 @@ import {
   segmentSetAzimuth,
   segmentSetProfile,
   segmentSetRacking,
+  segmentSetTrackerLimit,
   segmentSetStructureFields,
   segmentSetTilt,
 } from '../lib/ops/layout-ops';
@@ -156,6 +163,15 @@ import {
   stringsAddManual,
   stringsResetToAuto,
 } from '../lib/ops/electrical-ops';
+import { batteryPlace, batteryRemove } from '../lib/ops/battery-ops';
+import { boxPlace, boxRemove } from '../lib/ops/box-ops';
+import { unitPlanPos } from '../lib/unit-pos';
+import type { Roof } from '../types';
+import { rotate as rotateXY } from '../lib/geo';
+import { COL_STRIDE, roofGridAngle as gridAngleOfRoof } from '../lib/layout';
+import { segmentGrid } from '../lib/segment-ops';
+import { layoutShrink } from '../lib/ops/layout-ops';
+import { batteryWorldPos } from '../lib/battery';
 import {
   arresterAdd,
   arresterRemove,
@@ -186,13 +202,49 @@ const MUTATING_TOOLS: Tool[] = [
   'erase',
 ];
 
+/**
+ * The table a drag draws: a rectangle in the ROOF'S grid frame (rows follow
+ * the roof's long edge, or the slope), so a table on a turned roof is drawn
+ * turned with it — the same frame the fill lays its rows in.
+ */
+function dragArea(a: XY, b: XY, roof: Roof | undefined): XY[] {
+  const ang = roof ? gridAngleOfRoof(roof) : 0;
+  const la = rotateXY(a, -ang);
+  const lb = rotateXY(b, -ang);
+  const minX = Math.min(la.x, lb.x);
+  const maxX = Math.max(la.x, lb.x);
+  const minY = Math.min(la.y, lb.y);
+  const maxY = Math.max(la.y, lb.y);
+  return [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ].map((c) => rotateXY(c, ang));
+}
+
+/** a table edge being dragged in the plan: count > 0 grows, < 0 shrinks, by whole rows/columns */
+interface TableDragState {
+  segId: string;
+  side: 'top' | 'bottom' | 'left' | 'right';
+  count: number;
+  start: XY;
+}
+
+/** rows × columns of a set of grid-filled modules (cellIndex encodes row and column) */
+function gridShape(panels: { cellIndex?: number }[]): { rows: number; cols: number } {
+  const rows = new Set(panels.map((p) => Math.floor((p.cellIndex ?? 0) / COL_STRIDE))).size;
+  const cols = new Set(panels.map((p) => (p.cellIndex ?? 0) % COL_STRIDE)).size;
+  return { rows: Math.max(1, rows), cols: Math.max(1, cols) };
+}
+
 const TOOL_HINTS: Record<Exclude<Tool, 'select' | 'walkway'>, string> = {
-  panels: 'Click to add one panel · drag to fill an area (obstacles auto-avoided)',
+  panels: 'Drag a rectangle to draw a table — rows follow the roof, obstacles are avoided · click adds one module',
   erase:
     'Click to erase a panel, walkway, safety rail, arrester, inverter or meter · hover highlights the target in red',
   rail: 'Drag along a roof edge to add a safety rail',
   arrester: 'Click to place a lightning arrester (2.0 m)',
-  inverter: 'Click near a roof edge to mount the inverter',
+  inverter: 'Tap a wall to hang it, the roof to stand it, or beside the building for ground level',
   keepout: 'Drag a no-build zone (fire lane, access, reserved area) · click one to remove it',
 };
 
@@ -275,7 +327,10 @@ export function Step6Editor() {
   // Only here, after the editor has re-rendered, does a target exist again.
   const open3DRef = useRef<HTMLButtonElement>(null);
   const was3D = useRef(false);
+  // mounted lazily on first open, then kept
+  const [opened3D, setOpened3D] = useState(false);
   useEffect(() => {
+    if (show3D) setOpened3D(true);
     if (was3D.current && !show3D) open3DRef.current?.focus();
     was3D.current = show3D;
   }, [show3D]);
@@ -291,12 +346,12 @@ export function Step6Editor() {
   // option — the rail already overflows its own column (that is exactly how the
   // 3D pill came to cover "Mount inverter"), so the sub-mode lives in the tool's
   // own hint bar, the pattern manual-stringing already uses.
-  const [placeKind, setPlaceKind] = useState<'inverter' | 'meter'>('inverter');
+  const [placeKind, setPlaceKind] = useState<'inverter' | 'meter' | 'battery' | 'dcdb' | 'acdb'>('inverter');
   // §H: the router's corners are draggable ON the route. Live position is LOCAL
   // (like dragLine/marquee) — the store is written once, on release, so a drag
   // is ONE undo step rather than one per pointermove.
   const [routeDrag, setRouteDrag] = useState<
-    { routeId: string; index: number; pos: XY; insert?: boolean } | null
+    { routeId: string; index: number; pos: XY; insert?: boolean; start: XY } | null
   >(null);
   const [dragLine, setDragLine] = useState<{ a: XY; b: XY } | null>(null);
   const measure = useMeasure();
@@ -312,6 +367,8 @@ export function Step6Editor() {
   const [tableSheet, setTableSheet] = useState(false);
   const canvasRef = useRef<SatCanvasHandle>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // a table edge handle mid-drag (view state; the op runs on release)
+  const [tableDrag, setTableDrag] = useState<TableDragState | null>(null);
   const [walkwayWidthMm, setWalkwayWidthMm] = useState(800);
   const [notice, setNotice] = useState<Notice | null>(null);
   const noticeTimer = useRef<number | undefined>(undefined);
@@ -591,7 +648,7 @@ export function Step6Editor() {
       reconcileBridgedPanels(project, { segments, panels: update.panels }) ?? update.panels;
     patch({ panels, segments }, true);
   }
-  function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt') {
+  function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat') {
     if (locked) return flashLock();
     if (!selectedSegment || !selectedSegRoof) return;
     report(ops.run(segmentSetRacking, { segmentId: selectedSegment.id, kind }));
@@ -599,6 +656,10 @@ export function Step6Editor() {
   function applyTilt(t: number) {
     if (locked || !selectedSegment) return;
     report(ops.run(segmentSetTilt, { segmentId: selectedSegment.id, tiltDeg: t }));
+  }
+  function applyTrackerLimit(deg: number) {
+    if (locked || !selectedSegment) return;
+    report(ops.run(segmentSetTrackerLimit, { segmentId: selectedSegment.id, maxRotationDeg: deg }));
   }
   function applyAzimuth(az: number) {
     if (locked || !selectedSegment) return;
@@ -674,6 +735,12 @@ export function Step6Editor() {
           case 'inverter':
             report(ops.run(inverterRemove, { id: hit.id }));
             return;
+          case 'battery':
+            report(ops.run(batteryRemove, { id: hit.id }));
+            return;
+          case 'box':
+            report(ops.run(boxRemove, { id: hit.id }));
+            return;
           case 'meter':
             report(ops.run(meterRemove, {}));
             return;
@@ -709,16 +776,37 @@ export function Step6Editor() {
             if (!best || d < best.d) best = { roofId: roof.id, edgeIndex: i, t, d };
           }
         }
-        if (best && best.d < 4) {
-          report(
-            ops.run(inverterPlace, {
-              roofId: best.roofId,
-              edgeIndex: best.edgeIndex,
-              t: best.t,
-              heightM: 1.5,
-            }),
-          );
+        // Where the tap lands decides the mount: within arm's reach of a wall
+        // → on that wall; inside a roof → free-standing on the deck (a stand);
+        // outside → free-standing at ground level (the plant room, the yard).
+        if (!best || best.d > 80) return;
+        const roofUnder = pickRoofAt(m, project.roofs);
+        const onWall = best.d < 1.5;
+        const at = {
+          roofId: roofUnder && !onWall ? roofUnder.id : best.roofId,
+          edgeIndex: best.edgeIndex,
+          t: best.t,
+          ...(onWall ? {} : { pos: m, level: (roofUnder ? 'roof' : 'ground') as 'roof' | 'ground' }),
+        };
+        if (placeKind === 'dcdb' || placeKind === 'acdb') {
+          report(ops.run(boxPlace, { kind: placeKind, ...at, heightM: 1.2 }));
           setTool('select');
+          return;
+        }
+        if (placeKind === 'battery') {
+          // a cabinet stands on the floor at the foot of the wall, or free on the surface it is put on
+          report(ops.run(batteryPlace, { ...at, heightM: 0 }));
+          const wanted = Math.max(1, project.components.batteryCount ?? 1);
+          if ((project.batteryPlacements ?? []).length + 1 >= wanted) setTool('select');
+          return;
+        }
+        {
+          report(ops.run(inverterPlace, { ...at, heightM: 1.5 }));
+          // stay in the tool until every inverter in the design hangs on a
+          // wall — a 3-inverter design used to drop back to Select after the
+          // first one, which read as "only one inverter allowed"
+          const wanted = Math.max(1, project.components.inverterCount);
+          if (project.inverterPlacements.length + 1 >= wanted) setTool('select');
         }
         return;
       }
@@ -873,9 +961,11 @@ export function Step6Editor() {
     const d = routeDrag;
     setRouteDrag(null);
     if (!d) return;
-    // An inserted corner the user never moved is just noise on the same line —
-    // drop it rather than litter the route with collinear points.
-    if (d.insert && Math.hypot(m.x - d.pos.x, m.y - d.pos.y) < 0.25) return;
+    // A press that never travelled is a click, not an edit: an inserted corner
+    // would be noise on the same line, and a "moved" corner would only mark
+    // the run hand-routed for nothing (measured against where the press BEGAN —
+    // the live position always equals the release point).
+    if (Math.hypot(m.x - d.start.x, m.y - d.start.y) < 0.25) return;
     report(ops.run(routesMoveWaypoint, { routeId: d.routeId, index: d.index, pos: m, insert: !!d.insert }));
   }
 
@@ -895,6 +985,7 @@ export function Step6Editor() {
     keyHandler.current = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]'))
         return;
+      if (show3D) return; // the scene owns the keyboard while it is up
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
@@ -970,12 +1061,28 @@ export function Step6Editor() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  if (show3D) {
-    return <Scene3D onClose={() => setShow3D(false)} />;
-  }
-
   return (
     <div style={{ position: 'absolute', inset: 0 }}>
+      {/* The 3D scene is a persistent layer, not a replacement: once opened it
+          stays mounted (GL context, GLBs and the satellite texture survive the
+          toggle) and only its render loop is parked while the plan is up.
+          Selection is shared, so what is picked here is picked there. */}
+      {opened3D && (
+        <div hidden={!show3D}>
+          <Scene3D
+            visible={show3D}
+            onClose={() => setShow3D(false)}
+            selectedIds={selectedIds}
+            onSelectPanels={(ids, additive) =>
+              setSelectedIds((cur) => {
+                if (!additive) return ids;
+                const all = ids.every((id) => cur.includes(id));
+                return all ? cur.filter((x) => !ids.includes(x)) : [...new Set([...cur, ...ids])];
+              })
+            }
+          />
+        </div>
+      )}
       {/* validation banner (the plan-limit gate is gone — D38) */}
       {issues.length > 0 && (
         <button
@@ -1033,7 +1140,7 @@ export function Step6Editor() {
             // so it would swallow the handle
             const hit = findRouteHandleAt(m);
             if (hit) {
-              setRouteDrag({ ...hit, pos: m });
+              setRouteDrag({ ...hit, pos: m, start: m });
               return true;
             }
             // grab-and-go: pressing on the run itself creates a corner there and
@@ -1041,7 +1148,7 @@ export function Step6Editor() {
             // the insert is only committed on release
             const seg = findRouteSegmentAt(m);
             if (seg) {
-              setRouteDrag({ ...seg, pos: m, insert: true });
+              setRouteDrag({ ...seg, pos: m, insert: true, start: m });
               return true;
             }
             // grab a PANEL: pressing one starts a move, releasing without
@@ -1139,18 +1246,10 @@ export function Step6Editor() {
               }
               return;
             }
-            // DRAG → fill the rectangle as a collision-aware segment
-            const minX = Math.min(line.a.x, line.b.x);
-            const maxX = Math.max(line.a.x, line.b.x);
-            const minY = Math.min(line.a.y, line.b.y);
-            const maxY = Math.max(line.a.y, line.b.y);
-            const area: XY[] = [
-              { x: minX, y: minY },
-              { x: maxX, y: minY },
-              { x: maxX, y: maxY },
-              { x: minX, y: maxY },
-            ];
+            // DRAG → draw a table: the rectangle in the roof's grid frame,
+            // filled row-wise as a collision-aware segment
             const roof = pickRoofAt(line.a, project.roofs) ?? project.roofs[0];
+            const area: XY[] = dragArea(line.a, line.b, roof);
             if (roof) {
               const filled = fillRoofAsSegment(
                 project,
@@ -1184,6 +1283,19 @@ export function Step6Editor() {
           routeDrag={routeDrag}
           manualString={manualString}
           dragLine={dragLine}
+          onSelectTable={setSelectedIds}
+          tableDrag={tableDrag}
+          onTableDrag={setTableDrag}
+          onTableDragEnd={(d) => {
+            setTableDrag(null);
+            if (d.count === 0) return;
+            const axis = d.side === 'top' || d.side === 'bottom' ? 'row' : 'column';
+            report(
+              d.count > 0
+                ? ops.run(layoutGrow, { segmentId: d.segId, axis, side: d.side, count: d.count })
+                : ops.run(layoutShrink, { segmentId: d.segId, axis, side: d.side, count: -d.count }),
+            );
+          }}
           panelDrag={panelDrag}
           marquee={marquee}
           hoverPoint={hoverPoint}
@@ -1315,8 +1427,8 @@ export function Step6Editor() {
         />
         <RailBtn
           icon={<Grid3x3 />}
-          label="Panels"
-          tip={'Panels — click for one · drag to fill\nP'}
+          label="Table"
+          tip={'Table — drag to draw rows of modules · click adds one\nP'}
           active={tool === 'panels'}
           pressed={tool === 'panels'}
           disabled={locked}
@@ -1558,7 +1670,10 @@ export function Step6Editor() {
               dark hint bar made the SELECTED chip recede and the unselected one
               pop — the active state read as inactive. State this explicitly
               rather than borrowing button semantics that invert here. */}
-          {(['inverter', 'meter'] as const).map((k) => (
+          {(project.components.battery
+            ? (['inverter', 'meter', 'battery', 'dcdb', 'acdb'] as const)
+            : (['inverter', 'meter', 'dcdb', 'acdb'] as const)
+          ).map((k) => (
             <button
               key={k}
               className="btn"
@@ -1575,12 +1690,31 @@ export function Step6Editor() {
               }}
               onClick={() => setPlaceKind(k)}
             >
-              {k === 'inverter' ? 'Inverter' : 'Meter'}
+              {k === 'inverter' ? 'Inverter' : k === 'meter' ? 'Meter' : k === 'battery' ? 'Battery' : k === 'dcdb' ? 'DCDB' : 'ACDB'}
             </button>
           ))}
           <span style={{ opacity: 0.85 }}>
             {placeKind === 'inverter'
-              ? 'Tap a roof edge to hang the inverter'
+              ? (() => {
+                  const wanted = Math.max(1, project.components.inverterCount);
+                  const placed = project.inverterPlacements.length;
+                  if (wanted === 1) return 'Tap a wall, the roof, or beside the building to place the inverter';
+                  return placed < wanted
+                    ? `Tap a wall, the roof, or beside the building for inverter ${placed + 1} of ${wanted}`
+                    : `All ${wanted} inverters mounted · tap an edge to move the oldest one`;
+                })()
+              : placeKind === 'dcdb' || placeKind === 'acdb'
+                ? `Tap a wall, the roof or the ground for the ${placeKind.toUpperCase()} — ${placeKind === 'dcdb' ? 'its inverter’s home runs will land on it' : 'the AC runs will pass through it'}`
+              : placeKind === 'battery'
+                ? (() => {
+                    const wanted = Math.max(1, project.components.batteryCount ?? 1);
+                    const placed = (project.batteryPlacements ?? []).length;
+                    if (placed < wanted)
+                      return wanted === 1
+                        ? 'Tap a wall to stand the battery cabinet at its foot'
+                        : `Tap a wall to stand battery ${placed + 1} of ${wanted}`;
+                    return `All ${wanted} batteries placed · tap a wall to move the oldest one`;
+                  })()
               : project.gridConnection
                 ? 'Tap to move the meter / service entry'
                 : 'Tap the meter / service entry — optional, but it makes the AC cable a measured length'}
@@ -1822,9 +1956,17 @@ export function Step6Editor() {
         const segPanels = project.panels.filter((p) => p.segmentId === seg.id);
         const kwp = Math.round(((segPanels.length * spec.watt) / 1000) * 10) / 10;
         const isFlush = seg.racking.kind === 'flush';
+        // a tracker's tilt is the time of day, so its panel controls differ
+        const isTracker = seg.racking.kind === 'tracker_hsat';
         const tilt = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 0;
         const az = seg.azimuthDeg;
         const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(az / 45) % 8];
+        // a torque tube is a LINE, so it is named by the axis it lies on, not
+        // by one end of it: bearing 90 and bearing 270 are the same tube
+        const tubeLine = (bearing: number) => {
+          const n = ['north–south', 'northeast–southwest', 'east–west', 'southeast–northwest'];
+          return n[Math.round((((bearing % 180) + 180) % 180) / 45) % 4];
+        };
         const seg2 = seg.racking;
         const rowStyle = { display: 'flex', gap: 6, marginBottom: 12 } as const;
         const lbl = { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--editor-ink-2)', margin: '2px 0 6px' } as const;
@@ -1943,14 +2085,56 @@ export function Step6Editor() {
 
             <div style={lbl as React.CSSProperties}>Racking</div>
             <div style={rowStyle}>
-              {(['flush', 'fixed_tilt', 'dual_tilt'] as const).map((k) => (
+              {/* A tracker belongs on open ground: nothing on a roof turns, so
+                  the option is not offered where it could not be built. */}
+              {(
+                [
+                  'flush',
+                  'fixed_tilt',
+                  'dual_tilt',
+                  ...(selectedSegRoof?.roofType === 'ground' ? (['tracker_hsat'] as const) : []),
+                ] as const
+              ).map((k) => (
                 <button key={k} style={seg3btn(seg.racking.kind === k) as React.CSSProperties} onClick={() => applyRacking(k)}>
-                  {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : 'Dual tilt'}
+                  {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : k === 'dual_tilt' ? 'Dual tilt' : 'Tracker'}
                 </button>
               ))}
             </div>
 
-            {!isFlush && (
+            {isTracker &&
+              (() => {
+                // the elevated variant carries the tracker's own lazy fields
+                const r = seg.racking.kind !== 'flush' ? seg.racking : null;
+                if (!r) return null;
+                const limit = r.maxRotationDeg ?? TRACKER_DEFAULT_MAX_ROTATION_DEG;
+                const slant = (seg.orientation === 'portrait' ? spec.lengthMm : spec.widthMm) / 1000;
+                const g = r.rowPitchM > 0 ? slant / r.rowPitchM : 1;
+                return (
+                  <>
+                    <div style={lbl as React.CSSProperties}>Rotation limit · ±{limit}°</div>
+                    <div style={rowStyle}>
+                      <button className="tool-btn" onClick={() => applyTrackerLimit(limit - 5)}>−</button>
+                      <input
+                        type="range" min={30} max={60} step={5} value={limit}
+                        onChange={(e) => applyTrackerLimit(Number(e.target.value))}
+                        style={{ flex: 1 }}
+                        aria-label="Tracker rotation limit"
+                      />
+                      <button className="tool-btn" onClick={() => applyTrackerLimit(limit + 5)}>+</button>
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.45, marginTop: 4 }}>
+                      Single-axis tracker: each ROW is a torque tube, and it rolls its modules
+                      to follow the sun, backtracking near sunrise and sunset so the rows stay
+                      out of each other&apos;s light. This table&apos;s tubes run{' '}
+                      <b>{tubeLine(trackerAxisFromSegment(az))}</b> — a tube lies along its row,
+                      so the table&apos;s facing sets it. Open the 3D view and run the timeline
+                      to watch it turn.
+                    </div>
+                  </>
+                );
+              })()}
+
+            {!isFlush && !isTracker && (
               <>
                 <div style={lbl as React.CSSProperties}>Panel tilt · {tilt}°</div>
                 <div style={rowStyle}>
@@ -1971,8 +2155,23 @@ export function Step6Editor() {
               (() => {
                 const loc = project.location;
                 const collectorLen = (seg.orientation === 'portrait' ? spec.lengthMm : spec.widthMm) / 1000;
-                const pitch = shadowFreePitchM(loc.latLng.lat, loc.latLng.lng, tilt, collectorLen, az);
+                // A TRACKER never stands still, so "the winter shadow-free pitch
+                // at this tilt" means nothing to it: at rest it is flat and
+                // shades nothing, and at 55° it would shade a neighbour three
+                // rows away. What a tracker field is laid out to is a ground
+                // cover ratio — the same number its backtracking is computed
+                // from — so that is what is recommended and applied here.
+                const pitch = isTracker
+                  ? collectorLen / TRACKER_DEFAULT_GCR
+                  : shadowFreePitchM(loc.latLng.lat, loc.latLng.lng, tilt, collectorLen, az);
                 const g = gcr(collectorLen, pitch);
+                // what the rows ACTUALLY are, which is what the engines read
+                const built = measuredRowPitchM(
+                  project.panels.filter((p) => p.enabled && p.segmentId === seg.id).map((p) => p.center),
+                  az,
+                );
+                const builtGcr = built ? gcr(collectorLen, built) : null;
+                const tooTight = isTracker && builtGcr !== null && builtGcr > TRACKER_DEFAULT_GCR + 0.08;
                 return (
                   <div
                     style={{
@@ -1983,7 +2182,9 @@ export function Step6Editor() {
                       fontSize: 12,
                     }}
                   >
-                    <div style={lbl as React.CSSProperties}>Inter-row shading · winter shadow-free</div>
+                    <div style={lbl as React.CSSProperties}>
+                      {isTracker ? 'Row spacing · tracker' : 'Inter-row shading · winter shadow-free'}
+                    </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: 'var(--editor-ink-2)' }}>Recommended row pitch</span>
                       <b style={{ fontVariantNumeric: 'tabular-nums' }}>{pitch.toFixed(2)} m</b>
@@ -1992,12 +2193,27 @@ export function Step6Editor() {
                       <span style={{ color: 'var(--editor-ink-2)' }}>Ground coverage (GCR)</span>
                       <b style={{ fontVariantNumeric: 'tabular-nums' }}>{g.toFixed(2)}</b>
                     </div>
+                    {built !== null && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+                        <span style={{ color: 'var(--editor-ink-2)' }}>Rows as built</span>
+                        <b style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {built.toFixed(2)} m · GCR {builtGcr!.toFixed(2)}
+                        </b>
+                      </div>
+                    )}
+                    {tooTight && (
+                      <div style={{ marginTop: 6, color: 'var(--editor-warn, #f0b429)', lineHeight: 1.45 }}>
+                        These rows are packed tighter than the tracker was set up for, so it will
+                        backtrack hard all morning and evening and give away much of what tracking
+                        earns. Widen them to the pitch above.
+                      </div>
+                    )}
                     <button
                       className="btn"
                       style={{ width: '100%', marginTop: 10, minHeight: 30, fontSize: 12, fontWeight: 700 }}
                       onClick={() => applyRespace(pitch)}
                     >
-                      Apply shadow-free spacing
+                      {isTracker ? 'Apply tracker spacing' : 'Apply shadow-free spacing'}
                     </button>
                   </div>
                 );
@@ -2733,6 +2949,10 @@ function EditorLayers({
   walkwayWidthMm,
   selected,
   tool,
+  onSelectTable,
+  tableDrag,
+  onTableDrag,
+  onTableDragEnd,
 }: {
   heatmap: boolean;
   heatResult: HeatmapResult | null;
@@ -2747,12 +2967,24 @@ function EditorLayers({
   walkwayWidthMm: number;
   selected: string[];
   tool: Tool;
+  /** a table label was tapped: select its modules */
+  onSelectTable: (ids: string[]) => void;
+  /** an edge handle being dragged: whole cells crossed so far */
+  tableDrag: TableDragState | null;
+  onTableDrag: (d: TableDragState | null) => void;
+  onTableDragEnd: (d: TableDragState) => void;
 }) {
   const project = useActiveProject()!;
   const frame = useCanvasFrame();
   const spec = project.components.panel!;
   const pxPerM = frame.sizePx / frame.spanM;
   const byId = new Map(project.panels.map((p) => [p.id, p]));
+  // a module on a TRACKER rests flat but is not grid-aligned — it sits along
+  // its torque tube, so its drawn footprint follows its own facing
+  const trackerSegs = new Set(
+    project.segments.filter((sg) => sg.racking.kind === 'tracker_hsat').map((sg) => sg.id),
+  );
+  const onTracker = (p: PlacedPanel) => !!p.segmentId && trackerSegs.has(p.segmentId);
 
   // Live preview for the panel-table (drag-fill) tool: the drawn rectangle AND a
   // ghost of the panels that would land there — already obstruction/setback-aware
@@ -2760,19 +2992,10 @@ function EditorLayers({
   // and obstructions as they drag, instead of just a line.
   const tablePreview = useMemo(() => {
     if (tool !== 'panels' || !dragLine) return null;
-    const minX = Math.min(dragLine.a.x, dragLine.b.x);
-    const maxX = Math.max(dragLine.a.x, dragLine.b.x);
-    const minY = Math.min(dragLine.a.y, dragLine.b.y);
-    const maxY = Math.max(dragLine.a.y, dragLine.b.y);
-    if (maxX - minX < 0.2 || maxY - minY < 0.2) return { panels: [], minX, maxX, minY, maxY, angle: 0 };
-    const area: XY[] = [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY },
-    ];
     const roof = pickRoofAt(dragLine.a, project.roofs) ?? project.roofs[0];
-    if (!roof) return { panels: [], minX, maxX, minY, maxY, roof: undefined };
+    const area = dragArea(dragLine.a, dragLine.b, roof);
+    const span = Math.hypot(dragLine.b.x - dragLine.a.x, dragLine.b.y - dragLine.a.y);
+    if (span < 0.3 || !roof) return { panels: [] as PlacedPanel[], area, roof };
     const panels = autoFillRoof(
       project,
       roof,
@@ -2780,7 +3003,7 @@ function EditorLayers({
       { orientation: 'portrait', gapM: 0.05, grouped: true, avoidPanels: project.panels },
       area,
     );
-    return { panels, minX, maxX, minY, maxY, roof };
+    return { panels, area, roof };
   }, [tool, dragLine, project, spec]);
 
   // Live single-panel ghost: where a click would drop ONE panel, snapped to the
@@ -2943,7 +3166,9 @@ function EditorLayers({
       {/* panels */}
       {project.panels.map((p) => {
         const roof = project.roofs.find((r) => r.id === p.roofId);
-        const corners = panelCornersOnRoof(p, spec, roof);
+        // a module on a TRACKER lies flat but sits along its tube, so its
+        // footprint follows its own facing rather than the site's grid
+        const corners = panelCornersOnRoof(p, spec, roof, onTracker(p));
         const inString = manualString?.includes(p.id);
         const isSelected = selected.includes(p.id);
         const stringOf = project.strings.find((s) => s.panelIds.includes(p.id));
@@ -3103,14 +3328,9 @@ function EditorLayers({
         })()}
 
       {project.inverterPlacements.map((ip) => {
-        const roof = project.roofs.find((r) => r.id === ip.roofId);
-        if (!roof) return null;
-        const a = roof.polygon[ip.edgeIndex];
-        const b = roof.polygon[(ip.edgeIndex + 1) % roof.polygon.length];
-        const pos = frame.toPx({
-          x: a.x + (b.x - a.x) * ip.t,
-          y: a.y + (b.y - a.y) * ip.t,
-        });
+        const wp = unitPlanPos(project, ip);
+        if (!wp) return null;
+        const pos = frame.toPx(wp);
         return (
           <g key={ip.id} transform={`translate(${pos.x}, ${pos.y}) scale(${1 / frame.zoom})`}>
             <rect
@@ -3124,6 +3344,161 @@ function EditorLayers({
               strokeWidth={1.5}
             />
             <PlugZap x={-6} y={-6} width={12} height={12} color="#fff" />
+          </g>
+        );
+      })}
+
+      {/* battery cabinets — a green box with a battery glyph at the wall foot */}
+      {(project.batteryPlacements ?? []).map((bp, i) => {
+        const wp = batteryWorldPos(project, bp);
+        if (!wp) return null;
+        const pos = frame.toPx(wp);
+        return (
+          <g key={bp.id} transform={`translate(${pos.x}, ${pos.y}) scale(${1 / frame.zoom})`}>
+            <rect x={-9} y={-9} width={18} height={18} rx={3} fill="#15803d" stroke="#fff" strokeWidth={1.5} />
+            <rect x={-5.5} y={-3} width={9} height={6} rx={1} fill="none" stroke="#fff" strokeWidth={1.2} />
+            <rect x={3.5} y={-1.5} width={1.6} height={3} fill="#fff" />
+            <rect x={-4} y={-1.5} width={4.5} height={3} fill="#fff" />
+            <text x={0} y={16} textAnchor="middle" fontSize={7} fontWeight={700} fill="#15803d">
+              BAT {i + 1}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* tables: the outline of each table and its label — click the label to select the whole table */}
+      {spec &&
+        project.segments.map((seg) => {
+          const roof = project.roofs.find((r) => r.id === seg.roofId);
+          const mine = project.panels.filter((p) => p.segmentId === seg.id && p.enabled);
+          if (!roof || mine.length === 0) return null;
+          const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
+          const locals = mine.map((p) => rotateXY(p.center, -angle));
+          const minX = Math.min(...locals.map((l) => l.x)) - pitchX / 2;
+          const maxX = Math.max(...locals.map((l) => l.x)) + pitchX / 2;
+          const minY = Math.min(...locals.map((l) => l.y)) - pitchY / 2;
+          const maxY = Math.max(...locals.map((l) => l.y)) + pitchY / 2;
+          const corners = [
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY },
+          ].map((c) => rotateXY(c, angle));
+          const { rows, cols } = gridShape(mine);
+          const allSelected = mine.every((p) => selected.includes(p.id));
+          const lp = frame.toPx(corners[3]);
+          const text = `${seg.label} · ${rows}×${cols}`;
+          const live = tableDrag?.segId === seg.id ? tableDrag : null;
+          // the outline while an edge is dragged: grown or shrunk by whole cells
+          const dragCorners = live
+            ? [
+                { x: minX - (live.side === 'left' ? live.count * pitchX : 0), y: minY - (live.side === 'bottom' ? live.count * pitchY : 0) },
+                { x: maxX + (live.side === 'right' ? live.count * pitchX : 0), y: minY - (live.side === 'bottom' ? live.count * pitchY : 0) },
+                { x: maxX + (live.side === 'right' ? live.count * pitchX : 0), y: maxY + (live.side === 'top' ? live.count * pitchY : 0) },
+                { x: minX - (live.side === 'left' ? live.count * pitchX : 0), y: maxY + (live.side === 'top' ? live.count * pitchY : 0) },
+              ].map((c) => rotateXY(c, angle))
+            : null;
+          const edgeMid = (side: 'top' | 'bottom' | 'left' | 'right'): XY =>
+            rotateXY(
+              side === 'top'
+                ? { x: (minX + maxX) / 2, y: maxY }
+                : side === 'bottom'
+                  ? { x: (minX + maxX) / 2, y: minY }
+                  : side === 'left'
+                    ? { x: minX, y: (minY + maxY) / 2 }
+                    : { x: maxX, y: (minY + maxY) / 2 },
+              angle,
+            );
+          return (
+            <g key={seg.id}>
+              <path
+                d={polyPath(frame, corners)}
+                fill="none"
+                stroke={allSelected ? '#fde68a' : '#c9a24a'}
+                strokeWidth={allSelected ? 2 : 1.2}
+                strokeDasharray="6 4"
+                opacity={0.9}
+                pointerEvents="none"
+              />
+              {dragCorners && (
+                <path d={polyPath(frame, dragCorners)} fill="rgba(253,230,138,0.12)" stroke="#fde68a" strokeWidth={1.6} pointerEvents="none" />
+              )}
+              {/* edge handles when the table is selected: drag out for more rows/columns, in for fewer */}
+              {allSelected &&
+                (['top', 'bottom', 'left', 'right'] as const).map((side) => {
+                  const mp = frame.toPx(edgeMid(side));
+                  const rowEdge = side === 'top' || side === 'bottom';
+                  const isLive = live?.side === side;
+                  return (
+                    <g
+                      key={side}
+                      transform={`translate(${mp.x}, ${mp.y}) scale(${1 / frame.zoom})`}
+                      style={{ cursor: rowEdge ? 'ns-resize' : 'ew-resize' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        (e.currentTarget as SVGGElement).setPointerCapture(e.pointerId);
+                        // client px at the press; the move turns px deltas into metres
+                        onTableDrag({ segId: seg.id, side, count: 0, start: { x: e.clientX, y: e.clientY } });
+                      }}
+                      onPointerMove={(e) => {
+                        if (!live || live.side !== side) return;
+                        // screen px → plan metres (north is up on screen) → the table's lattice frame
+                        const dm = rotateXY(
+                          { x: (e.clientX - live.start.x) / frame.pxPerM, y: -(e.clientY - live.start.y) / frame.pxPerM },
+                          -angle,
+                        );
+                        const raw =
+                          side === 'top'
+                            ? dm.y / pitchY
+                            : side === 'bottom'
+                              ? -dm.y / pitchY
+                              : side === 'left'
+                                ? -dm.x / pitchX
+                                : dm.x / pitchX;
+                        const count = Math.round(raw);
+                        if (count !== live.count) onTableDrag({ ...live, count });
+                      }}
+                      onPointerUp={(e) => {
+                        e.stopPropagation();
+                        if (live) onTableDragEnd(live);
+                      }}
+                      onPointerCancel={() => onTableDrag(null)}
+                    >
+                      <circle r={9} fill={isLive ? '#fde68a' : '#1f2937'} stroke="#c9a24a" strokeWidth={1.5} />
+                      <text x={0} y={3.5} textAnchor="middle" fontSize={9} fontWeight={800} fill={isLive ? '#1f2937' : '#fde68a'}>
+                        {isLive && live.count !== 0 ? (live.count > 0 ? `+${live.count}` : `${live.count}`) : rowEdge ? '↕' : '↔'}
+                      </text>
+                    </g>
+                  );
+                })}
+              <g
+                transform={`translate(${lp.x}, ${lp.y}) scale(${1 / frame.zoom})`}
+                style={{ cursor: 'pointer' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onSelectTable(mine.map((p) => p.id));
+                }}
+              >
+                <rect x={0} y={-18} width={text.length * 6.4 + 10} height={16} rx={3} fill="#1f2937" stroke="#c9a24a" strokeWidth={1} />
+                <text x={5} y={-6} fontSize={9.5} fontWeight={800} fill="#fde68a" fontFamily="var(--mono)">
+                  {text}
+                </text>
+              </g>
+            </g>
+          );
+        })}
+
+      {/* DCDB / ACDB enclosures on the wall */}
+      {(project.electricalBoxes ?? []).map((bx) => {
+        const wp = batteryWorldPos(project, bx);
+        if (!wp) return null;
+        const pos = frame.toPx(wp);
+        return (
+          <g key={bx.id} transform={`translate(${pos.x}, ${pos.y}) scale(${1 / frame.zoom})`}>
+            <rect x={-10} y={-8} width={20} height={16} rx={2} fill="#374151" stroke="#fff" strokeWidth={1.5} />
+            <text x={0} y={3} textAnchor="middle" fontSize={6.5} fontWeight={800} fill="#fff">
+              {bx.kind === 'dcdb' ? 'DC' : 'AC'}
+            </text>
           </g>
         );
       })}
@@ -3270,6 +3645,8 @@ function EditorLayers({
             }
             case 'arrester':
             case 'inverter':
+            case 'battery':
+            case 'box':
             case 'meter': {
               // ring around the point marker, constant screen size across zoom
               const q = frame.toPx(eraseTarget.pos);
@@ -3307,15 +3684,14 @@ function EditorLayers({
           will land (already avoiding obstructions/keepouts/setbacks) */}
       {tablePreview &&
         (() => {
-          const pa = frame.toPx({ x: tablePreview.minX, y: tablePreview.minY });
-          const pb = frame.toPx({ x: tablePreview.maxX, y: tablePreview.maxY });
+          const n = tablePreview.panels.length;
+          const { rows, cols } = gridShape(tablePreview.panels);
+          const top = tablePreview.area.reduce((m, c) => (c.y > m.y ? c : m), tablePreview.area[0]);
+          const lp = frame.toPx(top);
           return (
             <g>
-              <rect
-                x={Math.min(pa.x, pb.x)}
-                y={Math.min(pa.y, pb.y)}
-                width={Math.abs(pb.x - pa.x)}
-                height={Math.abs(pb.y - pa.y)}
+              <path
+                d={polyPath(frame, tablePreview.area)}
                 fill="rgba(34,197,94,0.12)"
                 stroke="#22c55e"
                 strokeWidth={1.6}
@@ -3330,6 +3706,15 @@ function EditorLayers({
                   strokeWidth={1}
                 />
               ))}
+              {/* what the release will make: rows × columns, modules, kWp */}
+              <g transform={`translate(${lp.x}, ${lp.y}) scale(${1 / frame.zoom})`} pointerEvents="none">
+                <rect x={0} y={-30} width={n > 0 ? 176 : 150} height={20} rx={4} fill="rgba(20,24,30,0.9)" stroke="#22c55e" />
+                <text x={7} y={-16} fontSize={11} fontWeight={700} fill="#bbf7d0" fontFamily="var(--mono)">
+                  {n > 0
+                    ? `${rows} row${rows === 1 ? '' : 's'} × ${cols} · ${n} modules · ${((n * spec.watt) / 1000).toFixed(1)} kWp`
+                    : 'no room for a module here'}
+                </text>
+              </g>
             </g>
           );
         })()}

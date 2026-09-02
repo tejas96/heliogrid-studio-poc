@@ -8,12 +8,17 @@
 // tests, a locked-down browser) ⇒ run the SAME pure function inline. The engine
 // is identical either way — only WHERE it runs changes.
 import type { Project } from '../types';
-import { computeSolarAccess } from './shading';
+import { computeShadeProfile } from './shading';
+import type { SurroundHeights } from './surround-geometry';
 import type { AnalysisResponse } from '../workers/analysis.worker';
+import { setShadeProfile } from './shade-profile-cache';
+import { shadingFp } from './fingerprints';
 
 type Pending = {
   resolve: (v: Map<string, number>) => void;
   reject: (e: Error) => void;
+  /** the shading fingerprint of the project the request was made for — the profile's cache key */
+  fp: string;
 };
 
 let worker: Worker | null = null;
@@ -32,8 +37,12 @@ function ensureWorker(): Worker | null {
       const p = pending.get(msg.id);
       if (!p) return; // superseded — the caller has moved on
       pending.delete(msg.id);
-      if (msg.ok) p.resolve(new Map(msg.access));
-      else p.reject(new Error(msg.error));
+      if (msg.ok) {
+        // the full profile (per sample, per caster) stays in memory for the
+        // string-shade and caster-cost readers; the map is what callers asked for
+        if (msg.profile) setShadeProfile(p.fp, msg.profile);
+        p.resolve(new Map(msg.access));
+      } else p.reject(new Error(msg.error));
     };
     worker.onerror = () => {
       // the worker died (bundling issue, OOM): fail every waiter INLINE rather
@@ -58,10 +67,17 @@ function ensureWorker(): Worker | null {
  */
 export function requestSolarAccess(
   project: Project,
-  opts: { cancelPrevious?: boolean } = {},
+  opts: { cancelPrevious?: boolean; surround?: SurroundHeights | null } = {},
 ): Promise<Map<string, number>> {
+  const surround = opts.surround ?? null;
+  const fp = shadingFp(project);
+  const inline = () => {
+    const profile = computeShadeProfile(project, { surround });
+    setShadeProfile(fp, profile);
+    return profile.access;
+  };
   const w = ensureWorker();
-  if (!w) return Promise.resolve(computeSolarAccess(project));
+  if (!w) return Promise.resolve(inline());
   if (opts.cancelPrevious) {
     for (const [id, p] of pending) {
       p.reject(new AnalysisSuperseded());
@@ -70,13 +86,13 @@ export function requestSolarAccess(
   }
   const id = nextId++;
   return new Promise<Map<string, number>>((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    w.postMessage({ id, kind: 'access', project });
+    pending.set(id, { resolve, reject, fp });
+    w.postMessage({ id, kind: 'access', project, surround });
   }).catch((err) => {
     if (err instanceof AnalysisSuperseded) throw err;
     // worker path failed for this request — answer inline so the user still
     // gets fresh numbers (slower, but never silently stale)
-    return computeSolarAccess(project);
+    return inline();
   });
 }
 

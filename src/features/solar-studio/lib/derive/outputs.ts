@@ -1,16 +1,22 @@
 import type { Project, ValidationIssue } from '../../types';
 import { designFp } from '../fingerprints';
+import { tmyVersion } from '../energy/tmy';
 import { memoByKey } from './memo';
 import { computeEnergyReport } from '../solar';
 import { bomMoney, mergedBomResult } from '../bom';
 import { computeFinancials } from '../finance';
 import { layoutIssues, structureIssues } from '../drc';
 import { routeIssues } from '../routing';
+import { roofHeightIssues } from '../surround-check';
+import { bifacialIssues } from '../bifacial-check';
 import { validateSystem } from '../stringing';
 import { resolveDesignTemps } from '../electrical/temps';
 
 /** designFp + the shading stamp: the two things every customer-facing number reads. */
-const outputKey = (p: Project) => designFp(p) + '§' + (p.derived.solarAccessFp ?? '');
+// …plus the typical year: its identity, and whether it is in memory yet (the
+// engine switches from the monthly estimate to the hourly run when it lands)
+const outputKey = (p: Project) =>
+  designFp(p) + '§' + (p.derived.solarAccessFp ?? '') + '§' + (p.location?.tmy?.blobId ?? '') + '#' + tmyVersion();
 
 export const deriveEnergy = memoByKey(outputKey, computeEnergyReport);
 export const deriveBomResult = memoByKey(outputKey, mergedBomResult);
@@ -25,6 +31,8 @@ export const designIssues = memoByKey(outputKey, (p): ValidationIssue[] => {
   const inverter = p.components.inverter;
   const enabled = p.panels.filter((x) => x.enabled);
   return [
+    ...roofHeightIssues(p),
+    ...bifacialIssues(p),
     ...layoutIssues(p, spec),
     ...structureIssues(p, spec),
     ...routeIssues(p, spec),

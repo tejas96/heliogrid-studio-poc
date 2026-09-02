@@ -13,6 +13,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent as ReactWheelEvent,
 } from 'react';
+import { useEffect } from 'react';
 import { Plus, Minus, Maximize2 } from 'lucide-react';
 import type { XY } from '../types';
 import { metersPerStaticMap, pickScaleBar, staticSatelliteUrl } from '../lib/maps';
@@ -84,6 +85,15 @@ export const SatCanvas = forwardRef<
   ref,
 ) {
   const outerRef = useRef<HTMLDivElement>(null);
+  // wheel over the canvas zooms the map; it must never scroll the page. Only a
+  // NON-passive native listener may cancel a wheel — React's onWheel cannot.
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const cancel = (e: WheelEvent) => e.preventDefault();
+    el.addEventListener('wheel', cancel, { passive: false });
+    return () => el.removeEventListener('wheel', cancel);
+  }, []);
   const [zoom, setZoom] = useState(1.5);
   const [pan, setPan] = useState<XY>({ x: 0, y: 0 });
   const dragRef = useRef<{
@@ -171,7 +181,9 @@ export const SatCanvas = forwardRef<
 
   /** wheel-zoom keeping the point under the cursor fixed */
   function wheel(e: ReactWheelEvent) {
-    e.preventDefault();
+    // no preventDefault here: React registers onWheel as PASSIVE, so calling
+    // it logged "Unable to preventDefault inside passive event listener" on
+    // every notch. The native non-passive listener below stops the page scroll.
     const outer = outerRef.current;
     if (!outer) return;
     const rect = outer.getBoundingClientRect();

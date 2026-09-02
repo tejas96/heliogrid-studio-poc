@@ -194,6 +194,19 @@ describe('routeIssues — voltage drop', () => {
     expect(routeIssues(p, p.components.panel)).toEqual([]);
   });
 
+  it('a hand-routed leg keeps its sibling: the other leg is re-routed, not dropped', () => {
+    const panels = fixturePanels(6);
+    const p0 = project({ panels, strings: [stringOf(panels.map((x) => x.id))] });
+    const auto = autoRouteStrings(p0);
+    expect(auto).toHaveLength(2);
+    const last = auto[0].waypoints[auto[0].waypoints.length - 1];
+    const manual: CableRoute = { ...auto[0], manual: true, waypoints: [...auto[0].waypoints, { x: last.x + 1, y: last.y }] };
+    const again = autoRouteStrings({ ...p0, cableRoutes: [manual, auto[1]] });
+    expect(again.map((r) => r.id).sort()).toEqual(auto.map((r) => r.id).sort());
+    expect(again.find((r) => r.id === manual.id)?.manual).toBe(true);
+    expect(again.find((r) => r.id === manual.id)?.waypoints).toHaveLength(manual.waypoints.length);
+  });
+
   it('says nothing before anything is routed', () => {
     expect(routeIssues(project({ panels: fixturePanels(6) }), null)).toEqual([]);
   });

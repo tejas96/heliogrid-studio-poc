@@ -36,10 +36,19 @@
 // └───────────────────────────────────────────────────────────────────────────
 import * as THREE from 'three';
 import type { PanelSpec, PlacedPanel, Project, Roof } from '../types';
-import { panelPose, panelSampleHeightM } from './panel-pose';
+import { panelPose, panelSampleHeightM, trackerAxisFor, type SunAngles } from './panel-pose';
 import { solarHourDate, sunPosition } from './solar';
 import { buildShadowCasters, disposeGroup } from './scene-model';
 import { computeEaveRefs, surfaceHeightAt } from './roof-plane';
+import type { SurroundHeights } from './surround-geometry';
+import type { ShadeProfile } from './shade-profile-cache';
+import { trackerPose, type TrackerAxis } from './energy/tracker';
+
+/** Extra casters the caller resolved outside the engine (the real neighbourhood). */
+export interface ShadingOptions {
+  /** lib/surround grid — null/undefined = no real-surroundings data */
+  surround?: SurroundHeights | null;
+}
 
 /** Sample dates (21st of EVERY month) — full seasonal coverage, aligned with
  *  the heatmap's month set (the old 5-month subset under-weighted shoulders). */
@@ -75,6 +84,9 @@ export const SAMPLE_YEAR = 2025;
 export interface ShadingSample {
   dir: THREE.Vector3;
   weight: number;
+  /** calendar month 0..11 and solar hour of the sample, for consumers that read the profile */
+  month: number;
+  hour: number;
 }
 
 export function buildSunSamples(
@@ -105,6 +117,8 @@ export function buildSunSamples(
         // beam-irradiance proxy × the hour it stands for — the heatmap's
         // exact quadrature, so the two surfaces integrate the same year
         weight: Math.max(0, Math.sin(s.altitude)) * SAMPLE_HOUR_STEP,
+        month: m,
+        hour: h,
       });
     }
   }
@@ -133,10 +147,14 @@ function panelRayOrigins(
   spec: PanelSpec | null,
   roof: Roof | undefined,
   surfaceY: number,
+  /** a tracker's plate is where the sun put it at THIS sample, not at rest */
+  sun?: SunAngles,
+  /** the tube, resolved once per module by the caller */
+  axis?: TrackerAxis | null,
 ): THREE.Vector3[] {
   const baseY = surfaceY + panelSampleHeightM(project, panel, spec, roof, surfaceY);
   if (!spec) return [new THREE.Vector3(panel.center.x, baseY, -panel.center.y)];
-  const pose = panelPose(project, panel, spec, roof, surfaceY);
+  const pose = panelPose(project, panel, spec, roof, surfaceY, sun, axis);
   const sinT = Math.sin(pose.tiltRad);
   const cosT = Math.cos(pose.tiltRad);
   const sinY = Math.sin(pose.yawRad);
@@ -158,43 +176,108 @@ function panelRayOrigins(
  * year during which the panel's plane has a clear line to the sun, averaged
  * over its sample points (partial shade ⇒ fractional access).
  */
-export function computeSolarAccess(project: Project): Map<string, number> {
+export function computeSolarAccess(project: Project, opts: ShadingOptions = {}): Map<string, number> {
+  return computeShadeProfile(project, opts).access;
+}
+
+/**
+ * The full analysis: annual access per module PLUS the two things the
+ * summary throws away — the clear fraction at every sample (so a string's
+ * weakest module at each hour is known: electrical shading) and, for every
+ * blocked ray, WHICH caster blocked it (so an obstruction can say what it
+ * costs). Same rays, same numbers; nothing is computed twice.
+ */
+export function computeShadeProfile(project: Project, opts: ShadingOptions = {}): ShadeProfile {
   const access = new Map<string, number>();
+  const bySample = new Map<string, Float32Array>();
+  const byCaster = new Map<string, Map<string, number>>();
   const loc = project.location;
-  if (!loc || project.panels.length === 0) return access;
+  const empty: ShadeProfile = { samples: [], bySample, byCaster, access };
+  if (!loc || project.panels.length === 0) return empty;
 
   const samples = buildSunSamples(
     loc.latLng.lat,
     loc.latLng.lng,
     project.calibration?.northOffsetDeg ?? 0,
   );
-  if (samples.length === 0) return access;
+  if (samples.length === 0) return empty;
   const totalW = samples.reduce((s, x) => s + x.weight, 0);
 
   // Tier-2 (Phase 8): the modules are casters too — row-on-row self-shading is
   // real delivered-energy loss and the scene already draws those shadows.
-  const { group, meshes } = buildShadowCasters(project, { includePanels: true });
+  // Phase 4: the real neighbourhood (Google DSM) casts as well when present.
+  const { group, meshes, panelPlates } = buildShadowCasters(project, {
+    includePanels: true,
+    surround: opts.surround,
+  });
   const eaveRefs = computeEaveRefs(project.roofs);
   const raycaster = new THREE.Raycaster();
   raycaster.far = 250;
 
+  /** The module's outward normal in the sample frame (x=E, y=up, z=−N). */
+  const normalOf = (tiltDeg: number, azDeg: number) => {
+    const t = (tiltDeg * Math.PI) / 180;
+    const a = (azDeg * Math.PI) / 180;
+    return { nx: Math.sin(t) * Math.sin(a), ny: Math.cos(t), nz: -Math.sin(t) * Math.cos(a) };
+  };
+
   try {
     const spec = project.components.panel;
-    for (const p of project.panels) {
+    // ── everything about a module that does not change with the sun ─────────
+    const rows = project.panels.map((p) => {
       const roof = project.roofs.find((r) => r.id === p.roofId);
       const surfaceY = roof ? surfaceHeightAt(roof, p.center, eaveRefs.get(roof.id)) : 3;
-      const origins = panelRayOrigins(project, p, spec, roof, surfaceY);
+      // A TRACKER turns through the day: its rays leave a different plane at
+      // every sample, its own normal moves with them, AND the plate it casts
+      // with turns too — so the tube is resolved once here and the pose is
+      // recomputed per sample below, for the rays and the casters alike.
+      const axis = spec ? trackerAxisFor(project, p, spec, roof) : null;
+      return {
+        panel: p,
+        roof,
+        surfaceY,
+        axis,
+        plate: panelPlates.get(p.id) ?? null,
+        restOrigins: axis ? null : panelRayOrigins(project, p, spec, roof, surfaceY),
+        restNormal: normalOf(p.tiltDeg, p.azimuthDeg),
+        clearW: 0,
+        panelW: 0,
+        perSample: new Float32Array(samples.length).fill(-1),
+        casters: new Map<string, number>(),
+      };
+    });
+    const tracked = rows.filter((r) => r.axis);
 
-      // The module's own outward normal, in the sample frame (x=E, y=up, z=-N).
-      const tRad = (p.tiltDeg * Math.PI) / 180;
-      const aRad = (p.azimuthDeg * Math.PI) / 180;
-      const nx = Math.sin(tRad) * Math.sin(aRad);
-      const ny = Math.cos(tRad);
-      const nz = -Math.sin(tRad) * Math.cos(aRad);
+    // ── the sun's turn is the OUTER loop, because a tracker's whole field
+    // moves between one sample and the next: every plate must be where it
+    // really is before any ray is cast through it ──────────────────────────
+    samples.forEach((s, si) => {
+      const sunAngles: SunAngles = {
+        altitudeDeg: (Math.asin(Math.max(-1, Math.min(1, s.dir.y))) * 180) / Math.PI,
+        azimuthDeg: ((Math.atan2(s.dir.x, -s.dir.z) * 180) / Math.PI + 360) % 360,
+      };
+      if (tracked.length > 0) {
+        for (const r of tracked) {
+          const pose = trackerPose(r.axis!, sunAngles.altitudeDeg, sunAngles.azimuthDeg);
+          if (r.plate) {
+            // the tube carries the module's centre, so only the rotation moves
+            r.plate.rotation.set(0, -((pose.azimuthDeg * Math.PI) / 180), 0);
+            r.plate.rotateX(-((pose.tiltDeg * Math.PI) / 180));
+          }
+        }
+        group.updateMatrixWorld(true);
+      }
 
-      let clearW = 0;
-      let panelW = 0; // beam-available weight for THIS module
-      for (const s of samples) {
+      for (const r of rows) {
+        const p = r.panel;
+        let origins = r.restOrigins;
+        let n = r.restNormal;
+        if (r.axis) {
+          const pose = trackerPose(r.axis, sunAngles.altitudeDeg, sunAngles.azimuthDeg);
+          n = normalOf(pose.tiltDeg, pose.azimuthDeg);
+          origins = panelRayOrigins(project, p, spec, r.roof, r.surfaceY, sunAngles, r.axis);
+        }
+        if (!origins) continue;
         // BEHIND THE PLANE ⇒ no beam on this module at all. The self-exclusion
         // below already says this is incidence rather than shade, but it only
         // excluded the module's own PLATE — its own ROOF solid still swallowed
@@ -202,8 +285,8 @@ export function computeSolarAccess(project: Project): Map<string, number> {
         // multiplies by poaBeamRatio, which has ALREADY zeroed these hours, so
         // the same physics was priced twice. Worst on a gable's north face,
         // which this tool produces on every gable.
-        if (nx * s.dir.x + ny * s.dir.y + nz * s.dir.z <= 0) continue;
-        panelW += s.weight;
+        if (n.nx * s.dir.x + n.ny * s.dir.y + n.nz * s.dir.z <= 0) continue;
+        r.panelW += s.weight;
         let clearPts = 0;
         for (const origin of origins) {
           raycaster.set(origin, s.dir);
@@ -212,25 +295,47 @@ export function computeSolarAccess(project: Project): Map<string, number> {
           // — it is incidence, already priced by the POA transposition
           // (poaBeamRatio). Counting it here would derate the same physics twice.
           const hits = raycaster.intersectObjects(meshes, false);
-          if (!hits.some((h) => h.object.userData.panelId !== p.id)) clearPts++;
+          const blocker = hits.find((h) => h.object.userData.panelId !== p.id);
+          if (!blocker) clearPts++;
+          else {
+            // the NEAREST foreign hit is the caster that took this ray
+            const u = blocker.object.userData as { casterKind?: string; casterId?: string };
+            const key = `${u.casterKind ?? 'unknown'}:${u.casterId ?? ''}`;
+            r.casters.set(key, (r.casters.get(key) ?? 0) + s.weight / origins.length);
+          }
         }
-        clearW += (s.weight * clearPts) / origins.length;
+        r.clearW += (s.weight * clearPts) / origins.length;
+        r.perSample[si] = clearPts / origins.length;
       }
+    });
+
+    for (const r of rows) {
       // Denominator is the module's OWN beam-available weight: solarAccess is
       // "of the hours that could light this module, how many are unshaded".
       // Orientation is poaBeamRatio's job, not this metric's.
-      access.set(p.id, panelW > 0 ? clearW / panelW : 1);
+      access.set(r.panel.id, r.panelW > 0 ? r.clearW / r.panelW : 1);
+      bySample.set(r.panel.id, r.perSample);
+      if (r.casters.size > 0 && r.panelW > 0) {
+        const fracs = new Map<string, number>();
+        for (const [k, w] of r.casters) fracs.set(k, w / r.panelW);
+        byCaster.set(r.panel.id, fracs);
+      }
     }
   } finally {
     disposeGroup(group);
   }
-  return access;
+  return {
+    samples: samples.map((s) => ({ month: s.month, hour: s.hour, weight: s.weight })),
+    bySample,
+    byCaster,
+    access,
+  };
 }
 
 // ─── Per-panel shade attribution (Phase 8 task 27c) ─────────────────────────
 
 export interface ShadeBlocker {
-  kind: 'panel' | 'obstruction' | 'roof' | 'parapet';
+  kind: 'panel' | 'obstruction' | 'roof' | 'parapet' | 'arrester' | 'surround';
   id: string;
   label: string;
   /** share of the panel's ANNUAL beam budget this caster costs, 0..1 */
@@ -257,6 +362,7 @@ export interface PanelShadeDetail {
 export function computePanelShadeDetail(
   project: Project,
   panelId: string,
+  opts: ShadingOptions = {},
 ): PanelShadeDetail | null {
   const loc = project.location;
   const panel = project.panels.find((p) => p.id === panelId);
@@ -269,7 +375,7 @@ export function computePanelShadeDetail(
   if (samples.length === 0) return null;
   const totalW = samples.reduce((s, x) => s + x.weight, 0);
 
-  const { group, meshes } = buildShadowCasters(project, { includePanels: true });
+  const { group, meshes } = buildShadowCasters(project, { includePanels: true, surround: opts.surround });
   const eaveRefs = computeEaveRefs(project.roofs);
   const raycaster = new THREE.Raycaster();
   raycaster.far = 250;

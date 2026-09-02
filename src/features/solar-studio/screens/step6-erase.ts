@@ -5,11 +5,14 @@
 // small point targets win over long strip targets that may pass under them.
 import type { Project, XY } from '../types';
 import { pointSegDist } from '../lib/geo';
+import { unitPlanPos } from '../lib/unit-pos';
 
 export type EraseTarget =
   | { kind: 'panel'; id: string }
   | { kind: 'arrester'; id: string; pos: XY }
   | { kind: 'inverter'; id: string; pos: XY }
+  | { kind: 'battery'; id: string; pos: XY }
+  | { kind: 'box'; id: string; pos: XY }
   | { kind: 'meter'; pos: XY }
   | { kind: 'walkway'; id: string }
   | { kind: 'rail'; id: string };
@@ -25,12 +28,7 @@ export function inverterPlacementPos(
   project: Project,
   ip: Project['inverterPlacements'][number],
 ): XY | null {
-  const roof = project.roofs.find((r) => r.id === ip.roofId);
-  if (!roof || roof.polygon.length === 0) return null;
-  const a = roof.polygon[ip.edgeIndex];
-  const b = roof.polygon[(ip.edgeIndex + 1) % roof.polygon.length];
-  if (!a || !b) return null;
-  return { x: a.x + (b.x - a.x) * ip.t, y: a.y + (b.y - a.y) * ip.t };
+  return unitPlanPos(project, ip);
 }
 
 /** What the eraser at plan point `m` would remove, or null over empty roof. */
@@ -49,6 +47,18 @@ export function findEraseTargetAt(project: Project, m: XY): EraseTarget | null {
     const pos = inverterPlacementPos(project, ip);
     if (pos && Math.hypot(m.x - pos.x, m.y - pos.y) < MARKER_R)
       return { kind: 'inverter', id: ip.id, pos };
+  }
+
+  // battery cabinets and DCDB/ACDB boxes share the inverter's wall-edge frame
+  for (const bp of project.batteryPlacements ?? []) {
+    const pos = inverterPlacementPos(project, bp);
+    if (pos && Math.hypot(m.x - pos.x, m.y - pos.y) < MARKER_R)
+      return { kind: 'battery', id: bp.id, pos };
+  }
+  for (const bx of project.electricalBoxes ?? []) {
+    const pos = inverterPlacementPos(project, bx);
+    if (pos && Math.hypot(m.x - pos.x, m.y - pos.y) < MARKER_R)
+      return { kind: 'box', id: bx.id, pos };
   }
 
   const gc = project.gridConnection;

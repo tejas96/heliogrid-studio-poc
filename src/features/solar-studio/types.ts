@@ -89,6 +89,12 @@ export interface SiteWeather {
   raddatabase?: string;
   /** distinct years in the climatological record (e.g. 19 for 2005–2023) */
   yearsOfRecord?: number;
+  /**
+   * Each complete year's horizontal irradiation, kWh/m²/yr. Their spread is
+   * the site's year-to-year variability — the base of the P90. Absent on
+   * weather stored before it was kept; such weather is fetched once more.
+   */
+  annualGhiByYear?: number[];
 }
 
 export interface SiteLocation {
@@ -103,6 +109,26 @@ export interface SiteLocation {
   solarInsights?: SolarInsights;
   /** measured PVGIS climate, when the fetch succeeded for this pin */
   weather?: SiteWeather;
+  /**
+   * The pin's typical year, hour by hour (PVGIS TMY) — the hourly engine's
+   * input. Metadata only; the 8760 samples live in the blob store. null =
+   * PVGIS has no hourly year here (the monthly estimate carries on).
+   */
+  tmy?: SiteTmy | null;
+}
+
+export interface SiteTmy {
+  source: 'pvgis-tmy';
+  /** blob id of the packed Int16 samples (lib/energy/tmy) */
+  blobId: string;
+  forLatLng: LatLng;
+  radiationDb: string;
+  yearMin: number | null;
+  yearMax: number | null;
+  /** the hour's values are averages centred this far into the hour (h) */
+  timeOffsetH: number;
+  elevationM: number | null;
+  fetchedAt: number;
 }
 
 // ─── Step 2: Roofs ──────────────────────────────────────────────────────────
@@ -181,6 +207,11 @@ export interface Roof {
    * A roof without it behaves exactly as it always did (per-roof edits only).
    */
   faceGroupId?: string;
+  /**
+   * Where `heightM` (and the pitch/facing set with it) came from: measured
+   * off the aerial height map, or typed by the user. Absent = typed (legacy).
+   */
+  heightSource?: 'aerial_map' | 'user';
   /** per-roof structure defaults (Phase 7) — overrides project defaults */
   structureOverride?: StructureDefaults;
   /** absent = manual (drawn by hand) */
@@ -274,6 +305,15 @@ export interface PanelSpec {
    * materially smaller and inflates the usable window.
    */
   tempCoeffPmaxPct?: number;
+  /**
+   * Bifaciality factor, % — the datasheet's rear efficiency as a share of the
+   * front (glass-glass PERC ≈ 70, TOPCon ≈ 80, HJT ≈ 90). Absent means the
+   * module makes no power from its back, which is the truth for every
+   * mono-facial module and the honest default for a bifacial one whose
+   * datasheet the user has not supplied. What the back is WORTH is never a
+   * property of the module — see lib/energy/bifacial.ts.
+   */
+  bifacialityPct?: number;
   almm: boolean;
   dcr: boolean;
   priceInr: number;
@@ -306,6 +346,69 @@ export interface InverterSpec {
   warrantyYears?: number;
 }
 
+// ─── Battery storage (BESS) ───────────────────────────────────────────────────
+
+export type BatteryChemistry = 'lfp' | 'nmc' | 'lead_acid';
+/**
+ * How the battery meets the PV. 'dc_hybrid' = a hybrid inverter charges it on
+ * the DC bus (one box, the residential default). 'ac_coupled' = a separate
+ * battery inverter hangs off the AC side (retrofits, large C&I).
+ */
+export type BatteryCoupling = 'dc_hybrid' | 'ac_coupled';
+
+export interface BatterySpec {
+  id: string;
+  brand: string;
+  model: string;
+  /** USABLE energy per unit, kWh */
+  kwh: number;
+  nominalV: number;
+  chemistry: BatteryChemistry;
+  /** continuous charge/discharge power per unit, kW */
+  powerKw: number;
+  cycleLife: number;
+  warrantyYears?: number;
+  /** cabinet size — drives placement clearance and the 3D model */
+  widthMm: number;
+  depthMm: number;
+  heightMm: number;
+  weightKg: number;
+  priceInr: number;
+}
+
+/**
+ * A distribution box on a wall: the DCDB (string fuses, DC SPD, isolator)
+ * where the home runs land, or the ACDB (MCCB, AC SPD) between the inverter
+ * and the meter. Same wall-edge frame as the inverter. Placing one changes
+ * where the cable runs go — the BOM already bills the boxes themselves.
+ */
+export interface ElectricalBox {
+  id: string;
+  kind: 'dcdb' | 'acdb';
+  roofId: string;
+  edgeIndex: number;
+  /** 0..1 along the edge */
+  t: number;
+  heightM: number;
+  /** free-standing instead of on the wall: plan position */
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}
+
+/** A battery cabinet standing at the foot of a wall (same edge frame as the inverter). */
+export interface BatteryPlacement {
+  id: string;
+  roofId: string;
+  edgeIndex: number;
+  /** 0..1 along the edge */
+  t: number;
+  /** base height above grade — 0 = floor-standing */
+  heightM: number;
+  /** free-standing instead of at the wall foot: plan position */
+  pos?: XY;
+  level?: 'roof' | 'ground';
+}
+
 /**
  * DC collection topology. 'string' = strings go straight to inverter MPPTs
  * (residential/small C&I, today's default). 'central' = strings are paralleled
@@ -331,6 +434,12 @@ export interface Components {
   inverterTopology?: InverterTopology;
   /** module-level power electronics; absent ⇒ 'none' (back-compat) */
   mlpe?: MlpeKind;
+  /** battery storage — absent/null ⇒ a plain grid-tied system (back-compat) */
+  battery?: BatterySpec | null;
+  /** units of the selected battery; absent ⇒ 1 */
+  batteryCount?: number;
+  /** absent ⇒ 'dc_hybrid' */
+  batteryCoupling?: BatteryCoupling;
 }
 
 // ─── Steps 5–6: Layout & electrical ─────────────────────────────────────────
@@ -404,12 +513,28 @@ export type FoundationShape = 'square' | 'circular';
 export type RackingSpec =
   | { kind: 'flush' } // pitched roof: coplanar, no self-shade, hotter
   | {
-      kind: 'fixed_tilt' | 'dual_tilt'; // flat roof: elevated
+      /**
+       * Elevated on posts. `tracker_hsat` is a horizontal single-axis tracker:
+       * the same steel plus a torque tube and a drive, so it carries exactly
+       * the fields the fixed kinds do — its `tiltDeg` is 0 because a tracker
+       * lies FLAT at rest and its real tilt is a function of the time of day
+       * (lib/energy/tracker.ts), read wherever a module's pose is needed.
+       */
+      kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat'; // flat roof / open ground: elevated
       tiltDeg: number;
       rowPitchM: number; // centre-to-centre; GCR solver fills this (Phase 3)
       frontLegM: number;
       backLegM: number; // = frontLegM + slant·sin(tilt)
       profile: StructureProfile;
+
+      // ── Tracker only (Batch C3). All LAZY: a fixed table never writes them,
+      // so every existing project fingerprints byte-identically. ────────────
+      /** bearing of the torque tube, degrees from north; absent ⇒ 0, true north–south */
+      axisAzimuthDeg?: number;
+      /** rotation limit either side of flat, degrees; absent ⇒ 55 (common hardware) */
+      maxRotationDeg?: number;
+      /** turn back at a low sun to keep the rows out of each other's light; absent ⇒ true */
+      backtracking?: boolean;
       /** LAZY fields (Phase 7): absent = resolved from roof/project defaults
        *  at READ time (resolveRacking) — only explicit edits write them, so
        *  existing projects' fingerprints (and captures) stay untouched. */
@@ -525,6 +650,13 @@ export interface PlacedPanel {
   /** filled by 3D solar-access analysis, 0..1 */
   solarAccess: number;
   enabled: boolean;
+  /**
+   * Set when the app turned this module off because it sits under an
+   * obstruction it cannot bridge (the obstruction's id). The module comes back
+   * by itself when that blocker moves, lowers, or is removed. Absent on a
+   * module the user turned off — that choice is never undone by the app.
+   */
+  blockedBy?: string;
   /** link to its ArraySegment; undefined = loose panel */
   segmentId?: string;
   /** encodes (row,col): row*COL_STRIDE + col (see lib/layout.ts) */
@@ -563,6 +695,10 @@ export interface InverterPlacement {
   /** 0..1 along the edge */
   t: number;
   heightM: number;
+  /** free-standing instead of on the wall: plan position (the edge then only names the nearest wall) */
+  pos?: XY;
+  /** where a free-standing unit stands: on a stand on the roof deck, or at ground level */
+  level?: 'roof' | 'ground';
 }
 
 /**
@@ -572,7 +708,7 @@ export interface InverterPlacement {
  */
 export interface CableRoute {
   id: string;
-  kind: 'string_homerun' | 'inverter_ac' | 'earth_conductor';
+  kind: 'string_homerun' | 'inverter_ac' | 'earth_conductor' | 'battery_dc';
   /** what it connects, for traceability back to the design */
   fromRef: string;
   toRef: string;
@@ -655,6 +791,49 @@ export interface EnergyReport {
   degradationPctPerYear: number;
   /** provenance of the irradiance driving these numbers, for honest labeling */
   irradianceSource?: 'PVGIS' | 'estimate';
+  /**
+   * 'hourly' = the 8760-hour engine (PVGIS typical year, Perez sky, module
+   * temperature, inverter curve and clipping, hour by hour); 'monthly' = the
+   * quick mean-field estimate used until the typical year is in.
+   */
+  engine?: 'hourly' | 'monthly';
+  /**
+   * How sure the year-1 figure is. P50 is the figure itself; P90 is what
+   * nine years in ten will beat. Sigma combines the site's year-to-year
+   * irradiation spread (measured from the record) with the model's own
+   * uncertainty (assumed) — the bankable convention.
+   */
+  uncertainty?: {
+    p50Kwh: number;
+    p75Kwh: number;
+    p90Kwh: number;
+    p99Kwh: number;
+    sigmaPct: number;
+    interannualPct: number;
+    modelPct: number;
+    /** years the spread was measured over; 0 = the spread itself is assumed */
+    yearsOfRecord: number;
+  };
+  /** what the hourly engine saw, for the report's provenance line */
+  hourly?: {
+    radiationDb: string;
+    yearMin: number | null;
+    yearMax: number | null;
+    /** kWh/m²/yr on the horizontal, from the typical year */
+    ghiKwhM2: number;
+    /** kWh/m²/yr in the modules' planes (unshaded), area-weighted */
+    poaKwhM2: number;
+    /** kWh/m²/yr reaching the BACKS of the modules, before the bifaciality factor */
+    rearKwhM2?: number;
+    /** what the rear side adds to the year, % — 0 for a mono-facial module */
+    rearGainPct?: number;
+    dcKwh: number;
+    clippedKwh: number;
+    /** hours in the year the inverter was clipping */
+    clippingHours: number;
+    /** which assumptions were defaults, not measured — for the assumptions box */
+    assumed: string[];
+  };
 }
 
 export interface FinancialSummary {
@@ -679,6 +858,7 @@ export interface FinancialSummary {
 export type BomCategory =
   | 'Modules'
   | 'Inverter'
+  | 'Battery Storage'
   | 'Electrical BOS'
   | 'Mechanical BOS'
   | 'Safety'
@@ -844,6 +1024,9 @@ export interface SldParams {
   maxStringLength: number;
   /** number of inverters — the sheet notes when the block represents several */
   inverterCount: number;
+  /** battery bank on the sheet, e.g. "2 × 5.12 kWh LFP · 5.0 kW · 51.2 V"; absent ⇒ no storage */
+  batteryLabel?: string;
+  batteryCoupling?: BatteryCoupling;
 }
 
 // ─── Auto-design decision log (§3.5 explainability) ─────────────────────────
@@ -932,6 +1115,43 @@ export interface HealthSnapshotEntry {
   categories: { key: 'energy' | 'electrical' | 'utilization'; score: number | null; codes: string[] }[];
 }
 
+// ─── Real surroundings for the shading engine ───────────────────────────────
+
+/**
+ * The neighbourhood's REAL heights (Google Solar API digital surface model)
+ * as a grid of metres above grade, so the shading engine sees the actual
+ * trees and buildings around the site — not only the objects the user drew.
+ * Metadata only: the height samples live in the blob store under `blobId`.
+ */
+export interface SiteSurround {
+  source: 'google-solar-dsm';
+  /** ISO date of the aerial imagery the DSM was derived from */
+  imageryDate: string;
+  quality: string;
+  /** the pin the raster was requested around — a moved pin invalidates it */
+  pin: LatLng;
+  radiusM: number;
+  /** grid spacing after downsampling, metres */
+  stepM: number;
+  cols: number;
+  rows: number;
+  /** plan (EN) position of grid cell (0,0) and the per-column / per-row step vectors */
+  originEN: XY;
+  stepCol: XY;
+  stepRow: XY;
+  /** DSM elevation taken as ground at the site, metres (median of non-building pixels) */
+  gradeM: number;
+  /** blob id of the Int16 heights (centimetres above grade, row-major) */
+  blobId: string;
+  fetchedAt: number;
+  /**
+   * Storage format (lib/surround SURROUND_FORMAT). 2 = the grid is stored
+   * uncut and the site's roofs are cut out where it is used. Absent = an old
+   * grid cut at fetch time for the roofs of that moment; it refetches once.
+   */
+  format?: number;
+}
+
 // ─── Project root ───────────────────────────────────────────────────────────
 
 export interface Project {
@@ -952,6 +1172,10 @@ export interface Project {
   rails: SafetyRail[];
   arresters: LightningArrester[];
   inverterPlacements: InverterPlacement[];
+  /** battery cabinets at the foot of a wall; absent ⇒ none (additive migration) */
+  batteryPlacements?: BatteryPlacement[];
+  /** DCDB / ACDB enclosures on walls; absent ⇒ none (routes go straight to the inverter/meter) */
+  electricalBoxes?: ElectricalBox[];
   /**
    * Where the supply meets the grid — meter / service entry, in plan metres.
    * OPTIONAL BY DESIGN. Aurora models this because a permit plan set must show
@@ -995,6 +1219,24 @@ export interface Project {
    * projects saved before it existed — see lib/__tests__/site-migration.test.ts.
    */
   siteFrame: SiteFrame | null;
+  /**
+   * Real neighbourhood heights for the shading engine (see SiteSurround).
+   * Absent = never fetched; null = checked, no data at this location.
+   */
+  surround?: SiteSurround | null;
+  /**
+   * The user switched the real neighbourhood OFF for shade: the height map
+   * stays stored (ground, roof readings) but casts nothing and is not drawn.
+   * For when the aerial data is wrong or the neighbour is coming down. Every
+   * number that depends on it says so.
+   */
+  ignoreSurround?: boolean;
+  /**
+   * The roof auto-trace (Step 2) already ran for this pin — whatever the user
+   * did with it. It runs once per pin, never again on every visit; moving the
+   * pin starts afresh.
+   */
+  roofAutoDetect?: { pinKey: string; at: number };
   /** decision log of the last auto-design run (renders the "why?" sheet) */
   designLog?: DesignDecision[];
   /**

@@ -77,6 +77,9 @@ import {
   sanitizeRoofPolygon,
   nextGroundName,
 } from '../lib/roof-factory';
+import { useSurroundGrid } from '../lib/use-surround-grid';
+import { roofMapFit, roofsWithMapFit, TRUSTED_RMSE_M } from '../lib/roof-map-fit';
+import { ROOF_HEIGHT_TOLERANCE_M } from '../lib/surround-check';
 import { detectRoofs } from '../lib/roof-ai/detect-client';
 import { detectRoofsViaGemini } from '../lib/roof-ai/gemini-client';
 import { applyArtifact, validateArtifact, type RoofArtifact } from '../lib/roof-ai/artifact';
@@ -120,6 +123,8 @@ function compass8(azDeg: number): string {
 export function Step2Roof() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
+  // the aerial height map: a traced roof takes its height, pitch and facing from it
+  const surroundGrid = useSurroundGrid(project.surround);
   const { state, dispatch } = useStore();
   const loc = project.location!;
 
@@ -173,23 +178,49 @@ export function Step2Roof() {
     offset: XY;
   }>(null);
 
-  async function runAiDetect() {
+  /**
+   * Which of the detected roofs the project is FOR. The detector returns every
+   * building within 100 m — the neighbours too, and those already shade the
+   * design from the height map. Ticked by default: the roofs under the pin, or
+   * under the building Google's own insight put at the pin; the largest roof
+   * when neither says. The rest stay as ghosts the user can tick.
+   */
+  function ticksForThePin(artifact: RoofArtifact): { roofs: Set<string>; obs: Set<string> } {
+    const anchors: XY[] = [{ x: 0, y: 0 }]; // the site frame's origin is the pin
+    const frame = frameFor(project);
+    if (frame) for (const s of loc.solarInsights?.roofSegments ?? []) if (s.center) anchors.push(toEN(frame, s.center));
+    let mine = artifact.roofs.filter((r) => anchors.some((a) => pointInPolygon(a, r.polygon)));
+    if (mine.length === 0 && artifact.roofs.length > 0) {
+      mine = [[...artifact.roofs].sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon))[0]];
+    }
+    const roofs = new Set(mine.map((r) => r.id));
+    // an object counts only when it stands on one of those roofs
+    const obs = new Set(
+      artifact.obstructions.filter((o) => mine.some((r) => pointInPolygon(o.center, r.polygon))).map((o) => o.id),
+    );
+    return { roofs, obs };
+  }
+
+  async function runAiDetect(auto = false) {
     setAiBusy(true);
+    if (auto) showHint('Tracing the roof from the aerial data…');
     try {
       // fallback ladder (plan §E): aerial DSM/mask → Gemini photo analysis
       // on the SAME tile → manual drawing. Both AI paths land in the same
       // validated ghost review — nothing enters the project unreviewed.
       const res = await detectRoofs(loc.latLng);
       if (res.status === 'ok' && (res.artifact.roofs.length > 0 || res.artifact.obstructions.length > 0)) {
+        const ticks = ticksForThePin(res.artifact);
         setAiReview({
           artifact: res.artifact,
           dropped: res.dropped,
           imageryDate: res.imageryDate,
           imageryQuality: res.imageryQuality,
-          acceptedRoofs: new Set(res.artifact.roofs.map((r) => r.id)),
-          acceptedObs: new Set(res.artifact.obstructions.map((o) => o.id)),
+          acceptedRoofs: ticks.roofs,
+          acceptedObs: ticks.obs,
           offset: { x: 0, y: 0 },
         });
+        if (auto) showHint('Roof traced from the aerial data — check the outline, then Add. Or Cancel and draw it yourself.', false, 6000);
         return;
       }
       const aerialNote =
@@ -203,14 +234,16 @@ export function Step2Roof() {
       if (gem.status === 'ok') {
         const validated = validateArtifact(gem.artifact, loc.latLng);
         if (validated.ok && validated.artifact.roofs.length > 0) {
+          const ticks = ticksForThePin(validated.artifact);
           setAiReview({
             artifact: validated.artifact,
             dropped: validated.dropped,
             imageryQuality: validated.artifact.imageryQuality,
-            acceptedRoofs: new Set(validated.artifact.roofs.map((r) => r.id)),
-            acceptedObs: new Set(validated.artifact.obstructions.map((o) => o.id)),
+            acceptedRoofs: ticks.roofs,
+            acceptedObs: ticks.obs,
             offset: { x: 0, y: 0 },
           });
+          if (auto) showHint('Roof traced from the photo — check the outline, then Add. Or Cancel and draw it yourself.', false, 6000);
           return;
         }
       }
@@ -220,7 +253,8 @@ export function Step2Roof() {
           : gem.status === 'error'
             ? `photo analysis: ${gem.message}`
             : 'photo analysis found nothing definite';
-      showHint(`${aerialNote} Also, ${gemNote} — draw the roof with the pen tool.`, true);
+      // an outcome the user must read, not a flash: it stays long enough
+      showHint(`${aerialNote.replace(/\.?\s*$/, '.')} Also, ${gemNote} — draw the roof with the pen tool.`, false, 9000);
     } finally {
       setAiBusy(false);
     }
@@ -294,10 +328,25 @@ export function Step2Roof() {
 
   useEffect(() => () => window.clearTimeout(hintTimer.current), []);
 
-  function showHint(text: string, lock = false) {
+  // A new project starts with its roof already traced: the detector runs by
+  // itself the first time Step 2 opens with a confirmed pin and no roofs, and
+  // its ghosts wait for the user's Add or Cancel — nothing enters the project
+  // otherwise. Once per pin, so a Cancel is not asked again on every visit;
+  // a moved pin starts afresh. The rail button re-runs it on demand.
+  const autoPinKey = `${loc.latLng.lat.toFixed(5)},${loc.latLng.lng.toFixed(5)}`;
+  useEffect(() => {
+    if (project.roofs.length > 0 || aiBusy || aiReview) return;
+    if (project.roofAutoDetect?.pinKey === autoPinKey) return;
+    patch({ roofAutoDetect: { pinKey: autoPinKey, at: Date.now() } }, false);
+    void runAiDetect(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPinKey, project.roofs.length]);
+
+  /** A short notice; `ms` for one the user must have time to read (an outcome, an instruction). */
+  function showHint(text: string, lock = false, ms = 2400) {
     window.clearTimeout(hintTimer.current);
     setHint({ text, lock });
-    hintTimer.current = window.setTimeout(() => setHint(null), 2400);
+    hintTimer.current = window.setTimeout(() => setHint(null), ms);
   }
 
   function selectRoof(id: string | null) {
@@ -722,11 +771,31 @@ export function Step2Roof() {
         pointInPolygon(polygonCentroid(polygon), r.polygon),
     );
     // shared factory — identical defaults for hand-drawn and AI-imported roofs
-    const roof: Roof = makeRoof({ polygon, existing: project.roofs, parent });
+    let roof: Roof = makeRoof({ polygon, existing: project.roofs, parent });
+    // the aerial height map knows this roof: its height, pitch and facing are
+    // MEASURED, not typed — the user can still change any of them
+    const grid = surroundGrid;
+    const fit = grid ? roofMapFit(grid, roof, project.calibration.northOffsetDeg) : null;
+    if (fit) {
+      roof = {
+        ...roof,
+        heightM: fit.heightM,
+        heightSource: 'aerial_map',
+        ...(fit.rmseM <= TRUSTED_RMSE_M
+          ? { pitchDeg: fit.pitchDeg, ...(fit.slopeAzimuthDeg !== null ? { slopeAzimuthDeg: fit.slopeAzimuthDeg } : {}) }
+          : {}),
+      };
+    }
     patch({ roofs: [...project.roofs, roof] }, true);
     cancelDraw();
     selectRoof(roof.id);
-    if (parent) showHint(`Placed on ${parent.name} — height set to ${roof.heightM.toFixed(1)} m`);
+    if (fit) {
+      showHint(
+        `${roof.name}: ${roof.heightM.toFixed(1)} m${roof.pitchDeg ? ` · ${roof.pitchDeg}° facing ${Math.round(roof.slopeAzimuthDeg)}°` : ' · flat'} — measured from the aerial height map`,
+      );
+    } else if (parent) {
+      showHint(`Placed on ${parent.name} — height set to ${roof.heightM.toFixed(1)} m`);
+    }
   }
 
   function deleteRoof(id: string) {
@@ -1310,6 +1379,20 @@ export function Step2Roof() {
             {aiReview.imageryQuality ? ` · imagery ${aiReview.imageryQuality}` : ''}
             {aiReview.imageryDate ? ` (${aiReview.imageryDate})` : ''}
           </span>
+          {/* where the shapes came from and how sure the detector is — the user
+              decides with that in view, never on trust */}
+          <span style={{ flexBasis: '100%', color: 'var(--editor-ink-2)', fontSize: 11.5 }}>
+            {aiReview.artifact.source === 'dataLayers'
+              ? "Traced from Google's building outline and height map"
+              : 'Traced from the photo by AI'}
+            {aiReview.artifact.roofs.length > 0 &&
+              ` · sure ${Math.round(
+                (aiReview.artifact.roofs.reduce((s, r) => s + r.confidence, 0) / aiReview.artifact.roofs.length) * 100,
+              )}%`}
+            {' · heights, pitch and facing are measured; edit any of them after Add'}
+            {aiReview.artifact.roofs.length > aiReview.acceptedRoofs.size &&
+              ' · ticked: the building at your pin — tap a ghost to add or drop it'}
+          </span>
           <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
             <span style={{ color: 'var(--editor-ink-2)', fontSize: 11 }}>Align</span>
             {(
@@ -1708,7 +1791,7 @@ export function Step2Roof() {
             <kbd className="dark">Esc</kbd> to cancel
           </div>
         )}
-        {!draft && project.roofs.length === 0 && !hint && (
+        {!draft && project.roofs.length === 0 && !hint && !aiReview && !aiBusy && (
           <div className="hint-bar">
             <PenLine />
             Press <kbd className="dark">D</kbd> or pick the pen tool to trace your first roof
@@ -1937,11 +2020,11 @@ export function Step2Roof() {
             label="Height from Ground"
             value={selected.heightM}
             min={2}
-            max={30}
+            max={150}
             step={0.5}
             unit={units === 'imperial' ? 'ft' : 'm'}
             format={(v) => lenValue(v, 1)}
-            onChange={(v) => updateRoof(selected.id, { heightM: v })}
+            onChange={(v) => updateRoof(selected.id, { heightM: v, heightSource: 'user' })}
             hint={
               selected.faceGroupId
                 ? 'Low-side (eave) wall height — shared by every face of this roof, so it applies to all of them.'
@@ -1950,6 +2033,32 @@ export function Step2Roof() {
                   : 'Height of roof surface from ground level. Used for accurate shadow calculations.'
             }
           />
+          {(() => {
+            // what the aerial height map measured over this polygon — one tap to take it
+            const grid = surroundGrid;
+            const fit = grid ? roofMapFit(grid, selected, project.calibration.northOffsetDeg) : null;
+            if (!grid || !fit) return null;
+            const differs =
+              Math.abs(fit.heightM - selected.heightM) > ROOF_HEIGHT_TOLERANCE_M ||
+              (fit.rmseM <= TRUSTED_RMSE_M && Math.abs(fit.pitchDeg - selected.pitchDeg) >= 1);
+            // this roof and every roof standing on it, in one undo step
+            const take = () =>
+              patch({ roofs: roofsWithMapFit(project.roofs, grid, selected.id, project.calibration.northOffsetDeg) }, true);
+            return (
+              <div className="hint" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '-4px 0 10px' }}>
+                <span>
+                  Aerial height map: ≈ {lenValue(fit.heightM, 1)} {units === 'imperial' ? 'ft' : 'm'}
+                  {fit.pitchDeg ? ` · ${fit.pitchDeg}° facing ${fit.slopeAzimuthDeg}°` : ' · flat'}
+                  {selected.heightSource === 'aerial_map' && !differs ? ' · in use' : ''}
+                </span>
+                {differs && (
+                  <button type="button" className="btn btn-secondary" onClick={take}>
+                    Use
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           {roofHint && (
             <div
               style={{

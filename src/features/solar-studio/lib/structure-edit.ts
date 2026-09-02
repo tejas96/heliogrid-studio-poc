@@ -6,6 +6,7 @@ import type {
   ArraySegment,
   FoundationKind,
   FoundationShape,
+  Obstruction,
   PanelSpec,
   PlacedPanel,
   Project,
@@ -197,11 +198,21 @@ function shrink(c: XY[]): XY[] {
   return c.map((p) => ({ x: cx + (p.x - cx) * k, y: cy + (p.y - cy) * k }));
 }
 
+/** The module without its `blockedBy` mark, on or off as asked. */
+function unblocked(x: PlacedPanel, enabled: boolean): PlacedPanel {
+  const rest = { ...x, enabled };
+  delete rest.blockedBy;
+  return rest;
+}
+
 /**
  * Recompute panel enabled-state against blocking obstructions after an edit.
  * `next` carries the not-yet-committed slices (segments/roofs/panels/
  * obstructions); returns the adjusted panels array, or null when nothing
- * changes. Panels away from obstructions are never touched.
+ * changes. A module under something it cannot bridge goes OFF and remembers
+ * why (`blockedBy`); when that blocker moves, lowers, gets bridged, or is
+ * removed, the module comes back by itself. A module the user turned off
+ * (no `blockedBy`) is the user's call and is never switched on here.
  */
 export function reconcileBridgedPanels(
   base: Project,
@@ -211,9 +222,9 @@ export function reconcileBridgedPanels(
 ): PlacedPanel[] | null {
   const p = { ...base, ...next } as Project;
   const spec = p.components?.panel;
-  if (!spec || p.panels.length === 0 || p.obstructions.length === 0) return null;
-  /** panelId → may stay enabled (AND across every overlapped obstruction) */
-  const desired = new Map<string, boolean>();
+  if (!spec || p.panels.length === 0) return null;
+  /** panelId → the first obstruction it overlaps and cannot bridge */
+  const blocker = new Map<string, string>();
   for (const roof of p.roofs) {
     const onRoof = p.panels.filter((x) => x.roofId === roof.id);
     if (onRoof.length === 0) continue;
@@ -227,6 +238,7 @@ export function reconcileBridgedPanels(
           ? rectCorners(o.center, o.diameterM, o.diameterM, 0)
           : rectCorners(o.center, o.lengthM, o.widthM, o.rotationDeg);
       for (const x of onRoof) {
+        if (blocker.has(x.id)) continue;
         if (!rectsOverlap(shrink(panelCornersOnRoof(x, spec, roof)), foot)) continue;
         let ok = false;
         if (bridgeable) {
@@ -234,19 +246,41 @@ export function reconcileBridgedPanels(
           const clearance = seg ? (resolveRacking(p, roof, seg, spec)?.frontLegM ?? 0) : 0;
           ok = clearance >= needM - 1e-9;
         }
-        desired.set(x.id, (desired.get(x.id) ?? true) && ok);
+        if (!ok) blocker.set(x.id, o.id);
       }
     }
   }
-  if (desired.size === 0) return null;
   let changed = false;
   const panels = p.panels.map((x) => {
-    const want = desired.get(x.id);
-    if (want === undefined || want === x.enabled) return x;
+    const by = blocker.get(x.id);
+    if (by !== undefined) {
+      if (!x.enabled && x.blockedBy === by) return x;
+      changed = true;
+      return { ...x, enabled: false, blockedBy: by };
+    }
+    if (x.blockedBy === undefined) return x;
     changed = true;
-    return { ...x, enabled: want };
+    return unblocked(x, true);
   });
   return changed ? panels : null;
+}
+
+/** An obstruction edit as ONE patch: the new list plus every module it blocks or frees. */
+export function withObstructions(
+  p: Project,
+  obstructions: Obstruction[],
+): { obstructions: Obstruction[]; panels?: PlacedPanel[] } {
+  const panels = reconcileBridgedPanels(p, { obstructions });
+  return { obstructions, ...(panels ? { panels } : {}) };
+}
+
+/**
+ * The obstruction is gone for good but what it stood for is still there (it
+ * became a platform roof): its modules stay off, now as the user's own call,
+ * so no later edit brings them back under the platform.
+ */
+export function releaseBlockedPanels(panels: PlacedPanel[], obstructionId: string): PlacedPanel[] {
+  return panels.map((x) => (x.blockedBy === obstructionId ? unblocked(x, false) : x));
 }
 
 /** Current-value readout for the on-object panel header. */

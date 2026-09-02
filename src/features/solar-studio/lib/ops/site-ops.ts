@@ -3,6 +3,7 @@ import type { Keepout, LightningArrester, SafetyRail, Walkway, XY } from '../../
 import { defineOp } from './types';
 import { registerOp } from './registry';
 import { genId } from '../geo';
+import { withObstructions } from '../structure-edit';
 
 export const arresterAdd = defineOp<{ roofId: string; pos: XY; heightMm: number }>({
   id: 'arrester.add',
@@ -66,6 +67,127 @@ export const keepoutRemove = defineOp<{ id: string }>({
   apply: (p, a) => ({ keepouts: p.keepouts.filter((k) => k.id !== a.id) }),
 });
 
-for (const op of [arresterAdd, arresterRemove, walkwayAdd, walkwayRemove, railAdd, railRemove, keepoutAdd, keepoutRemove]) {
+// ── obstructions (the 3D scene's on-object actions; Step 3 keeps its own tools) ──
+
+export const obstructionRemove = defineOp<{ id: string }>({
+  id: 'obstruction.remove',
+  layer: 'geometry',
+  label: (a) => `Remove obstruction`,
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  // every obstruction edit goes through withObstructions: the modules it
+  // blocked come back, the ones it now covers go off — in the same patch
+  apply: (p, a) =>
+    withObstructions(
+      p,
+      p.obstructions.filter((o) => o.id !== a.id),
+    ),
+});
+
+export const obstructionRotate = defineOp<{ id: string; deltaDeg: number }>({
+  id: 'obstruction.rotate',
+  layer: 'geometry',
+  label: (a) => `Rotate obstruction ${Math.round(a.deltaDeg)}°`,
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) =>
+    withObstructions(
+      p,
+      p.obstructions.map((o) =>
+        o.id === a.id ? { ...o, rotationDeg: (((o.rotationDeg + a.deltaDeg) % 360) + 360) % 360 } : o,
+      ),
+    ),
+});
+
+/** A copy of an obstruction, set one width beside the original on the same roof. */
+export const obstructionDuplicate = defineOp<{ id: string }>({
+  id: 'obstruction.duplicate',
+  layer: 'design',
+  label: () => 'Duplicate obstruction',
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) => {
+    const o = p.obstructions.find((x) => x.id === a.id)!;
+    const step = (o.shape === 'circle' ? o.diameterM : o.widthM) + 0.5;
+    const rad = (o.rotationDeg * Math.PI) / 180;
+    return withObstructions(p, [
+      ...p.obstructions,
+      {
+        ...o,
+        id: genId('obs'),
+        label: `${o.label} copy`,
+        center: { x: o.center.x + Math.cos(rad) * step, y: o.center.y + Math.sin(rad) * step },
+        provenance: { source: 'manual' as const },
+      },
+    ]);
+  },
+});
+registerOp(obstructionDuplicate);
+
+export const obstructionMove = defineOp<{ id: string; center: XY; roofId?: string | null }>({
+  id: 'obstruction.move',
+  layer: 'geometry',
+  label: () => 'Move obstruction',
+  validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
+  apply: (p, a) =>
+    withObstructions(
+      p,
+      p.obstructions.map((o) =>
+        o.id === a.id ? { ...o, center: a.center, ...(a.roofId !== undefined ? { roofId: a.roofId } : {}) } : o,
+      ),
+    ),
+});
+
+export const obstructionSetCastsShadow = defineOp<{ id: string; castsShadow: boolean }>({
+  id: 'obstruction.setCastsShadow',
+  layer: 'geometry',
+  label: (a) => (a.castsShadow ? 'Obstruction casts shadow' : 'Obstruction casts no shadow'),
+  // The legacy flag is only the DEFAULT: a per-instance capability record (every
+  // factory-made obstruction carries one) overrides it in resolveCapabilities.
+  // Writing the flag alone left the toggle dead on those objects, so both go.
+  apply: (p, a) => ({
+    obstructions: p.obstructions.map((o) =>
+      o.id === a.id
+        ? {
+            ...o,
+            castsShadow: a.castsShadow,
+            ...(o.capabilities
+              ? { capabilities: { ...o.capabilities, castsAnalyticalShadow: a.castsShadow } }
+              : {}),
+          }
+        : o,
+    ),
+  }),
+});
+
+/**
+ * The real surroundings — the streamed 3D mesh and Google's height map — on or
+ * off. ONE switch: off means they are neither drawn nor counted, so the picture
+ * and the numbers can never disagree. The data is kept (the ground, the roof
+ * readings), and every dependent number says the neighbours are out. For when
+ * the aerial data is wrong, or the neighbour is coming down.
+ *
+ * Settable at any site: where there is no height map there are still streamed
+ * surroundings to hide, and refusing there left that view stuck on.
+ */
+export const surroundSetIgnored = defineOp<{ ignore: boolean }>({
+  id: 'surround.setIgnored',
+  layer: 'geometry',
+  label: (a) => (a.ignore ? 'Real surroundings off' : 'Real surroundings on'),
+  apply: (p, a) => ({ ignoreSurround: a.ignore ? true : undefined }),
+});
+
+for (const op of [
+  arresterAdd,
+  arresterRemove,
+  walkwayAdd,
+  walkwayRemove,
+  railAdd,
+  railRemove,
+  keepoutAdd,
+  keepoutRemove,
+  obstructionRemove,
+  obstructionRotate,
+  obstructionMove,
+  obstructionSetCastsShadow,
+  surroundSetIgnored,
+]) {
   registerOp(op);
 }

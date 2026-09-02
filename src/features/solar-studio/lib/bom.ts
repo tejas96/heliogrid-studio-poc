@@ -11,6 +11,7 @@ import { STRUCTURE_DISCLAIMER } from './structure';
 import { buildContext } from './bom/context';
 import { emitModules } from './bom/emitters/modules';
 import { emitInverter } from './bom/emitters/inverter';
+import { emitBattery } from './bom/emitters/battery';
 import { emitElectrical } from './bom/emitters/electrical';
 import { emitMechanical } from './bom/emitters/mechanical';
 import { emitSafety } from './bom/emitters/safety';
@@ -44,6 +45,7 @@ export type { BomContext } from './bom/context';
 const EMITTERS = [
   emitModules,
   emitInverter,
+  emitBattery,
   emitElectrical,
   emitMechanical,
   emitSafety,

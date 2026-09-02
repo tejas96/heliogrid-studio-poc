@@ -9,7 +9,9 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useActiveProject, useProjectPatch } from './store';
 import { accessChanged } from '../lib/shading';
 import { AnalysisSuperseded, requestSolarAccess } from '../lib/analysis-client';
+import { peekShadeProfile } from '../lib/shade-profile-cache';
 import { shadingFp } from '../lib/fingerprints';
+import { loadSurroundHeights } from '../lib/surround';
 
 export function useDesignSync() {
   const project = useActiveProject();
@@ -28,8 +30,12 @@ export function useDesignSync() {
     const current = projectRef.current;
     if (!current || current.panels.length === 0) return;
     // Already computed for exactly this geometry (e.g. re-mount, reload) —
-    // don't burn the shading engine to rediscover identical values.
-    if (current.derived.solarAccessFp === fingerprint) return;
+    // don't burn the shading engine to rediscover identical values. The full
+    // profile (per sample, per caster) lives only in memory, though: after a
+    // reload it is gone, and the string-shade and caster-cost readers need it
+    // — so a matching stamp WITHOUT a profile still runs once (off-thread;
+    // the identical values patch nothing).
+    if (current.derived.solarAccessFp === fingerprint && peekShadeProfile(fingerprint)) return;
     let cancelled = false;
     const t = window.setTimeout(() => {
       const computedFor = projectRef.current;
@@ -38,8 +44,12 @@ export function useDesignSync() {
       // `computedFor` may already be newer than the debounced `fingerprint`.
       const stamp = shadingFp(computedFor);
       // off the main thread (Phase 8): Tier-2 casters made this pass grow with
-      // panel count squared — inline it would drop frames on large roofs
-      requestSolarAccess(computedFor, { cancelPrevious: true })
+      // panel count squared — inline it would drop frames on large roofs.
+      // The real neighbourhood grid (Phase 4) is resolved from the blob store
+      // first; it is part of the fingerprint, so its arrival re-runs this.
+      loadSurroundHeights(computedFor.ignoreSurround ? null : computedFor.surround)
+        .catch(() => null)
+        .then((surround) => requestSolarAccess(computedFor, { cancelPrevious: true, surround }))
         .then((fresh) => {
           // The store may have moved on while the worker ran. Re-read it and
           // apply the result to the LATEST panels, but only stamp what this

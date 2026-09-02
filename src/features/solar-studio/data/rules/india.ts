@@ -200,15 +200,19 @@ export interface CableRules {
   /** the perimeter corridor sits this far inside the roof edge (m) */
   corridorInsetM: number;
   /**
-   * Conductor size and material the DC runs are quoted at, for the
-   * voltage-drop check (matches the "DC Solar Cable 4 sq.mm" BOM line).
+   * Copper resistivity the DC runs are sized with and their loss computed
+   * with, Ω·mm²/m at the conductor's working temperature — ONE number shared
+   * by the cable sizing, the drop check and the energy engine, so the cable
+   * that is quoted is the cable that is simulated.
    */
-  dcCableMm2: number;
   copperResistivity: number;
   /**
-   * ENGINEER VALIDATION REQUIRED (plan §F2 — "engineer validation for drop
-   * limits"). Industry practice is ~1–2% DC and ~2–3% AC at full load; the
-   * binding number is whatever the DISCOM/consultant adopts.
+   * DC voltage-drop limit at STC, percent of the string's Vmp. The cable
+   * sizing takes the smallest standard section that stays inside it (never
+   * below the fuse-rated minimum); the drop check warns only when no standard
+   * section can. PVsyst's default wiring-loss target is 1.5% at STC.
+   * ENGINEER VALIDATION REQUIRED (plan §F2): the binding number is whatever
+   * the DISCOM/consultant adopts (commonly 1–2%).
    */
   maxDcDropPct: number;
   /**
@@ -362,9 +366,9 @@ export const INDIA_RULES: MarketRules = {
     slackPct: 0.1,
     crossFieldPenalty: 6,
     corridorInsetM: 0.4,
-    dcCableMm2: 4,
-    copperResistivity: 0.0175, // Ω·mm²/m at ~20 °C
-    maxDcDropPct: 2,
+    // 0.0172 at 20 °C, +0.393 %/K → ≈ 0.0189 for a 45 °C working conductor
+    copperResistivity: 0.0189,
+    maxDcDropPct: 1.5,
     moduleLeadReachM: 1.4,
     defaultVerticalDropM: 3,
   },
@@ -383,6 +387,7 @@ export const INDIA_RULES: MarketRules = {
       [4, 32],
       [6, 42],
       [10, 57],
+      [16, 73],
     ],
   },
   acSizing: {
@@ -465,6 +470,18 @@ export const INDIA_RULES: MarketRules = {
       foundation_too_tall: 20,
       // a stringing-topology defect, same tier as unstrung_panels/mppt_capacity
       panel_in_two_strings: 30,
+      // per-inverter Pnom ratio (PVsyst sizes each inverter): an overloaded unit
+      // clips real energy; an idle one is paid for and does nothing
+      inverter_dc_ac_high: 20,
+      inverter_unused: 15,
+      // the roof's height in the model is far from what the aerial height map
+      // read over it: the shade, the drops and the structure all lean on it —
+      // same tier as shade_mismatch (the number is uncertain, not yet wrong)
+      roof_height_vs_map: 12,
+      // the yield is honest either way — what is wrong is paying a bifacial
+      // premium for a back that never sees the sun; a commercial slip, not a
+      // safety one, so it scores below the electrical faults
+      bifacial_wasted: 8,
     },
     unknownValidationPenalty: 10,
     insightPenalties: { critical: 25, warning: 12, suggestion: 6, info: 0 },

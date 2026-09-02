@@ -39,15 +39,57 @@ export function stringsInputFp(p: Project): string {
  * the geometry blockers and corridors (via layoutFp ⊂ electricalFp), the
  * inverter placements, the meter, and the hand-routed runs it must keep.
  */
+/** Bump when the router's RULES change: stored runs are then stale and re-derive once. */
+// 3: a hand-routed leg keeps its sibling — stored runs missing a leg re-derive once
+const ROUTER_RULES_VERSION = 3;
+
 export function routesInputFp(p: Project): string {
   return (
     electricalFp(p) +
-    '|' +
+    `|rv${ROUTER_RULES_VERSION}|` +
     JSON.stringify([
-      p.inverterPlacements.map((i) => [i.id, i.roofId, i.edgeIndex, r(i.t, 1000), i.heightM]),
+      p.inverterPlacements.map((i) => [
+        i.id,
+        i.roofId,
+        i.edgeIndex,
+        r(i.t, 1000),
+        i.heightM,
+        // free-standing units add their position; wall units stay byte-identical
+        ...(i.pos ? [r(i.pos.x, 100), r(i.pos.y, 100), i.level ?? 'roof'] : []),
+      ]),
       p.gridConnection?.pos ?? null,
       (p.cableRoutes ?? []).filter((c) => c.manual).map((c) => [c.id, c.fromRef, c.waypoints]),
-    ])
+    ]) +
+    // DCDB / ACDB boxes bend the runs — CONDITIONAL suffix, so a project
+    // without boxes keeps its route fingerprint byte-identical
+    ((p.electricalBoxes?.length ?? 0) > 0
+      ? '|box:' +
+        JSON.stringify(
+          p.electricalBoxes!.map((b) => [
+            b.id,
+            b.kind,
+            b.roofId,
+            b.edgeIndex,
+            r(b.t, 1000),
+            b.heightM,
+            ...(b.pos ? [r(b.pos.x, 100), r(b.pos.y, 100), b.level ?? 'roof'] : []),
+          ]),
+        )
+      : '') +
+    // battery leads follow the cabinets — same conditional rule
+    ((p.batteryPlacements?.length ?? 0) > 0
+      ? '|bat:' +
+        JSON.stringify(
+          p.batteryPlacements!.map((b) => [
+            b.id,
+            b.roofId,
+            b.edgeIndex,
+            r(b.t, 1000),
+            b.heightM,
+            ...(b.pos ? [r(b.pos.x, 100), r(b.pos.y, 100), b.level ?? 'ground'] : []),
+          ]),
+        )
+      : '')
   );
 }
 

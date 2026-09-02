@@ -17,6 +17,8 @@ import {
 import { effectiveParapetEdges } from './roof-topology';
 import { panelPose } from './panel-pose';
 import { castsAnalyticalShadow } from './capabilities';
+import { buildSurroundGeometry, cutSurroundForRoofs, type SurroundHeights } from './surround-geometry';
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 
 /**
  * Parapet bands for a roof as extrudable THREE.Shapes, one entry per distinct
@@ -46,25 +48,39 @@ export function buildRoofSolidGeometry(roof: Roof, eaveProj?: number): THREE.Buf
   const ground = poly.map((p) => new THREE.Vector3(p.x, 0, -p.y));
 
   const pos: number[] = [];
-  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3) =>
+  const uv: number[] = [];
+  // UVs in PLAN METRES (caps) / metres along the wall × height (walls), so a
+  // covering texture repeats at true size whatever the roof's extent
+  const tri = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, ta: [number, number], tb: [number, number], tc: [number, number]) => {
     pos.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+    uv.push(ta[0], ta[1], tb[0], tb[1], tc[0], tc[1]);
+  };
+  const planUv = (v: THREE.Vector3): [number, number] => [v.x, -v.z];
 
   // top + bottom caps share the plan triangulation
   const contour = poly.map((p) => new THREE.Vector2(p.x, p.y));
   const faces = THREE.ShapeUtils.triangulateShape(contour, []);
   for (const [i, j, k] of faces) {
-    tri(top[i], top[k], top[j]); // top: up-facing
-    tri(ground[i], ground[j], ground[k]); // bottom: down-facing
+    tri(top[i], top[k], top[j], planUv(top[i]), planUv(top[k]), planUv(top[j])); // top: up-facing
+    tri(ground[i], ground[j], ground[k], planUv(ground[i]), planUv(ground[j]), planUv(ground[k])); // bottom
   }
   // vertical walls, one quad per edge
+  let along = 0;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
-    tri(top[i], top[j], ground[j]);
-    tri(top[i], ground[j], ground[i]);
+    const len = top[i].distanceTo(top[j]);
+    const a0: [number, number] = [along, top[i].y];
+    const a1: [number, number] = [along + len, top[j].y];
+    const g0: [number, number] = [along, 0];
+    const g1: [number, number] = [along + len, 0];
+    tri(top[i], top[j], ground[j], a0, a1, g1);
+    tri(top[i], ground[j], ground[i], a0, g1, g0);
+    along += len;
   }
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geo.computeVertexNormals();
   return geo;
 }
@@ -126,56 +142,9 @@ export function buildParapetGeometries(
   return out;
 }
 
-export function mulberry32(a: number) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-export interface ContextBuilding {
-  x: number;
-  z: number;
-  w: number;
-  d: number;
-  h: number;
-  tint: string;
-}
-
-/**
- * Deterministic DECORATIVE neighbourhood (seeded by location).
- * Visual context only — never part of shading/energy calculations.
- * Real neighbour shading must be modeled by the user as a 'building'
- * obstruction, which IS an engineering object.
- */
-export function contextBuildings(project: Project): ContextBuilding[] {
-  const loc = project.location;
-  if (!loc) return [];
-  const seed = Math.abs(Math.sin(loc.latLng.lat * 1000) * 10000);
-  const rnd = mulberry32(Math.floor(seed));
-  const tints = ['#8d8579', '#9a9287', '#7f7a70', '#948b7d'];
-  const out: ContextBuilding[] = [];
-  for (let i = 0; i < 14; i++) {
-    const ang = rnd() * Math.PI * 2;
-    const dist = 18 + rnd() * 26;
-    const x = Math.cos(ang) * dist;
-    const z = Math.sin(ang) * dist;
-    const w = 5 + rnd() * 9;
-    const d = 5 + rnd() * 9;
-    const h = 3 + rnd() * 7;
-    const tint = tints[Math.floor(rnd() * tints.length)];
-    const clear = project.roofs.every((r) => {
-      const c = polygonCentroid(r.polygon);
-      return Math.hypot(x - c.x, z + c.y) > 14;
-    });
-    if (!clear) continue;
-    out.push({ x, z, w, d, h, tint });
-  }
-  return out;
-}
+// The seeded "decorative neighbourhood" that used to live here is gone: the
+// scene now streams Google's real photogrammetry (three/RealSurround.tsx) and
+// draws nothing when no real data exists.
 
 /**
  * Build the ENGINEERING shadow-caster meshes for a project:
@@ -197,13 +166,16 @@ export function contextBuildings(project: Project): ContextBuilding[] {
  */
 export function buildShadowCasters(
   project: Project,
-  opts: { includePanels?: boolean } = {},
+  opts: { includePanels?: boolean; surround?: SurroundHeights | null } = {},
 ): {
   group: THREE.Group;
   meshes: THREE.Object3D[];
+  /** the module plates, by panel id — a tracker's turns through the day */
+  panelPlates: Map<string, THREE.Mesh>;
 } {
   const group = new THREE.Group();
   const meshes: THREE.Object3D[] = [];
+  const panelPlates = new Map<string, THREE.Mesh>();
   // DoubleSide is load-bearing: Raycaster culls by material.side, and rays
   // leaving a panel can exit through BACKFACES (parapet inner walls, roof
   // undersides) — FrontSide silently missed those hits, under-counting shade
@@ -306,11 +278,32 @@ export function buildShadowCasters(
       };
       group.add(mesh);
       meshes.push(mesh);
+      panelPlates.set(p.id, mesh);
     }
   }
 
+  // ── the REAL neighbourhood (Google DSM, lib/surround): trees, sheds, the
+  // building next door — everything the user did not draw but the sun sees.
+  // The site's own roofs are cut out HERE, for the roofs as they are now: a
+  // roof traced after the fetch must not shade its own modules.
+  if (opts.surround) {
+    const geom = buildSurroundGeometry(cutSurroundForRoofs(opts.surround, project.roofs));
+    // ~40k triangles × 150k rays per run: brute-force raycasting would take
+    // minutes. A BVH makes each ray a handful of box tests.
+    (geom as THREE.BufferGeometry & { boundsTree?: MeshBVH }).boundsTree = new MeshBVH(geom);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.raycast = acceleratedRaycast as unknown as typeof mesh.raycast;
+    mesh.userData = {
+      casterKind: 'surround',
+      casterId: 'surround',
+      casterLabel: 'Neighbourhood (Google aerial height map)',
+    };
+    group.add(mesh);
+    meshes.push(mesh);
+  }
+
   group.updateMatrixWorld(true);
-  return { group, meshes };
+  return { group, meshes, panelPlates };
 }
 
 export function disposeGroup(group: THREE.Group) {

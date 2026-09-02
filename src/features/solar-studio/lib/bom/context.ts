@@ -11,6 +11,7 @@ import { fastenerTotals } from '../structure';
 import { deriveStructures } from '../derive/structures';
 import { estimateDcCableM } from '../stringing';
 import { acCableFromRoutes, dcCableFromRoutes } from '../routing';
+import { batteryCableFromPlacements } from '../battery';
 import { resolveRules } from '../../data/rules/india';
 import type { MarketRules } from '../../data/rules/india';
 import { resolveCatalog } from '../../data/catalog';
@@ -40,6 +41,11 @@ export interface BomContext {
   spec: PanelSpec;
   inv: InverterSpec;
   invCount: number;
+  // ── Battery storage (null ⇒ plain grid-tied; the emitter emits nothing)
+  battery: NonNullable<Project['components']['battery']> | null;
+  batteryCount: number;
+  batteryCoupling: 'dc_hybrid' | 'ac_coupled';
+  batteryCable: ReturnType<typeof batteryCableFromPlacements>;
   rules: MarketRules;
   /**
    * Prices, resolved through the CATALOG rather than imported from
@@ -139,7 +145,16 @@ export function buildContext(project: Project): BomContext | null {
               2 *
               (1 + rules.cable.slackPct),
           )
-        : Math.max(30, estimateDcCableM(project.strings, project.panels));
+        : Math.max(
+            30,
+            estimateDcCableM(
+              project.strings,
+              project.panels,
+              15,
+              rules.cable.moduleLeadReachM,
+              rules.cable.slackPct,
+            ),
+          );
 
   const routedAc = acCableFromRoutes(project);
   const acSource: CableSource = routedAc.routed
@@ -253,6 +268,10 @@ export function buildContext(project: Project): BomContext | null {
     spec,
     inv,
     invCount,
+    battery: project.components.battery ?? null,
+    batteryCount: Math.max(1, project.components.batteryCount ?? 1),
+    batteryCoupling: project.components.batteryCoupling ?? 'dc_hybrid',
+    batteryCable: batteryCableFromPlacements(project),
     rules,
     pricebook: resolveCatalog().pricebook,
     routedDc,

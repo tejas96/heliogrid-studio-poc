@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acBreakerA, acFullLoadA, dcCableSizeMm2, dcFuseA, dcIsolatorA } from '../electrical-sizing';
+import { acBreakerA, acFullLoadA, dcCableSizeMm2, dcFuseA, dcIsolatorA, sizeDcCable } from '../electrical-sizing';
 import { deriveSldDefaults } from '../sld';
 import { mergedBom } from '../bom';
 import { PANEL_DB } from '../../data/panels';
@@ -36,6 +36,22 @@ describe('DC protective-device sizing from module Isc (IEC 62548 ≥1.5×Isc)', 
   it('cable ampacity covers the fuse rating', () => {
     expect(dcCableSizeMm2(panelWithIsc(15.7))).toBe(4); // 25A ≤ 32A (4mm²)
     expect(dcCableSizeMm2(panelWithIsc(22))).toBe(6); // fuse 40 → 6mm² (42A)
+  });
+
+  it('a long loop is sized up for the drop and says so; a hopeless one is flagged', () => {
+    const p = PANEL_DB[0]; // 14.94 A · 40.5 V → a 10-module string at 405 V
+    const short = sizeDcCable(p, 10, 40);
+    expect(short.mm2).toBe(4);
+    expect(short.governedBy).toBe('ampacity');
+    expect(short.dropPct).toBeLessThan(1.5);
+    const long = sizeDcCable(p, 10, 200); // 4 mm² would drop 3.5%
+    expect(long.mm2).toBeGreaterThan(4);
+    expect(long.governedBy).toBe('voltage-drop');
+    expect(long.dropPct).toBeLessThanOrEqual(1.5);
+    expect(long.withinLimit).toBe(true);
+    const hopeless = sizeDcCable(p, 10, 2000);
+    expect(hopeless.mm2).toBe(16); // the top of the ladder
+    expect(hopeless.withinLimit).toBe(false);
   });
 
   it('every catalog panel gets a fuse ≥ 1.5×Isc — none fall back to under-protection', () => {

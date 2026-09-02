@@ -94,6 +94,11 @@ export async function deleteImages(ids: string[]): Promise<void> {
 export function projectBlobIds(p: Project): string[] {
   const ids = p.captures.map((c) => c.imageBlobId).filter((x): x is string => !!x);
   if (p.coverImageBlobId) ids.push(p.coverImageBlobId);
+  // the real-surroundings height grid (lib/surround) lives here too
+  if (p.surround?.blobId) ids.push(p.surround.blobId);
+  // and the site's typical year (lib/energy/tmy) — the hourly engine's input;
+  // left off this list it was swept away as an orphan at the next boot
+  if (p.location?.tmy?.blobId) ids.push(p.location.tmy.blobId);
   return ids;
 }
 

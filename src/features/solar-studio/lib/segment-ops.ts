@@ -26,6 +26,12 @@ import {
   panelFootprintM,
   planCellM,
 } from './layout';
+import {
+  TRACKER_FIELD_FACING_DEG,
+  TRACKER_DEFAULT_GCR,
+  TRACKER_DEFAULT_MAX_ROTATION_DEG,
+  TRACKER_DEFAULT_TUBE_HEIGHT_M,
+} from './energy/tracker';
 
 /** Racking a segment gets by default from its roof (flush on pitched/metal). */
 function defaultRacking(roof: Roof, tiltDeg: number): ArraySegment['racking'] {
@@ -122,7 +128,7 @@ export function segmentFrameAngle(
   return gridAngleFor(roof, segmentPose(seg, panels));
 }
 
-function segmentGrid(
+export function segmentGrid(
   roof: Roof,
   spec: PanelSpec,
   seg: ArraySegment,
@@ -133,7 +139,9 @@ function segmentGrid(
   // facing — the frame autoFillRoof placed them in and gridAngleFor defines),
   // so grow/respace/duplicate/reindex keep operating in the panels' own frame
   // even after the user rotates the table.
-  const angle = gridAngleFor(roof, segmentPose(seg, panels));
+  const angle = gridAngleFor(roof, segmentPose(seg, panels), {
+    faceAzimuth: seg.racking.kind === 'tracker_hsat',
+  });
   // The plan cell comes from layout.ts — the SAME definition the fill places
   // panels with. This used to re-derive it as `w·cos(pitch)` × `h`, which is
   // the pre-S1 axis assignment: on a pitched roof it put the module's SHORT
@@ -293,6 +301,43 @@ export function growSegment(
   return { segment: re.segment, panels: re.panels, added: added.length };
 }
 
+/**
+ * Shrink a segment by `count` rows or columns on a given side — the mirror of
+ * growSegment, in the same lattice frame, so an edge dragged in and back out
+ * lands on the same cells. Never empties the table: the last row/column
+ * stays (remove the table instead).
+ */
+export function shrinkSegment(
+  project: Project,
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  axis: GrowAxis,
+  side: GrowSide,
+  count: number,
+): { segment: ArraySegment; panels: PlacedPanel[]; removed: number } {
+  const mine = project.panels.filter((p) => p.segmentId === seg.id);
+  if (mine.length === 0 || count < 1) return { segment: seg, panels: mine, removed: 0 };
+  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
+  const locals = mine.map((p) => ({ p, l: rotate(p.center, -angle) }));
+  const minX = Math.min(...locals.map(({ l }) => l.x));
+  const maxX = Math.max(...locals.map(({ l }) => l.x));
+  const minY = Math.min(...locals.map(({ l }) => l.y));
+  const maxY = Math.max(...locals.map(({ l }) => l.y));
+  const cut = (l: { x: number; y: number }): boolean =>
+    axis === 'row'
+      ? side === 'top'
+        ? l.y > maxY - count * pitchY + pitchY / 2
+        : l.y < minY + count * pitchY - pitchY / 2
+      : side === 'left'
+        ? l.x < minX + count * pitchX - pitchX / 2
+        : l.x > maxX - count * pitchX + pitchX / 2;
+  const keep = locals.filter(({ l }) => !cut(l)).map(({ p }) => p);
+  if (keep.length === 0) return { segment: seg, panels: mine, removed: 0 };
+  const re = reindexSegment(roof, spec, seg, keep);
+  return { segment: re.segment, panels: re.panels, removed: mine.length - keep.length };
+}
+
 /** The valid grow directions for a selection kind. */
 export function growSidesFor(axis: GrowAxis): GrowSide[] {
   return axis === 'row' ? ['top', 'bottom'] : ['left', 'right'];
@@ -329,7 +374,7 @@ export function classifySelection(panels: PlacedPanel[]): SelectionShape {
  */
 export { STRUCTURE_PROFILES } from '../data/profiles';
 
-export type ElevatedKind = 'fixed_tilt' | 'dual_tilt';
+export type ElevatedKind = 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat';
 
 /** Vertical rise a tilted module adds: its along-tilt dimension × sin(tilt). */
 function moduleRise(spec: PanelSpec, seg: ArraySegment, tiltDeg: number): number {
@@ -352,14 +397,33 @@ function elevatedRacking(
   tiltDeg: number,
 ): RackingSpec {
   const prev = seg.racking.kind !== 'flush' ? seg.racking : null;
-  const front = prev?.frontLegM ?? 0.3;
+  const tracker = kind === 'tracker_hsat';
+  // A tracker lies FLAT at rest (its real tilt is the time of day), stands on a
+  // torque tube well clear of the ground, and needs the wide pitch a tracker
+  // field is laid out at — a fixed table's 3 m rows would spend the morning
+  // backtracked almost flat. Every one of these is editable afterwards.
+  const slantM = panelFootprintM(spec, seg.orientation).h;
+  const front = tracker
+    ? Math.max(prev?.frontLegM ?? 0, TRACKER_DEFAULT_TUBE_HEIGHT_M)
+    : (prev?.frontLegM ?? 0.3);
+  const pitch = tracker
+    ? Math.max(prev?.rowPitchM ?? 0, slantM / TRACKER_DEFAULT_GCR)
+    : (prev?.rowPitchM ?? 0);
   return {
     kind,
     tiltDeg,
-    rowPitchM: prev?.rowPitchM ?? 0,
+    rowPitchM: pitch,
     frontLegM: front,
     backLegM: front + moduleRise(spec, seg, tiltDeg),
     profile: prev?.profile ?? DEFAULT_PROFILE,
+    ...(tracker
+      ? {
+          // axisAzimuthDeg stays LAZY: the tube follows the table's rows
+          ...(prev?.axisAzimuthDeg !== undefined ? { axisAzimuthDeg: prev.axisAzimuthDeg } : {}),
+          maxRotationDeg: prev?.maxRotationDeg ?? TRACKER_DEFAULT_MAX_ROTATION_DEG,
+          backtracking: prev?.backtracking ?? true,
+        }
+      : {}),
     // carry the LAZY structure fields (Phase 7) — a tilt change must never
     // silently reset an explicit leg spacing / clearance / foundation choice
     ...(prev?.legSpacingM !== undefined ? { legSpacingM: prev.legSpacingM } : {}),
@@ -384,11 +448,19 @@ export function setSegmentRacking(
     const tiltDeg = roof.pitchDeg > 0 ? defaultPanelPose(roof).tiltDeg : 0;
     return { segment: { ...seg, racking: { kind: 'flush' } }, panels: syncTilt(panels, seg.id, tiltDeg) };
   }
-  const tiltDeg = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 10;
-  return {
-    segment: { ...seg, racking: elevatedRacking(spec, seg, kind, tiltDeg) },
-    panels: syncTilt(panels, seg.id, tiltDeg),
-  };
+  // a tracker lies flat at rest; coming BACK off one, the stored 0° is not a
+  // tilt any fixed table may keep, so it takes the ordinary rooftop default
+  const prevTilt = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 10;
+  const tiltDeg = kind === 'tracker_hsat' ? 0 : prevTilt >= MIN_ELEVATED_TILT_DEG ? prevTilt : 10;
+  const racking = elevatedRacking(spec, seg, kind, tiltDeg);
+  const tilted = syncTilt(panels, seg.id, tiltDeg);
+  if (kind !== 'tracker_hsat') return { segment: { ...seg, racking }, panels: tilted };
+  // A tracker's ROWS are its tubes, so the table must be laid out with its rows
+  // running north–south — which is a table facing EAST. Turning it here, rather
+  // than leaving the rows pointing wherever the fill put them, is the
+  // difference between a tracker field and a row of modules that shade each
+  // other all morning. Re-space the rows afterwards to finish the re-lay.
+  return setSegmentAzimuth({ ...seg, racking }, tilted, TRACKER_FIELD_FACING_DEG);
 }
 
 /** Set the tilt of an elevated table (0–35°); no-op on flush racking. */
@@ -399,6 +471,8 @@ export function setSegmentTilt(
   tiltDeg: number,
 ): { segment: ArraySegment; panels: PlacedPanel[] } {
   if (seg.racking.kind === 'flush') return { segment: seg, panels };
+  // A TRACKER'S tilt is the time of day, not a setting — see lib/energy/tracker.
+  if (seg.racking.kind === 'tracker_hsat') return { segment: seg, panels };
   // An ELEVATED table cannot go to 0°, for two independent reasons.
   //
   // Engineering: below ~5° a module neither drains nor self-cleans, so no
@@ -583,6 +657,7 @@ export function respaceSegment(
         !panelFitsAt(without, roof, spec, world, seg.orientation, undefined, {
           tiltDeg,
           azimuthDeg: seg.azimuthDeg,
+          faceAzimuth: seg.racking.kind === 'tracker_hsat',
         })
       )
         continue;

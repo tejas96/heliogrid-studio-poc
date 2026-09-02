@@ -22,6 +22,7 @@ import {
   setSegmentRacking,
   setSegmentStructureFields,
   setSegmentTilt,
+  shrinkSegment,
   STRUCTURE_PROFILES,
   type ElevatedKind,
   type GrowAxis,
@@ -60,7 +61,16 @@ export const panelsSetEnabled = defineOp<{ ids: string[]; enabled: boolean }>({
   label: (a) => `${a.enabled ? 'Enable' : 'Disable'} ${a.ids.length} module${a.ids.length === 1 ? '' : 's'}`,
   apply: (p, a) => {
     const ids = new Set(a.ids);
-    return { panels: p.panels.map((m) => (ids.has(m.id) ? { ...m, enabled: a.enabled } : m)) };
+    return {
+      panels: p.panels.map((m) => {
+        if (!ids.has(m.id)) return m;
+        // the user's own call from here on: drop any "blocked by" mark so an
+        // obstruction edit neither restores nor keeps this module for them
+        const next = { ...m, enabled: a.enabled };
+        delete next.blockedBy;
+        return next;
+      }),
+    };
   },
 });
 
@@ -146,11 +156,46 @@ export const layoutGrow = defineOp<{ segmentId: string; axis: GrowAxis; side: Gr
   },
 });
 
+export const layoutShrink = defineOp<{ segmentId: string; axis: GrowAxis; side: GrowSide; count: number }>({
+  id: 'layout.shrink',
+  layer: 'layout',
+  label: (a) => `Remove ${a.count} ${a.axis}${a.count === 1 ? '' : 's'} (${a.side})`,
+  validate: (p, a) => {
+    const v = needTable(p, a);
+    if (v) return v;
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    return shrinkSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count).removed === 0
+      ? { reason: 'A table keeps its last row and column — remove the table instead' }
+      : null;
+  },
+  apply: (p, a) => {
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    const res = shrinkSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count);
+    return {
+      panels: [...p.panels.filter((m) => m.segmentId !== segment!.id), ...res.panels],
+      segments: p.segments.map((s) => (s.id === segment!.id ? res.segment : s)),
+    };
+  },
+});
+registerOp(layoutShrink);
+
 export const segmentSetRacking = defineOp<{ segmentId: string; kind: 'flush' | ElevatedKind }>({
   id: 'segment.setRacking',
   layer: 'layout',
-  label: (a) => `Mount: ${a.kind === 'flush' ? 'flush' : a.kind === 'dual_tilt' ? 'east-west' : 'fixed tilt'}`,
-  validate: needTable,
+  label: (a) =>
+    `Mount: ${a.kind === 'flush' ? 'flush' : a.kind === 'dual_tilt' ? 'east-west' : a.kind === 'tracker_hsat' ? 'tracker' : 'fixed tilt'}`,
+  validate: (p, a) => {
+    const gate = needTable(p, a);
+    if (gate) return gate;
+    // Nothing on a roof turns to follow the sun. The picker only offers a
+    // tracker on open ground; this is the rule itself, so a deep link, an
+    // imported project or a later roof-type change cannot get round it.
+    if (a.kind === 'tracker_hsat') {
+      const { roof } = segmentOf(p, a.segmentId);
+      if (roof?.roofType !== 'ground') return { reason: 'A tracker needs open ground, not a roof' };
+    }
+    return null;
+  },
   apply: (p, a) => {
     const { segment, roof, spec } = segmentOf(p, a.segmentId);
     return withSegment(p, setSegmentRacking(roof!, spec!, segment!, p.panels, a.kind));
@@ -166,6 +211,30 @@ export const segmentSetTilt = defineOp<{ segmentId: string; tiltDeg: number }>({
     const { segment, spec } = segmentOf(p, a.segmentId);
     return withSegment(p, setSegmentTilt(spec!, segment!, p.panels, a.tiltDeg));
   },
+});
+
+/**
+ * A tracker's rotation limit — how far the tube may roll either side of flat.
+ * Real hardware differs (±45 through ±60), and the limit genuinely changes the
+ * yield, so it is the tracker's equivalent of the fixed table's tilt slider.
+ */
+export const segmentSetTrackerLimit = defineOp<{ segmentId: string; maxRotationDeg: number }>({
+  id: 'segment.setTrackerLimit',
+  layer: 'layout',
+  label: (a) => `Tracker limit ±${Math.round(a.maxRotationDeg)}°`,
+  validate: (p, a) => {
+    const gate = needTable(p, a);
+    if (gate) return gate;
+    const seg = p.segments.find((s) => s.id === a.segmentId);
+    return seg && seg.racking.kind === 'tracker_hsat' ? null : { reason: 'That table is not on a tracker' };
+  },
+  apply: (p, a) => ({
+    segments: p.segments.map((s) =>
+      s.id === a.segmentId && s.racking.kind === 'tracker_hsat'
+        ? { ...s, racking: { ...s.racking, maxRotationDeg: Math.max(10, Math.min(75, Math.round(a.maxRotationDeg))) } }
+        : s,
+    ),
+  }),
 });
 
 export const segmentSetAzimuth = defineOp<{ segmentId: string; azimuthDeg: number }>({
@@ -315,6 +384,7 @@ for (const op of [
   layoutGrow,
   segmentSetRacking,
   segmentSetTilt,
+  segmentSetTrackerLimit,
   segmentSetAzimuth,
   segmentSetProfile,
   segmentSetStructureFields,
