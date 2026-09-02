@@ -1144,7 +1144,8 @@ export function Step2Roof() {
     : 0;
 
   if (show3D)
-    return <Scene3D onClose={() => setShow3D(false)} initialViewMode="mesh" />;
+    // Roof Setup owns the roofs and nothing else — no obstructions, no array
+    return <Scene3D onClose={() => setShow3D(false)} initialViewMode="mesh" stage={2} />;
 
   return (
     <div style={{ position: 'absolute', inset: 0 }}>

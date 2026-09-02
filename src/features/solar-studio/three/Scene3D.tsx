@@ -13,6 +13,7 @@ import {
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { designBounds, type SceneBounds } from './scene-bounds';
+import { projectForStage, stageShowsDesign } from '../lib/scene-stage';
 import { ScenePost } from './ScenePost';
 import { EntityLabel } from './EntityLabel';
 import { HOVER_COLOR, PICK_COLOR, PickHalo } from './PickHalo';
@@ -312,6 +313,7 @@ export function Scene3D({
   initial,
   readOnly = false,
   projectOverride,
+  stage,
   focusRoofId,
   initialViewMode = 'map',
   visible = true,
@@ -324,6 +326,11 @@ export function Scene3D({
   initial?: { date?: Date; hour?: number; solarAccess?: boolean };
   readOnly?: boolean;
   projectOverride?: Project;
+  /**
+   * The wizard step this scene was opened from. It scopes what the scene may
+   * show to what that step owns (lib/scene-stage). Absent = the full studio.
+   */
+  stage?: number;
   /** roof to isolate in mesh view (studio render of a single building) */
   focusRoofId?: string;
   initialViewMode?: 'map' | 'mesh';
@@ -337,7 +344,11 @@ export function Scene3D({
   onSelectPanels?: (ids: string[], additive: boolean) => void;
 }) {
   const storeProject = useActiveProject();
-  const project = projectOverride ?? storeProject!;
+  const fullProject = projectOverride ?? storeProject!;
+  // ONE scope for the whole scene — meshes, camera bounds, picking and shading
+  // all read this, so an early step cannot show a later step's work.
+  const project = useMemo(() => projectForStage(fullProject, stage), [fullProject, stage]);
+  const designStage = stageShowsDesign(stage);
   const loc = project.location!;
   const patchProject = useProjectPatch();
   const ops = useOps();
@@ -1054,6 +1065,10 @@ export function Scene3D({
         </button>
         {!heatmap && (
           <>
+            {/* per-module shading and the energy report need an array — an
+                earlier step has none, and a dead control is a lie */}
+            {designStage && (
+              <>
             <button
               className={`tool-btn ${solarAccessView ? 'accent' : ''}`}
               data-tip={'Solar access view\nPer-panel shading %'}
@@ -1067,6 +1082,8 @@ export function Scene3D({
             <button className="tool-btn" data-tip="Energy report" data-tip-right="" aria-label="Energy report" onClick={() => setShowReport(true)}>
               <BarChart3 />
             </button>
+              </>
+            )}
             <div className="tool-sep" />
             <button
               className={`tool-btn ${meshMode ? 'on' : ''}`}
@@ -1106,6 +1123,7 @@ export function Scene3D({
             >
               <Route />
             </button>
+            {designStage && (
             <button
               className={`tool-btn ${showElectrical ? '' : 'on'}`}
               data-tip={showElectrical ? 'Hide strings and cables' : 'Show strings and cables'}
@@ -1116,6 +1134,7 @@ export function Scene3D({
             >
               <Link2 />
             </button>
+            )}
           </>
         )}
         {!readOnly && !heatmap && (

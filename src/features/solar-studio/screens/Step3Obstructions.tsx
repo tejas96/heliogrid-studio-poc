@@ -290,7 +290,8 @@ export function Step3Obstructions() {
   const SelectedIcon = selected ? typeOf(selected)?.icon : undefined;
 
   if (show3D) {
-    return <Scene3D onClose={() => setShow3D(false)} initialViewMode="mesh" />;
+    // Obstructions shows the roofs and the obstructions on them — not the array
+    return <Scene3D onClose={() => setShow3D(false)} initialViewMode="mesh" stage={3} />;
   }
 
   return (
