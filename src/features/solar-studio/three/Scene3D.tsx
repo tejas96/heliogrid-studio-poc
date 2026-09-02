@@ -18,6 +18,8 @@ import { RadialMenu, type RadialGroup, type RadialItem } from '../components/Rad
 import { ACCESS_GRADIENT_CSS } from '../lib/shade-ramp';
 import { PanelYieldCard, usePanelYield } from '../components/PanelYieldCard';
 import { PanelLabels } from './PanelLabels';
+import { InverterBay, bayInverters } from '../components/InverterBay';
+import { wireTableToggle } from '../lib/electrical/wire-table';
 import { ScenePost } from './ScenePost';
 import { EntityLabel } from './EntityLabel';
 import { HOVER_COLOR, PICK_COLOR, PickHalo } from './PickHalo';
@@ -160,11 +162,15 @@ function PanelCard({
 }
 
 /** Installs the pick order on the fiber event manager (must live inside the Canvas). */
-function PickOrder() {
+function PickOrder({ wiring }: { wiring: boolean }) {
   const setEvents = useThree((s) => s.setEvents);
   useEffect(() => {
-    setEvents({ filter: pickFilter });
-  }, [setEvents]);
+    // While a string is being built by hand the MODULE is the only thing being
+    // clicked at, and the runs sit right under the glass claiming priority —
+    // so every other tap picked a cable instead of the module under it. In
+    // that mode the nearest hit wins, which is the module.
+    setEvents({ filter: wiring ? (items: THREE.Intersection[]) => items : pickFilter });
+  }, [setEvents, wiring]);
   return null;
 }
 
@@ -211,6 +217,7 @@ import {
   BarChart3,
   Box,
   Building2,
+  Cable,
   Camera,
   Check,
   Eye,
@@ -455,6 +462,9 @@ export function Scene3D({
   // wired by hand (module clicks toggle membership while it is set)
   const [showElectrical, setShowElectrical] = useState(true);
   const [wiring, setWiring] = useState<string[] | null>(null);
+  // which inverter the next hand-made string lands on; null = let the balancer
+  // choose, which is what it always did and stays the default
+  const [wireTarget, setWireTarget] = useState<number | null>(null);
   const wiringSet = useMemo(() => (wiring ? new Set(wiring) : null), [wiring]);
   // Google's data attribution for the streamed surroundings (terms of use)
   const [surroundAttribution, setSurroundAttribution] = useState('');
@@ -1061,11 +1071,24 @@ export function Scene3D({
         scene.push({
           id: 'electrical',
           icon: <Link2 />,
-          label: 'Wiring',
+          label: 'Cables',
           tip: showElectrical ? 'Hide strings and cables' : 'Show strings and cables',
           active: !showElectrical,
           onClick: () => setShowElectrical((v) => !v),
         });
+        // Starting a NEW hand-made string had no way in at all: the only route
+        // was to pick an existing string and choose "Wire by hand", so a fresh
+        // one could never be built in the 3D. This is that way in.
+        if (!readOnly && project.panels.some((p) => p.enabled)) {
+          scene.push({
+            id: 'wire',
+            icon: <Cable />,
+            label: 'Wire',
+            tip: 'Wire a string by hand\nPick the inverter, then click modules',
+            active: wiring !== null,
+            onClick: () => setWiring((v) => (v === null ? [] : null)),
+          });
+        }
       }
     }
     if (!readOnly && !heatmap) {
@@ -1201,6 +1224,9 @@ export function Scene3D({
     showBuildings,
     showSunPath,
     showElectrical,
+    showLabels,
+    wiring,
+    project.panels,
     readOnly,
     copied,
     project.shareId,
@@ -1249,7 +1275,7 @@ export function Scene3D({
           glRef.current = gl;
         }}
       >
-        <PickOrder />
+        <PickOrder wiring={wiring !== null} />
         <DevSceneHandle />
         <SceneContent
           project={project}
@@ -1293,6 +1319,7 @@ export function Scene3D({
           onSelectPanels={onSelectPanels}
           showElectrical={showElectrical}
           wiring={structInteractive ? wiring : null}
+          wireTarget={wireTarget}
           onWiringChange={setWiring}
           pick={structInteractive ? pick : null}
           hoverPick={structInteractive ? hoverPick : null}
@@ -1650,6 +1677,22 @@ export function Scene3D({
         >
           Zoom in to read the module figures
         </div>
+      )}
+
+      {/* ── the Inverter Bay: where the next hand-made string goes ── */}
+      {wiring && project.components.inverter && project.components.panel && (
+        <InverterBay
+          spec={project.components.inverter}
+          target={wireTarget}
+          onTarget={setWireTarget}
+          inverters={bayInverters(
+            project.strings,
+            project.components.inverter,
+            project.components.inverterCount,
+            project.components.panel.watt,
+            project.inverterPlacements.length,
+          )}
+        />
       )}
 
       {/* ── solar access legend ── */}
@@ -2031,6 +2074,7 @@ function SceneContent({
   onSurroundAttribution,
   showElectrical,
   wiring,
+  wireTarget,
   onWiringChange,
 }: {
   project: Project;
@@ -2045,6 +2089,8 @@ function SceneContent({
   onSurroundAttribution?: (text: string) => void;
   showElectrical: boolean;
   wiring: string[] | null;
+  /** the inverter the Bay says the next hand-made string belongs on */
+  wireTarget: number | null;
   onWiringChange: (ids: string[] | null) => void;
   sunAltitude: number;
   sunAzimuth: number;
@@ -2135,6 +2181,14 @@ function SceneContent({
     (panelId: string, additive: boolean) => {
       // wiring by hand: a click puts the module into the string, or takes it out
       if (wiring) {
+        // Shift takes the WHOLE table (lib/electrical/wire-table)
+        if (additive) {
+          const next = wireTableToggle(project.panels, panelId, wiring);
+          if (next) {
+            onWiringChange(next);
+            return;
+          }
+        }
         onWiringChange(wiring.includes(panelId) ? wiring.filter((id) => id !== panelId) : [...wiring, panelId]);
         return;
       }
@@ -2971,6 +3025,7 @@ function SceneContent({
           onHoverPick={onHoverPick}
           runOp={runOp}
           wiring={wiring}
+          wireTarget={wireTarget}
           onWiringChange={onWiringChange}
           isolate={isolate}
         />

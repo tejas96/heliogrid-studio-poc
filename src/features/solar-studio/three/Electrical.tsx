@@ -109,6 +109,7 @@ export function ElectricalOverlay({
   onHoverPick,
   runOp,
   wiring,
+  wireTarget = null,
   onWiringChange,
   isolate = null,
 }: {
@@ -125,6 +126,8 @@ export function ElectricalOverlay({
   runOp: RunOp;
   /** module ids being wired by hand, or null when not wiring */
   wiring: string[] | null;
+  /** the inverter the Bay says this string belongs on; null = let it balance */
+  wireTarget?: number | null;
   onWiringChange: (ids: string[] | null) => void;
 }) {
   const inv = project.components.inverter;
@@ -535,15 +538,18 @@ export function ElectricalOverlay({
                     : `NOT YET — ${wiringHealth.why}`,
                   ...(wiringPreview && !wiringPreview.ok ? [`Cannot save: ${wiringPreview.refusal.reason}`] : []),
                 ]
-              : ['Click a module to start. Click again to take it out.']
+              : ['Click a module to start. Click again to take it out.', 'Shift-click takes its whole table.']
           }
           onClose={() => onWiringChange(null)}
           actions={[
             {
-              label: 'Save string',
+              label: wireTarget === null ? 'Save string' : `Save to INV ${wireTarget + 1}`,
               onClick: () => {
                 if (!wiring.length) return;
-                const r = runOp(stringsAddManual, { panelIds: wiring });
+                const r = runOp(stringsAddManual, {
+                  panelIds: wiring,
+                  ...(wireTarget === null ? {} : { inverterIndex: wireTarget }),
+                });
                 if (r.ok) onWiringChange(null);
               },
             },

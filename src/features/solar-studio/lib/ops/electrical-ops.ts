@@ -17,13 +17,36 @@ export const stringsResetToAuto = defineOp<Record<string, never>>({
   apply: (p) => resetStringsToAuto(p).patch,
 });
 
-export const stringsAddManual = defineOp<{ panelIds: string[] }>({
+export const stringsAddManual = defineOp<{
+  panelIds: string[];
+  /**
+   * Put the string on THIS inverter. Absent = the balancer picks, as it always
+   * has. On a C&I job the installer knows block B belongs to inverter 2, and
+   * before this the app gave them no way to say so.
+   */
+  inverterIndex?: number;
+}>({
   id: 'strings.addManual',
   layer: 'electrical',
-  label: (a) => `Wire ${a.panelIds.length} modules by hand`,
+  label: (a) =>
+    a.inverterIndex === undefined
+      ? `Wire ${a.panelIds.length} modules by hand`
+      : `Wire ${a.panelIds.length} modules to inverter ${a.inverterIndex + 1}`,
   validate: (p, a) => {
     if (!p.components.inverter) return { reason: 'Select an inverter first' };
     if (a.panelIds.length === 0) return { reason: 'Pick at least one module' };
+    if (a.inverterIndex !== undefined) {
+      const count = Math.max(1, p.components.inverterCount);
+      if (a.inverterIndex < 0 || a.inverterIndex >= count)
+        return { reason: `This design has ${count} inverter${count === 1 ? '' : 's'}` };
+      // a tracker already carrying a DIFFERENT string cannot take this one, so
+      // the refusal has to name the real reason rather than silently rebalancing
+      const used = new Set(
+        p.strings.filter((s) => s.inverterIndex === a.inverterIndex).map((s) => s.mpptIndex),
+      );
+      if (used.size >= p.components.inverter.mppt.count)
+        return { reason: `Inverter ${a.inverterIndex + 1} has no free MPPT input left` };
+    }
     const byId = new Map(p.panels.map((m) => [m.id, m]));
     for (const id of a.panelIds) {
       const m = byId.get(id);
@@ -44,7 +67,21 @@ export const stringsAddManual = defineOp<{ panelIds: string[] }>({
     // index — that put every manual string on inverter 1 until it overflowed.
     let inverterIndex = Math.floor(idx / inverter.mppt.count) % count;
     let mpptIndex = idx % inverter.mppt.count;
-    if (panel) {
+    if (a.inverterIndex !== undefined) {
+      // the user named the inverter, so only the tracker is still ours to
+      // choose: the lowest free one on that box
+      const used = new Set(
+        p.strings.filter((s) => s.inverterIndex === a.inverterIndex).map((s) => s.mpptIndex),
+      );
+      inverterIndex = a.inverterIndex;
+      mpptIndex = 0;
+      for (let m = 0; m < inverter.mppt.count; m++) {
+        if (!used.has(m)) {
+          mpptIndex = m;
+          break;
+        }
+      }
+    } else if (panel) {
       const { assignments } = assignStrings(
         [{ ids: a.panelIds, groupKey: 'manual' }],
         panel,

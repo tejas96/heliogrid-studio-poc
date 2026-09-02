@@ -720,6 +720,15 @@ export interface CableRoute {
   slackPct: number;
   /** true when the user has hand-edited the path — auto-routing must not stomp it */
   manual?: boolean;
+  /**
+   * The run was drawn to an inverter that is NOT placed on the model, so its
+   * length is an ESTIMATE, not a measurement. Set when the design names more
+   * inverters than the user has hung: the route used to borrow inverter 1's
+   * coordinates silently and report the result as measured metres, which put a
+   * fabricated number straight into the BOM (plan §F2 — a run is measured only
+   * when the thing it runs to actually exists on the model).
+   */
+  assumedTarget?: true;
 }
 
 export interface StringDef {

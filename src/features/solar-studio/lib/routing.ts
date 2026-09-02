@@ -476,9 +476,13 @@ export function autoRouteStrings(project: Project): CableRoute[] {
     const blockers = roof ? routeBlockers(project, roof) : [];
     const corridor = roof ? [roofCorridor(roof), ...arrayCorridors(project, roof)] : undefined;
     const footprint = roof ? arrayFootprint(project, roof) : undefined;
-    // the placement THIS string lands on — `inverterWorldPos` falls back to [0]
-    // when the design names more inverters than the user has placed (defect #3)
-    const placementIndex = project.inverterPlacements[s.inverterIndex] ? s.inverterIndex : 0;
+    // The placement THIS string lands on. When the design names more inverters
+    // than the user has hung, the run still has to be drawn somewhere — but it
+    // is then measured to the WRONG box, so it is marked as an estimate and
+    // every number downstream says so, rather than a fabricated length going
+    // into the BOM as measured metres (defect #3, now labelled at the source).
+    const placed = !!project.inverterPlacements[s.inverterIndex];
+    const placementIndex = placed ? s.inverterIndex : 0;
     // home runs land on THIS inverter's DCDB when it has one (string fuses +
     // isolator live there), otherwise straight on the inverter's own DC inputs
     const target = dcdbForInverter(project, placementIndex) ?? inverterWorldPos(project, placementIndex)!;
@@ -497,6 +501,7 @@ export function autoRouteStrings(project: Project): CableRoute[] {
         waypoints: exit ? [end.center, ...tail] : tail,
         verticalDropM: dropForRunM(project, 'dc', placementIndex),
         slackPct: rules.slackPct,
+        ...(placed ? {} : { assumedTarget: true as const }),
       });
     });
   }
@@ -648,9 +653,17 @@ export function dcCableFromRoutes(project: Project): {
    *  conductors share it — conduit is bought per run, not per core */
   ductM: number;
   routed: boolean;
+  /**
+   * Some of these metres run to an inverter that is not on the model, so they
+   * were measured to the wrong box. The figure is still the best available —
+   * but it is an estimate, and whatever prints it must say so.
+   */
+  assumedTargets: number;
 } {
   const routes = (project.cableRoutes ?? []).filter((r) => r.kind === 'string_homerun');
-  if (routes.length === 0) return { meters: 0, homeRunM: 0, intraM: 0, ductM: 0, routed: false };
+  const assumedTargets = routes.filter((r) => r.assumedTarget).length;
+  if (routes.length === 0)
+    return { meters: 0, homeRunM: 0, intraM: 0, ductM: 0, routed: false, assumedTargets: 0 };
   const slack = 1 + resolveRules().cable.slackPct;
   // Round the PARTS, then sum — never round both independently. The BOM prints
   // the parts in its formula and the sum as the quantity; if they disagree by a
@@ -664,5 +677,5 @@ export function dcCableFromRoutes(project: Project): {
   const ductM = Math.round(
     routes.reduce((sum, r) => sum + polylineLengthM(r.waypoints), 0) / 2,
   );
-  return { meters: homeRunM + intraM, homeRunM, intraM, ductM, routed: true };
+  return { meters: homeRunM + intraM, homeRunM, intraM, ductM, routed: true, assumedTargets };
 }
