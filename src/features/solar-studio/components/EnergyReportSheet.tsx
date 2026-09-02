@@ -83,6 +83,16 @@ export function EnergyReportSheet({
             <b>×{r.poaFactor}</b>
           </div>
         </div>
+        {/* how sure: the figure above is the P50; a bank reads the P90 */}
+        {r.uncertainty && (
+          <div style={{ marginTop: 10, fontSize: 11.5, opacity: 0.9, lineHeight: 1.4 }}>
+            <b>P90 {Math.round(r.uncertainty.p90Kwh / 100) / 10} MWh</b> — nine years in ten beat this · P99{' '}
+            {Math.round(r.uncertainty.p99Kwh / 100) / 10} MWh · one sigma {r.uncertainty.sigmaPct}% = years ±
+            {r.uncertainty.interannualPct}%{' '}
+            {r.uncertainty.yearsOfRecord > 0 ? `(${r.uncertainty.yearsOfRecord}-yr record)` : '(assumed — record not kept yet)'} ⊕
+            model ±{r.uncertainty.modelPct}% (assumed until the PVsyst comparison)
+          </div>
+        )}
         <div style={{ fontSize: 10, opacity: 0.7, marginTop: 8 }}>
           {/* provenance follows the ACTUAL numbers (r.irradianceSource), not the
               persisted dataSource string — which can read 'PVGIS' on a rehydrated

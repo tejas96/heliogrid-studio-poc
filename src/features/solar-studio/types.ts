@@ -89,6 +89,12 @@ export interface SiteWeather {
   raddatabase?: string;
   /** distinct years in the climatological record (e.g. 19 for 2005–2023) */
   yearsOfRecord?: number;
+  /**
+   * Each complete year's horizontal irradiation, kWh/m²/yr. Their spread is
+   * the site's year-to-year variability — the base of the P90. Absent on
+   * weather stored before it was kept; such weather is fetched once more.
+   */
+  annualGhiByYear?: number[];
 }
 
 export interface SiteLocation {
@@ -766,6 +772,23 @@ export interface EnergyReport {
    * quick mean-field estimate used until the typical year is in.
    */
   engine?: 'hourly' | 'monthly';
+  /**
+   * How sure the year-1 figure is. P50 is the figure itself; P90 is what
+   * nine years in ten will beat. Sigma combines the site's year-to-year
+   * irradiation spread (measured from the record) with the model's own
+   * uncertainty (assumed) — the bankable convention.
+   */
+  uncertainty?: {
+    p50Kwh: number;
+    p75Kwh: number;
+    p90Kwh: number;
+    p99Kwh: number;
+    sigmaPct: number;
+    interannualPct: number;
+    modelPct: number;
+    /** years the spread was measured over; 0 = the spread itself is assumed */
+    yearsOfRecord: number;
+  };
   /** what the hourly engine saw, for the report's provenance line */
   hourly?: {
     radiationDb: string;

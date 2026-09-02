@@ -111,6 +111,18 @@ export function pvgisToWeather(
   const years = new Set<number>();
   for (const r of rows) if (typeof r.year === 'number') years.add(r.year);
 
+  // each complete year's horizontal irradiation, kWh/m²/yr — the spread of
+  // these is the site's year-to-year variability, the bankable P90's base
+  const byYear = new Map<number, { sum: number; months: number }>();
+  for (const r of rows) {
+    if (typeof r.year !== 'number' || !isFiniteNum(r['H(h)_m'])) continue;
+    const y = byYear.get(r.year) ?? { sum: 0, months: 0 };
+    y.sum += r['H(h)_m'];
+    y.months++;
+    byYear.set(r.year, y);
+  }
+  const annualGhiByYear = [...byYear.values()].filter((y) => y.months === 12).map((y) => round(y.sum, 1));
+
   return {
     monthlyGhi,
     monthlyDiffuseFrac,
@@ -120,6 +132,7 @@ export function pvgisToWeather(
     fetchedAt: 0, // stamped by the caller (keeps this mapper pure/testable)
     raddatabase: json?.inputs?.meteo_data?.radiation_db,
     yearsOfRecord: years.size > 0 ? years.size : undefined,
+    annualGhiByYear: annualGhiByYear.length >= 3 ? annualGhiByYear : undefined,
   };
 }
 

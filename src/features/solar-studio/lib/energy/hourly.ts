@@ -96,6 +96,21 @@ const IAM_DIFFUSE = 0.95;
 const IAM_GROUND = 0.9;
 /** the typical year's calendar has 365 days; any non-leap year serves */
 const CALENDAR_YEAR = 2019;
+/**
+ * Crystalline silicon converts less efficiently in weak light (Huld et al.
+ * 2011, the model PVGIS runs): relative efficiency = 1 + k1·ln G' + k2·ln² G'
+ * with G' the irradiance as a fraction of 1000 W/m². At 200 W/m² that is
+ * −13%, at 500 W/m² −3%, at 1000 W/m² nothing — worth 2–4% over a year.
+ */
+const LOW_LIGHT_K1 = -0.017162;
+const LOW_LIGHT_K2 = -0.040289;
+
+export function lowLightEfficiency(irradianceWm2: number): number {
+  if (irradianceWm2 <= 1) return 0;
+  const g = Math.min(1.2, irradianceWm2 / 1000);
+  const ln = Math.log(g);
+  return Math.max(0, 1 + LOW_LIGHT_K1 * ln + LOW_LIGHT_K2 * ln * ln);
+}
 
 /** Relative air mass (Kasten & Young 1989); zenith in radians. */
 export function airMass(zenithRad: number): number {
@@ -149,6 +164,7 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
   let eShaded = 0;
   let eIam = 0;
   let eSoiled = 0;
+  let eLowLight = 0;
   let eTemp = 0;
   let eLid = 0;
   let eMismatch = 0;
@@ -228,9 +244,10 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
       const poaEff =
         beam * access * iamB + (iso * input.skyView + circ * access + hor) * IAM_DIFFUSE + ground * IAM_GROUND;
       const poaSoiled = poaEff * soil;
+      const pLow = ((p.pstcW * poaSoiled) / 1000) * lowLightEfficiency(poaSoiled);
       const tModule = tair + poaShaded / (p.u0 + p.u1 * wind);
       const tempFactor = 1 + (input.gammaPmaxPct / 100) * (tModule - 25);
-      const pTemp = (p.pstcW * poaSoiled) / 1000 * tempFactor;
+      const pTemp = pLow * tempFactor;
       const pLid = pTemp * (1 - input.lidFrac);
       const pMis = pLid * (1 - input.mismatchFrac);
       eGhi += (p.pstcW * ghi) / 1000;
@@ -238,6 +255,7 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
       eShaded += (p.pstcW * poaShaded) / 1000;
       eIam += (p.pstcW * poaEff) / 1000;
       eSoiled += (p.pstcW * poaSoiled) / 1000;
+      eLowLight += pLow;
       eTemp += pTemp;
       eLid += pLid;
       eMismatch += pMis;
@@ -274,7 +292,8 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
     { key: 'shading', label: 'Shading (near: beam + sky view)', pct: pct(ePoa, eShaded) },
     { key: 'iam', label: 'Incidence angle (IAM)', pct: pct(eShaded, eIam) },
     { key: 'soiling', label: 'Soiling', pct: pct(eIam, eSoiled) },
-    { key: 'temperature', label: 'Temperature', pct: pct(eSoiled, eTemp) },
+    { key: 'low_light', label: 'Low-light efficiency', pct: pct(eSoiled, eLowLight) },
+    { key: 'temperature', label: 'Temperature', pct: pct(eLowLight, eTemp) },
     { key: 'lid', label: 'Module quality / LID', pct: pct(eTemp, eLid) },
     { key: 'mismatch', label: 'Mismatch', pct: pct(eLid, eMismatch) },
     { key: 'dc_wiring', label: 'DC wiring', pct: pct(eMismatch, eDcOhm) },

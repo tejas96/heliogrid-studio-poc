@@ -117,6 +117,45 @@ export function panelEnergyShares(project: Project): Map<string, number> {
   return out;
 }
 
+/**
+ * The model's own uncertainty on a year-1 figure, one standard deviation, %:
+ * irradiance data ±3, transposition and losses ±3, shading ±2 — combined in
+ * quadrature ≈ 4.7. ASSUMED until the PVsyst comparison (Batch C) pins it.
+ */
+const MODEL_SIGMA_PCT = 5;
+/** the year-to-year spread assumed where the climate record is missing, % */
+const INTERANNUAL_ASSUMED_PCT = 5;
+
+/**
+ * P50/P75/P90/P99 for a year-1 figure: the site's year-to-year irradiation
+ * spread (measured from the PVGIS record) combined with the model's own
+ * uncertainty, the bankable convention. Energy scales with irradiation to
+ * first order, so the irradiation spread IS the energy spread.
+ */
+function uncertaintyFor(annualKwh: number, weather: SiteWeather | undefined): EnergyReport['uncertainty'] {
+  const yrs = weather?.annualGhiByYear;
+  let interannual = INTERANNUAL_ASSUMED_PCT;
+  let years = 0;
+  if (yrs && yrs.length >= 3) {
+    const mean = yrs.reduce((s, v) => s + v, 0) / yrs.length;
+    const sd = Math.sqrt(yrs.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (yrs.length - 1));
+    interannual = mean > 0 ? (sd / mean) * 100 : INTERANNUAL_ASSUMED_PCT;
+    years = yrs.length;
+  }
+  const sigma = Math.hypot(interannual, MODEL_SIGMA_PCT);
+  const at = (k: number) => Math.round(annualKwh * (1 - (k * sigma) / 100));
+  return {
+    p50Kwh: Math.round(annualKwh),
+    p75Kwh: at(0.6745),
+    p90Kwh: at(1.2816),
+    p99Kwh: at(2.326),
+    sigmaPct: Math.round(sigma * 10) / 10,
+    interannualPct: Math.round(interannual * 10) / 10,
+    modelPct: MODEL_SIGMA_PCT,
+    yearsOfRecord: years,
+  };
+}
+
 /** 25-year energy with a fixed yearly degradation, from a first-year figure. */
 function lifetimeFrom(annualKwh: number, degradation: number) {
   let lifetime = 0;
@@ -176,6 +215,7 @@ export function computeEnergyReport(project: Project): EnergyReport {
       degradationPctPerYear: degradation * 100,
       irradianceSource: 'PVGIS',
       engine: 'hourly',
+      uncertainty: uncertaintyFor(hourly.annualKwh, activeWeather(project.location)),
       hourly: {
         radiationDb: meta.radiationDb,
         yearMin: meta.yearMin,
@@ -319,6 +359,7 @@ export function computeEnergyReport(project: Project): EnergyReport {
     degradationPctPerYear: degradation * 100,
     irradianceSource,
     engine: 'monthly',
+    uncertainty: uncertaintyFor(annualKwh, weather),
   };
 }
 

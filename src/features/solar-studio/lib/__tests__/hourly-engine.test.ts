@@ -80,6 +80,9 @@ describe('hourly engine — the physics holds together', () => {
     expect(by.temperature).toBeLessThan(15);
     expect(by.iam).toBeGreaterThan(0.5);
     expect(by.iam).toBeLessThan(6);
+    // weak light converts worse: mornings, evenings, thin months
+    expect(by.low_light).toBeGreaterThan(0.5);
+    expect(by.low_light).toBeLessThan(6);
     expect(by.clipping).toBe(0);
     expect(r.monthlyKwh).toHaveLength(12);
     expect(r.monthlyKwh.reduce((s, v) => s + v, 0)).toBeCloseTo(r.annualKwh, -2);

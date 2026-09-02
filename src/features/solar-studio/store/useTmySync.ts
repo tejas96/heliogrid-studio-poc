@@ -27,7 +27,8 @@ export function useTmySync() {
   const loc = project?.location;
   const projectId = project?.id ?? null;
   const pinKey = loc?.confirmed ? `${loc.latLng.lat.toFixed(5)},${loc.latLng.lng.toFixed(5)}` : null;
-  const weatherMissing = !!loc && !activeWeather(loc);
+  // missing, for another pin, or stored before the year-by-year record was kept
+  const weatherMissing = !!loc && !activeWeather(loc)?.annualGhiByYear;
   const meta = loc?.tmy;
   const tmyMissing = !!loc && (meta === undefined || (meta !== null && tmyStale(meta, loc.latLng)));
 
