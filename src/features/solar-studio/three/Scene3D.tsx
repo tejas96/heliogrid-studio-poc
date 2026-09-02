@@ -148,6 +148,7 @@ import {
   Box,
   Building2,
   Camera,
+  Image as ImageIcon,
   Check,
   Grid3x3,
   Link2,
@@ -497,6 +498,8 @@ export function Scene3D({
   const [showReport, setShowReport] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'mesh'>(initialViewMode);
   const [showBuildings, setShowBuildings] = useState(true);
+  // the real roof (satellite photo on the deck) or the covering material
+  const [showRoofPhoto, setShowRoofPhoto] = useState(true);
   const [showSunPath, setShowSunPath] = useState(true);
   const [showSunChart, setShowSunChart] = useState(false);
   // ── inspect: isolate the picked entity, fly to it, walk the site ──────────
@@ -936,6 +939,7 @@ export function Scene3D({
           sunAzimuth={sceneSunAzimuth}
           solarAccessView={solarAccessView}
           showBuildings={showBuildings}
+          showRoofPhoto={showRoofPhoto}
           showSunPath={showSunPath}
           isolate={isolate && pick ? pick : null}
           onPickFocus={(f) => {
@@ -1060,6 +1064,16 @@ export function Scene3D({
                   onClick={() => setShowBuildings((v) => !v)}
                 >
                   <Building2 />
+                </button>
+                <button
+                  className={`tool-btn ${showRoofPhoto ? '' : 'on'}`}
+                  data-tip={showRoofPhoto ? 'Roof: show the covering material' : 'Roof: show the aerial photo'}
+                  data-tip-right=""
+                  aria-label="Toggle the roof photo"
+                  aria-pressed={!showRoofPhoto}
+                  onClick={() => setShowRoofPhoto((v) => !v)}
+                >
+                  <ImageIcon />
                 </button>
               </>
             )}
@@ -1844,6 +1858,7 @@ function SceneContent({
   sunAzimuth,
   solarAccessView,
   showBuildings,
+  showRoofPhoto,
   showSunPath,
   isolate,
   onPickFocus,
@@ -1890,6 +1905,8 @@ function SceneContent({
   sunAzimuth: number;
   solarAccessView: boolean;
   showBuildings: boolean;
+  /** the satellite photo on every deck (the real roof) instead of the covering material */
+  showRoofPhoto: boolean;
   showSunPath: boolean;
   /** show only this entity (and the roofs) — object isolation */
   isolate: ScenePick | null;
@@ -2182,6 +2199,33 @@ function SceneContent({
   // satellite tile when the URL changes and on unmount
   useEffect(() => () => groundTex.dispose(), [groundTex]);
 
+  // The same photo on the deck as on the ground — the real roof under the
+  // modules, with its skylights, stains and kit. A roof wider than the ground
+  // tile gets a wider (coarser) tile so the picture never runs out under it.
+  const roofReach = useMemo(
+    () => Math.max(0, ...project.roofs.flatMap((r) => r.polygon.map((p) => Math.hypot(p.x, p.y)))),
+    [project.roofs],
+  );
+  const roofZoom =
+    [SAT_ZOOM, SAT_ZOOM - 1, SAT_ZOOM - 2].find(
+      (z) => (metersPerStaticMap(loc.latLng.lat, z, 640) * project.calibration.scaleFactor) / 2 >= roofReach + 4,
+    ) ?? SAT_ZOOM - 2;
+  const roofSpanM = metersPerStaticMap(loc.latLng.lat, roofZoom, 640) * project.calibration.scaleFactor;
+  const roofTexUrl =
+    roofZoom === SAT_ZOOM ? null : staticSatelliteUrl(loc.latLng.lat, loc.latLng.lng, roofZoom, 640, 2);
+  const roofTexOwn = useMemo(() => {
+    if (!roofTexUrl) return null;
+    const t = new THREE.TextureLoader().load(roofTexUrl);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  }, [roofTexUrl]);
+  useEffect(() => () => roofTexOwn?.dispose(), [roofTexOwn]);
+  const roofPhoto = useMemo(
+    () => ({ tex: roofTexOwn ?? groundTex, spanM: roofSpanM }),
+    [roofTexOwn, groundTex, roofSpanM],
+  );
+
   const sunVisible = sunAltitude > 0;
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
@@ -2405,6 +2449,7 @@ function SceneContent({
               allRoofs={project.roofs}
               eaveProj={eaveRefs.get(r.id)}
               photoreal={!meshMode}
+              photo={showRoofPhoto && !meshMode ? roofPhoto : null}
               outline={picked ? PICK_COLOR : hovered ? HOVER_COLOR : undefined}
             />
             {picked && (
@@ -3166,17 +3211,57 @@ function SceneContent({
   );
 }
 
+/**
+ * The satellite photo on the deck, projected from above by WORLD position
+ * (so any roof — flat, pitched, a mumty — shows what the aerial picture shows
+ * there), with flat concrete on the walls. The photo is an exposed picture,
+ * not an albedo, so it is scaled like the ground plane's.
+ */
+function roofPhotoMaterial(tex: THREE.Texture, spanM: number): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({
+    map: tex,
+    color: '#ffffff',
+    roughness: 0.95,
+    metalness: 0,
+    envMapIntensity: 0.3,
+    side: THREE.DoubleSide,
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uPhotoSpan = { value: spanM };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uPhotoSpan;\nvarying vec2 vPhotoUv;\nvarying float vUpness;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\nvec4 photoWp = modelMatrix * vec4( transformed, 1.0 );\nvPhotoUv = vec2( 0.5 + photoWp.x / uPhotoSpan, 0.5 - photoWp.z / uPhotoSpan );\nvUpness = normal.y;',
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPhotoUv;\nvarying float vUpness;')
+      .replace(
+        '#include <map_fragment>',
+        `#ifdef USE_MAP
+  vec4 photo = texture2D( map, vPhotoUv ) * vec4( 0.46, 0.46, 0.46, 1.0 );
+  float deck = smoothstep( 0.4, 0.8, vUpness );
+  diffuseColor *= mix( vec4( 0.66, 0.64, 0.60, 1.0 ), photo, deck );
+#endif`,
+      );
+  };
+  return mat;
+}
+
 function RoofMesh({
   roof,
   allRoofs,
   eaveProj,
   photoreal,
+  photo,
   outline,
 }: {
   roof: Project['roofs'][number];
   allRoofs: Project['roofs'];
   eaveProj?: number;
   photoreal: boolean;
+  /** the aerial photo for the deck (null = the covering material) */
+  photo?: { tex: THREE.Texture; spanM: number } | null;
   /** pick/hover colour for the deck outline; undefined = the quiet default */
   outline?: string;
 }) {
@@ -3225,11 +3310,17 @@ function RoofMesh({
   // the real covering — concrete, coated sheet or clay tile — drawn at true
   // size on the deck's plan-metre UVs (three/roof-textures)
   const surface = photoreal ? getRoofSurface(roof.roofType) : null;
+  // the real roof: the aerial photo on the deck, concrete on the walls
+  const photoMat = useMemo(
+    () => (photoreal && photo ? roofPhotoMaterial(photo.tex, photo.spanM) : null),
+    [photoreal, photo],
+  );
+  useEffect(() => () => photoMat?.dispose(), [photoMat]);
 
   return (
     <group>
-      <mesh geometry={geom} castShadow receiveShadow userData={{ shadowCaster: true }}>
-        {surface ? (
+      <mesh geometry={geom} material={photoMat ?? undefined} castShadow receiveShadow userData={{ shadowCaster: true }}>
+        {photoMat ? null : surface ? (
           <meshStandardMaterial
             color={surface.color}
             map={surface.map}
