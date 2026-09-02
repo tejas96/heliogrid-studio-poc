@@ -175,6 +175,7 @@ import {
   Pause,
   Play,
   Route,
+  Share2,
   SunMedium,
   Sunrise,
   Sunset,
@@ -1153,7 +1154,9 @@ export function Scene3D({
                 });
               }}
             >
-              {copied ? <Check /> : <Link2 />}
+              {/* Share2, not Link2 — the strings-and-cables toggle sits a few
+                  pixels above in the same rail and owns the chain link */}
+              {copied ? <Check /> : <Share2 />}
             </button>
           </>
         )}
