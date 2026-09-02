@@ -953,7 +953,7 @@ export function Scene3D({
           {
             id: 'access',
             icon: <SunMedium />,
-            label: 'Access',
+            label: 'Shade',
             tip: 'Solar access view\nPer-panel shading %',
             active: solarAccessView,
             accent: true,
@@ -1073,7 +1073,7 @@ export function Scene3D({
           {
             id: 'fullscreen',
             icon: fullscreen ? <Minimize2 /> : <Maximize2 />,
-            label: 'Screen',
+            label: 'Full',
             tip: fullscreen ? 'Leave full screen' : 'Full screen',
             active: fullscreen,
             onClick: toggleFullscreen,

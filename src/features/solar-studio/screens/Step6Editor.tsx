@@ -1151,7 +1151,7 @@ export function Step6Editor() {
           {
             id: 'walkway',
             icon: <Footprints />,
-            label: 'Walkway',
+            label: 'Walk',
             tip: 'Walkway\nW',
             active: tool === 'walkway',
             disabled: locked,
@@ -1192,7 +1192,7 @@ export function Step6Editor() {
       },
       {
         id: 'electrical',
-        label: 'Electrical',
+        label: 'Elec',
         icon: <PlugZap />,
         items: [
           {
@@ -1208,7 +1208,9 @@ export function Step6Editor() {
           {
             id: 'stringing',
             icon: <Cable />,
-            label: 'String',
+            // not "String" — "Strings" in the View group shows them, this one
+            // wires them, and the two words a ring apart read as the same tool
+            label: 'Wire',
             tip: 'Stringing\nG',
             active: manualString !== null,
             disabled: locked,

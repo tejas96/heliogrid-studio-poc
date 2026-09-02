@@ -442,7 +442,7 @@ export function Step3Obstructions() {
               {
                 id: 'distance',
                 icon: <PencilRuler />,
-                label: 'Distance',
+                label: 'Dist',
                 tip: 'Measure distance\nClick two points',
                 active: measure.active,
                 onClick: measure.toggle,

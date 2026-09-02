@@ -1210,7 +1210,7 @@ export function Step2Roof() {
         {
           id: 'distance',
           icon: <PencilRuler />,
-          label: 'Distance',
+          label: 'Dist',
           tip: 'Measure distance\nClick two points — then calibrate\nthe imagery from a known length',
           active: measure.active,
           onClick: measure.toggle,

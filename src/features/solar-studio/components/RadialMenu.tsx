@@ -64,6 +64,11 @@ const R_OUTER = 178;
 const R_SOLO = 132;
 /** the widest a tool may sit from its neighbour before the arc tightens */
 const STEP_MAX = 24;
+/**
+ * The solo ring is much tighter than the outer one, so the same 24° step would
+ * put its circles shoulder to shoulder. It spreads wider to compensate.
+ */
+const STEP_MAX_SOLO = 38;
 
 /** Place `n` things evenly across [from, to]; one thing sits in the middle. */
 function spread(n: number, from: number, to: number): number[] {
@@ -88,9 +93,10 @@ export function hubArcAngles(n: number): number[] {
  * its step until it fills the sweep. Getting this wrong is what put the first
  * draft's buttons off the left edge.
  */
-export function toolArcAngles(n: number): number[] {
+export function toolArcAngles(n: number, solo = false): number[] {
   if (n <= 0) return [];
-  const step = n > 1 ? Math.min(STEP_MAX, (ARC_END - ARC_START) / (n - 1)) : 0;
+  const cap = solo ? STEP_MAX_SOLO : STEP_MAX;
+  const step = n > 1 ? Math.min(cap, (ARC_END - ARC_START) / (n - 1)) : 0;
   const span = step * (n - 1);
   const mid = (ARC_START + ARC_END) / 2;
   return spread(n, mid + span / 2, mid - span / 2);
@@ -137,15 +143,30 @@ export function RadialMenu({
 
   // Escape closes, and a click anywhere off the menu closes it — a radial menu
   // that stays open over the model is the rails' problem all over again.
+  //
+  // Both handlers first check the menu is actually ON SCREEN. Step 6 keeps the
+  // 3D scene mounted behind the 2D editor (`<div hidden>`, so the GL context
+  // and textures survive the toggle), which means TWO of these menus exist at
+  // once. Left open, the hidden one's Escape handler would go on swallowing
+  // the key from the editor that is actually in front. `offsetParent` is null
+  // throughout a display:none subtree, which is exactly the question.
   useEffect(() => {
     if (!open) return;
+    const onScreen = () => !!rootRef.current?.offsetParent;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
+      if (e.key !== 'Escape') return;
+      if (!onScreen()) {
         close();
+        return;
       }
+      e.stopPropagation();
+      close();
     };
     const onDown = (e: PointerEvent) => {
+      if (!onScreen()) {
+        close();
+        return;
+      }
       if (!rootRef.current?.contains(e.target as Node)) close();
     };
     // capture, so Escape closes the menu before the scene reads it for its own
@@ -157,11 +178,14 @@ export function RadialMenu({
     };
   }, [open, close]);
 
-  const hubAngles = useMemo(() => hubArcAngles(live.length), [live.length]);
-  const toolAngles = useMemo(() => toolArcAngles(current?.items.length ?? 0), [current]);
-
   // one group carries no hub ring, so its tools take the inner radius instead
   const solo = live.length < 2;
+  const hubAngles = useMemo(() => hubArcAngles(live.length), [live.length]);
+  const toolAngles = useMemo(
+    () => toolArcAngles(current?.items.length ?? 0, solo),
+    [current, solo],
+  );
+
   const toolRadius = solo ? R_SOLO : R_OUTER;
   const total = live.length + (current?.items.length ?? 0);
 

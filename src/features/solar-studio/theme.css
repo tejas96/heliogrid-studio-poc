@@ -1244,3 +1244,26 @@ h3 {
   padding: 0 4px;
   border: 1.5px solid var(--editor-bg);
 }
+
+/* ── Halo, third pass: the labels need room to breathe ───────────────────── */
+/* A word sits BELOW the circle's centre, where the chord is narrower than the
+   circle is wide. "ARRESTER" filled 88% of its 56px button and touched the
+   curve on both sides, which read as a cramped smudge rather than a label.
+   The button grows, the type comes down, and the tracking tightens — at 60px
+   the chord under the icon is ~54px and the longest word in the app now
+   leaves 7px of air each side. */
+.halo-item {
+  width: 60px;
+  height: 60px;
+}
+.halo-label {
+  font-size: 7px;
+  letter-spacing: 0.15px;
+  max-width: 46px;
+  padding: 0 1px;
+}
+.halo-hub .halo-label {
+  font-size: 6px;
+  letter-spacing: 0.1px;
+  max-width: 40px;
+}
