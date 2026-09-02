@@ -9,6 +9,7 @@ import {
   Lightformer,
   Line,
   Sky,
+  Stars,
 } from '@react-three/drei';
 import * as THREE from 'three';
 import { designBounds, type SceneBounds } from './scene-bounds';
@@ -99,6 +100,14 @@ import {
   Sunrise,
   Sunset,
   X,
+  ChevronsUp,
+  ChevronsLeft,
+  ChevronsRight,
+  Crosshair,
+  Focus,
+  Footprints,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { useUnits } from '../lib/units';
@@ -159,14 +168,24 @@ export function seasonDate(preset: SeasonPreset): Date {
   }
 }
 
-type ViewPreset = 'top' | 'iso' | 'front';
+type ViewPreset = 'top' | 'iso' | 'front' | 'back' | 'left' | 'right';
 
 /** Unit view directions; the camera director scales them to the design's size. */
 const VIEW_DIRS: Record<ViewPreset, [number, number, number]> = {
   top: [0.001, 1, 0.001],
   iso: [0.55, 0.62, 0.55],
+  // elevations: front looks north over the site (camera south of it), and so on
   front: [0, 0.3, 1],
+  back: [0, 0.3, -1],
+  left: [-1, 0.3, 0],
+  right: [1, 0.3, 0],
 };
+
+/** What the F key flies to: a sphere around the picked entity, in scene units. */
+export type FocusSphere = { x: number; y: number; z: number; r: number };
+
+/** Eye height of the walkthrough camera above the deck it stands on. */
+const WALK_EYE_M = 1.7;
 
 const ACTION = CameraControlsImpl.ACTION;
 
@@ -358,6 +377,30 @@ export function Scene3D({
   const [viewMode, setViewMode] = useState<'map' | 'mesh'>(initialViewMode);
   const [showBuildings, setShowBuildings] = useState(true);
   const [showSunPath, setShowSunPath] = useState(true);
+  // ── inspect: isolate the picked entity, fly to it, walk the site ──────────
+  // View state only: never persisted, never fingerprinted.
+  const [isolate, setIsolate] = useState(false);
+  const [walk, setWalk] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const pickFocusRef = useRef<FocusSphere | null>(null);
+  const walkSaved = useRef<{
+    pos: THREE.Vector3;
+    target: THREE.Vector3;
+    minDistance: number;
+    maxDistance: number;
+    maxPolarAngle: number;
+    azimuthRotateSpeed: number;
+    polarRotateSpeed: number;
+  } | null>(null);
+  useEffect(() => {
+    const onChange = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  // isolation follows the pick: losing the pick shows everything again
+  useEffect(() => {
+    if (!pick) setIsolate(false);
+  }, [pick]);
   const [copied, setCopied] = useState(false);
   const [heatmap, setHeatmap] = useState(false);
   const [heatMonth, setHeatMonth] = useState(new Date().getMonth());
@@ -493,6 +536,78 @@ export function Scene3D({
     if (zoomFactor !== 1) void c.dolly(zoomFactor < 1 ? c.distance * 0.12 : -c.distance * 0.12, true);
   }
 
+  /** Object focus: fly to the picked entity, keeping the current viewing angle. */
+  function focusPick() {
+    const c = controlsRef.current;
+    const f = pickFocusRef.current;
+    if (!c || !f) return;
+    void c.fitToSphere(new THREE.Sphere(new THREE.Vector3(f.x, f.y, f.z), Math.max(1.5, f.r)), true);
+  }
+
+  /**
+   * Walkthrough: the camera becomes a person standing on the site. The
+   * orbit target sits one metre in front of the eye, so the mouse looks
+   * around instead of orbiting; W/S/A/D walk, Q/E climb, arrows turn.
+   * Entering saves the orbit pose and the controls' clamps; leaving puts
+   * every one of them back.
+   */
+  function enterWalk() {
+    const c = controlsRef.current;
+    if (!c || walkSaved.current) return;
+    walkSaved.current = {
+      pos: c.getPosition(new THREE.Vector3()),
+      target: c.getTarget(new THREE.Vector3()),
+      minDistance: c.minDistance,
+      maxDistance: c.maxDistance,
+      maxPolarAngle: c.maxPolarAngle,
+      azimuthRotateSpeed: c.azimuthRotateSpeed,
+      polarRotateSpeed: c.polarRotateSpeed,
+    };
+    c.minDistance = 1;
+    c.maxDistance = 1;
+    c.maxPolarAngle = Math.PI * 0.95;
+    // negative speeds: drag left looks left, like every first-person camera
+    c.azimuthRotateSpeed = -0.3;
+    c.polarRotateSpeed = -0.3;
+    // stand at the near edge of the design, eye height above its deck, looking in
+    const from = walkSaved.current.pos;
+    const dx = from.x - bounds.cx;
+    const dz = from.z - bounds.cz;
+    const n = Math.hypot(dx, dz) || 1;
+    const ex = bounds.cx + (dx / n) * bounds.r * 0.9;
+    const ez = bounds.cz + (dz / n) * bounds.r * 0.9;
+    const ey = bounds.cy + WALK_EYE_M;
+    void c.setLookAt(ex, ey, ez, ex - (dx / n), ey, ez - (dz / n), true);
+    setWalk(true);
+  }
+  function exitWalk() {
+    const c = controlsRef.current;
+    const s = walkSaved.current;
+    walkSaved.current = null;
+    setWalk(false);
+    if (!c || !s) return;
+    c.minDistance = s.minDistance;
+    c.maxDistance = s.maxDistance;
+    c.maxPolarAngle = s.maxPolarAngle;
+    c.azimuthRotateSpeed = s.azimuthRotateSpeed;
+    c.polarRotateSpeed = s.polarRotateSpeed;
+    void c.setLookAt(s.pos.x, s.pos.y, s.pos.z, s.target.x, s.target.y, s.target.z, true);
+  }
+  function walkStep(forwardM: number, sideM: number, upM: number, turnRad: number) {
+    const c = controlsRef.current;
+    if (!c) return;
+    if (forwardM) void c.forward(forwardM, true);
+    if (sideM) void c.truck(sideM, 0, true);
+    if (upM) void c.elevate(upM, true);
+    if (turnRad) void c.rotate(turnRad, 0, true);
+  }
+  function toggleFullscreen() {
+    const el = wrapRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void el.requestFullscreen?.();
+  }
+
   /**
    * Arrow keys orbit, +/− dolly, 1/2/3 jump to a preset, Escape exits.
    *
@@ -509,26 +624,62 @@ export function Scene3D({
       t !== e.currentTarget &&
       !!t.closest?.('input,select,textarea,button,[role="slider"],[contenteditable="true"]');
     const STEP = e.shiftKey ? 0.04 : 0.12; // Shift = fine, as everywhere else
-    const map: Record<string, () => void> = {
-      ArrowLeft: () => orbitBy(-STEP, 0),
-      ArrowRight: () => orbitBy(STEP, 0),
-      ArrowUp: () => orbitBy(0, -STEP),
-      ArrowDown: () => orbitBy(0, STEP),
-      '+': () => orbitBy(0, 0, 0.9),
-      '=': () => orbitBy(0, 0, 0.9),
-      '-': () => orbitBy(0, 0, 1.1),
-      '1': () => goView('top'),
-      '2': () => goView('iso'),
-      '3': () => goView('front'),
+    const PACE = e.shiftKey ? 0.25 : 0.8; // metres per key press while walking
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const map: Record<string, () => void> = walk
+      ? {
+          // first person: keys move the body, the mouse turns the head
+          w: () => walkStep(PACE, 0, 0, 0),
+          ArrowUp: () => walkStep(PACE, 0, 0, 0),
+          s: () => walkStep(-PACE, 0, 0, 0),
+          ArrowDown: () => walkStep(-PACE, 0, 0, 0),
+          a: () => walkStep(0, -PACE, 0, 0),
+          d: () => walkStep(0, PACE, 0, 0),
+          ArrowLeft: () => walkStep(0, 0, 0, -STEP),
+          ArrowRight: () => walkStep(0, 0, 0, STEP),
+          q: () => walkStep(0, 0, -PACE / 2, 0),
+          e: () => walkStep(0, 0, PACE / 2, 0),
+        }
+      : {
+          ArrowLeft: () => orbitBy(-STEP, 0),
+          ArrowRight: () => orbitBy(STEP, 0),
+          ArrowUp: () => orbitBy(0, -STEP),
+          ArrowDown: () => orbitBy(0, STEP),
+          '+': () => orbitBy(0, 0, 0.9),
+          '=': () => orbitBy(0, 0, 0.9),
+          '-': () => orbitBy(0, 0, 1.1),
+          '1': () => goView('top'),
+          '2': () => goView('iso'),
+          '3': () => goView('front'),
+          '4': () => goView('back'),
+          '5': () => goView('left'),
+          '6': () => goView('right'),
+          w: () => enterWalk(),
+        };
+    // inspect keys work in both modes
+    map.f = focusPick;
+    map.i = () => {
+      if (pick) setIsolate((v) => !v);
     };
-    const fn = inControl ? undefined : map[e.key];
+    const fn = inControl ? undefined : map[key];
     if (fn) {
       e.preventDefault();
       fn();
       return;
     }
-    // Escape peels one layer at a time: an open card closes first (its own
-    // listener does that); only a bare scene leaves the 3D view
+    // Escape peels one layer at a time: walking stops first, then isolation,
+    // then an open card (its own listener does that); only a bare scene
+    // leaves the 3D view
+    if (e.key === 'Escape' && walk) {
+      e.preventDefault();
+      exitWalk();
+      return;
+    }
+    if (e.key === 'Escape' && isolate) {
+      e.preventDefault();
+      setIsolate(false);
+      return;
+    }
     if (e.key === 'Escape' && onClose && !structEdit && !pick && !wiring) {
       e.preventDefault();
       onClose();
@@ -610,6 +761,10 @@ export function Scene3D({
           solarAccessView={solarAccessView}
           showBuildings={showBuildings}
           showSunPath={showSunPath}
+          isolate={isolate && pick ? pick : null}
+          onPickFocus={(f) => {
+            pickFocusRef.current = f;
+          }}
           date={date}
           meshMode={meshMode}
           focusRoofId={focusRoofId}
@@ -778,7 +933,84 @@ export function Scene3D({
         <button className="tool-btn" data-tip="Front view" data-tip-right="" aria-label="Front view" onClick={() => goView('front')}>
           <Orbit />
         </button>
+        <button className="tool-btn" data-tip="Back view" data-tip-right="" aria-label="Back view" onClick={() => goView('back')}>
+          <ChevronsUp />
+        </button>
+        <button className="tool-btn" data-tip="Left view" data-tip-right="" aria-label="Left view" onClick={() => goView('left')}>
+          <ChevronsLeft />
+        </button>
+        <button className="tool-btn" data-tip="Right view" data-tip-right="" aria-label="Right view" onClick={() => goView('right')}>
+          <ChevronsRight />
+        </button>
+        <div className="tool-sep" />
+        <div className="tool-group-label">Inspect</div>
+        <button
+          className="tool-btn"
+          data-tip={pick ? 'Fly to the selection (F)' : 'Select something, then fly to it (F)'}
+          data-tip-right=""
+          aria-label="Fly to the selection"
+          disabled={!pick}
+          onClick={focusPick}
+        >
+          <Crosshair />
+        </button>
+        <button
+          className={`tool-btn ${isolate && pick ? 'on' : ''}`}
+          data-tip={isolate && pick ? 'Show everything again (I)' : pick ? 'Isolate the selection (I)' : 'Select something, then isolate it (I)'}
+          data-tip-right=""
+          aria-label="Isolate the selection"
+          aria-pressed={isolate && !!pick}
+          disabled={!pick}
+          onClick={() => setIsolate((v) => !v)}
+        >
+          <Focus />
+        </button>
+        <button
+          className={`tool-btn ${walk ? 'on' : ''}`}
+          data-tip={walk ? 'Leave the walkthrough (Esc)' : 'Walk the site (W)'}
+          data-tip-right=""
+          aria-label="Walk the site"
+          aria-pressed={walk}
+          onClick={() => (walk ? exitWalk() : enterWalk())}
+        >
+          <Footprints />
+        </button>
+        <button
+          className={`tool-btn ${fullscreen ? 'on' : ''}`}
+          data-tip={fullscreen ? 'Leave full screen' : 'Full screen'}
+          data-tip-right=""
+          aria-label="Toggle full screen"
+          aria-pressed={fullscreen}
+          onClick={toggleFullscreen}
+        >
+          {fullscreen ? <Minimize2 /> : <Maximize2 />}
+        </button>
       </div>
+      )}
+
+      {/* ── walkthrough hint ── */}
+      {walk && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            bottom: 140,
+            transform: 'translateX(-50%)',
+            background: 'rgba(20,24,30,0.88)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid var(--editor-line)',
+            borderRadius: 999,
+            color: 'var(--editor-ink)',
+            padding: '6px 14px',
+            fontSize: 12,
+            zIndex: 30,
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+          }}
+        >
+          Walking · W A S D move · Q E climb · drag to look · Shift = small steps · Esc leaves
+        </div>
       )}
 
       {/* ── sun widget (hidden in mesh/studio & heatmap view) ── */}
@@ -1225,6 +1457,8 @@ function SceneContent({
   solarAccessView,
   showBuildings,
   showSunPath,
+  isolate,
+  onPickFocus,
   date,
   meshMode,
   focusRoofId,
@@ -1262,6 +1496,10 @@ function SceneContent({
   solarAccessView: boolean;
   showBuildings: boolean;
   showSunPath: boolean;
+  /** show only this entity (and the roofs) — object isolation */
+  isolate: ScenePick | null;
+  /** where the F key should fly: a sphere around the picked entity */
+  onPickFocus: (f: FocusSphere | null) => void;
   date: Date;
   meshMode: boolean;
   focusRoofId?: string;
@@ -1309,8 +1547,10 @@ function SceneContent({
       selectedSegId,
       view,
     );
-    return allStructures.filter((s) => keep.has(s.segmentId));
-  }, [allStructures, selectedSegId, view]);
+    return allStructures.filter(
+      (s) => keep.has(s.segmentId) && (!isolate || (isolate.kind === 'table' && isolate.id === s.segmentId)),
+    );
+  }, [allStructures, selectedSegId, view, isolate]);
   // A click SELECTS the module (shared with the 2D editor) and, for a plain
   // click, opens its table's on-object card — a flush table has no structure
   // to click, and must stay re-elevatable from 3D. Shift/ctrl adds to the
@@ -1347,6 +1587,16 @@ function SceneContent({
       : null;
   const shownRoofs = focusRoof ? [focusRoof] : project.roofs;
   const inScope = (roofId: string | null) => !focusRoof || roofId === focusRoof.id;
+  // object isolation: only the picked entity (and the roofs) stay drawn
+  const isoOk = (kind: ScenePick['kind'], id: string) => !isolate || (isolate.kind === kind && isolate.id === id);
+  // isolating a table keeps its modules; a string keeps its own modules; a
+  // cable run keeps the array it crosses; anything else hides the array
+  const isoPanel = (p: { id: string; segmentId?: string | null }) => {
+    if (!isolate) return true;
+    if (isolate.kind === 'table') return p.segmentId === isolate.id;
+    if (isolate.kind === 'string') return !!project.strings.find((s) => s.id === isolate.id)?.panelIds.includes(p.id);
+    return isolate.kind === 'route';
+  };
   // shared eave line per roof → adjacent same-slope roofs form one plane
   const eaveRefs = useMemo(() => computeEaveRefs(project.roofs), [project.roofs]);
   const surfAt = (roofId: string | null, p: XY) => {
@@ -1367,7 +1617,7 @@ function SceneContent({
       spec
         ? partitionPanels(
             project.panels
-              .filter((p) => p.enabled && inScope(p.roofId))
+              .filter((p) => p.enabled && inScope(p.roofId) && isoPanel(p))
               .map((p) => {
                 const roof = project.roofs.find((r) => r.id === p.roofId);
                 // ONE pose source for the mesh, the analytical shadow slab and the
@@ -1391,8 +1641,85 @@ function SceneContent({
           )
         : { normal: [], ghost: [], hidden: [] },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project, spec, selectedSegId, view, focusRoof, eaveRefs],
+    [project, spec, selectedSegId, view, focusRoof, eaveRefs, isolate],
   );
+  // Object focus: a sphere around whatever is picked, reported up for the F
+  // key / Focus button. View-only; computed from the same poses the scene draws.
+  useEffect(() => {
+    if (!pick) {
+      onPickFocus(null);
+      return;
+    }
+    const all = [...panelParts.normal, ...panelParts.ghost];
+    const sphereOf = (pts: [number, number, number][], pad: number): FocusSphere | null => {
+      if (!pts.length) return null;
+      const c = pts.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]], [0, 0, 0]).map((v) => v / pts.length);
+      const r = Math.max(...pts.map((p) => Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2])));
+      return { x: c[0], y: c[1], z: c[2], r: r + pad };
+    };
+    const wallPoint = (u: { roofId: string; edgeIndex: number; t: number; heightM: number }): FocusSphere | null => {
+      const roof = project.roofs.find((r) => r.id === u.roofId);
+      if (!roof) return null;
+      const a = roof.polygon[u.edgeIndex % roof.polygon.length];
+      const b = roof.polygon[(u.edgeIndex + 1) % roof.polygon.length];
+      return { x: a.x + (b.x - a.x) * u.t, y: u.heightM, z: -(a.y + (b.y - a.y) * u.t), r: 2 };
+    };
+    let f: FocusSphere | null = null;
+    switch (pick.kind) {
+      case 'table':
+        f = sphereOf(all.filter((p) => p.segmentId === pick.id).map((p) => p.position), 1.5);
+        break;
+      case 'string': {
+        const ids = new Set(project.strings.find((s) => s.id === pick.id)?.panelIds ?? []);
+        f = sphereOf(all.filter((p) => ids.has(p.id)).map((p) => p.position), 1.5);
+        break;
+      }
+      case 'obstruction': {
+        const o = project.obstructions.find((x) => x.id === pick.id);
+        if (o) {
+          const size = o.shape === 'circle' ? o.diameterM : Math.max(o.lengthM, o.widthM);
+          const base = surfAt(o.roofId, o.center);
+          f = { x: o.center.x, y: base + o.heightM / 2, z: -o.center.y, r: Math.max(size, o.heightM) / 2 + 1 };
+        }
+        break;
+      }
+      case 'inverter': {
+        const u = project.inverterPlacements.find((x) => x.id === pick.id);
+        if (u) f = wallPoint(u);
+        break;
+      }
+      case 'battery': {
+        const u = (project.batteryPlacements ?? []).find((x) => x.id === pick.id);
+        if (u) f = wallPoint(u);
+        break;
+      }
+      case 'box': {
+        const u = (project.electricalBoxes ?? []).find((x) => x.id === pick.id);
+        if (u) f = wallPoint(u);
+        break;
+      }
+      case 'route': {
+        const r = (project.cableRoutes ?? []).find((x) => x.id === pick.id);
+        const roofId = project.inverterPlacements[0]?.roofId ?? project.roofs[0]?.id ?? null;
+        if (r && r.waypoints.length)
+          f = sphereOf(
+            r.waypoints.map((w) => [w.x, surfAt(roofId, w) + 0.3, -w.y] as [number, number, number]),
+            2,
+          );
+        break;
+      }
+      case 'roof': {
+        const roof = project.roofs.find((x) => x.id === pick.id);
+        if (roof) {
+          const b = designBounds(project, [roof]);
+          f = { x: b.cx, y: b.cy, z: b.cz, r: b.r };
+        }
+        break;
+      }
+    }
+    onPickFocus(f);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick, panelParts, project]);
   // module id → glass centre, for the string runs drawn on top of the modules
   // (globalThis.Map: the lucide `Map` icon shadows the global in this file)
   const panelPositions = useMemo(() => {
@@ -1546,7 +1873,11 @@ function SceneContent({
               mieDirectionalG={0.85}
             />
           ) : (
-            <color attach="background" args={['#0a0f1c']} />
+            <>
+              <color attach="background" args={['#0a0f1c']} />
+              {/* night: the sun is below the horizon, so the sky is stars */}
+              <Stars radius={400} depth={80} count={2400} factor={5} saturation={0} fade speed={0} />
+            </>
           )}
           {/* real haze at site scale is faint: the old 0.0035 washed a whole
               framed design grey once the camera stood 100 m back */}
@@ -1649,7 +1980,7 @@ function SceneContent({
       })}
 
       {/* obstructions — pickable: hover halo, click → label with quick actions */}
-      {project.obstructions.filter((o) => inScope(o.roofId)).map((o) => {
+      {project.obstructions.filter((o) => inScope(o.roofId) && isoOk('obstruction', o.id)).map((o) => {
         // Resolved from the obstruction's POSITION, not from `o.roofId` alone.
         // A stored anchor can be stale — it used to be captured at placement
         // and left behind by every drag — and `surfaceHeightAt` extrapolates
@@ -1817,7 +2148,7 @@ function SceneContent({
         })()}
 
       {/* strings + cable runs on the model, the string card, the wiring readout */}
-      {!meshMode && showElectrical && (
+      {!meshMode && showElectrical && (!isolate || isolate.kind === 'string' || isolate.kind === 'route') && (
         <ElectricalOverlay
           project={project}
           spec={spec}
@@ -1829,6 +2160,7 @@ function SceneContent({
           runOp={runOp}
           wiring={wiring}
           onWiringChange={onWiringChange}
+          isolate={isolate}
         />
       )}
 
@@ -1939,7 +2271,7 @@ function SceneContent({
       })}
 
       {/* wall inverters — pickable */}
-      {project.inverterPlacements.filter((ip) => inScope(ip.roofId)).map((ip, idx) => {
+      {project.inverterPlacements.filter((ip) => inScope(ip.roofId) && isoOk('inverter', ip.id)).map((ip, idx) => {
         const roof = project.roofs.find((r) => r.id === ip.roofId);
         if (!roof) return null;
         const a = roof.polygon[ip.edgeIndex];
@@ -2023,7 +2355,7 @@ function SceneContent({
       })}
 
       {/* battery cabinets — floor-standing at a wall, pickable */}
-      {(project.batteryPlacements ?? []).filter((bp) => inScope(bp.roofId)).map((bp, idx) => {
+      {(project.batteryPlacements ?? []).filter((bp) => inScope(bp.roofId) && isoOk('battery', bp.id)).map((bp, idx) => {
         const roof = project.roofs.find((r) => r.id === bp.roofId);
         const spec = project.components.battery;
         if (!roof || !spec) return null;
@@ -2114,7 +2446,7 @@ function SceneContent({
 
       {/* the real neighbourhood — Google's photogrammetry, never invented boxes */}
       {/* DCDB / ACDB enclosures — wall-mounted, pickable, slide along the wall */}
-      {(project.electricalBoxes ?? []).filter((bx) => inScope(bx.roofId)).map((bx) => {
+      {(project.electricalBoxes ?? []).filter((bx) => inScope(bx.roofId) && isoOk('box', bx.id)).map((bx) => {
         const roof = project.roofs.find((r) => r.id === bx.roofId);
         if (!roof) return null;
         const a = roof.polygon[bx.edgeIndex];
@@ -2196,7 +2528,7 @@ function SceneContent({
         );
       })}
 
-      {!meshMode && showBuildings && (
+      {!meshMode && showBuildings && !isolate && (
         <RealSurround project={project} onAttribution={onSurroundAttribution} />
       )}
 

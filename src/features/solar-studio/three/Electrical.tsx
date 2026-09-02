@@ -106,9 +106,12 @@ export function ElectricalOverlay({
   runOp,
   wiring,
   onWiringChange,
+  isolate = null,
 }: {
   project: Project;
   spec: PanelSpec | null;
+  /** object isolation: draw only this string (with its runs) or this run */
+  isolate?: ScenePick | null;
   /** module id → glass centre and how far above it a run must sit to clear the tilted high edge */
   panelPositions: ReadonlyMap<string, { position: Vec3; lift: number }>;
   pick: ScenePick | null;
@@ -122,6 +125,12 @@ export function ElectricalOverlay({
 }) {
   const inv = project.components.inverter;
   const routes = project.cableRoutes ?? [];
+  // isolation is a render-time filter, so the memoised geometry below is untouched
+  const stringVisible = (id: string) => !isolate || (isolate.kind === 'string' && isolate.id === id);
+  const routeVisible = (id: string) =>
+    !isolate ||
+    (isolate.kind === 'route' && isolate.id === id) ||
+    (isolate.kind === 'string' && routes.some((r) => r.id === id && r.fromRef === isolate.id));
 
   const roofHeightAt = (p: XY): number => {
     const roof = project.roofs.find((r) => inPolygon(p, r.polygon));
@@ -224,7 +233,7 @@ export function ElectricalOverlay({
 
   return (
     <group>
-      {stringLines.map(({ s, pts, health, tube }) => {
+      {stringLines.filter(({ s }) => stringVisible(s.id)).map(({ s, pts, health, tube }) => {
         if (pts.length < 2 || !tube) return null;
         const isPicked = picked?.id === s.id;
         const isHover = !isPicked && hoverPick?.kind === 'string' && hoverPick.id === s.id;
@@ -286,7 +295,7 @@ export function ElectricalOverlay({
         );
       })}
 
-      {routeLines.map((r) => {
+      {routeLines.filter((r) => routeVisible(r.id)).map((r) => {
         const isPicked = pick?.kind === 'route' && pick.id === r.id;
         const isHover = !isPicked && hoverPick?.kind === 'route' && hoverPick.id === r.id;
         return (
