@@ -780,14 +780,18 @@ export function Scene3D({
     map['?'] = () => setShowKeys((v) => !v);
     map['/'] = map['?'];
     map.h = map['?'];
-    // undo / redo, as in the 2D editor
-    if ((e.metaKey || e.ctrlKey) && key === 'z' && !inControl) {
+    // Undo / redo, as in the 2D editor. Only a TEXT field may keep these keys:
+    // after a click on a card or panel BUTTON that button holds focus, and
+    // treating it as "in a control" made Cmd+Z do nothing right after the one
+    // click a user most wants to take back (a racking option, a remove).
+    const inTextField = !!t.closest?.('input,select,textarea,[contenteditable="true"],[role="slider"]');
+    if ((e.metaKey || e.ctrlKey) && key === 'z' && !inTextField) {
       e.preventDefault();
       dispatch({ type: e.shiftKey ? 'redo' : 'undo' });
       return;
     }
     // Delete removes the selected modules, else the picked thing
-    if ((e.key === 'Delete' || e.key === 'Backspace') && !inControl && structInteractive) {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !inTextField && structInteractive) {
       e.preventDefault();
       if (selectedSet.size > 0 && !wiring) {
         runOp(panelsDelete, { ids: [...selectedSet] });
