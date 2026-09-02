@@ -159,6 +159,10 @@ import {
 import { batteryPlace, batteryRemove } from '../lib/ops/battery-ops';
 import { boxPlace, boxRemove } from '../lib/ops/box-ops';
 import { unitPlanPos } from '../lib/unit-pos';
+import type { Roof } from '../types';
+import { rotate as rotateXY } from '../lib/geo';
+import { COL_STRIDE, roofGridAngle as gridAngleOfRoof } from '../lib/layout';
+import { segmentGrid } from '../lib/segment-ops';
 import { batteryWorldPos } from '../lib/battery';
 import {
   arresterAdd,
@@ -190,8 +194,36 @@ const MUTATING_TOOLS: Tool[] = [
   'erase',
 ];
 
+/**
+ * The table a drag draws: a rectangle in the ROOF'S grid frame (rows follow
+ * the roof's long edge, or the slope), so a table on a turned roof is drawn
+ * turned with it — the same frame the fill lays its rows in.
+ */
+function dragArea(a: XY, b: XY, roof: Roof | undefined): XY[] {
+  const ang = roof ? gridAngleOfRoof(roof) : 0;
+  const la = rotateXY(a, -ang);
+  const lb = rotateXY(b, -ang);
+  const minX = Math.min(la.x, lb.x);
+  const maxX = Math.max(la.x, lb.x);
+  const minY = Math.min(la.y, lb.y);
+  const maxY = Math.max(la.y, lb.y);
+  return [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+  ].map((c) => rotateXY(c, ang));
+}
+
+/** rows × columns of a set of grid-filled modules (cellIndex encodes row and column) */
+function gridShape(panels: { cellIndex?: number }[]): { rows: number; cols: number } {
+  const rows = new Set(panels.map((p) => Math.floor((p.cellIndex ?? 0) / COL_STRIDE))).size;
+  const cols = new Set(panels.map((p) => (p.cellIndex ?? 0) % COL_STRIDE)).size;
+  return { rows: Math.max(1, rows), cols: Math.max(1, cols) };
+}
+
 const TOOL_HINTS: Record<Exclude<Tool, 'select' | 'walkway'>, string> = {
-  panels: 'Click to add one panel · drag to fill an area (obstacles auto-avoided)',
+  panels: 'Drag a rectangle to draw a table — rows follow the roof, obstacles are avoided · click adds one module',
   erase:
     'Click to erase a panel, walkway, safety rail, arrester, inverter or meter · hover highlights the target in red',
   rail: 'Drag along a roof edge to add a safety rail',
@@ -1190,18 +1222,10 @@ export function Step6Editor() {
               }
               return;
             }
-            // DRAG → fill the rectangle as a collision-aware segment
-            const minX = Math.min(line.a.x, line.b.x);
-            const maxX = Math.max(line.a.x, line.b.x);
-            const minY = Math.min(line.a.y, line.b.y);
-            const maxY = Math.max(line.a.y, line.b.y);
-            const area: XY[] = [
-              { x: minX, y: minY },
-              { x: maxX, y: minY },
-              { x: maxX, y: maxY },
-              { x: minX, y: maxY },
-            ];
+            // DRAG → draw a table: the rectangle in the roof's grid frame,
+            // filled row-wise as a collision-aware segment
             const roof = pickRoofAt(line.a, project.roofs) ?? project.roofs[0];
+            const area: XY[] = dragArea(line.a, line.b, roof);
             if (roof) {
               const filled = fillRoofAsSegment(
                 project,
@@ -1235,6 +1259,7 @@ export function Step6Editor() {
           routeDrag={routeDrag}
           manualString={manualString}
           dragLine={dragLine}
+          onSelectTable={setSelectedIds}
           panelDrag={panelDrag}
           marquee={marquee}
           hoverPoint={hoverPoint}
@@ -1366,8 +1391,8 @@ export function Step6Editor() {
         />
         <RailBtn
           icon={<Grid3x3 />}
-          label="Panels"
-          tip={'Panels — click for one · drag to fill\nP'}
+          label="Table"
+          tip={'Table — drag to draw rows of modules · click adds one\nP'}
           active={tool === 'panels'}
           pressed={tool === 'panels'}
           disabled={locked}
@@ -2806,6 +2831,7 @@ function EditorLayers({
   walkwayWidthMm,
   selected,
   tool,
+  onSelectTable,
 }: {
   heatmap: boolean;
   heatResult: HeatmapResult | null;
@@ -2820,6 +2846,8 @@ function EditorLayers({
   walkwayWidthMm: number;
   selected: string[];
   tool: Tool;
+  /** a table label was tapped: select its modules */
+  onSelectTable: (ids: string[]) => void;
 }) {
   const project = useActiveProject()!;
   const frame = useCanvasFrame();
@@ -2833,19 +2861,10 @@ function EditorLayers({
   // and obstructions as they drag, instead of just a line.
   const tablePreview = useMemo(() => {
     if (tool !== 'panels' || !dragLine) return null;
-    const minX = Math.min(dragLine.a.x, dragLine.b.x);
-    const maxX = Math.max(dragLine.a.x, dragLine.b.x);
-    const minY = Math.min(dragLine.a.y, dragLine.b.y);
-    const maxY = Math.max(dragLine.a.y, dragLine.b.y);
-    if (maxX - minX < 0.2 || maxY - minY < 0.2) return { panels: [], minX, maxX, minY, maxY, angle: 0 };
-    const area: XY[] = [
-      { x: minX, y: minY },
-      { x: maxX, y: minY },
-      { x: maxX, y: maxY },
-      { x: minX, y: maxY },
-    ];
     const roof = pickRoofAt(dragLine.a, project.roofs) ?? project.roofs[0];
-    if (!roof) return { panels: [], minX, maxX, minY, maxY, roof: undefined };
+    const area = dragArea(dragLine.a, dragLine.b, roof);
+    const span = Math.hypot(dragLine.b.x - dragLine.a.x, dragLine.b.y - dragLine.a.y);
+    if (span < 0.3 || !roof) return { panels: [] as PlacedPanel[], area, roof };
     const panels = autoFillRoof(
       project,
       roof,
@@ -2853,7 +2872,7 @@ function EditorLayers({
       { orientation: 'portrait', gapM: 0.05, grouped: true, avoidPanels: project.panels },
       area,
     );
-    return { panels, minX, maxX, minY, maxY, roof };
+    return { panels, area, roof };
   }, [tool, dragLine, project, spec]);
 
   // Live single-panel ghost: where a click would drop ONE panel, snapped to the
@@ -3214,6 +3233,56 @@ function EditorLayers({
         );
       })}
 
+      {/* tables: the outline of each table and its label — click the label to select the whole table */}
+      {spec &&
+        project.segments.map((seg) => {
+          const roof = project.roofs.find((r) => r.id === seg.roofId);
+          const mine = project.panels.filter((p) => p.segmentId === seg.id && p.enabled);
+          if (!roof || mine.length === 0) return null;
+          const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
+          const locals = mine.map((p) => rotateXY(p.center, -angle));
+          const minX = Math.min(...locals.map((l) => l.x)) - pitchX / 2;
+          const maxX = Math.max(...locals.map((l) => l.x)) + pitchX / 2;
+          const minY = Math.min(...locals.map((l) => l.y)) - pitchY / 2;
+          const maxY = Math.max(...locals.map((l) => l.y)) + pitchY / 2;
+          const corners = [
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY },
+          ].map((c) => rotateXY(c, angle));
+          const { rows, cols } = gridShape(mine);
+          const allSelected = mine.every((p) => selected.includes(p.id));
+          const lp = frame.toPx(corners[3]);
+          const text = `${seg.label} · ${rows}×${cols}`;
+          return (
+            <g key={seg.id}>
+              <path
+                d={polyPath(frame, corners)}
+                fill="none"
+                stroke={allSelected ? '#fde68a' : '#c9a24a'}
+                strokeWidth={allSelected ? 2 : 1.2}
+                strokeDasharray="6 4"
+                opacity={0.9}
+                pointerEvents="none"
+              />
+              <g
+                transform={`translate(${lp.x}, ${lp.y}) scale(${1 / frame.zoom})`}
+                style={{ cursor: 'pointer' }}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onSelectTable(mine.map((p) => p.id));
+                }}
+              >
+                <rect x={0} y={-18} width={text.length * 6.4 + 10} height={16} rx={3} fill="#1f2937" stroke="#c9a24a" strokeWidth={1} />
+                <text x={5} y={-6} fontSize={9.5} fontWeight={800} fill="#fde68a" fontFamily="var(--mono)">
+                  {text}
+                </text>
+              </g>
+            </g>
+          );
+        })}
+
       {/* DCDB / ACDB enclosures on the wall */}
       {(project.electricalBoxes ?? []).map((bx) => {
         const wp = batteryWorldPos(project, bx);
@@ -3410,15 +3479,14 @@ function EditorLayers({
           will land (already avoiding obstructions/keepouts/setbacks) */}
       {tablePreview &&
         (() => {
-          const pa = frame.toPx({ x: tablePreview.minX, y: tablePreview.minY });
-          const pb = frame.toPx({ x: tablePreview.maxX, y: tablePreview.maxY });
+          const n = tablePreview.panels.length;
+          const { rows, cols } = gridShape(tablePreview.panels);
+          const top = tablePreview.area.reduce((m, c) => (c.y > m.y ? c : m), tablePreview.area[0]);
+          const lp = frame.toPx(top);
           return (
             <g>
-              <rect
-                x={Math.min(pa.x, pb.x)}
-                y={Math.min(pa.y, pb.y)}
-                width={Math.abs(pb.x - pa.x)}
-                height={Math.abs(pb.y - pa.y)}
+              <path
+                d={polyPath(frame, tablePreview.area)}
                 fill="rgba(34,197,94,0.12)"
                 stroke="#22c55e"
                 strokeWidth={1.6}
@@ -3433,6 +3501,15 @@ function EditorLayers({
                   strokeWidth={1}
                 />
               ))}
+              {/* what the release will make: rows × columns, modules, kWp */}
+              <g transform={`translate(${lp.x}, ${lp.y}) scale(${1 / frame.zoom})`} pointerEvents="none">
+                <rect x={0} y={-30} width={n > 0 ? 176 : 150} height={20} rx={4} fill="rgba(20,24,30,0.9)" stroke="#22c55e" />
+                <text x={7} y={-16} fontSize={11} fontWeight={700} fill="#bbf7d0" fontFamily="var(--mono)">
+                  {n > 0
+                    ? `${rows} row${rows === 1 ? '' : 's'} × ${cols} · ${n} modules · ${((n * spec.watt) / 1000).toFixed(1)} kWp`
+                    : 'no room for a module here'}
+                </text>
+              </g>
             </g>
           );
         })()}
