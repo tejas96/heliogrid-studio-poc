@@ -103,6 +103,26 @@ export interface SiteLocation {
   solarInsights?: SolarInsights;
   /** measured PVGIS climate, when the fetch succeeded for this pin */
   weather?: SiteWeather;
+  /**
+   * The pin's typical year, hour by hour (PVGIS TMY) — the hourly engine's
+   * input. Metadata only; the 8760 samples live in the blob store. null =
+   * PVGIS has no hourly year here (the monthly estimate carries on).
+   */
+  tmy?: SiteTmy | null;
+}
+
+export interface SiteTmy {
+  source: 'pvgis-tmy';
+  /** blob id of the packed Int16 samples (lib/energy/tmy) */
+  blobId: string;
+  forLatLng: LatLng;
+  radiationDb: string;
+  yearMin: number | null;
+  yearMax: number | null;
+  /** the hour's values are averages centred this far into the hour (h) */
+  timeOffsetH: number;
+  elevationM: number | null;
+  fetchedAt: number;
 }
 
 // ─── Step 2: Roofs ──────────────────────────────────────────────────────────
@@ -740,6 +760,28 @@ export interface EnergyReport {
   degradationPctPerYear: number;
   /** provenance of the irradiance driving these numbers, for honest labeling */
   irradianceSource?: 'PVGIS' | 'estimate';
+  /**
+   * 'hourly' = the 8760-hour engine (PVGIS typical year, Perez sky, module
+   * temperature, inverter curve and clipping, hour by hour); 'monthly' = the
+   * quick mean-field estimate used until the typical year is in.
+   */
+  engine?: 'hourly' | 'monthly';
+  /** what the hourly engine saw, for the report's provenance line */
+  hourly?: {
+    radiationDb: string;
+    yearMin: number | null;
+    yearMax: number | null;
+    /** kWh/m²/yr on the horizontal, from the typical year */
+    ghiKwhM2: number;
+    /** kWh/m²/yr in the modules' planes (unshaded), area-weighted */
+    poaKwhM2: number;
+    dcKwh: number;
+    clippedKwh: number;
+    /** hours in the year the inverter was clipping */
+    clippingHours: number;
+    /** which assumptions were defaults, not measured — for the assumptions box */
+    assumed: string[];
+  };
 }
 
 export interface FinancialSummary {

@@ -87,14 +87,21 @@ export function EnergyReportSheet({
           {/* provenance follows the ACTUAL numbers (r.irradianceSource), not the
               persisted dataSource string — which can read 'PVGIS' on a rehydrated
               project whose weather was rejected/stale and fell back to estimate */}
-          {r.irradianceSource === 'PVGIS'
-            ? `Real irradiance — PVGIS ${project.location?.weather?.raddatabase ?? '(measured)'}${
-                project.location?.weather?.yearsOfRecord
-                  ? ` (${project.location.weather.yearsOfRecord}-yr record)`
-                  : ''
-              }`
-            : 'Built-in irradiance model (latitude fit, ±10%)'}{' '}
-          · POA = beam-weighted plane-of-array estimate · shading auto-updates on edits
+          {r.engine === 'hourly' && r.hourly
+            ? `Hourly engine — PVGIS typical year (${r.hourly.radiationDb}${
+                r.hourly.yearMin && r.hourly.yearMax ? ` ${r.hourly.yearMin}–${r.hourly.yearMax}` : ''
+              }), 8760 hours × every module: Perez sky, shade by the hour, module temperature, inverter curve and clipping · ` +
+              `${r.hourly.ghiKwhM2} kWh/m² horizontal → ${r.hourly.poaKwhM2} kWh/m² in plane` +
+              (r.hourly.clippingHours > 0 ? ` · clipping ${r.hourly.clippingHours} h/yr (${r.hourly.clippedKwh} kWh)` : '') +
+              ` · assumed: ${r.hourly.assumed.join('; ')}`
+            : r.irradianceSource === 'PVGIS'
+              ? `Real irradiance — PVGIS ${project.location?.weather?.raddatabase ?? '(measured)'}${
+                  project.location?.weather?.yearsOfRecord
+                    ? ` (${project.location.weather.yearsOfRecord}-yr record)`
+                    : ''
+                } · monthly estimate until the typical year loads · POA = beam-weighted plane-of-array estimate`
+              : 'Built-in irradiance model (latitude fit, ±10%) · POA = beam-weighted plane-of-array estimate'}{' '}
+          · shading auto-updates on edits
         </div>
       </div>
 

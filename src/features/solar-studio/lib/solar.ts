@@ -3,6 +3,8 @@ import type { EnergyReport, LatLng, LossItem, PlacedPanel, Project, SiteLocation
 import { DIFFUSE_SHARE, poaFactor, poaBeamRatio } from './poa';
 import { DAYS_IN_MONTH } from './pvgis';
 import { roofsUnionAreaM2 } from './roof-topology';
+import { peekTmy } from './energy/tmy';
+import { hourlyEnergyForProject } from './energy/hourly';
 
 // Astronomical core lives in lib/sun.ts (kept acyclic for physics modules);
 // re-exported here so every existing `from './solar'` import keeps working.
@@ -115,12 +117,78 @@ export function panelEnergyShares(project: Project): Map<string, number> {
   return out;
 }
 
+/** 25-year energy with a fixed yearly degradation, from a first-year figure. */
+function lifetimeFrom(annualKwh: number, degradation: number) {
+  let lifetime = 0;
+  let yearOut = annualKwh;
+  for (let y = 0; y < 25; y++) {
+    lifetime += yearOut;
+    yearOut *= 1 - degradation;
+  }
+  return { lifetime, year25: annualKwh * Math.pow(1 - degradation, 24) };
+}
+
 export function computeEnergyReport(project: Project): EnergyReport {
   const panels = project.panels.filter((p) => p.enabled);
   const wp = project.components.panel?.watt ?? 0;
   const capacityKwp = (panels.length * wp) / 1000;
   // union, not sum — a mumty/stacked roof must not double-count its footprint
   const roofAreaM2 = roofsUnionAreaM2(project.roofs);
+
+  // ── The hourly engine, whenever the site's typical year is in memory ──────
+  // 8760 hours, module by module: sun, Perez sky, near shade by the hour,
+  // incidence angle, soiling, module temperature, inverter curve, clipping.
+  // The monthly estimate below is what stands in until the year has loaded.
+  const tmyYear = peekTmy(project.location?.tmy);
+  const hourly = tmyYear ? hourlyEnergyForProject(project, tmyYear) : null;
+  if (hourly && project.location?.tmy) {
+    const meta = project.location.tmy;
+    const beamAccess =
+      panels.length > 0 ? panels.reduce((s, p) => s + (p.solarAccess ?? 1), 0) / panels.length : 1;
+    const electricalPct = electricalShadingLossPct(project);
+    const degradation = 0.0075;
+    const { lifetime, year25 } = lifetimeFrom(hourly.annualKwh, degradation);
+    return {
+      capacityKwp: Math.round(capacityKwp * 100) / 100,
+      panelCount: panels.length,
+      roofAreaM2: Math.round(roofAreaM2),
+      poaFactor: hourly.ghiKwhM2 > 0 ? Math.round((hourly.poaKwhM2 / hourly.ghiKwhM2) * 1000) / 1000 : 1,
+      annualMwh: Math.round(hourly.annualKwh / 100) / 10,
+      annualKwh: hourly.annualKwh,
+      specificYield: capacityKwp > 0 ? Math.round(hourly.annualKwh / capacityKwp) : 0,
+      performanceRatio: hourly.prPct,
+      monthlyKwh: hourly.monthlyKwh,
+      monsoonMonths: MONSOON_MONTHS,
+      losses: [
+        ...hourly.losses.map((l) =>
+          l.key === 'shading' && project.surround && project.ignoreSurround
+            ? { ...l, label: `${l.label} — neighbour shade OFF by your choice` }
+            : l,
+        ),
+        ...(electricalPct !== null && electricalPct > 0
+          ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
+          : []),
+      ],
+      totalLossPct: Math.round((100 - hourly.prPct) * 10) / 10,
+      avgSolarAccessPct: Math.round((DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * beamAccess) * 100),
+      lifetimeMwh25: Math.round(lifetime / 100) / 10,
+      year25Mwh: Math.round(year25 / 100) / 10,
+      degradationPctPerYear: degradation * 100,
+      irradianceSource: 'PVGIS',
+      engine: 'hourly',
+      hourly: {
+        radiationDb: meta.radiationDb,
+        yearMin: meta.yearMin,
+        yearMax: meta.yearMax,
+        ghiKwhM2: hourly.ghiKwhM2,
+        poaKwhM2: hourly.poaKwhM2,
+        dcKwh: hourly.dcKwh,
+        clippedKwh: hourly.clippedKwh,
+        clippingHours: hourly.clippingHours,
+        assumed: hourly.assumed,
+      },
+    };
+  }
   const psh = project.location?.peakSunHours ?? 5.3;
   const avgAccess =
     panels.length > 0
@@ -230,13 +298,7 @@ export function computeEnergyReport(project: Project): EnergyReport {
   ];
   const totalLossPct = Math.round((1 - pr) * 1000) / 10;
   const degradation = 0.0075;
-  let lifetime = 0;
-  let yearOut = annualKwh;
-  for (let y = 0; y < 25; y++) {
-    lifetime += yearOut;
-    yearOut *= 1 - degradation;
-  }
-  const year25 = annualKwh * Math.pow(1 - degradation, 24);
+  const { lifetime, year25 } = lifetimeFrom(annualKwh, degradation);
   return {
     capacityKwp: Math.round(capacityKwp * 100) / 100,
     panelCount: panels.length,
@@ -256,6 +318,7 @@ export function computeEnergyReport(project: Project): EnergyReport {
     year25Mwh: Math.round(year25 / 100) / 10,
     degradationPctPerYear: degradation * 100,
     irradianceSource,
+    engine: 'monthly',
   };
 }
 
