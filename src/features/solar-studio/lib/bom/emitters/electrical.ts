@@ -1,5 +1,6 @@
 import type { BomLine } from '../../../types';
 import { acBreakerA, acFullLoadA, dcCableSizeMm2, sizeAcCable } from '../../electrical-sizing';
+import { dcCableBySize, type DcCableBySize } from '../../electrical/dc-cable';
 import { cableRatePerM } from '../../../data/pricebook';
 import type { BomContext } from '../context';
 import { AC_ALLOWANCE_M } from '../context';
@@ -46,47 +47,70 @@ export function emitElectrical(ctx: BomContext): BomLine[] {
   const acCable = sizeAcCable(acSystemKw, inv.phases, acRunM);
   const acSizeMm2 = acCable.mm2;
 
-  out.push(
-    line({
-      key: 'elec.dc_cable',
-      category: 'Electrical BOS',
-      // The size lives in `spec`, where it is DERIVED. It used to be baked into
-      // this item name as a flat "4 sq.mm" that contradicted the derived spec
-      // beside it on any high-Isc module. Safe to change now: since 22c the
-      // override key is the LineKey, not the item text, so renaming an item no
-      // longer orphans a user's saved edit.
-      item: 'DC Solar Cable',
-      // The conductor is SIZED, not assumed: smallest standard mm² whose
-      // ampacity carries the string fuse (IEC 62548), from the module's own
-      // Isc. This is the SAME dcCableSizeMm2 the SLD sheet prints, so the two
-      // documents can no longer quote different cable for one system — the BOM
-      // used to state a flat 4 sq.mm here and would have contradicted the SLD
-      // on any high-Isc module.
-      spec: `${dcCableSizeMm2(ctx.spec)} sq.mm Cu · 1.1kV, UV-resistant, red+black pair`,
-      // A surveyed run the user typed in is THEIR measurement of the real site,
-      // so it outranks our estimator — but it is still not the routed geometry,
-      // which is why the three sources get three different labels rather than
-      // collapsing to routed/not-routed.
-      confidence:
-        dcSource === 'routed' ? 'derived' : dcSource === 'input' ? 'measured' : 'estimated',
-      qty: dcCableM,
-      unit: 'm',
-      unitPriceInr: cableRatePerM(PRICE_BOOK.dcCablePerMBySize, dcCableSizeMm2(ctx.spec)),
-      // The old text claimed "(+15% slack incl.)" on a figure that had no slack
-      // in it — the traceability line is the one thing a reviewer trusts, so it
-      // now states exactly what was summed.
-      formula:
-        dcSource === 'routed'
-          ? `Routed home runs ${routedDc.homeRunM} m` +
-            (routedDc.intraM > 0 ? ` + ${routedDc.intraM} m inter-row hops` : '') +
-            ` (incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop/run)`
-          : dcSource === 'input'
+  // The DC conductor is SIZED, not assumed — and once the runs are routed it is
+  // sized PER STRING against both the fuse it carries (IEC 62548) and the drop
+  // over its real loop (`sizeDcCable`), the same answer the SLD, the cable
+  // schedule and the energy engine read. Different strings can land on
+  // different sizes, so the routed quantity is one line PER SIZE; the size
+  // carrying the most metres keeps the plain key (and any saved edit on it).
+  const dcSpec = (mm2: number) => `${mm2} sq.mm Cu · 1.1kV, UV-resistant, red+black pair`;
+  const dcSlackNote = `(incl. ${Math.round(rules.cable.slackPct * 100)}% slack, ${rules.cable.defaultVerticalDropM} m drop/run)`;
+  const dcSizingNote = (row: DcCableBySize) =>
+    ` · Conductor ${row.mm2} sq.mm for ${row.strings.length} string${row.strings.length === 1 ? '' : 's'}: ` +
+    (row.dropGoverned > 0
+      ? `governed by VOLTAGE DROP on ${row.dropGoverned} of them (longest loop ${Math.round(row.longestLoopM)} m → ${row.worstDropPct.toFixed(1)}%, limit ${rules.cable.maxDcDropPct}% at STC)`
+      : `governed by the string fuse (longest loop ${Math.round(row.longestLoopM)} m → ${row.worstDropPct.toFixed(1)}%, inside the ${rules.cable.maxDcDropPct}% limit)`) +
+    '.';
+  const dcSizes = dcSource === 'routed' ? dcCableBySize(project) : [];
+  const dcMain = dcSizes.length ? dcSizes.reduce((a, b) => (b.meters > a.meters ? b : a)) : null;
+  if (dcMain) {
+    for (const row of dcSizes) {
+      out.push(
+        line({
+          key: 'elec.dc_cable',
+          ...(row === dcMain ? {} : { instance: String(row.mm2) }),
+          category: 'Electrical BOS',
+          item: 'DC Solar Cable',
+          spec: dcSpec(row.mm2),
+          confidence: 'derived',
+          qty: row.meters,
+          unit: 'm',
+          unitPriceInr: cableRatePerM(PRICE_BOOK.dcCablePerMBySize, row.mm2),
+          formula:
+            `Routed home runs ${row.homeRunM} m` +
+            (row.intraM > 0 ? ` + ${row.intraM} m inter-row hops` : '') +
+            ` ${dcSlackNote}` +
+            dcSizingNote(row),
+        }),
+      );
+    }
+  } else {
+    out.push(
+      line({
+        key: 'elec.dc_cable',
+        category: 'Electrical BOS',
+        item: 'DC Solar Cable',
+        spec: dcSpec(dcCableSizeMm2(ctx.spec)),
+        // A surveyed run the user typed in is THEIR measurement of the real
+        // site, so it outranks our estimator — but it is still not the routed
+        // geometry, which is why the two sources get two different labels.
+        confidence: dcSource === 'input' ? 'measured' : 'estimated',
+        qty: dcCableM,
+        unit: 'm',
+        unitPriceInr: cableRatePerM(PRICE_BOOK.dcCablePerMBySize, dcCableSizeMm2(ctx.spec)),
+        formula:
+          (dcSource === 'input'
             ? `YOUR SURVEYED RUN — ${project.bom!.inputs!.avgDcRunM} m average × ${Math.max(1, project.strings.length)} string(s) × 2 conductors, +${Math.round(rules.cable.slackPct * 100)}% slack. Routing the runs in Step 6 would replace this with measured geometry.`
             : `ESTIMATE — ${project.strings.length} strings × (2 × 15 m home runs + hops beyond the ${rules.cable.moduleLeadReachM} m module leads), +${Math.round(rules.cable.slackPct * 100)}% slack, floored at 30 m. ` +
               (project.inverterPlacements.length === 0
                 ? 'Place the inverter (Step 6 → Mount inverter), then Auto string, to route the real runs.'
-                : 'Run Auto string to route the real runs.'),
-    }),
+                : 'Run Auto string to route the real runs.')) +
+          ` · Conductor ${dcCableSizeMm2(ctx.spec)} sq.mm carries the string fuse; the ${rules.cable.maxDcDropPct}% drop sizing runs once the runs are routed.`,
+      }),
+    );
+  }
+
+  out.push(
     line({
       key: 'elec.ac_cable',
       category: 'Electrical BOS',

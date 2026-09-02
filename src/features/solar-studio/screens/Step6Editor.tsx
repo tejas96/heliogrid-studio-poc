@@ -344,7 +344,7 @@ export function Step6Editor() {
   // (like dragLine/marquee) — the store is written once, on release, so a drag
   // is ONE undo step rather than one per pointermove.
   const [routeDrag, setRouteDrag] = useState<
-    { routeId: string; index: number; pos: XY; insert?: boolean } | null
+    { routeId: string; index: number; pos: XY; insert?: boolean; start: XY } | null
   >(null);
   const [dragLine, setDragLine] = useState<{ a: XY; b: XY } | null>(null);
   const measure = useMeasure();
@@ -950,9 +950,11 @@ export function Step6Editor() {
     const d = routeDrag;
     setRouteDrag(null);
     if (!d) return;
-    // An inserted corner the user never moved is just noise on the same line —
-    // drop it rather than litter the route with collinear points.
-    if (d.insert && Math.hypot(m.x - d.pos.x, m.y - d.pos.y) < 0.25) return;
+    // A press that never travelled is a click, not an edit: an inserted corner
+    // would be noise on the same line, and a "moved" corner would only mark
+    // the run hand-routed for nothing (measured against where the press BEGAN —
+    // the live position always equals the release point).
+    if (Math.hypot(m.x - d.start.x, m.y - d.start.y) < 0.25) return;
     report(ops.run(routesMoveWaypoint, { routeId: d.routeId, index: d.index, pos: m, insert: !!d.insert }));
   }
 
@@ -1127,7 +1129,7 @@ export function Step6Editor() {
             // so it would swallow the handle
             const hit = findRouteHandleAt(m);
             if (hit) {
-              setRouteDrag({ ...hit, pos: m });
+              setRouteDrag({ ...hit, pos: m, start: m });
               return true;
             }
             // grab-and-go: pressing on the run itself creates a corner there and
@@ -1135,7 +1137,7 @@ export function Step6Editor() {
             // the insert is only committed on release
             const seg = findRouteSegmentAt(m);
             if (seg) {
-              setRouteDrag({ ...seg, pos: m, insert: true });
+              setRouteDrag({ ...seg, pos: m, insert: true, start: m });
               return true;
             }
             // grab a PANEL: pressing one starts a move, releasing without

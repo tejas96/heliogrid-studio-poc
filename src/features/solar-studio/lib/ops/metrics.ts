@@ -37,13 +37,16 @@ export function designMetrics(p: Project): DesignMetrics {
   const enabled = p.panels.filter((m) => m.enabled);
   const strung = new Set(p.strings.flatMap((s) => s.panelIds));
   const lines = deriveBomResult(p).lines;
-  const dc = lines.find((l) => l.id === 'elec.dc_cable');
+  // one DC cable line per size once the runs are routed — sum them all
+  const dcCableM = lines
+    .filter((l) => l.id === 'elec.dc_cable' || l.id.startsWith('elec.dc_cable:'))
+    .reduce((s, l) => s + l.qty, 0);
   return {
     modules: enabled.length,
     kwp: Math.round(((enabled.length * (p.components.panel?.watt ?? 0)) / 1000) * 100) / 100,
     strings: p.strings.length,
     unstrungModules: enabled.filter((m) => !strung.has(m.id)).length,
-    dcCableM: dc ? dc.qty : 0,
+    dcCableM,
     steelKg: Math.round(deriveStructures(p).reduce((s, st) => s + st.steelKg, 0)),
     bomTotalInr: deriveMoney(p).total,
     annualKwh: Math.round(deriveEnergy(p).annualKwh),

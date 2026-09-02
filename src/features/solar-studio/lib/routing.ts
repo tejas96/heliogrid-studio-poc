@@ -33,6 +33,7 @@ import { rowExitPoint } from './routing-tray';
 import { unitBaseY, unitPlanPos, type PlacedUnit } from './unit-pos';
 import { resolveCapabilities } from './capabilities';
 import { resolveRules } from '../data/rules/india';
+import { sizeDcCable } from './electrical-sizing';
 
 /**
  * How far a run drops vertically, FROM THE MODEL — not a constant.
@@ -460,7 +461,13 @@ export function autoRouteStrings(project: Project): CableRoute[] {
   const out: CableRoute[] = [...kept];
 
   for (const s of project.strings) {
-    if (kept.some((r) => r.fromRef === s.id)) continue; // user owns this one
+    // The user owns a hand-routed LEG, not the whole string: its sibling still
+    // gets routed (a corner dragged on the + run used to make the − run vanish,
+    // and the BOM with it). Legs are told apart by the router's own ids; a
+    // hand-routed run with some other id keeps the old rule and owns the string.
+    const owned = kept.filter((r) => r.fromRef === s.id);
+    if (owned.some((r) => !/\/hr\/\d+$/.test(r.id))) continue;
+    const ownedLegs = new Set(owned.map((r) => r.id));
     const ends = [s.panelIds[0], s.panelIds[s.panelIds.length - 1]]
       .map((id) => byId.get(id))
       .filter((p): p is NonNullable<typeof p> => !!p);
@@ -477,6 +484,7 @@ export function autoRouteStrings(project: Project): CableRoute[] {
     const target = dcdbForInverter(project, placementIndex) ?? inverterWorldPos(project, placementIndex)!;
     // a string needs BOTH conductors home: + from one end, − from the other
     ends.forEach((end, i) => {
+      if (ownedLegs.has(`${s.id}/hr/${i}`)) return; // hand-routed: already in `kept`
       // along the row to its end first — cables ride the tray under the
       // modules, they never cut across the array — then on to the target
       const exit = rowExitPoint(project, end, target);
@@ -592,42 +600,41 @@ export function acCableFromRoutes(project: Project): { meters: number; routed: b
 }
 
 /**
- * Voltage drop on each routed DC home run.
- *
- *   Vdrop = 2 · L · I · ρ / A     (2 = out and back on the conductor pair)
- *
- * Reported against the string's Vmp at STC. Long runs on thin cable quietly
- * burn yield the energy model never sees — the plan asked for this check
- * precisely because a routed length finally makes it computable.
- *
- * ENGINEER VALIDATION REQUIRED: the LIMIT is policy (industry ~1–2% DC; the
- * binding figure is whatever the DISCOM/consultant adopts) — see CableRules.
+ * The electrical length of a string's home-run LOOP: both legs, roof path plus
+ * the wall drop, without the purchase slack. null until a leg is routed; a
+ * lone leg stands for the pair (the + and − run home together).
+ */
+export function stringLoopM(project: Project, stringId: string): number | null {
+  const legs = (project.cableRoutes ?? []).filter((r) => r.kind === 'string_homerun' && r.fromRef === stringId);
+  if (legs.length === 0) return null;
+  const sum = legs.reduce((acc, r) => acc + polylineLengthM(r.waypoints) + r.verticalDropM, 0);
+  return legs.length === 1 ? 2 * sum : sum;
+}
+
+/**
+ * The drop check AFTER the cable has been sized for it. The cable the BOM
+ * quotes is already the section the drop demanded (`sizeDcCable`), so this
+ * warns only when no standard section keeps the loop inside the limit — a
+ * string that passes here passes on paper and on the roof.
  */
 export function routeIssues(project: Project, panel: PanelSpec | null): ValidationIssue[] {
   const rules = resolveRules().cable;
-  const routes = (project.cableRoutes ?? []).filter((r) => r.kind === 'string_homerun');
-  if (!panel || routes.length === 0) return [];
+  if (!panel) return [];
   const out: ValidationIssue[] = [];
   for (const s of project.strings) {
-    const mine = routes.filter((r) => r.fromRef === s.id);
-    if (mine.length === 0) continue;
-    // the worst conductor of the pair governs the string
-    const longest = Math.max(...mine.map((r) => polylineLengthM(r.waypoints) + r.verticalDropM));
-    const vDrop =
-      (2 * longest * panel.impA * rules.copperResistivity) / Math.max(0.1, rules.dcCableMm2);
-    const vString = panel.vmpV * s.panelIds.length;
-    const pct = vString > 0 ? (vDrop / vString) * 100 : 0;
-    if (pct > rules.maxDcDropPct) {
-      out.push({
-        level: 'warn',
-        code: 'dc_voltage_drop',
-        message:
-          `${s.name}: ${pct.toFixed(1)}% DC voltage drop over its ${Math.round(longest)} m run ` +
-          `(${rules.dcCableMm2} sq.mm Cu) — above the ${rules.maxDcDropPct}% design limit. ` +
-          `Shorten the run, move the inverter closer, or size the cable up.`,
-        focusPanelIds: s.panelIds,
-      });
-    }
+    const loopM = stringLoopM(project, s.id);
+    if (loopM === null) continue;
+    const sized = sizeDcCable(panel, s.panelIds.length, loopM);
+    if (sized.withinLimit) continue;
+    out.push({
+      level: 'warn',
+      code: 'dc_voltage_drop',
+      message:
+        `${s.name}: ${sized.dropPct.toFixed(2)}% DC voltage drop over its ${Math.round(loopM)} m loop ` +
+        `even at ${sized.mm2} sq.mm Cu — above the ${rules.maxDcDropPct}% design limit. ` +
+        `Shorten the run or move the inverter closer.`,
+      focusPanelIds: s.panelIds,
+    });
   }
   return out;
 }

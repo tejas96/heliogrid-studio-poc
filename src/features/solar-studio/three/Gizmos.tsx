@@ -21,6 +21,9 @@ import { unitBaseY } from '../lib/unit-pos';
 import type { ArraySegment, PanelSpec, Project, Roof, XY } from '../types';
 import type { DesignOp } from '../lib/ops/types';
 import { previewOp, type OpPreview } from '../lib/ops/run';
+
+/** a press that travels less than this is a tap on the handle, never a move */
+const HANDLE_TAP_PX = 6;
 import { summarizeImpact } from '../lib/ops/metrics';
 import { panelsNudge, segmentSetAzimuth, segmentSetTilt } from '../lib/ops/layout-ops';
 import { inverterMove } from '../lib/ops/electrical-ops';
@@ -191,6 +194,11 @@ export function Handle({
   onEnd: (e: React.PointerEvent, cancelled: boolean) => void;
 }) {
   const [hover, setHover] = useState(false);
+  // where the press began, in screen px: a release without travel is a tap on
+  // the handle, not a move — it must never run the op (a handle hangs OFFSET
+  // from its object, so committing a tap would jump the object to wherever
+  // the ray under the handle meets the plane)
+  const downAt = useRef<{ x: number; y: number } | null>(null);
   useCursor(hover, 'grab');
   return (
     <Html
@@ -216,6 +224,7 @@ export function Handle({
           } catch {
             /* not capturable */
           }
+          downAt.current = { x: e.clientX, y: e.clientY };
           onStart(e);
         }}
         onPointerMove={(e) => {
@@ -228,7 +237,10 @@ export function Handle({
           } catch {
             /* not captured */
           }
-          onEnd(e, false);
+          const d = downAt.current;
+          downAt.current = null;
+          const travelled = d ? Math.hypot(e.clientX - d.x, e.clientY - d.y) : 0;
+          onEnd(e, travelled < HANDLE_TAP_PX);
         }}
         onPointerCancel={(e) => onEnd(e, true)}
         onKeyDown={(e) => {

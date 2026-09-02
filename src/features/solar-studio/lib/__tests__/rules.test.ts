@@ -17,6 +17,7 @@ describe('India rule config (extraction snapshot)', () => {
       [4, 32],
       [6, 42],
       [10, 57],
+      [16, 73], // added with drop-based sizing: the rung a long loop climbs to
     ]);
   });
 

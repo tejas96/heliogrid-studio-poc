@@ -5,7 +5,8 @@
 // `sldParams` snapshot, which froze on first visit and silently went stale
 // when the inverter or module changed afterwards.
 import type { Project, SldParams } from '../types';
-import { acBreakerA, dcCableSizeMm2, dcFuseA, dcIsolatorA } from './electrical-sizing';
+import { acBreakerA, dcFuseA, dcIsolatorA } from './electrical-sizing';
+import { dcCableSizesInUse } from './electrical/dc-cable';
 import { resolveDesignTemps, vocAt } from './electrical/temps';
 
 /**
@@ -41,8 +42,10 @@ export function deriveSldDefaults(project: Project): SldParams | null {
     inverterCount: project.components.inverterCount,
     inverterLabel: `${inv.brand} ${inv.model}`,
     acRatingKw: acKw,
-    // DC side derived from the selected module's Isc (≥1.56×Isc per IEC 62548)
-    dcCableSizeMm2: panel ? dcCableSizeMm2(panel) : 4,
+    // DC side derived from the selected module's Isc (≥1.56×Isc per IEC 62548);
+    // the cable is the LARGEST section any string needs — its fuse rating, or
+    // the drop over its routed loop once the runs exist
+    dcCableSizeMm2: panel ? Math.max(4, ...dcCableSizesInUse(project)) : 4,
     dcFuseA: panel ? dcFuseA(panel) : 20,
     dcSpdType: 'Type-II',
     dcIsolatorA: panel ? dcIsolatorA(panel) : 32,

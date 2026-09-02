@@ -23,12 +23,66 @@ export function dcIsolatorA(panel: PanelSpec): number {
   return nextInLadder(resolveRules().dcSizing.isolatorLadder, dcFuseA(panel));
 }
 
-/** DC cable size: smallest standard mm² whose ampacity ≥ the fuse rating. */
+/** DC cable size by AMPACITY alone: smallest standard mm² that carries the fuse. */
 export function dcCableSizeMm2(panel: PanelSpec): number {
   const ampacity = resolveRules().dcSizing.cableAmpacity;
   const fuse = dcFuseA(panel);
   const hit = ampacity.find(([, amps]) => amps >= fuse);
   return hit ? hit[0] : ampacity[ampacity.length - 1][0];
+}
+
+/** Resistance of a conductor LOOP (both legs summed in `loopM`), ohms. */
+export function dcLoopResistanceOhm(loopM: number, mm2: number): number {
+  return (resolveRules().cable.copperResistivity * loopM) / Math.max(0.1, mm2);
+}
+
+/**
+ * Voltage drop of a string's home-run loop at STC, percent of the string's
+ * Vmp. A resistive drop at Imp loses the same FRACTION of power as of
+ * voltage, so this is also the string's wiring loss at STC.
+ */
+export function dcDropPct(panel: PanelSpec, modules: number, loopM: number, mm2: number): number {
+  const vString = panel.vmpV * modules;
+  if (vString <= 0) return 0;
+  return ((panel.impA * dcLoopResistanceOhm(loopM, mm2)) / vString) * 100;
+}
+
+export interface DcCableSizing {
+  /** the size to buy — the thicker of the two criteria */
+  mm2: number;
+  /** smallest size whose ampacity carries the string fuse */
+  ampacityMm2: number;
+  /** smallest size that keeps the loop inside the drop limit */
+  dropMm2: number;
+  governedBy: 'ampacity' | 'voltage-drop';
+  /** actual drop at the chosen size, percent of the string Vmp at STC */
+  dropPct: number;
+  /** false ⇒ even the largest standard section exceeds the limit */
+  withinLimit: boolean;
+}
+
+/**
+ * Size a string's DC home-run cable against BOTH criteria — the fuse it must
+ * carry and the drop over its real loop — and say which one governed. Same
+ * shape as `sizeAcCable`, so the BOM, the schedule, the SLD, the 3D string
+ * card and the energy engine all read one answer for one string.
+ */
+export function sizeDcCable(panel: PanelSpec, modules: number, loopM: number): DcCableSizing {
+  const { cableAmpacity } = resolveRules().dcSizing;
+  const limit = resolveRules().cable.maxDcDropPct;
+  const ampacityMm2 = dcCableSizeMm2(panel);
+  const dropHit = cableAmpacity.find(([s]) => dcDropPct(panel, modules, loopM, s) <= limit);
+  const dropMm2 = dropHit ? dropHit[0] : cableAmpacity[cableAmpacity.length - 1][0];
+  const mm2 = Math.max(ampacityMm2, dropMm2);
+  const dropPct = dcDropPct(panel, modules, loopM, mm2);
+  return {
+    mm2,
+    ampacityMm2,
+    dropMm2,
+    governedBy: dropMm2 > ampacityMm2 ? 'voltage-drop' : 'ampacity',
+    dropPct,
+    withinLimit: dropPct <= limit + 1e-9,
+  };
 }
 
 // ─── AC side ────────────────────────────────────────────────────────────────

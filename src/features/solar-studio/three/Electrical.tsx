@@ -23,7 +23,8 @@ import { routeResetToAuto } from '../lib/ops/route-ops';
 import { RouteGizmo } from './RouteGizmo';
 import { resolveDesignTemps, vmpAt, vocAt } from '../lib/electrical/temps';
 import { stringSizing } from '../lib/electrical/window';
-import { dcdbForInverter, polylineLengthM } from '../lib/routing';
+import { dcdbForInverter, polylineLengthM, stringLoopM } from '../lib/routing';
+import { sizeDcCable } from '../lib/electrical-sizing';
 import { stringShade } from '../lib/string-shade';
 import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { EntityLabel } from './EntityLabel';
@@ -460,6 +461,9 @@ export function ElectricalOverlay({
           const mid = midEntry ? [midEntry.position[0], midEntry.position[1] + midEntry.lift, midEntry.position[2]] : null;
           const mine = routes.filter((r) => r.kind === 'string_homerun' && r.fromRef === s.id);
           const longest = mine.length ? Math.max(...mine.map((r) => polylineLengthM(r.waypoints) + r.verticalDropM)) : 0;
+          // the cable this string was sized to — fuse rating, then the drop over its loop
+          const loopM = stringLoopM(project, s.id);
+          const cable = loopM === null ? null : sizeDcCable(spec, s.panelIds.length, loopM);
           const invLoadKw =
             (project.strings
               .filter((x) => x.inverterIndex === s.inverterIndex)
@@ -474,7 +478,13 @@ export function ElectricalOverlay({
                 `${health.n} modules · INV ${s.inverterIndex + 1} · MPPT ${s.mpptIndex + 1} · ${spec.impA} A`,
                 `Voc cold ${health.vocCold} V of ${inv.maxDcV} V · Vmp hot ${health.vmpHot} V (MPPT ${inv.mppt.minV}–${inv.mppt.maxV} V)`,
                 health.status === 'ok' ? `OK — ${health.why}` : `PROBLEM — ${health.why}`,
-                `${longest > 0 ? `home run ${Math.round(longest)} m` : 'not routed yet'} · INV ${s.inverterIndex + 1} carries ${invLoadKw.toFixed(1)} kWp on ${inv.acKw} kW AC (${(invLoadKw / inv.acKw).toFixed(2)})`,
+                `${
+                  cable && loopM !== null
+                    ? `home-run loop ${Math.round(loopM)} m · ${cable.mm2} mm² Cu · drop ${cable.dropPct.toFixed(1)}%${cable.withinLimit ? '' : ' — OVER THE LIMIT'}`
+                    : longest > 0
+                      ? `home run ${Math.round(longest)} m`
+                      : 'not routed yet'
+                } · INV ${s.inverterIndex + 1} carries ${invLoadKw.toFixed(1)} kWp on ${inv.acKw} kW AC (${(invLoadKw / inv.acKw).toFixed(2)})`,
                 ...(() => {
                   const sh = stringShade(project, s.id);
                   if (!sh) return ['shade: run the analysis to see this string’s loss'];

@@ -40,7 +40,8 @@ export function stringsInputFp(p: Project): string {
  * inverter placements, the meter, and the hand-routed runs it must keep.
  */
 /** Bump when the router's RULES change: stored runs are then stale and re-derive once. */
-const ROUTER_RULES_VERSION = 2;
+// 3: a hand-routed leg keeps its sibling — stored runs missing a leg re-derive once
+const ROUTER_RULES_VERSION = 3;
 
 export function routesInputFp(p: Project): string {
   return (

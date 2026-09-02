@@ -444,7 +444,7 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
         ...l,
         label:
           dc.source === 'routes'
-            ? `DC wiring — your cable runs (${dc.stringsRouted} string${dc.stringsRouted === 1 ? '' : 's'}, ${dc.conductorM} m of ${dc.mm2} mm² Cu, ${(dc.fraction * 100).toFixed(2)}% at full load)`
+            ? `DC wiring — your cable runs (${dc.stringsRouted} string${dc.stringsRouted === 1 ? '' : 's'}, ${dc.conductorM} m of ${dc.sizes} mm² Cu, ${(dc.fraction * 100).toFixed(2)}% at full load)`
             : 'DC wiring — assumed 1.5% at full load',
       };
     }

@@ -4,7 +4,8 @@
 // in — move the inverter or drag a corner and the sheet changes with it.
 import { Sheet, TitleBlock } from '../components/drawing';
 import { useActiveProject } from '../store/store';
-import { dcCableSizeMm2, sizeAcCable } from '../lib/electrical-sizing';
+import { sizeAcCable } from '../lib/electrical-sizing';
+import { dcCableSizesInUse, dcSizeLabel, dcStringCables } from '../lib/electrical/dc-cable';
 import { dcdbForInverter, polylineLengthM } from '../lib/routing';
 import { resolveRules } from '../data/rules/india';
 
@@ -20,7 +21,9 @@ export function CableScheduleSheet() {
   const routes = project.cableRoutes ?? [];
   const hasDcdb = (project.electricalBoxes ?? []).some((b) => b.kind === 'dcdb');
   const hasAcdb = (project.electricalBoxes ?? []).some((b) => b.kind === 'acdb');
-  const dcMm2 = spec ? dcCableSizeMm2(spec) : null;
+  // each string's conductor: fuse-rated until routed, then sized for its loop's drop too
+  const cableByString = new Map(dcStringCables(project).map((c) => [c.string.id, c]));
+  const dcSizes = spec ? dcCableSizesInUse(project) : [];
   const acKw = inv ? inv.acKw * Math.max(1, project.components.inverterCount) : 0;
 
   const pairIndex = new Map<string, number>();
@@ -39,12 +42,13 @@ export function CableScheduleSheet() {
         const s = project.strings.find((x) => x.id === r.fromRef);
         const sName = s?.name ?? 'String ?';
         const inverter = invNo(r.toRef);
+        const cable = cableByString.get(r.fromRef);
         return {
           id: r.id,
           tag: `DC-${sName.replace('String ', 'S')}${k === 0 ? '+' : '−'}`,
           from: `${sName} ${k === 0 ? '+ end' : '− end'}`,
           to: hasDcdb && dcdbForInverter(project, inverter - 1) ? `DCDB of INV ${inverter}` : `INV ${inverter}`,
-          size: dcMm2 ? `${dcMm2} sq.mm Cu 1.1 kV` : '—',
+          size: cable ? `${cable.mm2} sq.mm Cu 1.1 kV${cable.sizing?.governedBy === 'voltage-drop' ? ' (drop)' : ''}` : '—',
           plan,
           drop: r.verticalDropM,
           slack: r.slackPct,
@@ -163,7 +167,7 @@ export function CableScheduleSheet() {
       <g fontSize={8.5} fill="#555" fontFamily="monospace">
         <text x={40} y={498}>
           DERIVED — each run is its routed path on the roof plus the wall drop, with {Math.round(rules.slackPct * 100)}%
-          installation slack. * = hand-routed in the 3D model.
+          installation slack. DC sized for the string fuse and a ≤ {rules.maxDcDropPct}% drop at STC; (drop) = the drop governed. * = hand-routed in the 3D model.
         </text>
         <text x={40} y={511}>
           The BOM&apos;s DC cable line sums these same runs — the two cannot disagree.
@@ -175,7 +179,7 @@ export function CableScheduleSheet() {
           ['CLIENT', project.info.customerName || '—'],
           ['DRAWING', 'CABLE SCHEDULE'],
           ['RUNS', `${rows.length} (${rows.filter((r) => r.manual).length} hand-routed)`],
-          ['DC SIZE', dcMm2 ? `${dcMm2} sq.mm Cu` : '—'],
+          ['DC SIZE', dcSizes.length ? `${dcSizeLabel(dcSizes)} sq.mm Cu` : '—'],
           ['SHEET', 'CS-01 · A2'],
         ]}
       />

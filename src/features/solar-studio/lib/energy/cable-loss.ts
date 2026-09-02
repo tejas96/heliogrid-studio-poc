@@ -1,16 +1,16 @@
 // ─── Cable loss from the design's REAL runs ─────────────────────────────────
 // The cable schedule already knows every run: the two home-run conductors of
-// each string (their plan length, roof-edge drops and slack), the size the
-// string fuse demands, and each inverter's AC run with the size the drop
-// limit demands. The engine reads the same runs, so the wiring loss on the
-// report is the loss of the cables that will be bought — not a typed 1.5%.
-// Where the runs are not there yet, the assumed figures stand and say so.
+// each string (their plan length and roof-edge drops), the section each string
+// was SIZED to (fuse rating, then the drop over its loop), and each inverter's
+// AC run with the size the drop limit demands. The engine reads the same runs
+// and the same sizes, so the wiring loss on the report is the loss of the
+// cables that will be bought — not a typed 1.5%. Where the runs are not there
+// yet, the assumed figures stand and say so.
 import type { Project } from '../../types';
-import { dcCableSizeMm2, sizeAcCable } from '../electrical-sizing';
+import { dcLoopResistanceOhm, sizeAcCable } from '../electrical-sizing';
+import { dcSizeLabel, dcStringCables } from '../electrical/dc-cable';
 import { polylineLengthM } from '../routing';
 
-/** Copper at ~45 °C conductor temperature, Ω·mm²/m (0.0172 at 20 °C, +0.393%/K). */
-const RHO_CU_45C = 0.0172 * (1 + 0.00393 * 25);
 export const DC_ASSUMED_FRAC = 0.015;
 export const AC_ASSUMED_FRAC = 0.005;
 
@@ -21,52 +21,55 @@ export interface DcCableLoss {
   /** how much of the array is covered by routed strings, by STC power */
   strings: number;
   stringsRouted: number;
-  /** total conductor length of the routed strings, metres (both legs, slack included) */
+  /** electrical conductor length of the routed strings, metres (both legs) */
   conductorM: number;
-  mm2: number | null;
+  /** the sizes in use across the routed strings, e.g. "4" or "4 + 6" */
+  sizes: string;
 }
 
 /**
- * I²R over every routed string's two conductors at the module's Imp, against
- * the string's STC power. Strings without both home-run legs fall back to the
- * assumed figure for their share; the result is the power-weighted mix.
+ * I²R over every routed string's loop at the module's Imp, at the section the
+ * string was sized to, against the string's STC power. Strings with no home
+ * run yet fall back to the assumed figure for their share; the result is the
+ * power-weighted mix.
  */
 export function dcCableLossAtStc(project: Project): DcCableLoss {
   const spec = project.components.panel;
-  const routes = project.cableRoutes ?? [];
-  const strings = project.strings;
-  if (!spec || strings.length === 0) {
-    return { fraction: DC_ASSUMED_FRAC, source: 'assumed', strings: strings.length, stringsRouted: 0, conductorM: 0, mm2: null };
-  }
-  const mm2 = dcCableSizeMm2(spec);
+  const cables = dcStringCables(project);
+  const assumed = (strings: number): DcCableLoss => ({
+    fraction: DC_ASSUMED_FRAC,
+    source: 'assumed',
+    strings,
+    stringsRouted: 0,
+    conductorM: 0,
+    sizes: '',
+  });
+  if (!spec || cables.length === 0) return assumed(project.strings.length);
   let lossW = 0;
   let powerW = 0;
   let routed = 0;
   let conductorM = 0;
-  for (const s of strings) {
-    const legs = routes.filter((r) => r.kind === 'string_homerun' && r.fromRef === s.id);
-    const pString = s.panelIds.length * spec.watt;
+  const sizes = new Set<number>();
+  for (const c of cables) {
+    const pString = c.string.panelIds.length * spec.watt;
     powerW += pString;
-    if (legs.length < 2 || pString <= 0) {
+    if (c.loopM === null || pString <= 0) {
       lossW += pString * DC_ASSUMED_FRAC;
       continue;
     }
-    const lengthM = legs.reduce((sum, r) => sum + (polylineLengthM(r.waypoints) + r.verticalDropM) * (1 + r.slackPct), 0);
-    const rLoop = (RHO_CU_45C * lengthM) / mm2;
-    lossW += spec.impA * spec.impA * rLoop;
+    lossW += spec.impA * spec.impA * dcLoopResistanceOhm(c.loopM, c.mm2);
     routed++;
-    conductorM += lengthM;
+    conductorM += c.loopM;
+    sizes.add(c.mm2);
   }
-  if (powerW <= 0 || routed === 0) {
-    return { fraction: DC_ASSUMED_FRAC, source: 'assumed', strings: strings.length, stringsRouted: 0, conductorM: 0, mm2 };
-  }
+  if (powerW <= 0 || routed === 0) return assumed(cables.length);
   return {
     fraction: Math.min(0.1, lossW / powerW),
     source: 'routes',
-    strings: strings.length,
+    strings: cables.length,
     stringsRouted: routed,
     conductorM: Math.round(conductorM),
-    mm2,
+    sizes: dcSizeLabel([...sizes].sort((a, b) => a - b)),
   };
 }
 
