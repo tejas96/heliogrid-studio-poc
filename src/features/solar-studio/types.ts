@@ -594,6 +594,13 @@ export interface PlacedPanel {
   /** filled by 3D solar-access analysis, 0..1 */
   solarAccess: number;
   enabled: boolean;
+  /**
+   * Set when the app turned this module off because it sits under an
+   * obstruction it cannot bridge (the obstruction's id). The module comes back
+   * by itself when that blocker moves, lowers, or is removed. Absent on a
+   * module the user turned off — that choice is never undone by the app.
+   */
+  blockedBy?: string;
   /** link to its ArraySegment; undefined = loose panel */
   segmentId?: string;
   /** encodes (row,col): row*COL_STRIDE + col (see lib/layout.ts) */

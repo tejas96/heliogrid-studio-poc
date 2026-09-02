@@ -40,7 +40,7 @@ import { M_TO_FT, useUnits } from '../lib/units';
 import { resolveAnchorRoofId } from '../lib/ground';
 import { Scene3D } from '../three/Scene3D';
 import { resolveCapabilities, requiredBridgeClearanceM } from '../lib/capabilities';
-import { reconcileBridgedPanels } from '../lib/structure-edit';
+import { releaseBlockedPanels, withObstructions } from '../lib/structure-edit';
 import { obstructionToPlatform } from '../lib/roof-factory';
 import type { Obstruction, ObstructionType, XY } from '../types';
 import {
@@ -141,8 +141,7 @@ export function Step3Obstructions() {
     });
     // height/size/position/capability edits can invalidate (or restore)
     // panels bridging this obstruction — adjust in the same patch
-    const panels = reconcileBridgedPanels(project, { obstructions });
-    patch({ obstructions, ...(panels ? { panels } : {}) }, undoable);
+    patch(withObstructions(project, obstructions), undoable);
   }
 
   /** Live drag patch: first change of a gesture records one undo step. */
@@ -165,7 +164,8 @@ export function Step3Obstructions() {
       existing: project.obstructions,
       roofId: resolveAnchorRoofId(m, project.roofs),
     });
-    patch({ obstructions: [...project.obstructions, ob] }, true);
+    // modules under the new object go off at once (not only after its first edit)
+    patch(withObstructions(project, [...project.obstructions, ob]), true);
     setPlacing(null);
     setSelectedId(ob.id);
   }
@@ -183,13 +183,20 @@ export function Step3Obstructions() {
       center,
       roofId: resolveAnchorRoofId(center, project.roofs),
     };
-    patch({ obstructions: [...project.obstructions, copy] }, true);
+    patch(withObstructions(project, [...project.obstructions, copy]), true);
     setSelectedId(copy.id);
   }
 
   function deleteSelected() {
     if (!selected || selectedLocked) return;
-    patch({ obstructions: project.obstructions.filter((o) => o.id !== selected.id) }, true);
+    // the modules this object blocked come back in the same undo step
+    patch(
+      withObstructions(
+        project,
+        project.obstructions.filter((o) => o.id !== selected.id),
+      ),
+      true,
+    );
     setSelectedId(null);
   }
 
@@ -686,7 +693,8 @@ export function Step3Obstructions() {
                   disabled={!conversion}
                   onClick={() => {
                     if (!conversion) return;
-                    patch(conversion, true);
+                    // the tank is now a roof: its modules stay off, as the user's own call
+                    patch({ ...conversion, panels: releaseBlockedPanels(project.panels, selected.id) }, true);
                     setSheet(null);
                     setSelectedId(null);
                   }}

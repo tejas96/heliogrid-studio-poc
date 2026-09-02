@@ -351,6 +351,22 @@ describe('reconcileBridgedPanels — bridged panels track clearance changes', ()
     expect(reconcileBridgedPanels(empty, {})).toBeNull();
   });
 
+  it('removing the tank brings back the modules it blocked; a hand-disabled one stays off', () => {
+    const p = bridged();
+    const closed = p.obstructions.map((o) => ({
+      ...o,
+      capabilities: { ...o.capabilities, panelsMayCross: false },
+    }));
+    const blocked = reconcileBridgedPanels(p, { obstructions: closed })!;
+    expect(blocked.filter((x) => x.blockedBy === 'ob_wt1').length).toBe(overTank(p.panels));
+    // one module away from the tank, turned off by hand (no blockedBy mark)
+    const byHand = blocked.find((x) => x.enabled)!.id;
+    const panels = blocked.map((x) => (x.id === byHand ? { ...x, enabled: false } : x));
+    const back = reconcileBridgedPanels({ ...p, panels, obstructions: closed }, { obstructions: [] })!;
+    expect(back.filter((x) => !x.enabled).map((x) => x.id)).toEqual([byHand]);
+    expect(back.every((x) => x.blockedBy === undefined)).toBe(true);
+  });
+
   it('tilt/profile choices leave bridged panels enabled (clearance unchanged)', () => {
     const p = bridged();
     const r = applyStructChoice(p, p.segments[0].id, { kind: 'tilt', tiltDeg: 15 })!;

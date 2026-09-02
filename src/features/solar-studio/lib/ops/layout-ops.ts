@@ -61,7 +61,16 @@ export const panelsSetEnabled = defineOp<{ ids: string[]; enabled: boolean }>({
   label: (a) => `${a.enabled ? 'Enable' : 'Disable'} ${a.ids.length} module${a.ids.length === 1 ? '' : 's'}`,
   apply: (p, a) => {
     const ids = new Set(a.ids);
-    return { panels: p.panels.map((m) => (ids.has(m.id) ? { ...m, enabled: a.enabled } : m)) };
+    return {
+      panels: p.panels.map((m) => {
+        if (!ids.has(m.id)) return m;
+        // the user's own call from here on: drop any "blocked by" mark so an
+        // obstruction edit neither restores nor keeps this module for them
+        const next = { ...m, enabled: a.enabled };
+        delete next.blockedBy;
+        return next;
+      }),
+    };
   },
 });
 

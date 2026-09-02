@@ -3,6 +3,7 @@ import type { Keepout, LightningArrester, SafetyRail, Walkway, XY } from '../../
 import { defineOp } from './types';
 import { registerOp } from './registry';
 import { genId } from '../geo';
+import { withObstructions } from '../structure-edit';
 
 export const arresterAdd = defineOp<{ roofId: string; pos: XY; heightMm: number }>({
   id: 'arrester.add',
@@ -73,7 +74,13 @@ export const obstructionRemove = defineOp<{ id: string }>({
   layer: 'geometry',
   label: (a) => `Remove obstruction`,
   validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
-  apply: (p, a) => ({ obstructions: p.obstructions.filter((o) => o.id !== a.id) }),
+  // every obstruction edit goes through withObstructions: the modules it
+  // blocked come back, the ones it now covers go off — in the same patch
+  apply: (p, a) =>
+    withObstructions(
+      p,
+      p.obstructions.filter((o) => o.id !== a.id),
+    ),
 });
 
 export const obstructionRotate = defineOp<{ id: string; deltaDeg: number }>({
@@ -81,11 +88,13 @@ export const obstructionRotate = defineOp<{ id: string; deltaDeg: number }>({
   layer: 'geometry',
   label: (a) => `Rotate obstruction ${Math.round(a.deltaDeg)}°`,
   validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
-  apply: (p, a) => ({
-    obstructions: p.obstructions.map((o) =>
-      o.id === a.id ? { ...o, rotationDeg: (((o.rotationDeg + a.deltaDeg) % 360) + 360) % 360 } : o,
+  apply: (p, a) =>
+    withObstructions(
+      p,
+      p.obstructions.map((o) =>
+        o.id === a.id ? { ...o, rotationDeg: (((o.rotationDeg + a.deltaDeg) % 360) + 360) % 360 } : o,
+      ),
     ),
-  }),
 });
 
 /** A copy of an obstruction, set one width beside the original on the same roof. */
@@ -98,18 +107,16 @@ export const obstructionDuplicate = defineOp<{ id: string }>({
     const o = p.obstructions.find((x) => x.id === a.id)!;
     const step = (o.shape === 'circle' ? o.diameterM : o.widthM) + 0.5;
     const rad = (o.rotationDeg * Math.PI) / 180;
-    return {
-      obstructions: [
-        ...p.obstructions,
-        {
-          ...o,
-          id: genId('obs'),
-          label: `${o.label} copy`,
-          center: { x: o.center.x + Math.cos(rad) * step, y: o.center.y + Math.sin(rad) * step },
-          provenance: { source: 'manual' as const },
-        },
-      ],
-    };
+    return withObstructions(p, [
+      ...p.obstructions,
+      {
+        ...o,
+        id: genId('obs'),
+        label: `${o.label} copy`,
+        center: { x: o.center.x + Math.cos(rad) * step, y: o.center.y + Math.sin(rad) * step },
+        provenance: { source: 'manual' as const },
+      },
+    ]);
   },
 });
 registerOp(obstructionDuplicate);
@@ -119,11 +126,13 @@ export const obstructionMove = defineOp<{ id: string; center: XY; roofId?: strin
   layer: 'geometry',
   label: () => 'Move obstruction',
   validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
-  apply: (p, a) => ({
-    obstructions: p.obstructions.map((o) =>
-      o.id === a.id ? { ...o, center: a.center, ...(a.roofId !== undefined ? { roofId: a.roofId } : {}) } : o,
+  apply: (p, a) =>
+    withObstructions(
+      p,
+      p.obstructions.map((o) =>
+        o.id === a.id ? { ...o, center: a.center, ...(a.roofId !== undefined ? { roofId: a.roofId } : {}) } : o,
+      ),
     ),
-  }),
 });
 
 export const obstructionSetCastsShadow = defineOp<{ id: string; castsShadow: boolean }>({
