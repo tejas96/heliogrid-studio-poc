@@ -45,6 +45,19 @@ export function metersPerStaticMap(
 }
 
 /**
+ * The sharpest zoom whose static map still covers `neededM` metres of ground
+ * at this latitude. One tile at zoom 20 spans only ~70 m in the mid-latitudes
+ * — barely wider than a building — so anything that must fill the scene's
+ * ground has to step back until the picture is big enough.
+ */
+export function zoomCovering(lat: number, neededM: number, sizePx = 640, maxZoom = 20, minZoom = 14): number {
+  for (let z = maxZoom; z > minZoom; z--) {
+    if (metersPerStaticMap(lat, z, sizePx) >= neededM) return z;
+  }
+  return minZoom;
+}
+
+/**
  * Pick a round scale-bar length for the current screen px-per-meter: the
  * smallest candidate that draws at least `minPx` wide. Pure — the canvas
  * feeds it the SAME pxPerM it uses for hit-testing, so the drawn bar can

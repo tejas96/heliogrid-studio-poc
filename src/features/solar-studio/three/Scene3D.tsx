@@ -195,7 +195,7 @@ import { computePanelShadeDetail } from '../lib/shading';
 import { simTimeDate } from '../lib/sim-time';
 import { polygonCentroid } from '../lib/geo';
 import { roofGridAngle } from '../lib/layout';
-import { staticSatelliteUrl, metersPerStaticMap } from '../lib/maps';
+import { staticSatelliteUrl, metersPerStaticMap, zoomCovering } from '../lib/maps';
 import { SAT_ZOOM } from '../components/SatCanvas';
 import { EnergyReportSheet } from '../components/EnergyReportSheet';
 import {
@@ -256,6 +256,9 @@ const PLACE_NAME: Record<PlaceKind, string> = { inverter: 'inverter', battery: '
 
 /** Eye height of the walkthrough camera above the deck it stands on. */
 const WALK_EYE_M = 1.7;
+
+/** Side of the scene's ground plane, metres — the aerial picture must cover it. */
+const GROUND_PLANE_M = 300;
 
 const ACTION = CameraControlsImpl.ACTION;
 
@@ -496,7 +499,10 @@ export function Scene3D({
   const [solarAccessView, setSolarAccessView] = useState(initial?.solarAccess ?? false);
   const [showReport, setShowReport] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'mesh'>(initialViewMode);
-  const [showBuildings, setShowBuildings] = useState(true);
+  // ONE switch for the real surroundings: the same flag hides them and takes
+  // them out of the shading, so the picture and the numbers always agree. It
+  // lives on the project, so the choice survives a reload.
+  const showBuildings = !project.ignoreSurround;
   const [showSunPath, setShowSunPath] = useState(true);
   const [showSunChart, setShowSunChart] = useState(false);
   // ── inspect: isolate the picked entity, fly to it, walk the site ──────────
@@ -1051,13 +1057,13 @@ export function Scene3D({
                   className={`tool-btn ${showBuildings ? '' : 'on'}`}
                   data-tip={
                     showBuildings
-                      ? 'Hide the real surroundings (Google 3D + height map)'
-                      : 'Show the real surroundings (Google 3D + height map)'
+                      ? 'Hide the real surroundings — they stop shading the design too'
+                      : 'Show the real surroundings — they shade the design again'
                   }
                   data-tip-right=""
                   aria-label="Toggle the real surroundings"
                   aria-pressed={!showBuildings}
-                  onClick={() => setShowBuildings((v) => !v)}
+                  onClick={() => runOp(surroundSetIgnored, { ignore: showBuildings })}
                 >
                   <Building2 />
                 </button>
@@ -1470,16 +1476,8 @@ export function Scene3D({
 
       {/* ── provenance of the neighbour shade in the numbers (DESIGN-SYSTEM §12) ── */}
       {project.surround && !meshMode && !heatmap && (
-        <button
-          type="button"
-          onClick={() => runOp(surroundSetIgnored, { ignore: !project.ignoreSurround })}
-          title={
-            project.ignoreSurround
-              ? 'Turn the real neighbours back on for shade'
-              : 'Turn the real neighbours off for shade — when the aerial data is wrong'
-          }
+        <div
           style={{
-            font: 'inherit',
             position: 'absolute',
             right: 64, // clear of the Measure rail
             bottom: 124,
@@ -1490,15 +1488,14 @@ export function Scene3D({
             background: 'rgba(10,13,18,0.55)',
             padding: '2px 7px',
             borderRadius: 4,
-            border: 'none',
-            cursor: 'pointer',
+            pointerEvents: 'none',
             whiteSpace: 'nowrap',
           }}
         >
           {project.ignoreSurround
-            ? 'Neighbour shade: OFF by your choice · tap to turn on'
-            : `Neighbour shade: Google aerial height map ${project.surround.imageryDate} · ${project.surround.stepM.toFixed(1)} m grid · tap to turn off`}
-        </button>
+            ? 'Neighbour shade: OFF by your choice — the real surroundings are hidden'
+            : `Neighbour shade: Google aerial height map ${project.surround.imageryDate} · ${project.surround.stepM.toFixed(1)} m grid`}
+        </div>
       )}
       {/* no aerial height map here: say so, or a reader assumes the neighbours are in the numbers */}
       {project.surround === null && !meshMode && !heatmap && (
@@ -2202,6 +2199,22 @@ function SceneContent({
     t.anisotropy = 8;
     return t;
   }, [texUrl]);
+
+  // A zoom-20 tile spans only ~70 m — barely wider than the building — so with
+  // the streamed surroundings hidden the map used to collapse to one small
+  // square in a black field. A wider (coarser) picture underneath covers the
+  // whole ground plane; the sharp tile above still carries the detail on site.
+  const wideZoom = zoomCovering(loc.latLng.lat, GROUND_PLANE_M);
+  const wideSpanM =
+    metersPerStaticMap(loc.latLng.lat, wideZoom, 640) * project.calibration.scaleFactor;
+  const wideTexUrl = staticSatelliteUrl(loc.latLng.lat, loc.latLng.lng, wideZoom, 640, 2);
+  const wideGroundTex = useMemo(() => {
+    const t = new THREE.TextureLoader().load(wideTexUrl);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  }, [wideTexUrl]);
+  useEffect(() => () => wideGroundTex.dispose(), [wideGroundTex]);
   // GPU texture memory is never reclaimed implicitly — release the previous
   // satellite tile when the URL changes and on unmount
   useEffect(() => () => groundTex.dispose(), [groundTex]);
@@ -2383,8 +2396,14 @@ function SceneContent({
       ) : (
         <>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -0.02, 0]} receiveShadow>
-            <planeGeometry args={[300, 300]} />
+            <planeGeometry args={[GROUND_PLANE_M, GROUND_PLANE_M]} />
             <meshStandardMaterial color="#151a21" roughness={1} envMapIntensity={0.2} />
+          </mesh>
+          {/* the wide, coarse picture: the neighbourhood is still a map when
+              the streamed surroundings are off */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.0 : -0.01, 0]} receiveShadow>
+            <planeGeometry args={[wideSpanM, wideSpanM]} />
+            <meshStandardMaterial map={wideGroundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
           </mesh>
           {/* the aerial photo is an already-exposed picture, not an albedo: under
               a full sun plus sky it would render ~2.4× too bright, so it is
