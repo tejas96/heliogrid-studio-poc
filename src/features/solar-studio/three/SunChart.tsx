@@ -11,7 +11,16 @@ import type { Project } from '../types';
 import { fmtHour } from '../lib/solar';
 import { loadSurroundHeights, peekSurroundHeights } from '../lib/surround';
 import { farHorizonAt, fetchFarHorizon, type FarHorizonPoint } from '../lib/far-horizon';
-import { clockHour, horizonAt, horizonProfile, seasonDates, shadeWindows, sunCurve, type SunSample } from '../lib/sun-chart';
+import {
+  clockHour,
+  clockLabel,
+  horizonAt,
+  horizonProfile,
+  seasonDates,
+  shadeWindows,
+  sunCurve,
+  type SunSample,
+} from '../lib/sun-chart';
 
 const W = 460;
 const H = 250;
@@ -110,7 +119,7 @@ export function SunChart({
     if (!curve.length) return `${label}: the sun does not rise`;
     if (wins.length === 0) return `${label}: clear sky all day`;
     return `${label}: shaded ${wins
-      .map((w) => `${fmtHour(clockHour(w.from, lng))}–${fmtHour(clockHour(w.to, lng))}`)
+      .map((w) => `${fmtHour(clockHour(w.from, lng, lat))}–${fmtHour(clockHour(w.to, lng, lat))}`)
       .join(', ')}`;
   };
 
@@ -136,7 +145,7 @@ export function SunChart({
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <div style={{ fontWeight: 700, fontSize: 12 }} title="Filled skyline: as the array's middle sees it. Dashed: as its worst corner sees it.">
-          Sun paths over this site · clock time (IST)
+          Sun paths over this site · {clockLabel({ lat, lng })}
         </div>
         <button
           type="button"
@@ -204,7 +213,7 @@ export function SunChart({
               <path d={d} fill="none" stroke="rgba(212,160,23,0.45)" strokeWidth={0.8} strokeDasharray="2 2" />
               {h % 3 === 0 && (
                 <text x={x(top.azDeg)} y={y(top.altDeg) - 4} textAnchor="middle" fontSize={8} fill="#e5c76b">
-                  {fmtHour(clockHour(h, lng)).replace(':00', '')}
+                  {fmtHour(clockHour(h, lng, lat)).replace(':00', '')}
                 </text>
               )}
             </g>
@@ -216,7 +225,7 @@ export function SunChart({
           <g>
             <circle cx={x(now.azDeg)} cy={y(now.altDeg)} r={4.5} fill="#fff0c0" stroke="#f59e0b" strokeWidth={1.5} />
             <text x={x(now.azDeg) + 7} y={y(now.altDeg) - 6} fontSize={9} fill="#fff0c0">
-              {todayLabel} · {fmtHour(clockHour(hour, lng))}
+              {todayLabel} · {fmtHour(clockHour(hour, lng, lat))}
             </text>
           </g>
         )}

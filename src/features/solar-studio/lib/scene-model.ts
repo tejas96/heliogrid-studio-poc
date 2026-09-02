@@ -17,7 +17,7 @@ import {
 import { effectiveParapetEdges } from './roof-topology';
 import { panelPose } from './panel-pose';
 import { castsAnalyticalShadow } from './capabilities';
-import { buildSurroundGeometry, type SurroundHeights } from './surround-geometry';
+import { buildSurroundGeometry, cutSurroundForRoofs, type SurroundHeights } from './surround-geometry';
 import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
 
 /**
@@ -280,9 +280,10 @@ export function buildShadowCasters(
 
   // ── the REAL neighbourhood (Google DSM, lib/surround): trees, sheds, the
   // building next door — everything the user did not draw but the sun sees.
-  // The site's own roofs are already cut out of the grid at fetch time.
+  // The site's own roofs are cut out HERE, for the roofs as they are now: a
+  // roof traced after the fetch must not shade its own modules.
   if (opts.surround) {
-    const geom = buildSurroundGeometry(opts.surround);
+    const geom = buildSurroundGeometry(cutSurroundForRoofs(opts.surround, project.roofs));
     // ~40k triangles × 150k rays per run: brute-force raycasting would take
     // minutes. A BVH makes each ray a handful of box tests.
     (geom as THREE.BufferGeometry & { boundsTree?: MeshBVH }).boundsTree = new MeshBVH(geom);

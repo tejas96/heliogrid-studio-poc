@@ -13,9 +13,24 @@ import { pointInPolygon } from './geo';
 /** India runs on one clock; solar time at the site differs by the longitude. */
 export const CLOCK_OFFSET_H = 5.5;
 
-/** Mean solar hour at `lng` → wall-clock hour (IST). */
-export function clockHour(solarHour: number, lng: number): number {
+/** Inside India's clock zone (the product's market); elsewhere no zone table is bundled. */
+export function inIndia(p: { lat: number; lng: number }): boolean {
+  return p.lat >= 6 && p.lat <= 37.5 && p.lng >= 68 && p.lng <= 97.5;
+}
+
+/**
+ * Mean solar hour at `lng` → the hour the site's clock shows. India: IST.
+ * Anywhere else the app has no time-zone table, so it shows SOLAR time and
+ * says so (`clockLabel`) instead of stamping a wrong zone on the day.
+ */
+export function clockHour(solarHour: number, lng: number, lat = 20): number {
+  if (!inIndia({ lat, lng })) return solarHour;
   return solarHour - lng / 15 + CLOCK_OFFSET_H;
+}
+
+/** What the hours on screen are: the clock (IST) or solar time. */
+export function clockLabel(p: { lat: number; lng: number }): string {
+  return inIndia(p) ? 'IST' : 'solar time';
 }
 
 export interface SunSample {

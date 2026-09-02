@@ -8,7 +8,7 @@
 // Scope rule (plan §E, binding): GEOMETRY layers only. PVGIS stays the sole
 // irradiance source — this changes WHAT shades the modules, never how much
 // sun the sky delivers.
-import type { LatLng, Project, SiteSurround, XY } from '../types';
+import type { LatLng, Project, SiteSurround } from '../types';
 import { decodeGeoTiff } from './roof-ai/geotiff-decode';
 import { groundLevelM } from './roof-ai/plane-fit';
 import { frameFor, toEN } from './site/frame';
@@ -20,36 +20,15 @@ export type { SurroundHeights } from './surround-geometry';
 
 export const SURROUND_RADIUS_M = 100; // the Solar API's limit at LOW quality
 const DOWNSAMPLE = 5; // 0.1 m → 0.5 m
-const MAX_HEIGHT_M = 80;
-const CUTOUT_MARGIN_M = 1.0;
-/** a roof needs this many 0.5 m cells (10 m²) before its height-map reading counts */
-const ROOF_READ_MIN_CELLS = 40;
+/** Taller than any tower the raster can hold in Int16 centimetres; a downtown high-rise is ~150 m. */
+const MAX_HEIGHT_M = 250;
 const BLOB_PREFIX = 'data:application/octet-stream;base64,';
-
-// ── point in polygon (even-odd) — local copy so this module stays dependency-light
-function inPolygon(p: XY, poly: XY[]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i];
-    const b = poly[j];
-    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
-  }
-  return inside;
-}
-
-function distToPolygon(p: XY, poly: XY[]): number {
-  let best = Infinity;
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i];
-    const b = poly[(i + 1) % poly.length];
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len2 = dx * dx + dy * dy || 1;
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
-    best = Math.min(best, Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy)));
-  }
-  return best;
-}
+/**
+ * Storage format of the height grid. 2 = stored UNCUT (the site's roofs are
+ * cut out at use). Earlier grids were cut at fetch time for the roofs of that
+ * moment, so a roof traced later shaded its own modules — they fetch once more.
+ */
+export const SURROUND_FORMAT = 2;
 
 type DataLayersEnvelope = {
   status: string;
@@ -138,46 +117,10 @@ export async function fetchSurround(project: Project): Promise<FetchSurroundResu
   const stepCol = { x: e10.x - originEN.x, y: e10.y - originEN.y };
   const stepRow = { x: e01.x - originEN.x, y: e01.y - originEN.y };
 
-  // ── what the height map says each roof is, before the cutout erases it:
-  // the median over the cells inside the polygon (robust to tanks and
-  // parapets). The roof-height check holds the model against this. ──
-  const roofReadM: Record<string, number> = {};
-  for (const rf of project.roofs) {
-    if (rf.polygon.length < 3) continue;
-    const inside: number[] = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const p = {
-          x: originEN.x + c * stepCol.x + r * stepRow.x,
-          y: originEN.y + c * stepCol.y + r * stepRow.y,
-        };
-        if (inPolygon(p, rf.polygon)) inside.push(heights[r * cols + c]);
-      }
-    }
-    if (inside.length < ROOF_READ_MIN_CELLS) continue;
-    inside.sort((a, b) => a - b);
-    roofReadM[rf.id] = Math.round(inside[Math.floor(inside.length / 2)] * 10) / 10;
-  }
-
-  // ── the site's own roofs are modelled exactly: cut them out of the raster ──
-  const polys = project.roofs.map((rf) => rf.polygon).filter((p) => p.length >= 3);
-  if (polys.length > 0) {
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const p = {
-          x: originEN.x + c * stepCol.x + r * stepRow.x,
-          y: originEN.y + c * stepCol.y + r * stepRow.y,
-        };
-        for (const poly of polys) {
-          if (inPolygon(p, poly) || distToPolygon(p, poly) < CUTOUT_MARGIN_M) {
-            heights[r * cols + c] = 0;
-            break;
-          }
-        }
-      }
-    }
-  }
-
+  // The grid is stored UNCUT. The site's own roofs are cut out where the grid
+  // is used (cutSurroundForRoofs) for the roofs as they are THEN, and each
+  // roof's height-map reading (roofReadingsFor) comes from the same samples —
+  // a roof traced after the fetch neither shades itself nor goes unread.
   const blobId = await putImage(BLOB_PREFIX + packHeights(heights));
   const meta: SiteSurround = {
     source: 'google-solar-dsm',
@@ -194,7 +137,7 @@ export async function fetchSurround(project: Project): Promise<FetchSurroundResu
     gradeM: Math.round(grade * 100) / 100,
     blobId,
     fetchedAt: Date.now(),
-    roofReadM,
+    format: SURROUND_FORMAT,
   };
   const grid: SurroundHeights = { cols, rows, originEN, stepCol, stepRow, heights };
   cache.set(blobId, grid);
@@ -255,8 +198,8 @@ export function surroundStale(project: Project): boolean {
   const s = project.surround;
   const loc = project.location;
   if (!s || !loc) return false;
-  // stored before the per-roof reading existed: fetch once more to get it
-  if (!s.roofReadM) return true;
+  // an older storage format (cut at fetch time): fetch once more, uncut
+  if (s.format !== SURROUND_FORMAT) return true;
   const dLat = (s.pin.lat - loc.latLng.lat) * 111_320;
   const dLng = (s.pin.lng - loc.latLng.lng) * 111_320 * Math.cos((loc.latLng.lat * Math.PI) / 180);
   return Math.hypot(dLat, dLng) > 2;

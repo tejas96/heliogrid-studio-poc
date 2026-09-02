@@ -32,6 +32,8 @@ import {
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import type { Project } from '../types';
 import { setTerrainSampler } from './terrain-probe';
+import { loadSurroundHeights, peekSurroundHeights } from '../lib/surround';
+import { surroundHeightAt, type SurroundHeights } from '../lib/surround-geometry';
 
 const ROOT_URL = 'https://tile.googleapis.com/v1/3dtiles/root.json';
 /**
@@ -94,6 +96,78 @@ function cutoutPlanes(project: Project, marginM = 0.6): THREE.Plane[] {
  * midpoint. The pin itself sits on the building, and in Google's mesh that is
  * the building's ROOF — measuring there put the plinth in the ground.
  */
+/**
+ * Which of the candidate points really are ground. In a dense downtown the
+ * ring outside the footprint lands on the neighbours' ROOFS, and a tileset
+ * lifted onto a 60 m tower roof puts the street 60 m under the model. The
+ * aerial height map (lib/surround) says which cells are at grade: keep those;
+ * when too few of the ring's points are, walk rings further out until three
+ * are found. Without a height map the ring is all there is.
+ */
+function groundPoints(
+  project: Project,
+  ring: { x: number; y: number }[],
+  grid: SurroundHeights | null,
+): { x: number; y: number }[] {
+  if (!grid) return ring;
+  const atGrade = (q: { x: number; y: number }) => {
+    const h = surroundHeightAt(grid, q);
+    return h !== null && h < 0.5;
+  };
+  const keep = ring.filter(atGrade);
+  if (keep.length >= 3) return keep;
+  // centre and reach of everything traced, then rings 6…40 m outside it
+  const pts = project.roofs.flatMap((r) => r.polygon);
+  if (pts.length === 0) return ring;
+  const cx = pts.reduce((a, p) => a + p.x, 0) / pts.length;
+  const cy = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+  const reach = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy)));
+  for (const extra of [6, 12, 20, 30, 40]) {
+    const rad = reach + extra;
+    for (let deg = 0; deg < 360; deg += 12) {
+      const a = (deg * Math.PI) / 180;
+      const q = { x: cx + Math.sin(a) * rad, y: cy + Math.cos(a) * rad };
+      if (atGrade(q)) keep.push(q);
+    }
+    if (keep.length >= 3) return keep;
+  }
+  return keep.length >= 3 ? keep : ring;
+}
+
+/** Tiles with a geometric error at or above this are coarse: a block's average, not its streets. */
+const FINE_TILE_ERROR_M = 6;
+/** Street samples needed before the fine-tile median is trusted. */
+const MIN_STREET_SAMPLES = 200;
+
+/**
+ * The street level of the streamed mesh, read off the FINE tiles' vertices:
+ * every visible vertex within 120 m of the site whose plan position the
+ * height map calls grade (< 0.5 m) is a street sample; the median of those is
+ * where the ground is. Null until enough fine tiles are in.
+ */
+function groundFromFineTiles(t: TilesRenderer, grid: SurroundHeights): { y: number | null; n: number } {
+  const ys: number[] = [];
+  const v = new THREE.Vector3();
+  t.forEachLoadedModel((scene, tile) => {
+    if (!t.visibleTiles.has(tile) || tile.geometricError >= FINE_TILE_ERROR_M) return;
+    scene.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.geometry) return;
+      const pos = mesh.geometry.getAttribute('position');
+      if (!pos) return;
+      mesh.updateWorldMatrix(true, false);
+      for (let i = 0; i < pos.count; i += 3) {
+        v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).applyMatrix4(mesh.matrixWorld);
+        if (Math.abs(v.x) > 120 || Math.abs(v.z) > 120) continue;
+        const h = surroundHeightAt(grid, { x: v.x, y: -v.z });
+        if (h !== null && h < 0.5) ys.push(v.y);
+      }
+    });
+  });
+  ys.sort((a, b) => a - b);
+  return { y: ys.length >= MIN_STREET_SAMPLES ? ys[Math.floor(ys.length / 2)] : null, n: ys.length };
+}
+
 function groundRing(project: Project): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [];
   for (const roof of project.roofs) {
@@ -138,6 +212,8 @@ export function RealSurround({
   // ground samples: a ring just outside every roof footprint (plan metres)
   const ringRef = useRef<{ x: number; y: number }[]>([]);
   ringRef.current = groundRing(project);
+  const projectRef = useRef(project);
+  projectRef.current = project;
   planesRef.current = planes;
   // once planes change, re-clip the models already loaded
   useEffect(() => {
@@ -244,6 +320,7 @@ export function RealSurround({
       // HEIGHT: measure the real ground under the pin and re-centre on it. The
       // guess above is within the geoid's slack; the mesh settles the rest.
       let measured = 0;
+      let fineMisses = 0;
       const ray = new THREE.Raycaster();
       const onLoadEnd = () => {
         // Google's terms: show the data attribution of what is on screen
@@ -254,21 +331,69 @@ export function RealSurround({
         onAttribution?.(attr.join(' · '));
         if (measured >= 8) return;
         const down = new THREE.Vector3(0, -1, 0);
+        // Only what is ON SCREEN counts. The renderer keeps replaced coarse
+        // tiles in the graph (cached, hidden) and a Raycaster ignores
+        // `visible`: over a downtown street the hidden coarse blob — the
+        // block's average, tens of metres up — was the first hit, so the
+        // ground "converged" on it and the streets sat 70 m under the model.
+        const shown = (o: THREE.Object3D): boolean => {
+          for (let n: THREE.Object3D | null = o; n && n !== t.group; n = n.parent) if (!n.visible) return false;
+          return true;
+        };
         const hitY = (x: number, z: number): number | null => {
           ray.set(new THREE.Vector3(x, 3000, z), down);
-          const hits = ray.intersectObject(t.group, true);
-          return hits.length ? hits[0].point.y : null;
+          const hit = ray.intersectObject(t.group, true).find((i) => shown(i.object));
+          return hit ? hit.point.y : null;
         };
         // coarse probe: the pin is fine (a few km per tile). Fine tree: the
-        // ground is the MEDIAN of a ring outside the footprint, never the pin —
-        // the pin is on the building, and the mesh building has a roof.
+        // ground is the MEDIAN of points outside the footprint that the height
+        // map says are at grade — never the pin (it is on the building, and the
+        // mesh building has a roof), never a neighbour's roof either.
         let h: number | null = null;
         if (!probing) {
-          const ys = ringRef.current
-            .map((q) => hitY(q.x, -q.y))
-            .filter((v): v is number => v !== null)
-            .sort((a, b) => a - b);
-          if (ys.length >= 3) h = ys[Math.floor(ys.length / 2)];
+          const prj = projectRef.current;
+          let grid = peekSurroundHeights(prj.surround);
+          if (!grid && prj.surround) {
+            // the height map is on its way: measure when it lands, not on a roof now
+            void loadSurroundHeights(prj.surround).then((g) => {
+              if (!disposed && g) onLoadEnd();
+            });
+            return;
+          }
+          if (!grid) grid = null;
+          let source = 'ring';
+          let samples = 0;
+          if (grid) {
+            // The street, read off the FINE tiles' own vertices: every visible
+            // vertex within 120 m whose plan position the height map calls
+            // grade is a street sample. Coarse tiles are skipped — their
+            // surface is the block's average, tens of metres up — and a ray
+            // from above cannot tell the two apart where only a coarse tile
+            // covers the ground (outside the view nothing refines).
+            const fine = groundFromFineTiles(t, grid);
+            samples = fine.n;
+            if (fine.y !== null) {
+              h = fine.y;
+              source = 'fine-tiles';
+            } else if (++fineMisses < 6) {
+              // not enough fine tiles around the site yet: wait for the next load
+              if (process.env.NODE_ENV !== 'production') {
+                (window as unknown as { __surroundGround?: unknown }).__surroundGround = { measured, groundH, waiting: true, samples };
+              }
+              return;
+            }
+          }
+          if (h === null) {
+            const pts = groundPoints(prj, ringRef.current, grid);
+            const ys = pts
+              .map((q) => hitY(q.x, -q.y))
+              .filter((v): v is number => v !== null)
+              .sort((a, b) => a - b);
+            if (ys.length >= 3) h = ys[Math.floor(ys.length / 2)];
+          }
+          if (process.env.NODE_ENV !== 'production') {
+            (window as unknown as { __surroundGround?: unknown }).__surroundGround = { measured, groundH, grid: !!grid, source, samples, h };
+          }
         }
         if (h === null) h = hitY(0, 0);
         if (h === null) {

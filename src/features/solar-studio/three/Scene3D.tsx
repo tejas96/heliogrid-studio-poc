@@ -35,7 +35,8 @@ import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
 import { RealSurround } from './RealSurround';
 import { SurroundRelief } from './SurroundRelief';
-import { ROOF_HEIGHT_TOLERANCE_M } from '../lib/surround-check';
+import { ROOF_HEIGHT_TOLERANCE_M, roofReadings } from '../lib/surround-check';
+import { clockLabel } from '../lib/sun-chart';
 import { getRoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
@@ -1415,7 +1416,8 @@ export function Scene3D({
           Az {azDeg}° · Alt {Math.max(0, altDeg)}°
         </div>
         <div style={{ fontSize: 9.5, color: 'var(--editor-ink-2)', marginTop: 2 }}>
-          {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(clockHour(hour, loc.latLng.lng))} IST
+          {simDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} · {fmtHour(clockHour(hour, loc.latLng.lng, loc.latLng.lat))}{' '}
+          {clockLabel(loc.latLng)}
         </div>
         <div style={{ fontSize: 9, color: 'var(--editor-ink-2)', marginTop: 3, fontFamily: 'var(--mono)' }}>
           {Math.abs(loc.latLng.lat).toFixed(4)}°{loc.latLng.lat >= 0 ? 'N' : 'S'} {Math.abs(loc.latLng.lng).toFixed(4)}°
@@ -1621,7 +1623,7 @@ export function Scene3D({
           }}
         >
           <b style={{ color: '#f5b942', fontVariantNumeric: 'tabular-nums' }} title={`solar time ${fmtHour(hour)}`}>
-            {fmtHour(clockHour(hour, loc.latLng.lng))} IST
+            {fmtHour(clockHour(hour, loc.latLng.lng, loc.latLng.lat))} {clockLabel(loc.latLng)}
           </b>
           <span style={{ color: 'var(--editor-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
             <Sunrise size={13} /> {fmtHour(clockHour(sunrise, loc.latLng.lng))}
@@ -2397,15 +2399,16 @@ function SceneContent({
                   `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave`,
                   `${r.pitchDeg > 0 ? `${r.pitchDeg}° pitch facing ${Math.round(r.slopeAzimuthDeg)}°` : 'flat'} · ${r.roofType.replace('_', ' ')} · ${r.provenance?.source ?? 'traced by hand'}`,
                   `${project.panels.filter((p) => p.roofId === r.id && p.enabled).length} modules`,
-                  // what Google's height map read over this polygon when the surround was fetched
-                  ...(project.surround?.roofReadM?.[r.id] !== undefined
-                    ? [
-                        `aerial height map reads ≈ ${fmtLen(project.surround.roofReadM[r.id], 1)}` +
-                          (Math.abs(project.surround.roofReadM[r.id] - r.heightM) > ROOF_HEIGHT_TOLERANCE_M
-                            ? ' — check the eave height'
-                            : ''),
-                      ]
-                    : []),
+                  // what Google's height map reads over this polygon (only while the card is open)
+                  ...(() => {
+                    const read = roofReadings(project)[r.id];
+                    return read === undefined
+                      ? []
+                      : [
+                          `aerial height map reads ≈ ${fmtLen(read, 1)}` +
+                            (Math.abs(read - r.heightM) > ROOF_HEIGHT_TOLERANCE_M ? ' — check the eave height' : ''),
+                        ];
+                  })(),
                 ]}
                 onClose={() => onPick(null)}
                 // on-object placement: choose here, then tap the wall it goes on
