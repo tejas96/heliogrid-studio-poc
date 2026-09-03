@@ -161,6 +161,38 @@ function PanelCard({
   );
 }
 
+/**
+ * Atmosphere: the haze and the night background, put on the SCENE.
+ *
+ * These were declared as `<fogExp2 attach="fog">` and `<color attach="background">`
+ * inside SceneContents — which returns a `<group>`, so r3f dutifully attached
+ * them to that group. A Group has no fog and no background; the renderer never
+ * looks there. Measured: `scene.fog` was null and `scene.background` null with
+ * both tags mounted, so the site has never had any aerial perspective at all.
+ * That is why the ground ended in a razor-sharp cut with flat grey above it.
+ *
+ * Setting them through `useThree` names the target explicitly, so this cannot
+ * silently attach to the wrong object again.
+ */
+function Atmosphere({ color, density, background }: { color: string; density: number; background: string | null }) {
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    const prev = scene.fog;
+    scene.fog = new THREE.FogExp2(color, density);
+    return () => {
+      scene.fog = prev;
+    };
+  }, [scene, color, density]);
+  useEffect(() => {
+    const prev = scene.background;
+    scene.background = background ? new THREE.Color(background) : null;
+    return () => {
+      scene.background = prev;
+    };
+  }, [scene, background]);
+  return null;
+}
+
 /** Installs the pick order on the fiber event manager (must live inside the Canvas). */
 function PickOrder({ wiring }: { wiring: boolean }) {
   const setEvents = useThree((s) => s.setEvents);
@@ -358,6 +390,17 @@ const MIN_ORBIT_M = 3;
 
 /** Side of the scene's ground plane, metres — the aerial picture must cover it. */
 const GROUND_PLANE_M = 300;
+/**
+ * How far the plain ground runs. The aerial imagery is finite — about 560 m
+ * across at this latitude — and the base plane under it was 300 m, SMALLER
+ * than the picture it was meant to back. So past 280 m there was simply
+ * nothing, and the ground ended in a straight cut with sky above it.
+ *
+ * Eight kilometres is past anything a site camera can resolve, and the haze
+ * has fully taken it over long before then (FogExp2 at 0.0006 is ~99% by
+ * 4 km), so the ground arrives at the sky's own colour rather than stopping.
+ */
+const HORIZON_PLANE_M = 8000;
 /**
  * Gap between the stacked ground pictures. Not cosmetic: two coplanar surfaces
  * closer than the depth buffer can resolve alternate as the camera moves, and
@@ -2670,15 +2713,18 @@ function SceneContent({
               mieDirectionalG={0.85}
             />
           ) : (
-            <>
-              <color attach="background" args={['#0a0f1c']} />
-              {/* night: the sun is below the horizon, so the sky is stars */}
-              <Stars radius={400} depth={80} count={2400} factor={5} saturation={0} fade speed={0} />
-            </>
+            /* night: the sun is below the horizon, so the sky is stars */
+            <Stars radius={400} depth={80} count={2400} factor={5} saturation={0} fade speed={0} />
           )}
-          {/* real haze at site scale is faint: the old 0.0035 washed a whole
-              framed design grey once the camera stood 100 m back */}
-          <fogExp2 attach="fog" args={[sunVisible ? '#b9c7d8' : '#0a0f1c', 0.0006]} />
+          {/* Real haze at site scale is faint: the old 0.0035 washed a whole
+              framed design grey once the camera stood 100 m back. It carries
+              the far ground into the sky's own colour, which is what makes a
+              horizon instead of an edge. */}
+          <Atmosphere
+            color={sunVisible ? '#b9c7d8' : '#0a0f1c'}
+            density={0.0006}
+            background={sunVisible ? null : '#0a0f1c'}
+          />
 
           {/* lights — the environment map now carries the sky's ambient share,
               so the flat ambient/hemisphere terms are small */}
@@ -2725,9 +2771,18 @@ function SceneContent({
               near-black base plane fought through the aerial photo and painted
               the map with black patches and stripes (owner, 2026-09-03). They
               are half a metre apart now, whether the surround is on or off. */}
+          {/* The land itself, running to the horizon under everything else. It
+              used to be 300 m — narrower than the 560 m photo above it — and
+              near-black, so where the photo ended you got a dark ring and then
+              a hard edge. It now runs past sight and carries a muted land tone
+              close to the photo's own, which the haze walks up to the sky. */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -GROUND_STACK_M * 2, 0]} receiveShadow>
-            <planeGeometry args={[GROUND_PLANE_M, GROUND_PLANE_M]} />
-            <meshStandardMaterial color="#151a21" roughness={1} envMapIntensity={0.2} />
+            <planeGeometry args={[HORIZON_PLANE_M, HORIZON_PLANE_M]} />
+            <meshStandardMaterial
+              color={sunVisible ? '#6f7378' : '#0d1219'}
+              roughness={1}
+              envMapIntensity={0.2}
+            />
           </mesh>
           {/* the wide, coarse picture: the neighbourhood is still a map when
               the streamed surroundings are off */}
