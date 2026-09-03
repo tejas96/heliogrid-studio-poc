@@ -331,6 +331,30 @@ const PLACE_NAME: Record<PlaceKind, string> = { inverter: 'inverter', battery: '
 
 /** Eye height of the walkthrough camera above the deck it stands on. */
 const WALK_EYE_M = 1.7;
+/**
+ * How far above the site's datum the orbit camera and its target must stay.
+ *
+ * `minDistance` bounds the camera's distance to its TARGET, not to the ground,
+ * and `dollyToCursor` walks that target towards whatever the pointer is over —
+ * so dollying at the ground marched the target down through the terrain and
+ * took the camera with it. Measured: the camera reached y = −3.92 with every
+ * ground surface at −1.5 or above. Underneath, the single-sided ground planes
+ * cull away and you are left looking at sky through the floor.
+ *
+ * Eye height is the natural floor: you can stand on the site, never inside it.
+ */
+const CAMERA_FLOOR_M = 1.7;
+/**
+ * The closest the orbit camera may come to what it is looking at.
+ *
+ * At 1.5 m the camera could press against the Google photomesh — measured at
+ * 0.9 m from the lens — whose imagery here is about half a metre per texel and,
+ * in India, carries no buildings at all. That close it is a wall of pale blocks
+ * with stair-stepped edges, and the tile streamer swapping LOD levels underneath
+ * makes those blocks jump about: the flicker. A module is 1–2 m, so three metres
+ * still fills a third of the frame with it.
+ */
+const MIN_ORBIT_M = 3;
 
 /** Side of the scene's ground plane, metres — the aerial picture must cover it. */
 const GROUND_PLANE_M = 300;
@@ -753,6 +777,34 @@ export function Scene3D({
     controlsRef.current = c;
     if (c) setControlsReady(true);
   }, []);
+  /**
+   * The floor. CameraControls' own boundary is the right tool: it clamps the
+   * TARGET, and with `boundaryEnclosesCamera` the camera too, so the dolly can
+   * no longer march either of them down through the terrain.
+   *
+   * Not applied while WALKING — a walkthrough is deliberately at eye height on
+   * the deck, and it carries its own clamps (enterWalk pins the distance and
+   * opens the polar angle). Boxing it in as well would fight those.
+   */
+  useEffect(() => {
+    const c = controlsRef.current;
+    if (!controlsReady || !c) return;
+    if (walk) {
+      c.setBoundary(undefined);
+      c.boundaryEnclosesCamera = false;
+      return;
+    }
+    // wide enough in plan that the boundary never limits a pan across the site
+    const reach = Math.max(1000, bounds.r * 20);
+    c.setBoundary(
+      new THREE.Box3(
+        new THREE.Vector3(bounds.cx - reach, bounds.yMin + CAMERA_FLOOR_M, bounds.cz - reach),
+        new THREE.Vector3(bounds.cx + reach, bounds.yMin + CAMERA_FLOOR_M + 4000, bounds.cz + reach),
+      ),
+    );
+    c.boundaryEnclosesCamera = true;
+  }, [controlsReady, walk, bounds]);
+
   const framedFor = useRef<string>('');
   useEffect(() => {
     if (!controlsReady || !controlsRef.current) return;
@@ -1354,7 +1406,7 @@ export function Scene3D({
         <CameraControls
           ref={attachControls}
           makeDefault
-          minDistance={1.5}
+          minDistance={MIN_ORBIT_M}
           maxDistance={600}
           maxPolarAngle={Math.PI / 2.05}
           dollyToCursor

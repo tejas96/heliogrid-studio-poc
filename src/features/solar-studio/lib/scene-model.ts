@@ -57,16 +57,37 @@ export function buildRoofSolidGeometry(roof: Roof, eaveProj?: number): THREE.Buf
   };
   const planUv = (v: THREE.Vector3): [number, number] => [v.x, -v.z];
 
+  /**
+   * A plot AT ground level is a surface, not a solid.
+   *
+   * Every ground-mount site has `heightM: 0` and no pitch, so `top` and
+   * `ground` came out identical: the bottom cap landed on exactly the same
+   * plane as the top one and the four walls collapsed to zero-area slivers.
+   * Measured on "Tracker ground test": 12 triangles, only 10 distinct, every
+   * vertex at y = 0. With the DoubleSide material both caps then rendered at
+   * the same depth with nothing to break the tie, so the winner changed with
+   * the smallest numeric wobble — the white blocks and dashed stipple that
+   * crawled over the ground as the camera moved. (The dead walls made it
+   * worse: computeVertexNormals cannot normalise a zero-area triangle, so the
+   * surface shaded as blown-out white as well.)
+   *
+   * Emitting the top face alone is not a workaround; it is what a plot lying
+   * on the ground actually is, and it leaves a pitched or raised roof exactly
+   * as it was.
+   */
+  const flatOnGround = top.every((v) => Math.abs(v.y) < 1e-3);
+
   // top + bottom caps share the plan triangulation
   const contour = poly.map((p) => new THREE.Vector2(p.x, p.y));
   const faces = THREE.ShapeUtils.triangulateShape(contour, []);
   for (const [i, j, k] of faces) {
     tri(top[i], top[k], top[j], planUv(top[i]), planUv(top[k]), planUv(top[j])); // top: up-facing
+    if (flatOnGround) continue;
     tri(ground[i], ground[j], ground[k], planUv(ground[i]), planUv(ground[j]), planUv(ground[k])); // bottom
   }
   // vertical walls, one quad per edge
   let along = 0;
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; !flatOnGround && i < n; i++) {
     const j = (i + 1) % n;
     const len = top[i].distanceTo(top[j]);
     const a0: [number, number] = [along, top[i].y];
