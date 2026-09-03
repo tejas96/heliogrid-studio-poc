@@ -2279,11 +2279,27 @@ function SceneContent({
    * marker. They used to be written out separately and drifted apart — the
    * arcs at the design's top, the marker at ground level — which put the sun
    * below its own path by the height of the building.
+   *
+   * The dome is the SITE'S OWN SKY, so it is centred on the ground the site
+   * stands on and its horizon ring lies in that ground. It used to be centred
+   * on the design's TOP instead, to stop a tall building swallowing the path —
+   * but that floats the whole sky: measured on the 77 m tower, every arc
+   * bottomed out at 81 m with the ground at 0, so sunrise and sunset hung in
+   * mid-air and the path belonged to nothing.
+   *
+   * Height is bought with RADIUS, not by lifting the centre. The dome is grown
+   * until it encloses the design, so the midday arc passes over the building
+   * with room to spare. Near sunrise and sunset it drops behind the building
+   * instead — which is exactly right, and is the whole point of a sun path: a
+   * low sun really is blocked by what stands in front of it.
    */
-  const SUN_DOME_R = R * 0.75;
   const sunDomeCentre = useMemo(
-    () => new THREE.Vector3(bounds.cx, bounds.yMax, bounds.cz),
+    () => new THREE.Vector3(bounds.cx, bounds.yMin, bounds.cz),
     [bounds],
+  );
+  const SUN_DOME_R = Math.max(
+    R * 0.75,
+    Math.hypot(bounds.r, bounds.yMax - bounds.yMin) * 1.25,
   );
 
   // parametric structures (Phase 7): the member graph is the owner — the

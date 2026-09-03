@@ -23,6 +23,47 @@ function sunMarker(centre: THREE.Vector3, radius: number, altitudeRad: number, a
   return dir.multiplyScalar(radius).add(centre);
 }
 
+/** the scene's rule, in one place: three/Scene3D `SUN_DOME_R` */
+function domeRadius(designR: number, height: number, baseR: number) {
+  return Math.max(baseR * 0.75, Math.hypot(designR, height) * 1.25);
+}
+
+/**
+ * The dome is the SITE'S sky, so its horizon ring lies in the ground the site
+ * stands on. It used to be centred on the design's TOP so a tall building did
+ * not swallow the path — which floated the whole sky: on the 77 m tower every
+ * arc bottomed out at 81 m with the ground at 0, and sunrise hung in mid-air.
+ * Height is bought with radius instead.
+ */
+describe('the dome is the site’s own sky', () => {
+  const designR = 43.7;
+  const height = 76.9;
+  const baseR = Math.max(70, designR * 2.6);
+  const radius = domeRadius(designR, height, baseR);
+
+  it('puts sunrise and sunset ON the ground, not in the air', () => {
+    const centre = new THREE.Vector3(0.9, 0, -5.7);
+    // altitude 0 is the horizon ring
+    const p = sunMarker(centre, radius, 0, Math.PI * 0.4);
+    expect(p.y).toBeCloseTo(0, 6);
+  });
+
+  it('still clears the building at midday', () => {
+    const centre = new THREE.Vector3(0.9, 0, -5.7);
+    const noon = sunMarker(centre, radius, (54 * Math.PI) / 180, Math.PI);
+    expect(noon.y).toBeGreaterThan(height);
+  });
+
+  it('grows the dome for a tall design rather than lifting it', () => {
+    expect(domeRadius(designR, height, baseR)).toBeGreaterThan(domeRadius(designR, 0, baseR));
+  });
+
+  it('leaves a flat site on its ordinary radius', () => {
+    // a ground mount is only a couple of metres tall: nothing to clear
+    expect(domeRadius(designR, 2.5, baseR)).toBeCloseTo(baseR * 0.75, 6);
+  });
+});
+
 describe('the sun rides the same dome as its arcs', () => {
   const radius = 85.7; // R * 0.75 for the tower fixture
 
