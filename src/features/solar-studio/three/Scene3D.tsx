@@ -391,16 +391,24 @@ const MIN_ORBIT_M = 3;
 /** Side of the scene's ground plane, metres — the aerial picture must cover it. */
 const GROUND_PLANE_M = 300;
 /**
- * How far the plain ground runs. The aerial imagery is finite — about 560 m
- * across at this latitude — and the base plane under it was 300 m, SMALLER
- * than the picture it was meant to back. So past 280 m there was simply
- * nothing, and the ground ended in a straight cut with sky above it.
- *
- * Eight kilometres is past anything a site camera can resolve, and the haze
- * has fully taken it over long before then (FogExp2 at 0.0006 is ~99% by
- * 4 km), so the ground arrives at the sky's own colour rather than stopping.
+ * How far the plain ground runs — the backstop under everything, far enough
+ * out that the haze has entirely taken it over (FogExp2 at 0.0006 is ~99% by
+ * 4 km), so the world arrives at the sky's own colour rather than stopping.
  */
 const HORIZON_PLANE_M = 8000;
+/**
+ * How far the ground stays a PHOTOGRAPH.
+ *
+ * The first attempt at a horizon backed the imagery with a plain grey plane,
+ * which swapped a hard edge for something worse: a vast dead plate filling the
+ * middle distance. Ground has to stay ground. The aerial layers are therefore
+ * a hand-built mip pyramid — the sharp site tile (~70 m), the neighbourhood
+ * (~560 m), and this one — each about five times the last, so the eye never
+ * meets a boundary between a picture and a blank.
+ *
+ * Three kilometres is where the haze reaches ~89% and takes over honestly.
+ */
+const FAR_GROUND_M = 3000;
 /**
  * Gap between the stacked ground pictures. Not cosmetic: two coplanar surfaces
  * closer than the depth buffer can resolve alternate as the camera moves, and
@@ -2580,6 +2588,21 @@ function SceneContent({
     return t;
   }, [wideTexUrl]);
   useEffect(() => () => wideGroundTex.dispose(), [wideGroundTex]);
+
+  // the far picture: keeps the middle distance PHOTOGRAPHIC out to where the
+  // haze takes over, so the horizon is land fading into sky rather than the
+  // imagery stopping and a blank plate carrying on
+  const farZoom = zoomCovering(loc.latLng.lat, FAR_GROUND_M);
+  const farSpanM =
+    metersPerStaticMap(loc.latLng.lat, farZoom, 640) * project.calibration.scaleFactor;
+  const farTexUrl = staticSatelliteUrl(loc.latLng.lat, loc.latLng.lng, farZoom, 640, 2);
+  const farGroundTex = useMemo(() => {
+    const t = new THREE.TextureLoader().load(farTexUrl);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  }, [farTexUrl]);
+  useEffect(() => () => farGroundTex.dispose(), [farGroundTex]);
   // GPU texture memory is never reclaimed implicitly — release the previous
   // satellite tile when the URL changes and on unmount
   useEffect(() => () => groundTex.dispose(), [groundTex]);
@@ -2771,18 +2794,23 @@ function SceneContent({
               near-black base plane fought through the aerial photo and painted
               the map with black patches and stripes (owner, 2026-09-03). They
               are half a metre apart now, whether the surround is on or off. */}
-          {/* The land itself, running to the horizon under everything else. It
-              used to be 300 m — narrower than the 560 m photo above it — and
-              near-black, so where the photo ended you got a dark ring and then
-              a hard edge. It now runs past sight and carries a muted land tone
-              close to the photo's own, which the haze walks up to the sky. */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -GROUND_STACK_M * 2, 0]} receiveShadow>
+          {/* The backstop, running past sight under everything else. It used to
+              be 300 m — narrower than the 560 m photo above it — so where the
+              photo ended there was nothing at all. It is never really SEEN now:
+              by the distance it shows past the far photo the haze owns it. */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -2.2 : -2.2, 0]} receiveShadow>
             <planeGeometry args={[HORIZON_PLANE_M, HORIZON_PLANE_M]} />
             <meshStandardMaterial
               color={sunVisible ? '#6f7378' : '#0d1219'}
               roughness={1}
               envMapIntensity={0.2}
             />
+          </mesh>
+          {/* the far picture — the middle distance stays LAND, not a blank
+              plate, all the way out to where the haze takes over */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -1.5, 0]} receiveShadow>
+            <planeGeometry args={[farSpanM, farSpanM]} />
+            <meshStandardMaterial map={farGroundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
           </mesh>
           {/* the wide, coarse picture: the neighbourhood is still a map when
               the streamed surroundings are off */}
