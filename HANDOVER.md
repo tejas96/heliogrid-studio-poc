@@ -1,15 +1,27 @@
 # Solar Studio — session handover
 
-**You are on `main`.** Batch C was merged in at `82b7ebc`; `main`, `studio-next` and
-`origin/studio-next` all point at it.
+**You are on `main`**, and `main` tracks `origin/main`. Push it normally.
 
-**GIT — read this before pushing anything.** This repo's `origin` is
-`github.com-personal:tejas96/HelioGrid` — the SaaS **monorepo** (`apps/`, `infra/`, Temporal,
-Postgres). It shares **no commits and no files** with this POC. Never open a PR from here into
-`origin/main`, and never push `main`: a PR would read as "delete the SaaS product, replace it
-with the POC". Land work by merging into local `main`, re-running the gates on `main`, then
-fast-forwarding `studio-next` and pushing **only** `studio-next` as the off-machine backup.
-If this POC ever needs real PRs, it needs its own GitHub repo first.
+**GIT — this changed on 2026-09-03; the old warning no longer applies.** The studio now has
+its OWN repo: `origin` is `github.com-personal:tejas96/heliogrid-design-studio`. Work lands on
+`main`, gates green, `git push`. Real PRs are fine here.
+
+The SaaS monorepo is still reachable as the `heliogrid-saas` remote
+(`github.com-personal:tejas96/HelioGrid`). It shares **no commits and no files** with this
+repo — `git merge-base` between the two returns nothing. **Never push to it and never open a
+PR into it**: a PR would read as "delete the SaaS product, replace it with the POC". It is
+kept only so the old `studio-next` backup branch is not orphaned.
+
+Two local refs are pre-rewrite leftovers and are deliberately NOT pushed — they point at the
+old hashes of history that `main` already contains in full, so pushing them would double the
+repo: the `backup-before-author-rewrite` tag, and the stale `studio-next` / `site-frame`
+branches. Delete them whenever you like.
+
+**Authorship was rewritten once**, on 2026-09-03, before the first push to the new repo: 192
+commits carried `devtejas@Tejass-MacBook-Pro.local`, a machine hostname GitHub cannot link to
+an account, and were re-stamped `tejas96 <tejas96patil@gmail.com>`. Six commits by OM1807 were
+left alone. Not one file changed — the tree hash was identical before and after. Do not rewrite
+history again now that the repo is shared.
 
 **Ledger:** `.superpowers/sdd/2026-09-02-phase1-design-kernel/progress.md` (untracked, never commit).
 **Gates before every commit:** `npx tsc --noEmit` and `set -o pipefail; npx vitest run`.
