@@ -538,7 +538,10 @@ export function ElectricalOverlay({
                     : `NOT YET — ${wiringHealth.why}`,
                   ...(wiringPreview && !wiringPreview.ok ? [`Cannot save: ${wiringPreview.refusal.reason}`] : []),
                 ]
-              : ['Click a module to start. Click again to take it out.', 'Shift-click takes its whole table.']
+              : [
+                  'Click a module to start. Click again to take it out.',
+                  'Shift-click takes its whole table · Shift-drag a box takes everything inside.',
+                ]
           }
           onClose={() => onWiringChange(null)}
           actions={[

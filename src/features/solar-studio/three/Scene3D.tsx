@@ -433,29 +433,49 @@ export function Scene3D({
   const onWrapPointerDownCapture = (e: React.PointerEvent) => {
     if (!e.shiftKey || e.button !== 0) return;
     if ((e.target as HTMLElement).tagName !== 'CANVAS') return; // rails and cards keep their clicks
-    // the camera must not orbit under the box: the canvas never sees this press
-    e.stopPropagation();
-    e.preventDefault();
+    // The camera must not orbit under the box — but this used to be done by
+    // stopping the press dead, which meant the canvas never saw it and NO
+    // shift gesture could ever reach a module. Shift-click-takes-a-table
+    // silently did nothing. Disabling the controls in the capture phase, before
+    // they see the event, stops the orbit just as well and leaves the press and
+    // the click to travel on to the modules underneath.
+    const controls = controlsRef.current;
+    const wasEnabled = controls?.enabled ?? true;
+    if (controls) controls.enabled = false;
     const start = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
     marqueeRef.current = start;
-    setMarquee(start);
     const onMove = (ev: PointerEvent) => {
       const m = marqueeRef.current;
       if (!m) return;
       const next = { ...m, x1: ev.clientX, y1: ev.clientY };
       marqueeRef.current = next;
-      setMarquee(next);
+      // only draw the rectangle once this is plainly a DRAG; below that it is
+      // still a click, and a flickering 2 px box would only be noise
+      if (Math.abs(next.x1 - next.x0) > 3 || Math.abs(next.y1 - next.y0) > 3) setMarquee(next);
     };
-    const onUp = () => {
+    const onUp = (ev?: Event) => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      window.removeEventListener('blur', onUp);
+      // ALWAYS give the camera back. A gesture that ends off-window, or is
+      // cancelled by the OS, would otherwise leave the controls switched off
+      // for good and the scene frozen with no way to recover but a reload.
+      if (controls) controls.enabled = wasEnabled;
       const m = marqueeRef.current;
       marqueeRef.current = null;
       setMarquee(null);
-      if (m) setMarqueeCommit({ ...m, nonce: Date.now() });
+      // A press that never moved is a CLICK — the module under it handles
+      // itself, and committing a zero-size box on top would be a second,
+      // conflicting answer to the same gesture.
+      if (ev?.type === 'pointerup' && m && (Math.abs(m.x1 - m.x0) > 3 || Math.abs(m.y1 - m.y0) > 3)) {
+        setMarqueeCommit({ ...m, nonce: Date.now() });
+      }
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('blur', onUp);
   };
   const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
   // Phase 5: strings and cable runs on the model; `wiring` = module ids being
@@ -1679,10 +1699,19 @@ export function Scene3D({
         </div>
       )}
 
-      {/* ── the Inverter Bay: where the next hand-made string goes ── */}
-      {wiring && project.components.inverter && project.components.panel && (
+      {/* ── the Inverter Bay ──
+          A CHOICE while a string is being wired. Otherwise the readout: how
+          the DC has landed across the inverters. It only appears when there is
+          more than one, because a single inverter has no balance to look at —
+          the string card already says everything about it. It rides the Cables
+          toggle, so hiding the electrics hides this too. */}
+      {(wiring || (showElectrical && project.components.inverterCount > 1 && !readOnly && !captureMode)) &&
+        !heatmap &&
+        project.components.inverter &&
+        project.components.panel && (
         <InverterBay
           spec={project.components.inverter}
+          live={wiring !== null}
           target={wireTarget}
           onTarget={setWireTarget}
           inverters={bayInverters(
@@ -3032,7 +3061,23 @@ function SceneContent({
       )}
 
       {/* box select: the released rectangle picks every module centre inside it */}
-      <MarqueeSelect commit={marqueeCommit} positions={panelPositions} onSelect={(ids) => onSelectPanels?.(ids, true)} />
+      {/* box select: the released rectangle takes every module centre inside it.
+          While a string is being wired those modules join the STRING instead of
+          the selection — sweeping a box over a block is the fastest way to take
+          forty modules, and selecting them mid-wiring would mean nothing. */}
+      <MarqueeSelect
+        commit={marqueeCommit}
+        positions={panelPositions}
+        onSelect={(ids) => {
+          if (wiring) {
+            const have = new Set(wiring);
+            const add = ids.filter((id) => !have.has(id));
+            if (add.length) onWiringChange([...wiring, ...add]);
+            return;
+          }
+          onSelectPanels?.(ids, true);
+        }}
+      />
 
       {/* measurements: distance / angle / area / elevation on the real geometry */}
       <Measure

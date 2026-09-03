@@ -60,25 +60,38 @@ export function InverterBay({
   spec,
   target,
   onTarget,
+  live,
 }: {
   inverters: BayInverter[];
   spec: InverterSpec;
   /** the inverter the next hand-made string will land on; null = let it balance */
   target: number | null;
   onTarget: (index: number | null) => void;
+  /**
+   * A string is being wired, so the cards are a CHOICE. Otherwise the Bay is
+   * just the readout — how the DC has landed across the inverters — and must
+   * not look like a control that does nothing when tapped.
+   */
+  live: boolean;
 }) {
   return (
-    <div className="bay" role="radiogroup" aria-label="Inverter to wire into">
-      <button
-        className={`bay-card bay-auto ${target === null ? 'on' : ''}`}
-        role="radio"
-        aria-checked={target === null}
-        onClick={() => onTarget(null)}
-        data-tip={'Balance it for me\nThe next string goes on the lightest inverter'}
-      >
-        <span className="bay-name">Auto</span>
-        <span className="bay-sub">balance</span>
-      </button>
+    <div
+      className={`bay ${live ? '' : 'bay-readout'}`}
+      role={live ? 'radiogroup' : 'group'}
+      aria-label={live ? 'Inverter to wire into' : 'Inverter load'}
+    >
+      {live && (
+        <button
+          className={`bay-card bay-auto ${target === null ? 'on' : ''}`}
+          role="radio"
+          aria-checked={target === null}
+          onClick={() => onTarget(null)}
+          data-tip={'Balance it for me\nThe next string goes on the lightest inverter'}
+        >
+          <span className="bay-name">Auto</span>
+          <span className="bay-sub">balance</span>
+        </button>
+      )}
       {inverters.map((inv) => {
         const ratio = spec.acKw > 0 ? inv.kwp / spec.acKw : 0;
         const tone = ratioTone(ratio);
@@ -86,15 +99,17 @@ export function InverterBay({
         return (
           <button
             key={inv.index}
-            className={`bay-card ${target === inv.index ? 'on' : ''} ${full ? 'full' : ''}`}
-            role="radio"
-            aria-checked={target === inv.index}
-            disabled={full}
+            className={`bay-card ${live && target === inv.index ? 'on' : ''} ${full ? 'full' : ''}`}
+            role={live ? 'radio' : undefined}
+            aria-checked={live ? target === inv.index : undefined}
+            disabled={!live || full}
             onClick={() => onTarget(inv.index)}
             data-tip={
-              full
-                ? `Inverter ${inv.index + 1} has no free MPPT input left`
-                : `Wire the next string into inverter ${inv.index + 1}\n${inv.kwp.toFixed(1)} of ${spec.acKw} kW · ${inv.strings} string${inv.strings === 1 ? '' : 's'}`
+              !live
+                ? `Inverter ${inv.index + 1} carries ${inv.kwp.toFixed(1)} of ${spec.acKw} kW on ${inv.usedMppts} of ${spec.mppt.count} MPPT inputs`
+                : full
+                  ? `Inverter ${inv.index + 1} has no free MPPT input left`
+                  : `Wire the next string into inverter ${inv.index + 1}\n${inv.kwp.toFixed(1)} of ${spec.acKw} kW · ${inv.strings} string${inv.strings === 1 ? '' : 's'}`
             }
             aria-label={`Inverter ${inv.index + 1}, ${inv.kwp.toFixed(1)} of ${spec.acKw} kilowatts, ${inv.usedMppts} of ${spec.mppt.count} MPPT inputs used${inv.placed ? '' : ', not placed on the model'}`}
           >
