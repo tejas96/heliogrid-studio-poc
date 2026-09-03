@@ -2652,11 +2652,43 @@ function SceneContent({
   // design's footprint — a 300 m site keeps its shadows, a 20 m house gets a
   // sharp map instead of 60 m of wasted texels
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
-  lightTarget.position.set(bounds.cx, 0, bounds.cz);
-  const shadowHalf = Math.max(20, bounds.r * 1.2);
+  /**
+   * The sun light and its target share ONE anchor, so the light's direction is
+   * exactly the sun's.
+   *
+   * They used to disagree: the light was placed at `sunDir × D` from a point
+   * lifted to `bounds.yMax`, while the target sat at ground level. Adding a
+   * vertical offset to one end and not the other TILTS the beam. Measured on
+   * the 77 m tower with the sun at 54°: the light shone from 67.7°, so the
+   * drawn shadow was 32 m long where 56 m is right — 43% short, and worse the
+   * taller the building. On a flat site yMax is ~0 and nothing shows, which is
+   * why this only ever appeared on the big one.
+   *
+   * The shading ENGINE is unaffected — it casts its own rays from
+   * `sunPosition()` (lib/shading) and never reads this light. The energy
+   * numbers were right; the picture was not.
+   */
+  const lightAnchor = useMemo(
+    () => new THREE.Vector3(bounds.cx, bounds.cy, bounds.cz),
+    [bounds],
+  );
+  lightTarget.position.copy(lightAnchor);
+  /**
+   * The shadow frustum must hold the design AND the shadow it throws. A tall
+   * building's shadow reaches `height / tan(altitude)` beyond its own footprint
+   * — 56 m for this 77 m tower with the sun at 54°, and further as the sun
+   * drops — so a box sized to the footprint alone cut the shadow off partway
+   * across the ground.
+   *
+   * The allowance is 1.5 × the design's height, which holds the whole shadow
+   * down to a sun altitude of about 34°. Lower than that it clips again, and
+   * that is a deliberate trade: the 4096 map has to cover whatever this box
+   * spans, so buying the last few degrees costs sharpness everywhere else.
+   */
+  const shadowHalf = Math.max(20, bounds.r * 1.2 + (bounds.yMax - bounds.yMin) * 1.5);
   const sunPos = useMemo(
-    () => sunDir.clone().multiplyScalar(Math.max(80, bounds.r * 3)).add(new THREE.Vector3(bounds.cx, bounds.yMax, bounds.cz)),
-    [sunDir, bounds],
+    () => sunDir.clone().multiplyScalar(Math.max(80, bounds.r * 3 + bounds.yMax)).add(lightAnchor),
+    [sunDir, bounds, lightAnchor],
   );
 
   // heatmap mode: flat satellite ground + colored roof-surface cells only —
