@@ -2274,6 +2274,17 @@ function SceneContent({
   const spec = project.components.panel;
   // sun-path arc and sun disc radius: beyond the design, scaled to the site
   const R = Math.max(70, bounds.r * 2.6);
+  /**
+   * The sun dome: ONE centre and ONE radius, shared by the arcs and the sun
+   * marker. They used to be written out separately and drifted apart — the
+   * arcs at the design's top, the marker at ground level — which put the sun
+   * below its own path by the height of the building.
+   */
+  const SUN_DOME_R = R * 0.75;
+  const sunDomeCentre = useMemo(
+    () => new THREE.Vector3(bounds.cx, bounds.yMax, bounds.cz),
+    [bounds],
+  );
 
   // parametric structures (Phase 7): the member graph is the owner — the
   // scene renders it and couples panel heights to the SAME resolved racking.
@@ -3646,7 +3657,7 @@ function SceneContent({
         // centred on the DESIGN, not the scene origin: a building 25 m from
         // the origin had its sun arc drawn 25 m beside it — and at the design's
         // TOP, so a 75 m tower does not swallow its own sun path
-        <group position={[bounds.cx, bounds.yMax, bounds.cz]}>
+        <group position={sunDomeCentre.toArray()}>
           {/* the year's envelope: solstices and the equinox, faint, so a
               glance shows how far the sun swings between seasons */}
           {seasonDates(date.getFullYear()).map((s) => (
@@ -3655,7 +3666,7 @@ function SceneContent({
               lat={loc.latLng.lat}
               lng={loc.latLng.lng}
               date={s.date}
-              radius={R * 0.75}
+              radius={SUN_DOME_R}
               northOffsetDeg={project.calibration.northOffsetDeg}
               faint
               label={s.label}
@@ -3665,13 +3676,20 @@ function SceneContent({
             lat={loc.latLng.lat}
             lng={loc.latLng.lng}
             date={date}
-            radius={R * 0.75}
+            radius={SUN_DOME_R}
             northOffsetDeg={project.calibration.northOffsetDeg}
           />
         </group>
       )}
+      {/* The sun rides the SAME dome as its arcs — one centre, one radius. It
+          used to be placed on a dome centred at y = 0 while the arcs sat at
+          the design's top, so on this 77 m tower the marker was drawn 77 m
+          below its own path: measured at y = 69.3 where the dome puts it at
+          148, which reads as the sun sitting beside the building and below the
+          horizon while the badge says Alt 54°. Whoever lifted the arcs for
+          tall buildings did not lift the sun with them. */}
       {!meshMode && sunVisible && (
-        <mesh position={sunDir.clone().multiplyScalar(R * 0.75).add(new THREE.Vector3(bounds.cx, 0, bounds.cz))}>
+        <mesh position={sunDir.clone().multiplyScalar(SUN_DOME_R).add(sunDomeCentre)}>
           <sphereGeometry args={[2.1, 20, 20]} />
           <meshBasicMaterial color="#fff0c0" />
         </mesh>
