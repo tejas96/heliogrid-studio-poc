@@ -60,7 +60,7 @@ function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>):
 import { obstructionDuplicate, obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
 import { castsAnalyticalShadow } from '../lib/capabilities';
 import { polygonArea } from '../lib/geo';
-import type { ObstructionType } from '../types';
+import type { EntityProvenance, ObstructionType } from '../types';
 
 /** What the scene can pick besides modules (modules use the shared selection). */
 /**
@@ -229,6 +229,29 @@ export type ScenePick = {
   id: string;
 };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
+
+/**
+ * Where a roof's HEIGHT came from, and separately where its OUTLINE came from.
+ *
+ * The card used to print one bare word — the outline's provenance — on the
+ * line under the eave height, with nothing to say which number it described.
+ * On the owner's tower that read "74.7 m eave / flat · rcc flat · traced by
+ * hand", so a height MEASURED off Google's aerial map looked hand-typed. The
+ * house rule is that every user-visible number carries its tier; a number
+ * standing next to somebody else's tier is worse than one carrying none.
+ */
+export const HEIGHT_SOURCE_NAME: Record<'aerial_map' | 'user' | 'unknown', string> = {
+  aerial_map: 'from the aerial map',
+  user: 'entered by hand',
+  // older projects were saved before the height carried a source at all
+  unknown: 'source not recorded',
+};
+
+export const OUTLINE_SOURCE_NAME: Record<EntityProvenance['source'], string> = {
+  manual: 'outline traced by hand',
+  dataLayers: 'outline from Google',
+  gemini: 'outline detected by AI',
+};
 
 const OBSTRUCTION_NAME: Record<ObstructionType, string> = {
   tank: 'Water tank',
@@ -2955,8 +2978,8 @@ function SceneContent({
                 position={[c.x, r.heightM + 1.2, -c.y]}
                 title={r.name}
                 lines={[
-                  `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave`,
-                  `${r.pitchDeg > 0 ? `${r.pitchDeg}° pitch facing ${Math.round(r.slopeAzimuthDeg)}°` : 'flat'} · ${r.roofType.replace('_', ' ')} · ${r.provenance?.source ?? 'traced by hand'}`,
+                  `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave · ${HEIGHT_SOURCE_NAME[r.heightSource ?? 'unknown']}`,
+                  `${r.pitchDeg > 0 ? `${r.pitchDeg}° pitch facing ${Math.round(r.slopeAzimuthDeg)}°` : 'flat'} · ${r.roofType.replace('_', ' ')} · ${OUTLINE_SOURCE_NAME[r.provenance?.source ?? 'manual']}`,
                   `${project.panels.filter((p) => p.roofId === r.id && p.enabled).length} modules`,
                   // what Google's height map reads over this polygon (only while the card is open)
                   ...(() => {
