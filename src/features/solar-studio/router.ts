@@ -13,7 +13,7 @@ export interface Route {
 type NavigateFn = (path: string) => void;
 let navigateFn: NavigateFn | null = null;
 
-export function bindNavigate(fn: NavigateFn) {
+function bindNavigate(fn: NavigateFn) {
   navigateFn = fn;
 }
 

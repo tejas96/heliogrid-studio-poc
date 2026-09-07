@@ -11,9 +11,9 @@
 import type { Project } from '../types';
 
 /** The first wizard step at which the array and everything hung off it exists. */
-export const DESIGN_STAGE = 5;
+const DESIGN_STAGE = 5;
 /** The first wizard step at which obstructions exist. */
-export const OBSTRUCTION_STAGE = 3;
+const OBSTRUCTION_STAGE = 3;
 
 /** Does the design (modules, racking, wiring, BOS) belong on screen at `stage`? */
 export function stageShowsDesign(stage?: number): boolean {
@@ -21,7 +21,7 @@ export function stageShowsDesign(stage?: number): boolean {
 }
 
 /** Do obstructions belong on screen at `stage`? */
-export function stageShowsObstructions(stage?: number): boolean {
+function stageShowsObstructions(stage?: number): boolean {
   return stage === undefined || stage >= OBSTRUCTION_STAGE;
 }
 

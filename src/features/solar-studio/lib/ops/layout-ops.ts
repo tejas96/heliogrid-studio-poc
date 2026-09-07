@@ -368,7 +368,7 @@ export const layoutAutoDesign = defineOp<{ objective: DesignObjective }>({
   },
 });
 
-export const layoutClear = defineOp<Record<string, never>>({
+const layoutClear = defineOp<Record<string, never>>({
   id: 'layout.clear',
   layer: 'layout',
   label: () => 'Clear all modules',

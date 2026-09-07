@@ -135,7 +135,7 @@ function outlineBBox(o: SectionOutline) {
 }
 
 /** `THREE.Shape` in METRES, centred on the section's bounding box. */
-export function sectionShape(d: SectionDims): THREE.Shape {
+function sectionShape(d: SectionDims): THREE.Shape {
   const o = sectionOutline(d);
   const { cx, cy } = outlineBBox(o);
   const toShape = (r: { x: number; y: number }[]) => {

@@ -116,7 +116,7 @@ export function surroundHeightAt(g: SurroundHeights, p: XY): number | null {
 }
 
 /** Around every roof the raster is the raster; under it (and this far outside) the model rules. */
-export const CUTOUT_MARGIN_M = 1.0;
+const CUTOUT_MARGIN_M = 1.0;
 
 /**
  * The grid with the site's own roofs cut out (their cells set to 0), for the

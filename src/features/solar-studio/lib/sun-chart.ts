@@ -14,7 +14,7 @@ import { pointInPolygon } from './geo';
 const zoneCache = new Map<string, string>();
 
 /** The site's IANA time zone, from an offline table (tz-lookup) — Nepal is +5:45, not IST. */
-export function siteZone(p: { lat: number; lng: number }): string {
+function siteZone(p: { lat: number; lng: number }): string {
   const key = `${p.lat.toFixed(2)},${p.lng.toFixed(2)}`;
   let z = zoneCache.get(key);
   if (!z) {
@@ -29,7 +29,7 @@ export function siteZone(p: { lat: number; lng: number }): string {
 }
 
 /** The zone's offset from UTC in hours at `at` (daylight saving included). */
-export function zoneOffsetHours(zone: string, at: Date): number {
+function zoneOffsetHours(zone: string, at: Date): number {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: zone,
@@ -248,7 +248,7 @@ export function horizonProfile(
   };
 }
 
-export function horizonAt(profile: HorizonProfile, azDeg: number): number {
+function horizonAt(profile: HorizonProfile, azDeg: number): number {
   const i = Math.round((((azDeg % 360) + 360) % 360) / profile.stepDeg) % profile.elevDeg.length;
   return profile.elevDeg[i];
 }

@@ -10,7 +10,7 @@ import type { PanelSpec, StringDef } from '../../types';
 import { resolveRules } from '../../data/rules/india';
 import { dcFuseA } from '../electrical-sizing';
 
-export interface CombinerBox {
+interface CombinerBox {
   id: string;
   label: string; // 'SCB-1'
   stringIds: string[]; // the strings paralleled into this box

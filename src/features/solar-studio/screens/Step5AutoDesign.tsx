@@ -52,7 +52,7 @@ export function Step5AutoDesign() {
   );
 }
 
-export function Step5Body({
+function Step5Body({
   project,
   onDesign,
   onManual,

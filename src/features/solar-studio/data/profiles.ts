@@ -21,7 +21,7 @@
 // the existing masses, not the other way round, so no project's tonnage moves.
 import type { SectionDims, StructureProfile } from '../types';
 
-export const STEEL_DENSITY_KG_M3 = 7850;
+const STEEL_DENSITY_KG_M3 = 7850;
 
 /** Blank width for an open section — what the coil actually gives up. */
 export function developedWidthMm(d: SectionDims): number {

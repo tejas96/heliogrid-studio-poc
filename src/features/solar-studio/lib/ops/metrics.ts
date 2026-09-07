@@ -7,7 +7,7 @@ import { designFreshness, type Freshness } from '../derive/freshness';
 import { deriveStructures } from '../derive/structures';
 import { deriveBomResult, deriveEnergy, deriveMoney, designIssues } from '../derive/outputs';
 
-export interface DesignMetrics {
+interface DesignMetrics {
   modules: number;
   kwp: number;
   strings: number;
@@ -31,9 +31,9 @@ const NUMERIC = [
   'annualKwh',
   'errors',
 ] as const;
-export type NumericMetric = (typeof NUMERIC)[number];
+type NumericMetric = (typeof NUMERIC)[number];
 
-export function designMetrics(p: Project): DesignMetrics {
+function designMetrics(p: Project): DesignMetrics {
   const enabled = p.panels.filter((m) => m.enabled);
   const strung = new Set(p.strings.flatMap((s) => s.panelIds));
   const lines = deriveBomResult(p).lines;

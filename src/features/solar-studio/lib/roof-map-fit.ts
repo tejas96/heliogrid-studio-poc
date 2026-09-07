@@ -28,7 +28,7 @@ export interface RoofMapFit {
  * grid's edge cells add a degree or two of their own; calling that a pitched
  * roof would turn every flush table on it. Real pitched roofs start near 10°.
  */
-export const FLAT_PITCH_DEG = 5;
+const FLAT_PITCH_DEG = 5;
 /** Above this residual the plane is not trusted for pitch and facing (only the height is used). */
 export const TRUSTED_RMSE_M = 0.35;
 /** Cells this far above the plane are things ON the roof, not the roof. */
@@ -160,12 +160,12 @@ export function roofsWithMapFit(roofs: Roof[], g: SurroundHeights, roofId: strin
 }
 
 /** A roof standing on another is at least this much higher than it. */
-export const CHILD_MIN_RISE_M = 0.5;
+const CHILD_MIN_RISE_M = 0.5;
 /** A stair room the map cannot read stands this high — the roof factory's own default. */
-export const CHILD_DEFAULT_RISE_M = 2.2;
+const CHILD_DEFAULT_RISE_M = 2.2;
 
 /** A roof within this of the map's reading is "the same"; further off, it takes the reading. */
-export const ADOPT_TOLERANCE_M = 1.5;
+const ADOPT_TOLERANCE_M = 1.5;
 
 /**
  * Every roof the map can read and the user has not set by hand (no

@@ -50,7 +50,7 @@ export interface StringHealth {
 }
 
 /** The numbers behind a string's colour: cold Voc vs DC limit, hot Vmp vs MPPT floor. */
-export function stringHealth(project: Project, panelIds: string[], spec: PanelSpec, inv: InverterSpec): StringHealth {
+function stringHealth(project: Project, panelIds: string[], spec: PanelSpec, inv: InverterSpec): StringHealth {
   const temps = resolveDesignTemps(project);
   const sizing = stringSizing(spec, inv, temps);
   const n = panelIds.length;

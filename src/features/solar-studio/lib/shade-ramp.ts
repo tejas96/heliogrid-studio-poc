@@ -13,11 +13,11 @@
 // less contrast inside the bad part. Comparability is worth more here.
 
 /** Access at or below this is as red as the scale goes. */
-export const ACCESS_POOR = 0.85;
+const ACCESS_POOR = 0.85;
 /** The scale's midpoint — the amber knot. */
-export const ACCESS_FAIR = 0.95;
+const ACCESS_FAIR = 0.95;
 /** Full sun. */
-export const ACCESS_GOOD = 1;
+const ACCESS_GOOD = 1;
 
 /** The three stops, in order. The legend draws exactly these. */
 export const ACCESS_STOPS = ['#ef4444', '#eab308', '#22c55e'] as const;

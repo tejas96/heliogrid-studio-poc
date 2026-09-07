@@ -45,7 +45,7 @@ function bump(): void {
 }
 
 /** Int16 per value: irradiance W/m² as is, temperature and wind × 100. */
-export function packTmy(t: { ghi: number[]; dni: number[]; dhi: number[]; tair: number[]; wind: number[] }): string {
+function packTmy(t: { ghi: number[]; dni: number[]; dhi: number[]; tair: number[]; wind: number[] }): string {
   const n = HOURS_PER_YEAR;
   const i16 = new Int16Array(n * 5);
   for (let h = 0; h < n; h++) {
@@ -63,7 +63,7 @@ export function packTmy(t: { ghi: number[]; dni: number[]; dhi: number[]; tair: 
   return btoa(s);
 }
 
-export function unpackTmy(b64: string, timeOffsetH: number): TmyYear | null {
+function unpackTmy(b64: string, timeOffsetH: number): TmyYear | null {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);

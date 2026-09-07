@@ -8,7 +8,7 @@ import type { Project } from '../../types';
 
 export type InsightSeverity = 'info' | 'suggestion' | 'warning' | 'critical';
 
-export type InsightCategory =
+type InsightCategory =
   | 'energy'
   | 'electrical'
   | 'utilization'

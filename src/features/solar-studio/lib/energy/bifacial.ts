@@ -37,7 +37,6 @@ import { panelFootprintM } from '../layout';
 import { resolveRacking } from '../structure';
 import { measuredRowPitchM, resolveTrackerAxis, type TrackerAxis } from './tracker';
 
-export { measuredRowPitchM };
 
 /** angular bins in the half-space sweep — the view factors are built once */
 const SWEEP_BINS = 240;
@@ -73,7 +72,7 @@ export function surfaceAlbedo(roofType: RoofType): number {
 }
 
 /** the albedo when no surface is known — the engine's long-standing default */
-export const DEFAULT_ALBEDO = 0.2;
+const DEFAULT_ALBEDO = 0.2;
 
 /**
  * Rear-side allowances (PVsyst's defaults for the same two terms). Structure
@@ -251,7 +250,7 @@ function geometryKey(i: RearGeometryInput): string {
 /** A geometry cache: one build serves every module on the same table. */
 const cache = new Map<string, RearGeometry>();
 
-export function rearGeometryFor(input: RearGeometryInput): RearGeometry {
+function rearGeometryFor(input: RearGeometryInput): RearGeometry {
   const key = geometryKey(input);
   const hit = cache.get(key);
   if (hit) return hit;
@@ -462,6 +461,6 @@ export function projectRearGeometry(
 }
 
 /** a flush module's standoff off its roof covering, m — rail height, typical */
-export const FLUSH_STANDOFF_M = 0.1;
+const FLUSH_STANDOFF_M = 0.1;
 
 

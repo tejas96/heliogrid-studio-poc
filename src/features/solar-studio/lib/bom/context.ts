@@ -22,7 +22,7 @@ import { isSloped } from '../roof-plane';
 export const AC_ALLOWANCE_M = 25;
 
 /** Provenance of a cable length — see `BomContext.dcSource`. */
-export type CableSource = 'routed' | 'input' | 'fallback';
+type CableSource = 'routed' | 'input' | 'fallback';
 
 /**
  * The coverings a flush-hardware, unstructured, non-ground, non-metal-shed

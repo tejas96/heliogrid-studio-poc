@@ -8,9 +8,9 @@
 import type { FinancialSummary } from '../types';
 import { resolveRules } from '../data/rules/india';
 
-export type FinancingMode = 'cash' | 'loan' | 'lease' | 'ppa';
+type FinancingMode = 'cash' | 'loan' | 'lease' | 'ppa';
 
-export interface FinancingOption {
+interface FinancingOption {
   mode: FinancingMode;
   label: string;
   /** customer's day-1 outlay */

@@ -6,7 +6,7 @@ import { deriveStringPlan, type DerivedStringPlan } from '../electrical/derive-s
 import { autoRouteAc, autoRouteBattery, autoRouteStrings } from '../routing';
 import { routesInputFp, stringsInputFp } from './freshness';
 
-export interface ElectricalSyncReport {
+interface ElectricalSyncReport {
   restrung: boolean;
   rerouted: boolean;
   plan: DerivedStringPlan | null;

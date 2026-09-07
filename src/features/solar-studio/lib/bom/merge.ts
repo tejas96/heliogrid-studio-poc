@@ -23,7 +23,7 @@
 import type { BomLine, BomOverride, BomStaleField, BomState, Project } from '../../types';
 
 /** Fields a user may override. Anything else is derived, full stop. */
-export const OVERRIDABLE_FIELDS = [
+const OVERRIDABLE_FIELDS = [
   'item',
   'spec',
   'brand',
@@ -36,7 +36,7 @@ export const OVERRIDABLE_FIELDS = [
 ] as const;
 export type OverridableField = (typeof OVERRIDABLE_FIELDS)[number];
 
-export function isOverridable(field: string): field is OverridableField {
+function isOverridable(field: string): field is OverridableField {
   return (OVERRIDABLE_FIELDS as readonly string[]).includes(field);
 }
 

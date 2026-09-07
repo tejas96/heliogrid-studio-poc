@@ -333,7 +333,7 @@ export function computeShadeProfile(project: Project, opts: ShadingOptions = {})
 
 // ─── Per-panel shade attribution (Phase 8 task 27c) ─────────────────────────
 
-export interface ShadeBlocker {
+interface ShadeBlocker {
   kind: 'panel' | 'obstruction' | 'roof' | 'parapet' | 'arrester' | 'surround';
   id: string;
   label: string;

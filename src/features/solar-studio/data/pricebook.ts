@@ -118,7 +118,7 @@ export const PRICE_BOOK = {
  * `resolveCatalog().pricebook` (or `BomContext.pricebook`) and use this type for
  * their signatures, so an imported book substitutes cleanly for the bundled one.
  */
-export type PriceBook = typeof PRICE_BOOK;
+type PriceBook = typeof PRICE_BOOK;
 
 /**
  * Keys whose value is a plain ₹ rate.

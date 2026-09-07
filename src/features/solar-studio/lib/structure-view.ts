@@ -18,9 +18,9 @@ import {
 } from './structure';
 
 /** How the SELECTED table's modules are drawn while inspecting its structure. */
-export type PanelVisibility = 'show' | 'ghost' | 'hide';
+type PanelVisibility = 'show' | 'ghost' | 'hide';
 /** Whether the rest of the site stays visible around the selected table. */
-export type TableScope = 'all' | 'isolate';
+type TableScope = 'all' | 'isolate';
 
 export interface StructureViewState {
   panelVis: PanelVisibility;
@@ -96,7 +96,7 @@ export function visibleStructureIds(
 // dispatch on it, and importing it back from here would close a cycle. It is
 // re-exported so existing view-side imports keep working, and so there is
 // still exactly one definition.
-export { topologyOf, type StructureTopology } from './structure';
+export { topologyOf } from './structure';
 
 /**
  * Foundations this surface may actually use (plan E1).

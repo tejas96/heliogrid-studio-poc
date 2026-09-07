@@ -28,7 +28,7 @@ import {
 import { trackerPose, type TrackerAxis } from './tracker';
 import type { TmyYear } from './tmy';
 
-export interface EnginePanel {
+interface EnginePanel {
   tiltDeg: number;
   /** 0 = north, 90 = east, 180 = south (project-wide convention) */
   azimuthDeg: number;
@@ -52,7 +52,7 @@ export interface EnginePanel {
   rearAt?: (tiltDeg: number) => RearGeometry | null;
 }
 
-export interface EngineInverter {
+interface EngineInverter {
   /** nominal AC power of ONE unit, W */
   acW: number;
   count: number;
@@ -80,7 +80,7 @@ export interface EngineInput {
   skyView: number;
 }
 
-export interface HourlyLoss {
+interface HourlyLoss {
   key: string;
   label: string;
   pct: number;
@@ -131,7 +131,7 @@ const CALENDAR_YEAR = 2019;
 const LOW_LIGHT_K1 = -0.017162;
 const LOW_LIGHT_K2 = -0.040289;
 
-export function lowLightEfficiency(irradianceWm2: number): number {
+function lowLightEfficiency(irradianceWm2: number): number {
   if (irradianceWm2 <= 1) return 0;
   const g = Math.min(1.2, irradianceWm2 / 1000);
   const ln = Math.log(g);

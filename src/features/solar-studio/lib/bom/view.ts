@@ -78,7 +78,7 @@ export function rowState(line: BomLine, marginPct: number): RowState {
  * property name — "Mounting Rail (unitPriceInr)" — which is the schema talking,
  * not the product.
  */
-export const FIELD_LABELS: Record<string, string> = {
+const FIELD_LABELS: Record<string, string> = {
   item: 'Name',
   spec: 'Spec',
   brand: 'Brand',

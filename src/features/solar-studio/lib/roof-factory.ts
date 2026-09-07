@@ -104,7 +104,7 @@ export function sanitizeRoofPolygon(points: XY[]): PolygonResult {
 // ─── Roof construction ───────────────────────────────────────────────────────
 
 /** Next auto-name following Step 2's counters (Roof N / Mumty N). */
-export function nextRoofName(existing: Roof[], isMumty: boolean): string {
+function nextRoofName(existing: Roof[], isMumty: boolean): string {
   if (isMumty) {
     return `Mumty ${existing.filter((r) => r.name.startsWith('Mumty')).length + 1}`;
   }
@@ -210,7 +210,7 @@ export const OBSTRUCTION_PRESETS: Record<
   other: { code: 'OB', size: [1.5, 1.5, 1] },
 };
 
-export const MIN_OBSTRUCTION_DIM_M = 0.3;
+const MIN_OBSTRUCTION_DIM_M = 0.3;
 
 /**
  * An Obstruction with exactly the manual-place defaults (Step 3 place()).

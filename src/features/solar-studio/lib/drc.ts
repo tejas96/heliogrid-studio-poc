@@ -22,7 +22,7 @@ import {
 } from './foundation';
 
 /** Panels below this solar-access fraction are flagged as meaningfully shaded. */
-export const SHADE_ACCESS_MIN = 0.7;
+const SHADE_ACCESS_MIN = 0.7;
 
 /** Shrink a quad ~10% toward its centre so exact edge-adjacency ≠ overlap. */
 function shrink(c: XY[]): XY[] {

@@ -263,7 +263,7 @@ export interface XYZ {
   z: number;
 }
 
-export type MemberKind =
+type MemberKind =
   | 'front_leg'
   | 'back_leg'
   | 'rafter'
@@ -290,7 +290,7 @@ export interface Member {
   lengthM: number;
 }
 
-export interface StructureNode {
+interface StructureNode {
   id: string; // `${seg.id}/n/<kind>/<idx>`
   kind: NodeKind;
   position: XYZ;

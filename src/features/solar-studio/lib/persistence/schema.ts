@@ -14,7 +14,7 @@ import type { AppUser } from '../../types';
 
 export const META_KEY = 'solar-studio-meta';
 export const PROJECT_KEY_PREFIX = 'solar-studio-prj:';
-export const QUARANTINE_KEY_PREFIX = 'solar-studio-quarantine:';
+const QUARANTINE_KEY_PREFIX = 'solar-studio-quarantine:';
 export const V1_KEY = 'solar-studio-v1';
 export const V1_BACKUP_KEY = 'solar-studio-v1-backup';
 export const SCHEMA_VERSION = 2;

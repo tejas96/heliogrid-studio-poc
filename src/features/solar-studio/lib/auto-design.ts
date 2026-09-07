@@ -11,7 +11,6 @@ import type {
   Project,
   PanelSpec,
 } from '../types';
-export type { DesignDecision };
 import { autoFillRoof, fillRoofAsSegment, fillRowPitchM, DEFAULT_FILL } from './layout';
 import { reindexSegment } from './segment-ops';
 import { computeSolarAccess } from './shading';

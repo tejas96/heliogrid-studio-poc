@@ -17,7 +17,7 @@ export const GST_EQUIPMENT_PCT = 5;
 export const GST_SERVICE_PCT = 18;
 
 /** Default rate by category. Overridable per line in the BOM screen. */
-export const GST_BY_CATEGORY: Record<BomCategory, number> = {
+const GST_BY_CATEGORY: Record<BomCategory, number> = {
   Modules: GST_EQUIPMENT_PCT,
   Inverter: GST_EQUIPMENT_PCT,
   // leads, isolators and the battery inverter ride with the solar system
@@ -34,7 +34,7 @@ export const GST_BY_CATEGORY: Record<BomCategory, number> = {
  * bought as work — or vice versa. Keyed by LineKey PREFIX (before any
  * `:instance` suffix).
  */
-export const GST_BY_LINE: Record<string, number> = {
+const GST_BY_LINE: Record<string, number> = {
   // cast in place by a civil crew, not bought as a device
   'mech.pedestal': GST_SERVICE_PCT,
   // lithium / lead-acid batteries (HSN 8507) are 18% since the Sept-2025

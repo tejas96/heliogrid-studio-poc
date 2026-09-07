@@ -1,7 +1,7 @@
 // ─── Per-roof colours so multiple roofs are easy to tell apart ──────────────
 // Assigned by the roof's index in the project so adjacent roofs always differ.
 
-export const ROOF_PALETTE = [
+const ROOF_PALETTE = [
   '#3b82f6', // blue
   '#10b981', // emerald
   '#f59e0b', // amber

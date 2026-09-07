@@ -25,7 +25,7 @@ export const FACE_GROUP_SHARED_KEYS = ['pitchDeg', 'heightM'] as const;
  * Every roof that a shared edit on `id` touches, target FIRST.
  * A roof with no faceGroupId is its own group of one — unchanged behavior.
  */
-export function faceGroupMembers(roofs: Roof[], id: string): Roof[] {
+function faceGroupMembers(roofs: Roof[], id: string): Roof[] {
   const target = roofs.find((r) => r.id === id);
   if (!target) return [];
   const gid = target.faceGroupId;

@@ -7,7 +7,7 @@
 import type { Project } from '../../types';
 
 /** The fingerprint layer an op invalidates (documentation + future gating). */
-export type OpLayer = 'geometry' | 'layout' | 'electrical' | 'design';
+type OpLayer = 'geometry' | 'layout' | 'electrical' | 'design';
 
 export interface OpRefusal {
   reason: string;

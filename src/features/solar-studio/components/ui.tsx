@@ -207,7 +207,7 @@ export function SliderRow({
   );
 }
 
-export function Toggle({
+function Toggle({
   on,
   onChange,
   label,

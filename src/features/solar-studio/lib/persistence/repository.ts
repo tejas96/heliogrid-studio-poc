@@ -249,22 +249,6 @@ export function removeProject(id: string): void {
   }
 }
 
-/** Ids that currently sit in quarantine (dashboard recovery notice). */
-export function quarantinedIds(): string[] {
-  const ids: string[] = [];
-  try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('solar-studio-quarantine:')) {
-        ids.push(key.slice('solar-studio-quarantine:'.length));
-      }
-    }
-  } catch {
-    /* unreadable storage — nothing to report */
-  }
-  return ids;
-}
-
 /**
  * Blob ids referenced from quarantined raw payloads — the boot-time image
  * sweep must NOT delete these, or a recovered project comes back without its

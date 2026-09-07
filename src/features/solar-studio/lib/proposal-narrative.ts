@@ -9,7 +9,7 @@ import type { DesignDecision, Project } from '../types';
 import { deriveEnergy, deriveFinance } from './derive';
 import { estimateMaxCapacityKwp } from './layout';
 
-export interface NarrativeBeat {
+interface NarrativeBeat {
   text: string;
   /** the raw project-derived values this sentence was built from (traceability) */
   facts: (string | number)[];

@@ -121,7 +121,7 @@ export const CATEGORY_ORDER: BomCategory[] = [
  * Keyed by LineKey PREFIX, so per-instance lines (`mech.steel:c_channel`)
  * inherit their kind's allowance.
  */
-export const WASTE_PCT_BY_LINE: Record<string, number> = {
+const WASTE_PCT_BY_LINE: Record<string, number> = {
   'elec.dc_cable': 8,
   'elec.ac_cable': 8,
   'battery.cable': 8,

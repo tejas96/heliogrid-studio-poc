@@ -13,7 +13,7 @@ export const INDIAN_STATES: string[] = [
   'West Bengal',
 ];
 
-export const DISCOMS: Record<string, string[]> = {
+const DISCOMS: Record<string, string[]> = {
   Maharashtra: ['MSEDCL', 'Tata Power Mumbai', 'Adani Electricity Mumbai', 'BEST'],
   Gujarat: ['UGVCL', 'MGVCL', 'DGVCL', 'PGVCL', 'Torrent Power'],
   Delhi: ['BSES Rajdhani', 'BSES Yamuna', 'Tata Power DDL'],

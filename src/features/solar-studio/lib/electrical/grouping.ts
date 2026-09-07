@@ -57,8 +57,8 @@ export interface PanelGroup {
 }
 
 /** Tolerances: within these, modules track closely enough to share a string. */
-export const AZIMUTH_TOL_DEG = 5;
-export const TILT_TOL_DEG = 3;
+const AZIMUTH_TOL_DEG = 5;
+const TILT_TOL_DEG = 3;
 
 /**
  * Bucket an angle to a tolerance band. Bucketing (rather than clustering) keeps

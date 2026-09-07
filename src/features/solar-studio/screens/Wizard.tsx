@@ -144,7 +144,7 @@ function nextBlocker(step: number, p: NonNullable<ReturnType<typeof useActivePro
  * design). The labels come from the ops kernel, so the tooltip says what will
  * be undone — "Tilt 15°", not "Undo".
  */
-export function WizardUndoControls({
+function WizardUndoControls({
   undoLabels,
   redoLabels,
   onUndo,

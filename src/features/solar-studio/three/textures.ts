@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import type { PanelSpec } from '../types';
 
-export type ModuleOrientation = 'portrait' | 'landscape';
+type ModuleOrientation = 'portrait' | 'landscape';
 
 // ── deterministic noise (seeded), so every reload draws the same module ──
 function mulberry(seed: number) {
@@ -173,7 +173,7 @@ function drawModuleFace(spec: PanelSpec | null, orientation: ModuleOrientation):
 const faceCache = new Map<string, THREE.CanvasTexture>();
 
 /** Photoreal module face for this spec and orientation (cached). */
-export function getModuleTexture(spec: PanelSpec | null, orientation: ModuleOrientation): THREE.CanvasTexture {
+function getModuleTexture(spec: PanelSpec | null, orientation: ModuleOrientation): THREE.CanvasTexture {
   const key = `${spec?.id ?? 'default'}|${spec?.tech ?? ''}|${spec?.lengthMm ?? 0}|${orientation}`;
   const hit = faceCache.get(key);
   if (hit) return hit;

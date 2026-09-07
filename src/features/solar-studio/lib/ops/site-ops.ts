@@ -60,7 +60,7 @@ export const keepoutAdd = defineOp<{ keepout: Keepout }>({
   apply: (p, a) => ({ keepouts: [...p.keepouts, a.keepout] }),
 });
 
-export const keepoutRemove = defineOp<{ id: string }>({
+const keepoutRemove = defineOp<{ id: string }>({
   id: 'keepout.remove',
   layer: 'layout',
   label: () => 'Remove zone',

@@ -18,7 +18,7 @@ import { pickRoofAt } from '../roof-topology';
 import { pointInPolygon, polygonCentroid } from '../geo';
 
 export const ARTIFACT_VERSION = 1 as const;
-export type ArtifactSource = 'dataLayers' | 'gemini';
+type ArtifactSource = 'dataLayers' | 'gemini';
 
 export interface ArtifactRoof {
   /** deterministic within the artifact (e.g. 'ar_1') — replaced on accept */
@@ -36,7 +36,7 @@ export interface ArtifactRoof {
   rmseM?: number;
 }
 
-export interface ArtifactObstruction {
+interface ArtifactObstruction {
   id: string;
   type: ObstructionType;
   center: XY;

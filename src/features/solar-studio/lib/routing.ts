@@ -54,7 +54,7 @@ export function dropForRunM(project: Project, kind: 'dc' | 'ac', placementIndex 
 }
 
 /** Plan position of any placed unit (inverter, battery cabinet, DCDB, ACDB): wall point or free position. */
-export function wallUnitPos(project: Project, u: PlacedUnit): XY | null {
+function wallUnitPos(project: Project, u: PlacedUnit): XY | null {
   return unitPlanPos(project, u);
 }
 
@@ -290,7 +290,7 @@ function dedupeCollinear(pts: XY[]): XY[] {
 }
 
 /** The roof-edge corridor a run should prefer: the polygon, pulled inboard. */
-export function roofCorridor(roof: Roof): Corridor {
+function roofCorridor(roof: Roof): Corridor {
   const inset = resolveRules().cable.corridorInsetM;
   const c = polygonCentroid(roof.polygon);
   return {
@@ -317,7 +317,7 @@ export function roofCorridor(roof: Roof): Corridor {
  * Rows are found in the ROOF GRID frame, the frame the fill placed them in
  * (audit finding 11 — the same trap the shading serpentine fell into).
  */
-export function arrayCorridors(project: Project, roof: Roof): Corridor[] {
+function arrayCorridors(project: Project, roof: Roof): Corridor[] {
   const mine = project.panels.filter((p) => p.enabled && p.roofId === roof.id);
   if (mine.length < 2) return [];
   const rad = (-roofGridAngle(roof) * Math.PI) / 180;
@@ -369,7 +369,7 @@ export function arrayCorridors(project: Project, roof: Roof): Corridor[] {
  * with a small outward margin so a run hugging the array edge is not counted as
  * crossing it.
  */
-export function arrayFootprint(project: Project, roof: Roof): XY[] {
+function arrayFootprint(project: Project, roof: Roof): XY[] {
   const mine = project.panels.filter((p) => p.enabled && p.roofId === roof.id);
   if (mine.length < 3) return [];
   const rad = (-roofGridAngle(roof) * Math.PI) / 180;

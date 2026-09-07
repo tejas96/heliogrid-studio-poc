@@ -49,9 +49,9 @@ export function trackerAxisFor(
 }
 
 /** Flush-on-slope glass offset above the roof plane (rail + clamp stack). */
-export const FLUSH_STANDOFF_M = 0.06;
+const FLUSH_STANDOFF_M = 0.06;
 /** Loose panel on a flat roof with no structure model — legacy render height. */
-export const LOOSE_STANDOFF_M = 0.18;
+const LOOSE_STANDOFF_M = 0.18;
 
 export interface PanelPose {
   /** module-centre world position in three's frame: (x, y, -planY) */
@@ -136,7 +136,7 @@ export function panelPose(
 }
 
 /** Ray origins start just off the glass so the module's own slab never self-hits. */
-export const RAY_EPS_M = 0.05;
+const RAY_EPS_M = 0.05;
 
 /**
  * Height above the roof surface for the shading engine's ray origin: the REAL

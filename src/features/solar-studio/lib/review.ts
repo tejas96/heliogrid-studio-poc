@@ -18,9 +18,9 @@ import { memoizedInsights } from './insights/registry';
 import { bomConfidence, mergedBom } from './bom';
 import { isCaptureFresh } from './fingerprints';
 
-export type ReviewStatus = 'blocked' | 'attention' | 'ready';
+type ReviewStatus = 'blocked' | 'attention' | 'ready';
 
-export interface ReviewItem {
+interface ReviewItem {
   key: string;
   /** the screen that can FIX this — a finding with nowhere to go is noise */
   step: number;

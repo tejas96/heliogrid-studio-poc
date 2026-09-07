@@ -59,7 +59,7 @@ function norm360(deg: number): number {
 }
 
 /** Flat, stowed — where a tracker sits at night and where it is drawn at rest. */
-export const TRACKER_STOW: TrackerPose = { tiltDeg: 0, azimuthDeg: 0, rotationDeg: 0, backtracked: false };
+const TRACKER_STOW: TrackerPose ={ tiltDeg: 0, azimuthDeg: 0, rotationDeg: 0, backtracked: false };
 
 /**
  * Where the modules on this tube are pointing, for a sun at this altitude and

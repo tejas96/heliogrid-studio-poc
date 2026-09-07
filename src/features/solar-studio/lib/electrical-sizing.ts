@@ -41,7 +41,7 @@ export function dcLoopResistanceOhm(loopM: number, mm2: number): number {
  * Vmp. A resistive drop at Imp loses the same FRACTION of power as of
  * voltage, so this is also the string's wiring loss at STC.
  */
-export function dcDropPct(panel: PanelSpec, modules: number, loopM: number, mm2: number): number {
+function dcDropPct(panel: PanelSpec, modules: number, loopM: number, mm2: number): number {
   const vString = panel.vmpV * modules;
   if (vString <= 0) return 0;
   return ((panel.impA * dcLoopResistanceOhm(loopM, mm2)) / vString) * 100;

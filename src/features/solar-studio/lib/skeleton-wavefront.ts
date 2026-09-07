@@ -33,7 +33,7 @@ interface WEdge {
   rightTrace: XY[];
 }
 
-export interface SweptFace {
+interface SweptFace {
   /** original wall index — drives pitch/azimuth */
   orig: number;
   polygon: XY[];

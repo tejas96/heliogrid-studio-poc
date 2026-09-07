@@ -20,13 +20,13 @@ export function setTerrainSampler(fn: Sampler | null): void {
 }
 
 /** the surround calls this whenever more tiles have landed */
-export function bumpTerrain(): void {
+function bumpTerrain(): void {
   generation++;
   for (const l of listeners) l();
 }
 
 /** terrain height at a scene x/z, or null when no surround is loaded there */
-export function terrainYAt(x: number, z: number): number | null {
+function terrainYAt(x: number, z: number): number | null {
   return sampler ? sampler(x, z) : null;
 }
 

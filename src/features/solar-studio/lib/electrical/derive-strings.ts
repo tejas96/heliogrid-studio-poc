@@ -8,7 +8,7 @@ import { autoStringPlan } from './autostring';
 import { inverterLoadsKwp } from './balance';
 import { resolveDesignTemps } from './temps';
 
-export interface ManualStringChange {
+interface ManualStringChange {
   id: string;
   name: string;
   change: 'pruned' | 'dropped';

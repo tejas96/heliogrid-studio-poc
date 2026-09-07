@@ -16,7 +16,7 @@ import { DAYS_IN_MONTH } from './pvgis';
 import { buildShadowCasters, disposeGroup } from './scene-model';
 import { SAMPLE_YEAR } from './shading';
 
-export interface HeatCell {
+interface HeatCell {
   /** flat render position on the ground plane: (planX, 0.05, -planY) */
   world: [number, number, number];
   /** roof grid angle so the square cell aligns to roof edges */

@@ -10,7 +10,7 @@
 import type { LatLng, XY } from '../../types';
 import { makeSiteFrame, toEN } from '../site/frame';
 import type { SiteFrame } from '../site/types';
-import { decodeGeoTiff, type DecodedRaster } from './geotiff-decode';
+import { decodeGeoTiff } from './geotiff-decode';
 import { isInterior, labelComponents, orthogonalizeGated, segmentByHeight, simplifyDP, traceBoundary } from './vectorize';
 import { fitPlane, groundLevelM, residualClusters } from './plane-fit';
 import type { RoofArtifact } from './artifact';
@@ -220,4 +220,3 @@ export async function detectRoofArtifact(input: DetectInput): Promise<RoofArtifa
 
 // re-exported so the worker/tests can reuse the decode without a second import path
 export { decodeGeoTiff };
-export type { DecodedRaster };

@@ -17,7 +17,7 @@ import type { SurroundHeights } from './surround-geometry';
 
 export type { SurroundHeights } from './surround-geometry';
 
-export const SURROUND_RADIUS_M = 100; // the Solar API's limit at LOW quality
+const SURROUND_RADIUS_M = 100; // the Solar API's limit at LOW quality
 const DOWNSAMPLE = 5; // 0.1 m → 0.5 m
 /** Taller than any tower the raster can hold in Int16 centimetres; a downtown high-rise is ~150 m. */
 const MAX_HEIGHT_M = 250;
@@ -27,7 +27,7 @@ const BLOB_PREFIX = 'data:application/octet-stream;base64,';
  * cut out at use). Earlier grids were cut at fetch time for the roofs of that
  * moment, so a roof traced later shaded its own modules — they fetch once more.
  */
-export const SURROUND_FORMAT = 2;
+const SURROUND_FORMAT = 2;
 
 type DataLayersEnvelope = {
   status: string;

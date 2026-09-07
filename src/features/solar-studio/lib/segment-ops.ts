@@ -84,7 +84,7 @@ interface Grid {
  * after the fill), falling back to the segment's declared azimuth + racking
  * tilt when it has no panels to read.
  */
-export function segmentPose(
+function segmentPose(
   seg: ArraySegment,
   panels: PlacedPanel[],
 ): { tiltDeg: number; azimuthDeg: number } {
@@ -380,7 +380,7 @@ function moduleRise(spec: PanelSpec, seg: ArraySegment, tiltDeg: number): number
  * it is both the practical drainage/self-cleaning minimum and the guard that
  * keeps a table off the tilt-0 frame boundary.
  */
-export const MIN_ELEVATED_TILT_DEG = 5;
+const MIN_ELEVATED_TILT_DEG = 5;
 
 /** Build an elevated racking spec, carrying prior fields where possible. */
 function elevatedRacking(

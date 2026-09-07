@@ -2,7 +2,9 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
     "src/features/solar-studio/workers/*.worker.ts",
-    "src/app/**/{page,layout,route,not-found,error,loading,template,default,global-error}.{ts,tsx}"
+    "src/app/**/{page,layout,route,not-found,error,loading,template,default,global-error}.{ts,tsx}",
+    "src/features/solar-studio/types.ts",
+    "src/features/solar-studio/data/rules/india.ts"
   ],
   "project": ["src/**/*.{ts,tsx}"],
   "ignoreDependencies": [

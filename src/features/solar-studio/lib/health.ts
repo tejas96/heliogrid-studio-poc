@@ -34,7 +34,7 @@ import { activeWeather } from './solar';
 export type HealthCategoryKey = 'energy' | 'electrical' | 'utilization';
 export type HealthBand = 'good' | 'fair' | 'poor';
 
-export interface HealthDeduction {
+interface HealthDeduction {
   /** validation issue code or insight key — the delta unit */
   code: string;
   source: 'validation' | 'insight';
@@ -43,7 +43,7 @@ export interface HealthDeduction {
   focusIds?: string[];
 }
 
-export interface HealthCategory {
+interface HealthCategory {
   key: HealthCategoryKey;
   /** 0–100, or null when the category is not applicable yet */
   score: number | null;
