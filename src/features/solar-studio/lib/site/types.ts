@@ -1,5 +1,14 @@
 // ─── Site-level types: the frame everything geometric is measured against ───
-import type { LatLng } from '../../types';
+//
+// LatLng is DEFINED here, not in types.ts, and types.ts re-exports it. It is the
+// one primitive SiteFrame is built on, so importing it from types.ts made the two
+// files import each other. Keep importing it from '../types' everywhere else.
+
+/** A WGS84 geographic position. */
+export interface LatLng {
+  lat: number;
+  lng: number;
+}
 
 /**
  * The site's coordinate frame. Local ENU on the WGS84 ellipsoid, anchored at the

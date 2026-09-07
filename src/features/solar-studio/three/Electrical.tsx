@@ -28,7 +28,7 @@ import { sizeDcCable } from '../lib/electrical-sizing';
 import { stringShade } from '../lib/string-shade';
 import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { EntityLabel } from './EntityLabel';
-import type { ScenePick } from './Scene3D';
+import type { ScenePick } from './scene-pick';
 
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
 type Vec3 = [number, number, number];

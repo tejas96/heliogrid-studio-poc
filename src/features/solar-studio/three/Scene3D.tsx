@@ -224,10 +224,9 @@ function DevSceneHandle() {
   return null;
 }
 
-export type ScenePick = {
-  kind: 'obstruction' | 'inverter' | 'battery' | 'box' | 'roof' | 'table' | 'string' | 'route' | 'panel';
-  id: string;
-};
+// defined in ./scene-pick so the overlays can read it without importing Scene3D
+import type { ScenePick } from './scene-pick';
+export type { ScenePick };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
 
 /**

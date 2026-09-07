@@ -7,7 +7,7 @@
 // UTC+5:30 but Pune's solar noon isn't 12:00 IST) and arbitrarily wrong when
 // viewing a project from another timezone. This module is the single
 // conversion point so the visual sun can never disagree with the engine again.
-import { solarHourDate } from './solar';
+import { solarHourDate } from './sun';
 
 /**
  * UTC instant for solar `hour` (0–24, 12 = solar noon) on the calendar day of

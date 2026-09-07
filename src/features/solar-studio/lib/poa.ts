@@ -5,7 +5,7 @@
 // site. Diffuse light is treated as orientation-neutral, so this is a
 // deliberately conservative first-order transposition model — it is labeled
 // as such wherever it surfaces (audit R4/R5: no false precision).
-import { solarHourDate, sunPosition } from './solar';
+import { solarHourDate, sunPosition } from './sun';
 
 const SAMPLE_MONTHS = [0, 2, 5, 8, 11];
 /** local MEAN-SOLAR hours (not machine-clock) — see solarHourDate use below */

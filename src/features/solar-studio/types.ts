@@ -1,14 +1,12 @@
 // ─── Solar Design Studio — Domain Model ─────────────────────────────────────
 // Every entity in a project. The store, the editors, the 3D scene, the SLD,
 // the drawings and the BOM engine all read from this single shape.
-import type { SiteFrame } from './lib/site/types';
+import type { SiteFrame, LatLng } from './lib/site/types';
 
-export type { SiteFrame } from './lib/site/types';
-
-export interface LatLng {
-  lat: number;
-  lng: number;
-}
+// LatLng lives in lib/site/types.ts — SiteFrame is built on it, and defining it
+// here made the two files import each other. Re-exported so every other file can
+// go on importing it from this module.
+export type { SiteFrame, LatLng } from './lib/site/types';
 
 /** Local metric coordinate (meters, East-North frame around project origin). */
 export interface XY {

@@ -3,7 +3,9 @@
 // roof, rows self-shade in winter. We size the row pitch so the array stays
 // shadow-free across the winter-solstice mid-day window, using the SAME sun
 // engine as the rest of the app (timezone-independent via longitude).
-import { solarHourDate, sunPosition } from './solar';
+// straight from the sun math, NOT via solar.ts — solar.ts only re-exports these
+// and importing it from here would drag the whole energy engine into a cycle
+import { solarHourDate, sunPosition } from './sun';
 
 /** Ground Coverage Ratio (pvlib): collector slant length ÷ row pitch. */
 export function gcr(collectorLenM: number, pitchM: number): number {
