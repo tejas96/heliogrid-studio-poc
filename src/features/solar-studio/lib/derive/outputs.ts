@@ -1,6 +1,7 @@
 import type { Project, ValidationIssue } from '../../types';
 import { designFp } from '../fingerprints';
 import { tmyVersion } from '../energy/tmy';
+import { shadeProfileVersion } from '../shade-profile-cache';
 import { memoByKey } from './memo';
 import { computeEnergyReport } from '../energy/report';
 import { bomMoney, mergedBomResult } from '../bom';
@@ -15,8 +16,20 @@ import { resolveDesignTemps } from '../electrical/temps';
 /** designFp + the shading stamp: the two things every customer-facing number reads. */
 // …plus the typical year: its identity, and whether it is in memory yet (the
 // engine switches from the monthly estimate to the hourly run when it lands)
+// …and the shade profile, for the SAME reason. It is the other input that lives
+// only in memory: the stamp says WHICH geometry was analysed, not whether the
+// per-sample detail is still loaded. A page load wipes it, and a report built
+// without it uses each module's annual mean access instead of shade by the hour
+// AND drops the "Shading — electrical (strings)" loss line entirely. Leaving the
+// version out cached that colder report under a key that never changed again, so
+// /proposal opened by URL quoted a different annual yield for the same design —
+// permanently, because re-rendering just returned the same memo entry.
 const outputKey = (p: Project) =>
-  designFp(p) + '§' + (p.derived.solarAccessFp ?? '') + '§' + (p.location?.tmy?.blobId ?? '') + '#' + tmyVersion();
+  designFp(p) +
+  '§' + (p.derived.solarAccessFp ?? '') +
+  '§' + (p.location?.tmy?.blobId ?? '') +
+  '#' + tmyVersion() +
+  '~' + shadeProfileVersion();
 
 export const deriveEnergy = memoByKey(outputKey, computeEnergyReport);
 export const deriveBomResult = memoByKey(outputKey, mergedBomResult);

@@ -15,6 +15,8 @@ import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, deriveStruct
 import { BlobImg } from '../components/BlobImg';
 import { FreshnessBanner } from '../components/FreshnessBanner';
 import { capturesFresh } from '../lib/fingerprints';
+import { profileFor } from '../lib/string-shade';
+import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { useUnits } from '../store/useUnits';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 
@@ -43,11 +45,29 @@ function QrCode({ url, size }: { url: string; size: number }) {
 /** Printable web proposal — use the browser's Print → Save as PDF. */
 export function ProposalView() {
   const project = useActiveProject()!;
+  // Re-render when the shading analysis lands. The full shade profile lives
+  // only in memory (lib/shade-profile-cache), so ANY page load — a refresh, or
+  // opening /proposal by URL — starts cold. The hourly engine and the string
+  // mismatch term both read it, so a cold report quotes a different annual
+  // yield AND silently drops the "Shading — electrical (strings)" loss line.
+  // useDesignSync re-runs the analysis and refills the cache, but when the
+  // access values and the stamp are both unchanged it patches nothing — by
+  // design, there is nothing to save — so nothing on the project changes and
+  // React would never re-render. Scene3D and the electrical overlay already
+  // subscribe for exactly this reason; the printed document needs it more.
+  useShadeProfileVersion();
   // the 3D images are a separate freshness: money can be final while a capture
   // still shows last week's layout — say so on screen AND in print
   const captureNotes = capturesFresh(project)
     ? []
     : ['the 3D images show an older layout — retake the captures in Step 7'];
+  // ...and the shading pass is a third. Until the profile lands, the energy
+  // and savings figures on this page are computed WITHOUT the per-hour shade
+  // detail. They are provisional, and a PDF printed in that window must say so.
+  const shadeNotes =
+    profileFor(project) || project.panels.every((p) => !p.enabled)
+      ? []
+      : ['the shading analysis is still running — energy and savings are provisional'];
   const r = deriveEnergy(project);
   const fin = deriveFinance(project);
   const bom = deriveBomResult(project).lines;
@@ -80,7 +100,7 @@ export function ProposalView() {
     <div style={{ background: 'var(--paper-2)', minHeight: '100vh' }}>
       {/* staleness gate: the proposal must reflect the CURRENT design (soft block).
           `print` keeps it visible through Print/Save-PDF, unlike the toolbar below. */}
-      <FreshnessBanner project={project} print extra={captureNotes} />
+      <FreshnessBanner project={project} print extra={[...captureNotes, ...shadeNotes]} />
       {/* toolbar (hidden in print) */}
       <div
         className="no-print"
@@ -142,7 +162,7 @@ export function ProposalView() {
         <Page num={1} project={project}>
           {/* same banner, again — this is the physical first printed page, so the
               cover itself must carry PROVISIONAL, not just the on-screen toolbar. */}
-          <FreshnessBanner project={project} print extra={captureNotes} />
+          <FreshnessBanner project={project} print extra={[...captureNotes, ...shadeNotes]} />
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <div style={{ fontSize: 26, fontWeight: 800 }}>
