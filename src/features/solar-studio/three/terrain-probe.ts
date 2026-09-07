@@ -30,30 +30,6 @@ export function terrainYAt(x: number, z: number): number | null {
   return sampler ? sampler(x, z) : null;
 }
 
-/**
- * Height to lift a ground-level object so it stands on the photomesh:
- * the terrain there when known and within a sane band, else 0.
- */
-export function useGroundLift(x: number, z: number): number {
-  const [lift, setLift] = useState(0);
-  useEffect(() => {
-    const read = () => {
-      const y = terrainYAt(x, z);
-      setLift(y !== null && Math.abs(y) < 3 ? y : 0);
-    };
-    read();
-    listeners.add(read);
-    return () => {
-      listeners.delete(read);
-    };
-  }, [x, z]);
-  return lift;
-}
-
-export function terrainGeneration(): number {
-  return generation;
-}
-
 /** Synchronous lift for render-time use: the terrain height when known and sane, else 0. */
 export function groundLiftAt(x: number, z: number): number {
   const y = terrainYAt(x, z);

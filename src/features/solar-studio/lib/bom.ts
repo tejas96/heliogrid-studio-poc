@@ -19,22 +19,17 @@ import { emitCivil } from './bom/emitters/civil';
 import { _setDeriver, mergeBom, type MergedBomResult } from './bom/merge';
 import { bomMoney, discountAmount, lineMoney } from './bom/money';
 
-export { bomMoney, lineMoney, orderQtyOf, type BomMoney, type LineMoney } from './bom/money';
-export { isDiscreteUnit, wastePctFor } from './bom/registry';
-
-export { CATEGORY_ORDER } from './bom/registry';
+// The barrel forwards only what is actually consumed outside lib/bom/. Adding a
+// line back is one edit; a barrel that forwards everything hides what is dead.
+export { bomMoney, lineMoney, orderQtyOf } from './bom/money';
+export { isDiscreteUnit, CATEGORY_ORDER } from './bom/registry';
 export {
   clearFieldOverride,
   clearOverrides,
   migrateLegacyOverrides,
-  OVERRIDABLE_FIELDS,
   setFieldOverride,
-  type BomOrphan,
   type MergedBomResult,
-  type OverridableField,
 } from './bom/merge';
-export type { LineKey } from './bom/registry';
-export type { BomContext } from './bom/context';
 
 /**
  * The emitters, in CATEGORY_ORDER. Each is a pure function of the context and
@@ -127,11 +122,6 @@ export function bomConfidence(lines: BomLine[]): {
  * Order quantity, not calculated quantity: you pay for what you buy, waste and
  * all.
  */
-export function bomSubtotal(lines: BomLine[], project?: Project): number {
-  // `project` is optional so the existing call sites keep compiling; margin
-  // does not enter the subtotal, so a zero-margin stub is safe.
-  return bomMoney(lines, project ?? ({ pricing: { marginPct: 0 } } as Project)).subtotal;
-}
 
 /**
  * The ONE quote total: Σ per-line (sale value + that line's own GST).

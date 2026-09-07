@@ -592,10 +592,6 @@ export function dominantEdgeAngle(poly: XY[]): number {
   return best;
 }
 
-export function fmtM(m: number): string {
-  return `${m.toFixed(2)} m`;
-}
-
 let idCounter = 0;
 /**
  * Collision-safe entity id. The old timestamp+counter scheme collided across

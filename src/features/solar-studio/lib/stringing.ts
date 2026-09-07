@@ -17,7 +17,7 @@ export function vocAtTemp(spec: PanelSpec, tempC: number): number {
   return vocAt(spec, tempC);
 }
 
-export { STRING_COLORS, stringSizing, type StringSizing } from './electrical/window';
+export { stringSizing } from './electrical/window';
 
 /**
  * LEGACY shim — the real planner is lib/electrical/autostring.ts.

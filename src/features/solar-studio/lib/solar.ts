@@ -4,13 +4,13 @@
 // on top of this file, so it must not import anything that in turn needs them.
 // The whole-project energy report used to live here; it now lives in
 // lib/energy/report.ts, which is the top of the stack rather than the bottom.
-import type { LatLng, LossItem, PlacedPanel, SiteLocation, SiteWeather } from '../types';
+import type { LatLng, LossItem, SiteLocation, SiteWeather } from '../types';
 
 // Astronomical core lives in lib/sun.ts (kept acyclic for physics modules);
 // re-exported here so every existing `from './solar'` import keeps working.
 // Modules UNDER this one import from './sun' directly — going through this
 // re-export would put the loss model underneath them.
-export { sunPosition, solarHourDate, sunriseSunset, type SunPos } from './sun';
+export { sunPosition, solarHourDate, sunriseSunset } from './sun';
 
 export function fmtHour(h: number): string {
   // round to the minute FIRST: rounding the fraction alone gave "7:60 AM" at 7.995
@@ -90,7 +90,3 @@ export function suggestKwpFromBill(
   return Math.round(kwp * 10) / 10;
 }
 
-/** Per-panel solar access – cheap analytic version used before 3D raycast runs. */
-export function estimateSolarAccess(_panel: PlacedPanel): number {
-  return 1;
-}

@@ -33,10 +33,6 @@ export function unitBaseY(project: Project, u: PlacedUnit): number {
   return 0;
 }
 
-export function unitIsFree(u: PlacedUnit): boolean {
-  return !!u.pos;
-}
-
 /** Plain words for the card: where it is. */
 export function unitWhere(u: PlacedUnit): string {
   if (!u.pos) return 'on the wall';

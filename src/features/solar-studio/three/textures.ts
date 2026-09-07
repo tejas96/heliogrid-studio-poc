@@ -184,11 +184,6 @@ export function getModuleTexture(spec: PanelSpec | null, orientation: ModuleOrie
   return tex;
 }
 
-/** Back-compat alias — the old flat grid is gone; this is the default-spec landscape face. */
-export function getCellGridTexture(): THREE.CanvasTexture {
-  return getModuleTexture(null, 'landscape');
-}
-
 export interface PanelMaterials {
   glass: Record<ModuleOrientation, THREE.MeshPhysicalMaterial>;
   frame: THREE.MeshStandardMaterial;

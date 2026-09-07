@@ -34,13 +34,6 @@ export function batteryWorldPos(project: Project, bp: BatteryPlacement): XY | nu
   return unitPlanPos(project, bp);
 }
 
-/** Usable energy and power of the whole bank, from the selected spec × count. */
-export function batteryBank(project: Project): { kwh: number; kw: number; count: number } | null {
-  const spec = project.components.battery;
-  if (!spec) return null;
-  const count = Math.max(1, project.components.batteryCount ?? 1);
-  return { kwh: spec.kwh * count, kw: spec.powerKw * count, count };
-}
 
 /**
  * Battery leads to BUY: each cabinet's pair to its nearest inverter (plan

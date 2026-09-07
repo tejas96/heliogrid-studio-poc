@@ -21,8 +21,6 @@ import type { Roof } from '../types';
  */
 export const FACE_GROUP_SHARED_KEYS = ['pitchDeg', 'heightM'] as const;
 
-export type FaceGroupSharedKey = (typeof FACE_GROUP_SHARED_KEYS)[number];
-
 /**
  * Every roof that a shared edit on `id` touches, target FIRST.
  * A roof with no faceGroupId is its own group of one — unchanged behavior.

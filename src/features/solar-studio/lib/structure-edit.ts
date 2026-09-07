@@ -7,7 +7,6 @@ import type {
   FoundationKind,
   FoundationShape,
   Obstruction,
-  PanelSpec,
   PlacedPanel,
   Project,
   Roof,
@@ -283,9 +282,3 @@ export function releaseBlockedPanels(panels: PlacedPanel[], obstructionId: strin
   return panels.map((x) => (x.blockedBy === obstructionId ? unblocked(x, false) : x));
 }
 
-/** Current-value readout for the on-object panel header. */
-export function describeRacking(seg: ArraySegment, spec: PanelSpec): string {
-  if (seg.racking.kind === 'flush') return 'Flush mount';
-  void spec;
-  return `${seg.racking.tiltDeg}° · ${seg.racking.profile.label}`;
-}

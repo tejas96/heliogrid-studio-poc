@@ -15,7 +15,6 @@ import { frameFor, toEN } from './site/frame';
 import { getImage, putImage } from './persistence/blobs';
 import type { SurroundHeights } from './surround-geometry';
 
-export { buildSurroundGeometry, surroundKey } from './surround-geometry';
 export type { SurroundHeights } from './surround-geometry';
 
 export const SURROUND_RADIUS_M = 100; // the Solar API's limit at LOW quality

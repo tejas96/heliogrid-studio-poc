@@ -58,12 +58,6 @@ export function wallUnitPos(project: Project, u: PlacedUnit): XY | null {
   return unitPlanPos(project, u);
 }
 
-/** Plan position of the first DCDB / ACDB enclosure of a kind. */
-export function boxWorldPos(project: Project, kind: 'dcdb' | 'acdb'): XY | null {
-  const box = (project.electricalBoxes ?? []).find((b) => b.kind === kind);
-  return box ? wallUnitPos(project, box) : null;
-}
-
 /**
  * The DCDB that serves inverter `i`: every DCDB belongs to the inverter it
  * stands nearest to (one string box per inverter — a shared box would mix

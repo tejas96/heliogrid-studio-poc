@@ -11,9 +11,6 @@ import { simTimeDate } from './sim-time';
 import { peekSurroundHeights, type SurroundHeights } from './surround';
 import { pointInPolygon } from './geo';
 
-/** India runs on one clock; solar time at the site differs by the longitude. */
-export const CLOCK_OFFSET_H = 5.5;
-
 const zoneCache = new Map<string, string>();
 
 /** The site's IANA time zone, from an offline table (tz-lookup) — Nepal is +5:45, not IST. */

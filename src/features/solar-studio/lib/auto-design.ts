@@ -10,7 +10,6 @@ import type {
   PlacedPanel,
   Project,
   PanelSpec,
-  XY,
 } from '../types';
 export type { DesignDecision };
 import { autoFillRoof, fillRoofAsSegment, fillRowPitchM, DEFAULT_FILL } from './layout';
@@ -21,7 +20,6 @@ import { isBridgedAt, requiredBridgeClearanceM, resolveCapabilities } from './ca
 import { resolveRacking } from './structure';
 import { rectCorners, rectsOverlap } from './geo';
 import { panelCornersOnRoof } from './layout';
-import { polygonArea } from './geo';
 
 export type DesignObjective = 'target_kwp' | 'max_roof';
 
@@ -276,7 +274,3 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
   return { panels, segments, decisions, warnings, requestedKwp, achievedKwp, ranking };
 }
 
-/** Compact roof-area helper for UI copy. */
-export function roofAreaM2(polygon: XY[]): number {
-  return Math.round(polygonArea(polygon));
-}

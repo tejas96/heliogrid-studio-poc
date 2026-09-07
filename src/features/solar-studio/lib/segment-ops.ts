@@ -336,11 +336,6 @@ export function shrinkSegment(
   return { segment: re.segment, panels: re.panels, removed: mine.length - keep.length };
 }
 
-/** The valid grow directions for a selection kind. */
-export function growSidesFor(axis: GrowAxis): GrowSide[] {
-  return axis === 'row' ? ['top', 'bottom'] : ['left', 'right'];
-}
-
 export interface SelectionShape {
   segmentId?: string;
   kind: 'row' | 'column' | 'table' | 'other';

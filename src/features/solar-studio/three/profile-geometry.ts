@@ -202,8 +202,3 @@ export function cachedProfileGeometry(key: string, d: SectionDims): THREE.Extrud
   return g;
 }
 
-/** Release every cached geometry — call on full scene teardown only. */
-export function disposeProfileGeometryCache(): void {
-  for (const g of cache.values()) g.dispose();
-  cache.clear();
-}
