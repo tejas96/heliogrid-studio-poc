@@ -376,7 +376,6 @@ function SldSheet({ sld, threeLine = false }: { sld: SldParams; threeLine?: bool
   const strings = project.strings;
   const r = deriveEnergy(project);
 
-  const H = 640;
   const W = 980;
   const stringYs = strings.map((_, i) => 120 + i * Math.min(90, 380 / strings.length));
 

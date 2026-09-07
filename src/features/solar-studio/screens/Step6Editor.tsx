@@ -52,12 +52,9 @@ import { Dialog, EmptyState, OptionCard, Sheet } from '../components/ui';
 import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { ObstructionLayer } from './Step3Obstructions';
 import type {
-  ArraySegment,
   PlacedPanel,
-  StringDef,
   Walkway,
   SafetyRail,
-  LightningArrester,
   Keepout,
   XY,
 } from '../types';
@@ -84,27 +81,17 @@ import {
   type HeatmapResult,
 } from '../lib/solar-heatmap';
 import { gcr, shadowFreePitchM } from '../lib/spacing';
-import { shadingFingerprint } from '../lib/fingerprints';
+import { shadingFp } from '../lib/fingerprints';
 import {
   classifySelection,
-  duplicateSegment,
-  groupIntoTable,
   growCandidates,
-  growSegment,
-  reindexAll,
   reindexSegment,
-  respaceSegment,
-  setSegmentAzimuth,
-  setSegmentProfile,
-  setSegmentRacking,
-  setSegmentStructureFields,
   setSegmentTilt,
   STRUCTURE_PROFILES,
   type GrowAxis,
   type GrowSide,
   type SelectionShape,
 } from '../lib/segment-ops';
-import { cascadeDeletePanels } from '../lib/cascade';
 import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
 import { estimateDcCableM, stringSizing, vocAtTemp } from '../lib/stringing';
@@ -115,11 +102,9 @@ import {
   trackerAxisFromSegment,
 } from '../lib/energy/tracker';
 import { dcCableFromRoutes } from '../lib/routing';
-import { autoDesign } from '../lib/auto-design';
 import { resolveDesignTemps } from '../lib/electrical/temps';
-import { resetStringsToAuto } from '../lib/derive/electrical-sync';
 import { designIssues } from '../lib/derive';
-import { applyStructChoice, reconcileBridgedPanels, type StructChoice } from '../lib/structure-edit';
+import { type StructChoice } from '../lib/structure-edit';
 import {
   buildStructure,
   resolveRacking,
@@ -405,7 +390,7 @@ export function Step6Editor() {
 
   // Real rasterised solar-access heatmap for the 2D canvas — same engine as 3D,
   // cached by the shading fingerprint so it only recomputes on a geometry change.
-  const heatFp = useMemo(() => shadingFingerprint(project), [project]);
+  const heatFp = useMemo(() => shadingFp(project), [project]);
   useEffect(() => {
     if (!heatmap) return;
     if (heatCacheRef.current?.fp === heatFp) {
@@ -640,16 +625,6 @@ export function Step6Editor() {
   const selectedSegRoof =
     selectedSegment && project.roofs.find((r) => r.id === selectedSegment.roofId);
 
-  function applySegment(update: { segment: ArraySegment; panels: PlacedPanel[] }) {
-    const segments = project.segments.map((s) =>
-      s.id === update.segment.id ? update.segment : s,
-    );
-    // racking/tilt/respace edits can change under-structure clearance — keep
-    // panels bridging obstructions valid in the same undoable patch
-    const panels =
-      reconcileBridgedPanels(project, { segments, panels: update.panels }) ?? update.panels;
-    patch({ panels, segments }, true);
-  }
   function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat') {
     if (locked) return flashLock();
     if (!selectedSegment || !selectedSegRoof) return;
@@ -1227,7 +1202,6 @@ export function Step6Editor() {
         ],
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       heatmap,
       showStrings,
@@ -2154,8 +2128,6 @@ export function Step6Editor() {
                 const r = seg.racking.kind !== 'flush' ? seg.racking : null;
                 if (!r) return null;
                 const limit = r.maxRotationDeg ?? TRACKER_DEFAULT_MAX_ROTATION_DEG;
-                const slant = (seg.orientation === 'portrait' ? spec.lengthMm : spec.widthMm) / 1000;
-                const g = r.rowPitchM > 0 ? slant / r.rowPitchM : 1;
                 return (
                   <>
                     <div style={lbl as React.CSSProperties}>Rotation limit · ±{limit}°</div>

@@ -14,7 +14,7 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
-import { useActiveProject, useProjectPatch } from '../store/store';
+import { useActiveProject } from '../store/store';
 import { useOps } from '../store/useOps';
 import { componentsSet } from '../lib/ops/components-ops';
 import { PANEL_DB } from '../data/panels';
@@ -71,7 +71,6 @@ function SearchInput({
 
 export function Step4Components() {
   const project = useActiveProject()!;
-  const patch = useProjectPatch();
   const c = project.components;
   const [open, setOpen] = useState<Section>(
     !c.panel ? 'panel' : c.targetKwp <= 0 ? 'capacity' : 'inverter',

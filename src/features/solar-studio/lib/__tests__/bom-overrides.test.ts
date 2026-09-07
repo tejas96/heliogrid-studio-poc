@@ -12,19 +12,16 @@ import {
   setFieldOverride,
 } from '../bom';
 import {
-  addCustomBomLine,
   adoptOrphanAsCustom,
   discardOrphan,
   editBomField,
   refreshBomLines,
-  removeCustomBomLine,
   resetBomField,
   setBomInput,
 } from '../bom/edit';
 import { designFp } from '../fingerprints';
-import { STRUCTURE_PROFILES } from '../../data/profiles';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
-import type { ArraySegment, BomLine, PlacedPanel, Project, Roof } from '../../types';
+import type { BomLine, PlacedPanel, Project, Roof } from '../../types';
 
 const rect = (cx: number, cy: number, w: number, h: number) => [
   { x: cx - w / 2, y: cy - h / 2 },

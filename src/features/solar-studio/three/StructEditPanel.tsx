@@ -15,13 +15,12 @@
 //   · VIEW choices (module visibility, table isolation) call onViewChange and
 //     must NEVER touch the project — ghosting a module to look at a rafter is
 //     not a design change, and if it were persisted it would stale captures.
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { LegPlanEditor } from './LegPlanEditor';
 import { Html } from '@react-three/drei';
 import type {
   FoundationKind,
   FoundationShape,
-  PanelSpec,
   Project,
   SectionDims,
 } from '../types';

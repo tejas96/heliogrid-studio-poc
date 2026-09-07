@@ -308,10 +308,8 @@ import {
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../lib/units';
 import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
-import { STRUCTURE_PROFILES } from '../lib/segment-ops';
-import { COL_STRIDE, panelFootprintM } from '../lib/layout';
-import { StructurePreview } from '../components/StructurePreview';
-import { shadingFingerprint } from '../lib/fingerprints';
+import { COL_STRIDE } from '../lib/layout';
+import { shadingFp } from '../lib/fingerprints';
 import {
   accessLabel,
   computeHeatmap,
@@ -320,11 +318,9 @@ import {
 } from '../lib/solar-heatmap';
 import { HeatmapLayer } from './HeatmapLayer';
 import type { Project, XY } from '../types';
-import { panelEnergyShares, sunPosition, sunriseSunset, fmtHour } from '../lib/solar';
-import { computePanelShadeDetail } from '../lib/shading';
+import { sunPosition, sunriseSunset, fmtHour } from '../lib/solar';
 import { simTimeDate } from '../lib/sim-time';
 import { polygonCentroid } from '../lib/geo';
-import { roofGridAngle } from '../lib/layout';
 import { staticSatelliteUrl, metersPerStaticMap, zoomCovering } from '../lib/maps';
 import { SAT_ZOOM } from '../components/SatCanvas';
 import { EnergyReportSheet } from '../components/EnergyReportSheet';
@@ -333,7 +329,7 @@ import {
   buildRoofSolidGeometry,
   roofTopRing,
 } from '../lib/scene-model';
-import { computeEaveRefs, isSloped, surfaceHeightAt } from '../lib/roof-plane';
+import { computeEaveRefs, surfaceHeightAt } from '../lib/roof-plane';
 import { obstructionBaseY } from '../lib/ground';
 import { lightenHex, roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
@@ -343,7 +339,6 @@ import { deriveStructures } from '../lib/derive';
 import {
   DEFAULT_STRUCTURE_VIEW,
   effectiveView,
-  foundationOptionsFor,
   partitionPanels,
   visibleStructureIds,
   type StructureViewState,
@@ -696,14 +691,12 @@ export function Scene3D({
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('pointerup', onUp, true);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [structEdit, pick, wiring]);
   // the edited table can vanish under us (undo, delete in the 2D tab)
   useEffect(() => {
     if (structEdit && !project.segments.some((sg) => sg.id === structEdit.segId)) {
       closeStructEdit();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.segments, structEdit]);
 
   const [preset, setPreset] = useState<SeasonPreset>('today');
@@ -795,7 +788,7 @@ export function Scene3D({
     sun.azimuth + (project.calibration.northOffsetDeg * Math.PI) / 180;
 
   // ── solar-access heatmap: flat top-down satellite + per-month sun-hours ──
-  const heatFp = useMemo(() => shadingFingerprint(project), [project]);
+  const heatFp = useMemo(() => shadingFp(project), [project]);
   useEffect(() => {
     if (heatmap) {
       // present flat, top-down over the satellite (not the 3D model)
@@ -3359,7 +3352,6 @@ function SceneContent({
 
       {/* walkways */}
       {project.walkways.filter((w) => inScope(w.roofId)).map((w) => {
-        const roof = project.roofs.find((r) => r.id === w.roofId);
         const cx = (w.a.x + w.b.x) / 2;
         const cy = (w.a.y + w.b.y) / 2;
         const h = surfAt(w.roofId, { x: cx, y: cy }) + 0.06;
@@ -3375,7 +3367,6 @@ function SceneContent({
 
       {/* safety rails: posts + top bar */}
       {project.rails.filter((r) => inScope(r.roofId)).map((r) => {
-        const roof = project.roofs.find((x) => x.id === r.roofId);
         const cx = (r.a.x + r.b.x) / 2;
         const cy = (r.a.y + r.b.y) / 2;
         const h = surfAt(r.roofId, { x: cx, y: cy });
@@ -3405,7 +3396,6 @@ function SceneContent({
 
       {/* lightning arresters */}
       {project.arresters.filter((la) => inScope(la.roofId)).map((la) => {
-        const roof = project.roofs.find((x) => x.id === la.roofId);
         const base = surfAt(la.roofId, la.pos);
         return (
           <group key={la.id} position={[la.pos.x, base, -la.pos.y]}>

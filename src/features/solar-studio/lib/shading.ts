@@ -201,7 +201,6 @@ export function computeShadeProfile(project: Project, opts: ShadingOptions = {})
     project.calibration?.northOffsetDeg ?? 0,
   );
   if (samples.length === 0) return empty;
-  const totalW = samples.reduce((s, x) => s + x.weight, 0);
 
   // Tier-2 (Phase 8): the modules are casters too — row-on-row self-shading is
   // real delivered-energy loss and the scene already draws those shadows.
@@ -373,7 +372,6 @@ export function computePanelShadeDetail(
     project.calibration?.northOffsetDeg ?? 0,
   );
   if (samples.length === 0) return null;
-  const totalW = samples.reduce((s, x) => s + x.weight, 0);
 
   const { group, meshes } = buildShadowCasters(project, { includePanels: true, surround: opts.surround });
   const eaveRefs = computeEaveRefs(project.roofs);

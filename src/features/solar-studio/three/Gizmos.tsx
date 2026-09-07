@@ -59,7 +59,6 @@ export function ObstructionGizmo({
   const [preview, setPreview] = useState<OpPreview | null>(null);
   const o = project.obstructions.find((x) => x.id === id);
   if (!o) return null;
-  const size = o.shape === 'circle' ? o.diameterM : Math.max(o.lengthM, o.widthM);
   const top = planeY + o.heightM;
   const angleAt = (p: XY) => Math.atan2(p.y - o.center.y, p.x - o.center.x);
 

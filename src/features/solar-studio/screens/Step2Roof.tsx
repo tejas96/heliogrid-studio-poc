@@ -50,7 +50,6 @@ import {
 } from '../components/ui';
 import type { Project, Roof, XY } from '../types';
 import {
-  add,
   dist,
   dominantEdgeAngle,
   genId,
@@ -60,8 +59,6 @@ import {
   pointSegDist,
   polygonArea,
   polygonCentroid,
-  rotate,
-  sub,
   validateRoofPolygon,
 } from '../lib/geo';
 import { frameFor, toEN } from '../lib/site/frame';

@@ -9,7 +9,6 @@
 // `designFp`: hiding a panel to look at a rafter is not a design change, and if
 // it keyed a fingerprint it would stale every stored capture.
 import type { ArraySegment, FoundationKind, PanelSpec, Project, Roof } from '../types';
-import { isSloped } from './roof-plane';
 import {
   allowedFoundations,
   resolveRacking,

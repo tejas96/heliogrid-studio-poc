@@ -6,14 +6,12 @@ import type {
   FoundationKind,
   FoundationShape,
   ArraySegment,
-  PanelOrientation,
   PanelSpec,
   PlacedPanel,
   Project,
   RackingSpec,
   Roof,
   StructureProfile,
-  XY,
 } from '../types';
 import { genId, rotate } from './geo';
 import {

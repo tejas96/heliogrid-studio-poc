@@ -1,5 +1,5 @@
 // ─── Electrical operations: strings, routes, inverter and meter placement ───
-import type { InverterPlacement, Project, StringDef, XY } from '../../types';
+import type { InverterPlacement, StringDef, XY } from '../../types';
 import { defineOp } from './types';
 import { registerOp } from './registry';
 import { resetStringsToAuto } from '../derive/electrical-sync';

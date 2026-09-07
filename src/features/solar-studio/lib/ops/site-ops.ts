@@ -72,7 +72,7 @@ export const keepoutRemove = defineOp<{ id: string }>({
 export const obstructionRemove = defineOp<{ id: string }>({
   id: 'obstruction.remove',
   layer: 'geometry',
-  label: (a) => `Remove obstruction`,
+  label: () => 'Remove obstruction',
   validate: (p, a) => (p.obstructions.some((o) => o.id === a.id) ? null : { reason: 'Obstruction not found' }),
   // every obstruction edit goes through withObstructions: the modules it
   // blocked come back, the ones it now covers go off — in the same patch

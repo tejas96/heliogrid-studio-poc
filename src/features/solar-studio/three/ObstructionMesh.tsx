@@ -544,6 +544,10 @@ function TreeAsset({
 // twice in a row). The blade geometry is split out and named 'rotor' via a
 // local gltf-transform post-process script, so it can still be found and
 // spun independently at runtime.
+//
+// PARKED, NOT DEAD: windmill.glb is not shipped yet, so the switch at the top of
+// this file renders ProceduralWindmill instead. Keep this until the asset lands.
+// eslint-disable-next-line unused-imports/no-unused-vars
 function WindmillAsset({
   o,
   caster,

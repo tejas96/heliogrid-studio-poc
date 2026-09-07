@@ -460,7 +460,7 @@ export function buildStructure(
     nodes.push({ id: `${seg.id}/n/${kind}/${idx - 1}`, kind, position, memberIds, fastenerSpec });
   };
 
-  for (const [row, rowPanels] of [...byRow.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [, rowPanels] of [...byRow.entries()].sort((a, b) => a[0] - b[0])) {
     // contiguous runs by column index
     const sorted = rowPanels.sort(
       (a, b) => (a.cellIndex! % COL_STRIDE) - (b.cellIndex! % COL_STRIDE),

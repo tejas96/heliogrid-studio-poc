@@ -14,7 +14,6 @@ import { farHorizonAt, fetchFarHorizon, type FarHorizonPoint } from '../lib/far-
 import {
   clockHour,
   clockLabel,
-  horizonAt,
   horizonProfile,
   seasonDates,
   shadeWindows,

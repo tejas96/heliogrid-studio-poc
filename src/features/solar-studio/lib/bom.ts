@@ -6,7 +6,6 @@
 // keys, one shared context, and one emitter per category. `deriveBom` is the
 // orchestrator that wires them together.
 import type { BomLine, Project } from '../types';
-import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 import { STRUCTURE_DISCLAIMER } from './structure';
 import { buildContext } from './bom/context';
 import { emitModules } from './bom/emitters/modules';
@@ -18,7 +17,7 @@ import { emitSafety } from './bom/emitters/safety';
 import { emitCivil } from './bom/emitters/civil';
 
 import { _setDeriver, mergeBom, type MergedBomResult } from './bom/merge';
-import { bomMoney, discountAmount, lineMoney, orderQtyOf } from './bom/money';
+import { bomMoney, discountAmount, lineMoney } from './bom/money';
 
 export { bomMoney, lineMoney, orderQtyOf, type BomMoney, type LineMoney } from './bom/money';
 export { isDiscreteUnit, wastePctFor } from './bom/registry';

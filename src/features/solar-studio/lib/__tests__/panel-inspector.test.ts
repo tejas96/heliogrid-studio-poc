@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { computePanelShadeDetail, computeSolarAccess } from '../shading';
 import { computeEnergyReport, panelEnergyShares } from '../solar';
-import { fixtureProject, fixtureRoof } from './fixtures/project';
+import { fixtureProject } from './fixtures/project';
 import { CAPABILITY_PRESETS } from '../capabilities';
 import type { Obstruction, Project } from '../../types';
 

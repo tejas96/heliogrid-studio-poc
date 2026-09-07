@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 import {
   bomConfidence,
   bomMoney,
-  bomSubtotal,
   bomToCsv,
   bomTotal,
   deriveBom,

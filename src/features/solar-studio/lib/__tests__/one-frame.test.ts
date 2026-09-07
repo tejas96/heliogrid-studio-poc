@@ -24,7 +24,7 @@ import { surfaceHeightAt, isSloped } from '../roof-plane';
 import { DEFAULT_FILL, fillRoofAsSegment } from '../layout';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
 import { PANEL_DB } from '../../data/panels';
-import type { PlacedPanel, Project, Roof, XY } from '../../types';
+import type { Project, Roof, XY } from '../../types';
 
 const spec = PANEL_DB[0];
 

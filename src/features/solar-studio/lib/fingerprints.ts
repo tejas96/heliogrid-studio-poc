@@ -11,7 +11,7 @@
 //
 // `shadingFp` is the recompute/stamp key for per-panel solar access. It is NOT
 // a sixth layer — it is geometryFp plus only the panel SAMPLE POINTS (center,
-// roof), preserving the proven legacy `shadingFingerprint` semantics: panel
+// roof), preserving the proven pre-graph shading-fingerprint semantics: panel
 // tilt/azimuth/enabled edits must not trigger the expensive shading pass
 // because they do not move the sampled point.
 import type { Project, ShadowCapture } from '../types';
@@ -316,12 +316,6 @@ export function shadingFp(p: Project | null): string {
     (p.surround ? (p.ignoreSurround ? '|sur:off' : `|sur:${surroundKey(p.surround)}`) : '')
   );
 }
-
-/**
- * Legacy alias — heatmap invalidation in Step6Editor/Scene3D keys on this.
- * Same semantics as before the fingerprint graph existed.
- */
-export const shadingFingerprint = shadingFp;
 
 // ─── Freshness checks (drive the staleness badges) ──────────────────────────
 

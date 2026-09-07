@@ -14,7 +14,7 @@
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Html, Line } from '@react-three/drei';
-import type { InverterSpec, PanelSpec, Project, StringDef, XY } from '../types';
+import type { InverterSpec, PanelSpec, Project, XY } from '../types';
 import type { DesignOp } from '../lib/ops/types';
 import { previewOp, type OpPreview } from '../lib/ops/run';
 import { stringsAddManual, stringsResetToAuto } from '../lib/ops/electrical-ops';

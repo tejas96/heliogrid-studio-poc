@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import type { PanelSpec, PlacedPanel, Project, Roof, XY } from '../../types';
 import {
   autoFillRoof,
-  defaultPanelPose,
   fillRoofAsSegment,
   panelFitsAt,
 } from '../layout';

@@ -49,7 +49,6 @@ import {
   dist,
   genId,
   insetPolygonRobust,
-  pointInPolygon,
   rectCorners,
   rotate,
   sub,

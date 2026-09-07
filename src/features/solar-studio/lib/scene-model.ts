@@ -12,7 +12,6 @@ import {
   insetPolygonRobust,
   outsetPolygonRobust,
   polygonArea,
-  polygonCentroid,
 } from './geo';
 import { effectiveParapetEdges } from './roof-topology';
 import { panelPose } from './panel-pose';

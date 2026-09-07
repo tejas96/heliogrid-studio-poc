@@ -16,7 +16,7 @@ import {
 } from '../roof-topology';
 import { buildParapetGeometries } from '../scene-model';
 import { autoFillRoof } from '../layout';
-import { shadingFingerprint } from '../fingerprints';
+import { shadingFp } from '../fingerprints';
 import type { PanelSpec, ParapetWall, Project, Roof, XY } from '../../types';
 
 const rect = (cx: number, cy: number, w: number, h: number): XY[] => [
@@ -274,7 +274,7 @@ describe('shading fingerprint regression', () => {
       obstructions: [],
       panels: [],
     } as unknown as Project;
-    const f1 = shadingFingerprint(project);
+    const f1 = shadingFp(project);
     const toggled = {
       ...project,
       roofs: [
@@ -286,6 +286,6 @@ describe('shading fingerprint regression', () => {
         },
       ],
     } as Project;
-    expect(shadingFingerprint(toggled)).not.toBe(f1);
+    expect(shadingFp(toggled)).not.toBe(f1);
   });
 });

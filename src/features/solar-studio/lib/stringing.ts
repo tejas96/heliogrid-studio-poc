@@ -7,7 +7,6 @@ import type {
   StringDef,
   ValidationIssue,
 } from '../types';
-import { genId } from './geo';
 import { vocAt, type DesignTemps } from './electrical/temps';
 import { stringSizing } from './electrical/window';
 import { autoStringPlan } from './electrical/autostring';
