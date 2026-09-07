@@ -21,7 +21,7 @@ import { frameFor, makeSiteFrame, toEN } from '../lib/site/frame';
 import { latLngNear, mockIrradiance } from '../lib/solar';
 import { fetchBuildingInsights } from '../lib/solarApi';
 import { fetchWeather } from '../lib/weatherApi';
-import { useUnits } from '../lib/units';
+import { useUnits } from '../store/useUnits';
 
 const headingStyle: React.CSSProperties = {
   fontSize: 15,

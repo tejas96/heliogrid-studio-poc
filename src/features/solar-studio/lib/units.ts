@@ -1,6 +1,8 @@
 // ─── Display units: all stored values are METERS; only formatting converts ──
+//
+// PURE. The hook that reads the user's preference out of the store lives in
+// store/useUnits.ts — keeping it here made lib/ depend on React and the store.
 import type { UnitSystem } from '../types';
-import { useStore } from '../store/store';
 
 export const M_TO_FT = 3.28084;
 export const M2_TO_FT2 = 10.7639;
@@ -47,21 +49,3 @@ export function fmtArea(m2: number, units: UnitSystem): string {
     : `${Math.round(m2)} m²`;
 }
 
-/**
- * Units preference + bound formatters. Falls back to metric when no user is
- * logged in (share viewer / proposal links render without a session).
- */
-export function useUnits() {
-  const { state, dispatch } = useStore();
-  const units: UnitSystem = state.user?.units ?? 'metric';
-  return {
-    units,
-    setUnits: (u: UnitSystem) => dispatch({ type: 'set-units', units: u }),
-    lenUnit: lenUnit(units),
-    areaUnit: areaUnit(units),
-    fmtLen: (m: number, dp = 2) => fmtLen(m, units, dp),
-    lenValue: (m: number, dp = 2) => lenValue(m, units, dp),
-    lenToM: (v: number) => lenToM(v, units),
-    fmtArea: (m2: number) => fmtArea(m2, units),
-  };
-}

@@ -16,7 +16,7 @@ import {
 import { useEffect } from 'react';
 import { Plus, Minus, Maximize2 } from 'lucide-react';
 import type { XY } from '../types';
-import { metersPerStaticMap, pickScaleBar, staticSatelliteUrl } from '../lib/maps';
+import { SAT_ZOOM, metersPerStaticMap, pickScaleBar, staticSatelliteUrl } from '../lib/maps';
 
 export interface CanvasFrame {
   /** meters covered edge-to-edge by the base image */
@@ -36,8 +36,6 @@ export function useCanvasFrame(): CanvasFrame {
   if (!f) throw new Error('useCanvasFrame outside SatCanvas');
   return f;
 }
-
-export const SAT_ZOOM = 20;
 
 /** Imperative controls exposed to the parent (e.g. centre the view on a point). */
 export interface SatCanvasHandle {

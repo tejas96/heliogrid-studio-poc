@@ -83,7 +83,7 @@ import { detectRoofsViaGemini } from '../lib/roof-ai/gemini-client';
 import { applyArtifact, validateArtifact, type RoofArtifact } from '../lib/roof-ai/artifact';
 import { lightenHex, roofColor, roofRgba } from '../lib/roof-colors';
 import { effectiveParapetEdges, pickRoofAt } from '../lib/roof-topology';
-import { useUnits } from '../lib/units';
+import { useUnits } from '../store/useUnits';
 import { resolveRules } from '../data/rules/india';
 import { Scene3D } from '../three/Scene3D';
 

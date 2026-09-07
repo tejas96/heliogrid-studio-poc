@@ -27,7 +27,7 @@
 // this test MUST be updated as part of that work. Until then, a change to
 // either ratio means one ruler moved without the other.
 import { describe, expect, it } from 'vitest';
-import { SAT_ZOOM } from '../../components/SatCanvas';
+import { SAT_ZOOM } from '../maps';
 import { metersPerStaticMap } from '../maps';
 import { makeSiteFrame, toEN } from '../site/frame';
 

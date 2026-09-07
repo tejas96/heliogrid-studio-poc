@@ -15,7 +15,7 @@ import { deriveBomResult, deriveEnergy, deriveFinance, deriveMoney, deriveStruct
 import { BlobImg } from '../components/BlobImg';
 import { FreshnessBanner } from '../components/FreshnessBanner';
 import { capturesFresh } from '../lib/fingerprints';
-import { useUnits } from '../lib/units';
+import { useUnits } from '../store/useUnits';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

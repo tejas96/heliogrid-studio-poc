@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowLeft, Check, ChevronRight, CircleHelp, HeartPulse, Home, Redo2, Save, Undo2 } from 'lucide-react';
 import { navigate } from '../router';
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
-import { useUnits } from '../lib/units';
+import { useUnits } from '../store/useUnits';
 import { UnitToggle, Sheet } from '../components/ui';
 import { bandOf, describeHealthCode, explainDelta, healthKey, memoizedHealth, type HealthResult } from '../lib/health';
 import { electricalGate } from '../lib/electrical/gate';

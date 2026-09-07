@@ -8,7 +8,7 @@
 // confidence-floored on disagreement (plan §23b).
 import type { LatLng, ObstructionType, XY } from '../../types';
 import { metersPerStaticMap } from '../maps';
-import { SAT_ZOOM } from '../../components/SatCanvas';
+import { SAT_ZOOM } from '../maps';
 import { polygonArea } from '../geo';
 import { OBSTRUCTION_PRESETS } from '../roof-factory';
 import { ARTIFACT_VERSION, type ArtifactRoof, type RoofArtifact } from './artifact';

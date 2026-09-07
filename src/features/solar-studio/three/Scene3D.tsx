@@ -305,7 +305,7 @@ import {
   Keyboard,
 } from 'lucide-react';
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
-import { useUnits } from '../lib/units';
+import { useUnits } from '../store/useUnits';
 import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
 import { COL_STRIDE } from '../lib/layout';
 import { shadingFp } from '../lib/fingerprints';
@@ -321,7 +321,7 @@ import { sunPosition, sunriseSunset, fmtHour } from '../lib/solar';
 import { simTimeDate } from '../lib/sim-time';
 import { polygonCentroid } from '../lib/geo';
 import { staticSatelliteUrl, metersPerStaticMap, zoomCovering } from '../lib/maps';
-import { SAT_ZOOM } from '../components/SatCanvas';
+import { SAT_ZOOM } from '../lib/maps';
 import { EnergyReportSheet } from '../components/EnergyReportSheet';
 import {
   buildParapetGeometries,

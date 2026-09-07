@@ -5,7 +5,8 @@ import { computeEnergyReport } from '../lib/energy/report';
 import { computeFinancials } from '../lib/finance';
 import { computeFinancing } from '../lib/financing';
 import { isShadingFresh } from '../lib/fingerprints';
-import { M2_TO_FT2, useUnits } from '../lib/units';
+import { M2_TO_FT2 } from '../lib/units';
+import { useUnits } from '../store/useUnits';
 import { navigate } from '../router';
 
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];

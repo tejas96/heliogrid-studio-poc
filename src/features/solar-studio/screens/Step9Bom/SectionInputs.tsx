@@ -5,7 +5,7 @@
 import { Ruler } from 'lucide-react';
 import { NumberField } from '../../components/ui';
 import { dcCableFromRoutes, acCableFromRoutes } from '../../lib/routing';
-import { useUnits } from '../../lib/units';
+import { useUnits } from '../../store/useUnits';
 import type { BomCategory, Project } from '../../types';
 
 /**

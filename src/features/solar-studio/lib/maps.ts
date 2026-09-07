@@ -1,4 +1,13 @@
 // ─── Google Maps JS API loader (script tag, no extra deps) ─────────────────
+
+/**
+ * The zoom every satellite tile in this app is fetched at. It lives here, with
+ * the functions it is always passed to, rather than in the canvas component:
+ * the roof-AI client needs the same number, and reaching into a React component
+ * for a constant put lib/ underneath the UI.
+ */
+export const SAT_ZOOM = 20;
+
 let loadPromise: Promise<typeof google> | null = null;
 
 export function loadGoogleMaps(): Promise<typeof google> {
