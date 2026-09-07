@@ -3,7 +3,7 @@
 // a customer reads must trace to a real project value. This test is the guard.
 import { describe, expect, it } from 'vitest';
 import { proposalNarrative } from '../proposal-narrative';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { computeFinancials } from '../finance';
 import { fixtureProject, fixtureRoof, fixturePanels } from './fixtures/project';
 import { PANEL_DB } from '../../data/panels';

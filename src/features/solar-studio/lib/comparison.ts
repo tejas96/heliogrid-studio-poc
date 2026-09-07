@@ -28,7 +28,8 @@ import { resolveCatalog } from '../data/catalog';
 import { DEFAULT_FILL, fillRoofAsSegment } from './layout';
 import { reindexSegment } from './segment-ops';
 import { autoString, validateSystem } from './stringing';
-import { activeWeather, computeEnergyReport } from './solar';
+import { activeWeather } from './solar';
+import { computeEnergyReport } from './energy/report';
 import { computeFinancials } from './finance';
 import { designFp } from './fingerprints';
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cascadeDeletePanels, cascadeDeleteRoof } from '../cascade';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { deriveBom } from '../bom';
 import { fixtureProject, fixtureRoof, fixturePanels } from './fixtures/project';
 import type { Obstruction, Project, Walkway } from '../../types';

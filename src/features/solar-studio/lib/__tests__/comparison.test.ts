@@ -14,7 +14,7 @@ import {
   resetComparisonMemo,
   shortlistPanels,
 } from '../comparison';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { computeFinancials } from '../finance';
 import { resolveCatalog } from '../../data/catalog';
 import { PANEL_DB } from '../../data/panels';

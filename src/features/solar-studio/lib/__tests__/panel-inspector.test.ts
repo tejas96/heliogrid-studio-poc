@@ -4,7 +4,7 @@
 // never a second energy model that could contradict the proposal.
 import { describe, expect, it } from 'vitest';
 import { computePanelShadeDetail, computeSolarAccess } from '../shading';
-import { computeEnergyReport, panelEnergyShares } from '../solar';
+import { computeEnergyReport, panelEnergyShares } from '../energy/report';
 import { fixtureProject } from './fixtures/project';
 import { CAPABILITY_PRESETS } from '../capabilities';
 import type { Obstruction, Project } from '../../types';

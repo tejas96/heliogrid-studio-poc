@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Project, SiteWeather } from '../../types';
-import { activeWeather, computeEnergyReport } from '../solar';
+import { activeWeather } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { pvgisToWeather, type PvgisResponse } from '../pvgis';
 import fixture from './fixtures/pvgis-mrcalc-pune.json';
 

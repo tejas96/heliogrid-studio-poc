@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeFinancials, subsidyInr } from '../finance';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { bomMoney, bomTotal, mergedBom, orderQtyOf } from '../bom';
 import { fixtureProject } from './fixtures/project';
 import type { BomLine } from '../../types';

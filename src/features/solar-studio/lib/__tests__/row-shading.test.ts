@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { autoFillRoof, fillRoofAsSegment, fillRowPitchM, DEFAULT_FILL } from '../layout';
 import { computeSolarAccess } from '../shading';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
 import type { Project } from '../../types';
 

@@ -2,7 +2,7 @@ import type { Project, ValidationIssue } from '../../types';
 import { designFp } from '../fingerprints';
 import { tmyVersion } from '../energy/tmy';
 import { memoByKey } from './memo';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { bomMoney, mergedBomResult } from '../bom';
 import { computeFinancials } from '../finance';
 import { layoutIssues, structureIssues } from '../drc';

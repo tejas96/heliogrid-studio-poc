@@ -1,7 +1,7 @@
 import { BarChart3, FileText, RefreshCw, Sun, TrendingUp, Zap } from 'lucide-react';
 import { Sheet } from './ui';
 import type { Project } from '../types';
-import { computeEnergyReport } from '../lib/solar';
+import { computeEnergyReport } from '../lib/energy/report';
 import { computeFinancials } from '../lib/finance';
 import { computeFinancing } from '../lib/financing';
 import { isShadingFresh } from '../lib/fingerprints';

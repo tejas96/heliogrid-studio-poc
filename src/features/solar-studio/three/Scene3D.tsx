@@ -36,7 +36,7 @@ import { Measure, type MeasureMode } from './Measure';
 import { unitBaseY, unitWhere } from '../lib/unit-pos';
 import { clockHour, seasonDates } from '../lib/sun-chart';
 import { groundLiftAt, useTerrainGeneration } from './terrain-probe';
-import { casterCost } from '../lib/string-shade';
+import { casterCost } from '../lib/energy/report';
 import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';

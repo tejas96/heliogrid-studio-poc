@@ -12,7 +12,7 @@ import { useMemo } from 'react';
 import type { Project } from '../types';
 import { computePanelShadeDetail } from '../lib/shading';
 import { peekSurroundHeights } from '../lib/surround';
-import { panelEnergyShares } from '../lib/solar';
+import { panelEnergyShares } from '../lib/energy/report';
 import { accessHex } from '../lib/shade-ramp';
 
 export interface PanelYield {

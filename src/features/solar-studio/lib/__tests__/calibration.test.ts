@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyKnownDistance, rescaleProjectGeometry } from '../calibration';
 import { buildSunSamples } from '../shading';
 import { polygonArea } from '../geo';
-import { computeEnergyReport } from '../solar';
+import { computeEnergyReport } from '../energy/report';
 import { deriveBom } from '../bom';
 import { geometryFp } from '../fingerprints';
 import { fixtureProject } from './fixtures/project';

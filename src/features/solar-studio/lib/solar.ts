@@ -1,15 +1,16 @@
-// ─── Solar math: sun position (NOAA-style), sunrise/sunset, energy model ───
-import type { EnergyReport, LatLng, LossItem, PlacedPanel, Project, SiteLocation, SiteWeather } from '../types';
-import { DIFFUSE_SHARE, poaFactor, poaBeamRatio } from './poa';
-import { DAYS_IN_MONTH } from './pvgis';
-import { roofsUnionAreaM2 } from './roof-topology';
-import { peekTmy } from './energy/tmy';
-import { hourlyEnergyForProject } from './energy/hourly';
+// ─── Solar math: sun position (NOAA-style), sunrise/sunset, loss model ──────
+//
+// LOW-LEVEL ONLY. spacing.ts, sim-time.ts, poa.ts and string-shade.ts all sit
+// on top of this file, so it must not import anything that in turn needs them.
+// The whole-project energy report used to live here; it now lives in
+// lib/energy/report.ts, which is the top of the stack rather than the bottom.
+import type { LatLng, LossItem, PlacedPanel, SiteLocation, SiteWeather } from '../types';
 
 // Astronomical core lives in lib/sun.ts (kept acyclic for physics modules);
 // re-exported here so every existing `from './solar'` import keeps working.
+// Modules UNDER this one import from './sun' directly — going through this
+// re-export would put the loss model underneath them.
 export { sunPosition, solarHourDate, sunriseSunset, type SunPos } from './sun';
-import { electricalShadingLossPct } from './string-shade';
 
 export function fmtHour(h: number): string {
   // round to the minute FIRST: rounding the fraction alone gave "7:60 AM" at 7.995
@@ -28,10 +29,6 @@ export function mockIrradiance(lat: number): number {
   return Math.round(Math.max(4.6, Math.min(5.9, base)) * 100) / 100;
 }
 
-/** Monthly shape for Indian sites; monsoon dip Jun–Sep. */
-const MONTH_FACTORS = [
-  0.95, 1.0, 1.12, 1.13, 1.15, 0.88, 0.78, 0.8, 0.86, 1.02, 0.98, 0.93,
-];
 export const MONSOON_MONTHS = [5, 6, 7, 8]; // Jun..Sep (0-indexed)
 
 /**
@@ -41,7 +38,7 @@ export const MONSOON_MONTHS = [5, 6, 7, 8]; // Jun..Sep (0-indexed)
  * line is derived from the selected inverter's datasheet efficiency; 3.0%
  * is the fallback before one is chosen.
  * Shading is NOT in this list: it applies to the BEAM component only,
- * inside the plane-of-array composition (see computeEnergyReport) — a fully
+ * inside the plane-of-array composition (see energy/report.ts) — a fully
  * beam-shaded panel still collects diffuse light.
  */
 export function equipmentLosses(inverterEfficiencyPct?: number): LossItem[] {
@@ -64,305 +61,22 @@ export function composeLosses(losses: LossItem[]): number {
   return Math.min(1, Math.max(0.005, pr));
 }
 
-/**
- * The site's measured weather, but ONLY if it was fetched for the current pin.
- * A rehydrated project whose pin moved (or any path that changed latLng without
- * refetching) falls back to the estimate rather than lying with old-pin numbers.
- */
 /** True when two lat/lng points agree within `tolDeg` on both axes. */
 export function latLngNear(a: LatLng, b: LatLng, tolDeg: number): boolean {
   return Math.abs(a.lat - b.lat) <= tolDeg && Math.abs(a.lng - b.lng) <= tolDeg;
 }
 
+/**
+ * The site's measured weather, but ONLY if it was fetched for the current pin.
+ * A rehydrated project whose pin moved (or any path that changed latLng without
+ * refetching) falls back to the estimate rather than lying with old-pin numbers.
+ */
 export function activeWeather(location: SiteLocation | null): SiteWeather | undefined {
   const w = location?.weather;
   if (!w || !location) return undefined;
   // ~11 m — a rehydrated project whose pin drifted this far keeps its weather;
   // a real relocation is far larger and correctly invalidates it
   return latLngNear(w.forLatLng, location.latLng, 1e-4) ? w : undefined;
-}
-
-/**
- * Each enabled panel's share of the project's annual energy, in kWh.
- *
- * Deliberately a SPLIT of the ONE report number rather than a second energy
- * model (§A0): Σ shares === report.annualKwh by construction, so the on-panel
- * inspector can never quote a figure the report and proposal disagree with.
- * The report itself is a mean-field model (mean access × mean POA); this
- * inverts that mean by weighting each panel with its OWN beam access and
- * orientation — the two are consistent exactly because the total is fixed.
- *
- * Values are ESTIMATES of a share, not metered per-module output.
- */
-export function panelEnergyShares(project: Project): Map<string, number> {
-  const out = new Map<string, number>();
-  const enabled = project.panels.filter((p) => p.enabled);
-  if (enabled.length === 0) return out;
-  const report = computeEnergyReport(project);
-  const annualKwh = report.annualKwh;
-  const lat = project.location?.latLng.lat ?? 20;
-  const lng = project.location?.latLng.lng ?? 77;
-  const weather = activeWeather(project.location);
-  // annual mean diffuse fraction — the floor a fully beam-shaded module keeps
-  const kd = weather
-    ? weather.monthlyDiffuseFrac.reduce((s, v) => s + v, 0) / weather.monthlyDiffuseFrac.length
-    : DIFFUSE_SHARE;
-  const weights = enabled.map(
-    (p) =>
-      kd + (1 - kd) * poaBeamRatio(lat, lng, p.tiltDeg, p.azimuthDeg) * (p.solarAccess ?? 1),
-  );
-  const totalW = weights.reduce((s, v) => s + v, 0);
-  if (totalW <= 0) return out;
-  enabled.forEach((p, i) => out.set(p.id, (annualKwh * weights[i]) / totalW));
-  return out;
-}
-
-/**
- * The model's own uncertainty on a year-1 figure, one standard deviation, %:
- * irradiance data ±3, transposition and losses ±3, shading ±2 — combined in
- * quadrature ≈ 4.7. ASSUMED until the PVsyst comparison (Batch C) pins it.
- */
-const MODEL_SIGMA_PCT = 5;
-/** the year-to-year spread assumed where the climate record is missing, % */
-const INTERANNUAL_ASSUMED_PCT = 5;
-
-/**
- * P50/P75/P90/P99 for a year-1 figure: the site's year-to-year irradiation
- * spread (measured from the PVGIS record) combined with the model's own
- * uncertainty, the bankable convention. Energy scales with irradiation to
- * first order, so the irradiation spread IS the energy spread.
- */
-function uncertaintyFor(annualKwh: number, weather: SiteWeather | undefined): EnergyReport['uncertainty'] {
-  const yrs = weather?.annualGhiByYear;
-  let interannual = INTERANNUAL_ASSUMED_PCT;
-  let years = 0;
-  if (yrs && yrs.length >= 3) {
-    const mean = yrs.reduce((s, v) => s + v, 0) / yrs.length;
-    const sd = Math.sqrt(yrs.reduce((s, v) => s + (v - mean) * (v - mean), 0) / (yrs.length - 1));
-    interannual = mean > 0 ? (sd / mean) * 100 : INTERANNUAL_ASSUMED_PCT;
-    years = yrs.length;
-  }
-  const sigma = Math.hypot(interannual, MODEL_SIGMA_PCT);
-  const at = (k: number) => Math.round(annualKwh * (1 - (k * sigma) / 100));
-  return {
-    p50Kwh: Math.round(annualKwh),
-    p75Kwh: at(0.6745),
-    p90Kwh: at(1.2816),
-    p99Kwh: at(2.326),
-    sigmaPct: Math.round(sigma * 10) / 10,
-    interannualPct: Math.round(interannual * 10) / 10,
-    modelPct: MODEL_SIGMA_PCT,
-    yearsOfRecord: years,
-  };
-}
-
-/** 25-year energy with a fixed yearly degradation, from a first-year figure. */
-function lifetimeFrom(annualKwh: number, degradation: number) {
-  let lifetime = 0;
-  let yearOut = annualKwh;
-  for (let y = 0; y < 25; y++) {
-    lifetime += yearOut;
-    yearOut *= 1 - degradation;
-  }
-  return { lifetime, year25: annualKwh * Math.pow(1 - degradation, 24) };
-}
-
-export function computeEnergyReport(project: Project): EnergyReport {
-  const panels = project.panels.filter((p) => p.enabled);
-  const wp = project.components.panel?.watt ?? 0;
-  const capacityKwp = (panels.length * wp) / 1000;
-  // union, not sum — a mumty/stacked roof must not double-count its footprint
-  const roofAreaM2 = roofsUnionAreaM2(project.roofs);
-
-  // ── The hourly engine, whenever the site's typical year is in memory ──────
-  // 8760 hours, module by module: sun, Perez sky, near shade by the hour,
-  // incidence angle, soiling, module temperature, inverter curve, clipping.
-  // The monthly estimate below is what stands in until the year has loaded.
-  const tmyYear = peekTmy(project.location?.tmy);
-  const hourly = tmyYear ? hourlyEnergyForProject(project, tmyYear) : null;
-  if (hourly && project.location?.tmy) {
-    const meta = project.location.tmy;
-    const beamAccess =
-      panels.length > 0 ? panels.reduce((s, p) => s + (p.solarAccess ?? 1), 0) / panels.length : 1;
-    const electricalPct = electricalShadingLossPct(project);
-    const degradation = 0.0075;
-    const { lifetime, year25 } = lifetimeFrom(hourly.annualKwh, degradation);
-    return {
-      capacityKwp: Math.round(capacityKwp * 100) / 100,
-      panelCount: panels.length,
-      roofAreaM2: Math.round(roofAreaM2),
-      poaFactor: hourly.ghiKwhM2 > 0 ? Math.round((hourly.poaKwhM2 / hourly.ghiKwhM2) * 1000) / 1000 : 1,
-      annualMwh: Math.round(hourly.annualKwh / 100) / 10,
-      annualKwh: hourly.annualKwh,
-      specificYield: capacityKwp > 0 ? Math.round(hourly.annualKwh / capacityKwp) : 0,
-      performanceRatio: hourly.prPct,
-      monthlyKwh: hourly.monthlyKwh,
-      monsoonMonths: MONSOON_MONTHS,
-      losses: [
-        ...hourly.losses.map((l) =>
-          l.key === 'shading' && project.surround && project.ignoreSurround
-            ? { ...l, label: `${l.label} — neighbour shade OFF by your choice` }
-            : l,
-        ),
-        ...(electricalPct !== null && electricalPct > 0
-          ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
-          : []),
-      ],
-      totalLossPct: Math.round((100 - hourly.prPct) * 10) / 10,
-      avgSolarAccessPct: Math.round((DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * beamAccess) * 100),
-      lifetimeMwh25: Math.round(lifetime / 100) / 10,
-      year25Mwh: Math.round(year25 / 100) / 10,
-      degradationPctPerYear: degradation * 100,
-      irradianceSource: 'PVGIS',
-      engine: 'hourly',
-      uncertainty: uncertaintyFor(hourly.annualKwh, activeWeather(project.location)),
-      hourly: {
-        radiationDb: meta.radiationDb,
-        yearMin: meta.yearMin,
-        yearMax: meta.yearMax,
-        ghiKwhM2: hourly.ghiKwhM2,
-        poaKwhM2: hourly.poaKwhM2,
-        rearKwhM2: hourly.rearKwhM2,
-        rearGainPct: hourly.rearGainPct,
-        dcKwh: hourly.dcKwh,
-        clippedKwh: hourly.clippedKwh,
-        clippingHours: hourly.clippingHours,
-        assumed: hourly.assumed,
-      },
-    };
-  }
-  const psh = project.location?.peakSunHours ?? 5.3;
-  const avgAccess =
-    panels.length > 0
-      ? panels.reduce((s, p) => s + (p.solarAccess ?? 1), 0) / panels.length
-      : 1;
-  // tilt/azimuth actually change yield (audit R4/R5): mean plane-of-array factor
-  const lat = project.location?.latLng.lat ?? 20;
-  const lng = project.location?.latLng.lng ?? 77;
-  const meanPoa =
-    panels.length > 0
-      ? panels.reduce(
-          (s, p) => s + poaFactor(lat, lng, p.tiltDeg, p.azimuthDeg),
-          0,
-        ) / panels.length
-      : 1;
-  // ── Loss & shading composition (multiplicative; PVWatts convention) ──────
-  // Equipment losses multiply into prEquip. Shading applies ONLY to the beam
-  // component inside the plane-of-array term: a fully beam-shaded panel still
-  // collects the diffuse share — the same definition the heatmap uses, so the
-  // report and heatmap can never disagree about "access" again. The stored
-  // per-panel solarAccess stays the raw BEAM-clear fraction from the raycast
-  // engine; the diffuse floor is applied here with the measured monthly Kd
-  // (or the DIFFUSE_SHARE fallback).
-  const losses = equipmentLosses(project.components.inverter?.efficiencyPct ?? undefined);
-  const prEquip = composeLosses(losses);
-  const beamAccess = avgAccess; // raw beam-clear fraction, 0..1
-
-  const weather = activeWeather(project.location);
-  let annualKwh: number;
-  let monthlyKwh: number[];
-  let reportPoa = meanPoa;
-  let irradianceSource: 'PVGIS' | 'estimate';
-  // annual beam-shading factor on the delivered energy (1 = unshaded); the
-  // effective "solar access" (diffuse-floored, GHI-weighted) for the report
-  let shadeFactor: number;
-  let effectiveAccess: number;
-  // Inter-row self-shading is NOT a separate term (Phase 8): the modules are
-  // shadow casters in the raycast engine, so row-on-row loss already lives
-  // inside each panel's measured solarAccess — and therefore inside
-  // `beamAccess` below. The Tier-1 analytical derate that used to multiply
-  // here priced the same physics twice; tighter rows now show up as lower
-  // access, which the "Shading (beam)" line reports.
-  if (weather) {
-    const meanBeamRatio =
-      panels.length > 0
-        ? panels.reduce((s, p) => s + poaBeamRatio(lat, lng, p.tiltDeg, p.azimuthDeg), 0) /
-          panels.length
-        : 1;
-    let shadedSum = 0; // what's actually delivered (beamAccess)
-    let unshadedSum = 0;
-    const monthly = weather.monthlyGhi.map((ghiDay, m) => {
-      const kd = weather.monthlyDiffuseFrac[m];
-      const ghiMonth = ghiDay * DAYS_IN_MONTH[m];
-      const poaShaded = kd + (1 - kd) * meanBeamRatio * beamAccess;
-      const poaUnshaded = kd + (1 - kd) * meanBeamRatio;
-      shadedSum += ghiMonth * poaShaded;
-      unshadedSum += ghiMonth * poaUnshaded;
-      return capacityKwp * ghiMonth * prEquip * poaShaded;
-    });
-    annualKwh = monthly.reduce((s, v) => s + v, 0);
-    monthlyKwh = monthly.map((v) => Math.round(v));
-    shadeFactor = unshadedSum > 0 ? shadedSum / unshadedSum : 1;
-    // the ACCESS METRIC uses the fixed comparability floor — IDENTICAL to the
-    // heatmap's colour metric (its kWh layer, like our energy, uses real Kd)
-    effectiveAccess = DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * beamAccess;
-    // effective annual POA/GHI factor (for the report's poaFactor readout)
-    const baseline = capacityKwp * weather.annualGhi * 365 * prEquip;
-    reportPoa = baseline > 0 ? annualKwh / baseline : meanPoa;
-    irradianceSource = 'PVGIS';
-  } else {
-    const meanBeamRatioEst =
-      panels.length > 0
-        ? panels.reduce((s, p) => s + poaBeamRatio(lat, lng, p.tiltDeg, p.azimuthDeg), 0) /
-          panels.length
-        : 1;
-    const poaShaded = DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * meanBeamRatioEst * beamAccess;
-    const poaUnshaded = DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * meanBeamRatioEst;
-    annualKwh = capacityKwp * psh * 365 * prEquip * poaShaded;
-    reportPoa = poaShaded;
-    shadeFactor = poaUnshaded > 0 ? poaShaded / poaUnshaded : 1;
-    effectiveAccess = DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * beamAccess;
-    const monthTotal = MONTH_FACTORS.reduce((s, f) => s + f, 0);
-    monthlyKwh = MONTH_FACTORS.map((f) => Math.round((annualKwh * f) / monthTotal));
-    irradianceSource = 'estimate';
-  }
-  // PR (display) includes equipment losses AND the beam-shading effect, but
-  // excludes orientation (POA is the reference plane) — always within (0,1]
-  const pr = Math.min(1, Math.max(0.005, prEquip * shadeFactor));
-  const shadingLossPct = Math.max(0, (1 - shadeFactor) * 100);
-  // series wiring: a shaded module pulls its whole string down — known only
-  // once the full analysis has run this session and strings exist
-  const electricalPct = electricalShadingLossPct(project);
-  const reportLosses: LossItem[] = [
-    ...losses,
-    // includes obstruction AND row-on-row shading — one measured beam term
-    {
-      key: 'shading',
-      label:
-        project.surround && project.ignoreSurround
-          ? 'Shading (beam) — neighbour shade OFF by your choice'
-          : 'Shading (beam)',
-      pct: Math.round(shadingLossPct * 10) / 10,
-    },
-    ...(electricalPct !== null && electricalPct > 0
-      ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
-      : []),
-  ];
-  const totalLossPct = Math.round((1 - pr) * 1000) / 10;
-  const degradation = 0.0075;
-  const { lifetime, year25 } = lifetimeFrom(annualKwh, degradation);
-  return {
-    capacityKwp: Math.round(capacityKwp * 100) / 100,
-    panelCount: panels.length,
-    roofAreaM2: Math.round(roofAreaM2),
-    poaFactor: Math.round(reportPoa * 1000) / 1000,
-    annualMwh: Math.round(annualKwh / 100) / 10,
-    annualKwh,
-    specificYield: capacityKwp > 0 ? Math.round(annualKwh / capacityKwp) : 0,
-    performanceRatio: Math.round(pr * 1000) / 10,
-    monthlyKwh,
-    monsoonMonths: MONSOON_MONTHS,
-    losses: reportLosses,
-    totalLossPct,
-    // the UNIFIED metric (diffuse-floored, = heatmap's definition)
-    avgSolarAccessPct: Math.round(effectiveAccess * 100),
-    lifetimeMwh25: Math.round(lifetime / 100) / 10,
-    year25Mwh: Math.round(year25 / 100) / 10,
-    degradationPctPerYear: degradation * 100,
-    irradianceSource,
-    engine: 'monthly',
-    uncertainty: uncertaintyFor(annualKwh, weather),
-  };
 }
 
 /** Suggested kWp from a monthly bill (improvement: consumption-based sizing). */

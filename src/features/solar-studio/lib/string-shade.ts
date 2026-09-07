@@ -7,7 +7,7 @@
 // both numbers, and turn a caster's blocked rays into kWh a year.
 import type { Project } from '../types';
 import { peekShadeProfile, type ShadeProfile } from './shade-profile-cache';
-import { panelEnergyShares, activeWeather } from './solar';
+import { activeWeather } from './solar';
 
 const DIFFUSE_FALLBACK = 0.35;
 /** a module this far below the string's best is taken as bypassed (diode conducts) */
@@ -97,40 +97,12 @@ export function electricalShadingLossPct(project: Project): number | null {
   return Math.round(beamShare * (1 - ele / lin) * 1000) / 10;
 }
 
-function meanDiffuse(project: Project): number {
+/**
+ * The site's annual mean diffuse fraction, or a fallback where no measured
+ * weather is loaded. Exported because energy/report.ts needs the same number
+ * for casterCost, and two definitions of "the beam share" would drift apart.
+ */
+export function meanDiffuse(project: Project): number {
   const w = activeWeather(project.location);
   return w ? w.monthlyDiffuseFrac.reduce((a, v) => a + v, 0) / w.monthlyDiffuseFrac.length : DIFFUSE_FALLBACK;
-}
-
-export interface CasterCost {
-  /** modules that lose any beam to it */
-  modules: number;
-  /** kWh a year the caster takes, beam share applied */
-  kwhPerYear: number;
-  /** of the plant's annual energy */
-  pct: number;
-}
-
-/** What one caster (an obstruction, a neighbour, a row of modules) costs the plant. */
-export function casterCost(project: Project, casterKey: string): CasterCost | null {
-  const profile = profileFor(project);
-  if (!profile) return null;
-  const shares = panelEnergyShares(project);
-  const beamShare = 1 - meanDiffuse(project);
-  let modules = 0;
-  let kwh = 0;
-  let total = 0;
-  for (const p of project.panels) {
-    if (!p.enabled) continue;
-    const e = shares.get(p.id) ?? 0;
-    total += e;
-    const frac = profile.byCaster.get(p.id)?.get(casterKey) ?? 0;
-    if (frac <= 0) continue;
-    modules++;
-    // the module's energy already has the shade in it; what it WOULD make
-    // without this caster is e / (1 − beamShare·frac) — the difference is the cost
-    const denom = 1 - beamShare * frac;
-    kwh += denom > 0 ? e / denom - e : 0;
-  }
-  return { modules, kwhPerYear: Math.round(kwh), pct: total > 0 ? Math.round((kwh / total) * 1000) / 10 : 0 };
 }
