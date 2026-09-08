@@ -119,6 +119,42 @@ export function PanelsInstanced({
     [items],
   );
 
+  /**
+   * SIX materials for the module box, not one.
+   *
+   * A BoxGeometry carries six groups and its material index runs
+   * `+X, −X, +Y, −Y, +Z, −Z`. Handed a single material, all six faces drew the
+   * cell texture: the module's 45 mm EDGE showed a whole panel squashed into a
+   * strip, and its underside showed cells where a mono-facial module has an
+   * opaque white backsheet. Both are visible — the edge from any low camera
+   * angle, the underside from walkthrough under a tilted table.
+   *
+   * Access view and ghosting still take ONE material each, on purpose: there
+   * the flat colour IS the data, and a frame-coloured rim would read as a
+   * value.
+   */
+  const faceMats = useMemo(
+    () => ({
+      portrait: [
+        mats.frame,
+        mats.frame,
+        mats.glass.portrait,
+        mats.back.portrait,
+        mats.frame,
+        mats.frame,
+      ],
+      landscape: [
+        mats.frame,
+        mats.frame,
+        mats.glass.landscape,
+        mats.back.landscape,
+        mats.frame,
+        mats.frame,
+      ],
+    }),
+    [mats],
+  );
+
   const { glassMeshes, frameMesh, legMesh } = useMemo(() => {
     const m = new THREE.Matrix4();
 
@@ -135,7 +171,7 @@ export function PanelsInstanced({
         const list = byOrientation[o];
         const mesh = new THREE.InstancedMesh(
           boxGeom,
-          ghost ? ghostMat : accessView ? accessMat : mats.glass[o],
+          ghost ? ghostMat : accessView ? accessMat : faceMats[o],
           list.length,
         );
         mesh.renderOrder = ghost ? 2 : 0; // ghosts blend over the structure
@@ -213,7 +249,7 @@ export function PanelsInstanced({
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
     return { glassMeshes, frameMesh, legMesh };
-  }, [items, legs, accessView, ghost, boxGeom, legGeom, accessMat, ghostMat, mats]);
+  }, [items, legs, accessView, ghost, boxGeom, legGeom, accessMat, ghostMat, mats, faceMats]);
 
   // InstancedMesh allocates per-instance GPU buffers — always dispose the
   // mesh objects when a rebuild (or unmount) replaces them

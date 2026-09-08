@@ -186,6 +186,12 @@ function getModuleTexture(spec: PanelSpec | null, orientation: ModuleOrientation
 
 export interface PanelMaterials {
   glass: Record<ModuleOrientation, THREE.MeshPhysicalMaterial>;
+  /**
+   * What the UNDERSIDE of the module box shows — an opaque white backsheet, or
+   * the muted cells of a bifacial module's rear glass. Per orientation because
+   * the bifacial one carries the same face map, which is orientation-specific.
+   */
+  back: Record<ModuleOrientation, THREE.MeshStandardMaterial>;
   frame: THREE.MeshStandardMaterial;
   leg: THREE.MeshStandardMaterial;
 }
@@ -193,6 +199,7 @@ export interface PanelMaterials {
 const matCache = new Map<string, PanelMaterials>();
 let sharedFrame: THREE.MeshStandardMaterial | null = null;
 let sharedLeg: THREE.MeshStandardMaterial | null = null;
+let sharedBacksheet: THREE.MeshStandardMaterial | null = null;
 
 /** Shared glass (per orientation) / aluminium-frame / stand-leg materials for placed panels. */
 export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials {
@@ -201,6 +208,20 @@ export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials
   if (hit) return hit;
   sharedFrame ??= new THREE.MeshStandardMaterial({ color: '#cfd3d9', metalness: 0.85, roughness: 0.3, envMapIntensity: 1 });
   sharedLeg ??= new THREE.MeshStandardMaterial({ color: '#a3a9b1', metalness: 0.75, roughness: 0.38, envMapIntensity: 0.9 });
+  // A mono-facial module's back is an opaque white polymer sheet, not glass:
+  // no metalness, and rough enough that it never picks up a highlight.
+  sharedBacksheet ??= new THREE.MeshStandardMaterial({ color: '#e7e9ec', metalness: 0, roughness: 0.9 });
+  // A BIFACIAL module really does show its cells from below — through rear
+  // glass, so dimmer and flatter than the front. `bifacialityPct` is the same
+  // datasheet field lib/bifacial-check.ts prices the premium from, so the
+  // picture and the quote cannot disagree about which module this is.
+  const backFor = (o: ModuleOrientation) =>
+    new THREE.MeshStandardMaterial({
+      color: '#9aa1ab',
+      metalness: 0,
+      roughness: 0.35,
+      map: getModuleTexture(spec, o),
+    });
   const glassFor = (o: ModuleOrientation) =>
     // Tempered low-iron glass over the cells: a hard clearcoat that reflects
     // the environment map, low base roughness so the sky reads in it at
@@ -236,6 +257,9 @@ export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials
     });
   const mats: PanelMaterials = {
     glass: { portrait: glassFor('portrait'), landscape: glassFor('landscape') },
+    back: spec?.bifacialityPct
+      ? { portrait: backFor('portrait'), landscape: backFor('landscape') }
+      : { portrait: sharedBacksheet, landscape: sharedBacksheet },
     frame: sharedFrame,
     leg: sharedLeg,
   };
