@@ -358,6 +358,40 @@ export function classifySelection(panels: PlacedPanel[]): SelectionShape {
   return { segmentId: segId, kind: 'table' };
 }
 
+/**
+ * Every table the selection touches, in first-seen order.
+ *
+ * `classifySelection` deliberately answers a DIFFERENT question — "is this
+ * selection one row, one column, or one whole table?" — and returns
+ * `{kind:'other'}` the moment two panels carry different `segmentId`s, because
+ * growing a row across two tables is meaningless. That is right for grow and
+ * wrong for everything else: it also made the Table sheet unreachable with two
+ * tables selected, so "set these twelve tables to 12°" was not slow, it was
+ * impossible. This is the question the settings sheet actually asks.
+ *
+ * Loose hand-placed modules carry no `segmentId` and are simply not tables;
+ * they are ignored here rather than reported as a null entry.
+ */
+export function selectedSegmentIds(panels: PlacedPanel[]): string[] {
+  const seen: string[] = [];
+  for (const p of panels) {
+    if (p.segmentId && !seen.includes(p.segmentId)) seen.push(p.segmentId);
+  }
+  return seen;
+}
+
+/**
+ * The one value they all share, or `undefined` when they differ — the test
+ * behind a settings field showing "–" for a mixed selection instead of lying
+ * with the first table's number. `undefined` for an empty list too: nothing
+ * selected has no shared value either.
+ */
+export function oneOf<T>(vals: readonly T[]): T | undefined {
+  if (vals.length === 0) return undefined;
+  const first = vals[0];
+  return vals.every((v) => v === first) ? first : undefined;
+}
+
 // ─── Per-table properties (Phase 2 array side-panel) ────────────────────────
 
 /**

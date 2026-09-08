@@ -53,6 +53,7 @@ import { Dialog, EmptyState, OptionCard, Sheet } from '../components/ui';
 import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { ObstructionLayer } from './Step3Obstructions';
 import type {
+  ArraySegment,
   PlacedPanel,
   Walkway,
   SafetyRail,
@@ -86,7 +87,9 @@ import { shadingFp } from '../lib/fingerprints';
 import {
   classifySelection,
   growCandidates,
+  oneOf,
   reindexSegment,
+  selectedSegmentIds,
   setSegmentTilt,
   STRUCTURE_PROFILES,
   type GrowAxis,
@@ -631,65 +634,208 @@ export function Step6Editor() {
   }
 
   // ── per-table settings (array side panel) ───────────────────────────────────
+  // TWO different questions, and conflating them is what made multi-table
+  // editing impossible. `selectedSegment` is "the ONE table a grow can act on"
+  // — growShape is `{kind:'other'}` the moment two tables are selected, which
+  // is correct, because adding a row across two tables means nothing.
+  // `selectedSegments` is "every table the settings sheet must set", which is
+  // usually more than one: twelve tables and one tilt is the everyday C&I edit.
   const selectedSegment = growShape.segmentId
     ? project.segments.find((s) => s.id === growShape.segmentId)
     : undefined;
   const selectedSegRoof =
     selectedSegment && project.roofs.find((r) => r.id === selectedSegment.roofId);
+  const selectedSegments = useMemo(() => {
+    const ids = selectedSegmentIds(selectedPanels);
+    return ids
+      .map((id) => project.segments.find((s) => s.id === id))
+      .filter((s): s is ArraySegment => !!s);
+  }, [selectedPanels, project.segments]);
+  /** The table the sheet reads its headline numbers from — the first selected. */
+  const sheetSeg = selectedSegments[0];
+  const multi = selectedSegments.length > 1;
+
+  /**
+   * Every settings handler acts on the WHOLE selection, as one undoable patch.
+   *
+   * `ops.runMany`, never a loop over `ops.run`: `run` computes its patch from
+   * the project captured in this render's closure, and every segment op returns
+   * a whole rebuilt `segments` array, so a loop would rebuild from the ORIGINAL
+   * array each time, the store's shallow merge would keep only the last, and
+   * twelve tables would become one changed table and twelve undo entries.
+   *
+   * Partial refusal is normal, not exceptional — a tracker is refused on a roof,
+   * a respace is refused where there is no room. `reportMany` says how many
+   * landed and why the rest did not, instead of quietly doing less than asked.
+   */
+  function reportMany(r: ReturnType<typeof ops.runMany>, n: number) {
+    if (!r) return false;
+    if (!r.ok) {
+      flash('info', r.refusals[0]?.reason ?? 'Nothing to change');
+      return false;
+    }
+    if (r.refusals.length > 0) {
+      // say what landed AND what did not — never quietly do less than asked
+      flash('info', `${summarizeImpact(r.impact)} — ${r.refusals.length} of ${n} refused: ${r.refusals[0].reason}`);
+      return true;
+    }
+    flash('ok', summarizeImpact(r.impact));
+    return true;
+  }
+  /** The selected tables' ids, or nothing when the layout is locked. */
+  function targetSegIds(): string[] | null {
+    if (locked) {
+      flashLock();
+      return null;
+    }
+    return selectedSegments.length > 0 ? selectedSegments.map((s) => s.id) : null;
+  }
+  const tableCountLabel = (verb: string) =>
+    selectedSegments.length > 1 ? `${verb} · ${selectedSegments.length} tables` : verb;
 
   function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat') {
-    if (locked) return flashLock();
-    if (!selectedSegment || !selectedSegRoof) return;
-    report(ops.run(segmentSetRacking, { segmentId: selectedSegment.id, kind }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetRacking,
+        ids.map((segmentId) => ({ segmentId, kind })),
+        { label: tableCountLabel(`Set racking to ${kind.replace('_', ' ')}`) },
+      ),
+      ids.length,
+    );
   }
   function applyTilt(t: number) {
-    if (locked || !selectedSegment) return;
-    report(ops.run(segmentSetTilt, { segmentId: selectedSegment.id, tiltDeg: t }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetTilt,
+        ids.map((segmentId) => ({ segmentId, tiltDeg: t })),
+        { label: tableCountLabel(`Set tilt to ${t}°`) },
+      ),
+      ids.length,
+    );
+  }
+  /** A relative nudge: each table steps from ITS own tilt, not the first one's. */
+  function applyTiltDelta(delta: number) {
+    const ids = targetSegIds();
+    if (!ids) return;
+    const argsList = selectedSegments.map((s) => ({
+      segmentId: s.id,
+      tiltDeg: Math.max(0, Math.min(35, (s.racking.kind !== 'flush' ? s.racking.tiltDeg : 0) + delta)),
+    }));
+    reportMany(
+      ops.runMany(segmentSetTilt, argsList, { label: tableCountLabel(`Tilt ${delta > 0 ? '+' : '−'}1°`) }),
+      ids.length,
+    );
   }
   function applyTrackerLimit(deg: number) {
-    if (locked || !selectedSegment) return;
-    report(ops.run(segmentSetTrackerLimit, { segmentId: selectedSegment.id, maxRotationDeg: deg }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetTrackerLimit,
+        ids.map((segmentId) => ({ segmentId, maxRotationDeg: deg })),
+        { label: tableCountLabel(`Set tracker limit to ±${deg}°`) },
+      ),
+      ids.length,
+    );
   }
-  function applyAzimuth(az: number) {
-    if (locked || !selectedSegment) return;
-    report(ops.run(segmentSetAzimuth, { segmentId: selectedSegment.id, azimuthDeg: az }));
+  /**
+   * Azimuth comes in two flavours and they must not be confused across a
+   * multi-table selection. An ABSOLUTE target (due south, a slider value) is
+   * the same number for every table. A RELATIVE nudge (−5°, +5°) or the roof's
+   * own slope is computed per table from ITS current value — applying the first
+   * table's answer to all twelve would silently flatten twelve azimuths into one.
+   */
+  function applyAzimuth(az: number | ((seg: ArraySegment) => number), label: string) {
+    const ids = targetSegIds();
+    if (!ids) return;
+    const argsList = selectedSegments.map((seg) => ({
+      segmentId: seg.id,
+      azimuthDeg: typeof az === 'function' ? az(seg) : az,
+    }));
+    reportMany(ops.runMany(segmentSetAzimuth, argsList, { label: tableCountLabel(label) }), ids.length);
   }
   function applyProfile(key: string) {
-    if (locked || !selectedSegment) return;
-    report(ops.run(segmentSetProfile, { segmentId: selectedSegment.id, profileKey: key }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetProfile,
+        ids.map((segmentId) => ({ segmentId, profileKey: key })),
+        { label: tableCountLabel('Set structure profile') },
+      ),
+      ids.length,
+    );
   }
   function applyStructureFields(
     fields: Partial<{ legSpacingM: number; foundation: 'anchor' | 'ballast'; clearanceM: number }>,
   ) {
-    if (locked || !selectedSegment) return;
-    report(ops.run(segmentSetStructureFields, { segmentId: selectedSegment.id, fields }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetStructureFields,
+        ids.map((segmentId) => ({ segmentId, fields })),
+        { label: tableCountLabel('Set structure') },
+      ),
+      ids.length,
+    );
   }
   /** Presets write the fields they OWN; anything else the user set survives. */
   function applyPreset(preset: Extract<StructChoice, { kind: 'preset' }>['preset']) {
-    if (locked || !selectedSegment || !selectedSegRoof) return;
-    report(ops.run(segmentChoice, { segmentId: selectedSegment.id, choice: { kind: 'preset', preset } }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentChoice,
+        ids.map((segmentId) => ({ segmentId, choice: { kind: 'preset' as const, preset } })),
+        { label: tableCountLabel(`Set to ${preset}`) },
+      ),
+      ids.length,
+    );
   }
   function applyRespace(pitch: number) {
-    if (locked) return flashLock();
-    if (!selectedSegment || !selectedSegRoof) return;
-    const segId = selectedSegment.id;
-    const r = ops.run(segmentRespace, { segmentId: segId, rowPitchM: pitch });
-    if (!report(r)) return;
-    setSelectedIds(r.next.panels.filter((p) => p.segmentId === segId).map((p) => p.id));
+    const ids = targetSegIds();
+    if (!ids) return;
+    const r = ops.runMany(
+      segmentRespace,
+      ids.map((segmentId) => ({ segmentId, rowPitchM: pitch })),
+      { label: tableCountLabel(`Row pitch ${pitch.toFixed(2)} m`) },
+    );
+    if (!reportMany(r, ids.length) || !r?.ok) return;
+    // a respace re-lays the lattice, so the old panel ids are gone — re-select
+    // every module that now belongs to the tables we just changed
+    setSelectedIds(r.next.panels.filter((p) => p.segmentId && ids.includes(p.segmentId)).map((p) => p.id));
   }
   function duplicateTable() {
-    if (locked) return flashLock();
-    if (!selectedSegment || !selectedSegRoof) return;
-    const r = ops.run(segmentDuplicate, { segmentId: selectedSegment.id });
-    if (!report(r)) return;
-    const seg = r.next.segments[r.next.segments.length - 1];
-    setSelectedIds(r.next.panels.filter((p) => p.segmentId === seg.id).map((p) => p.id));
+    const ids = targetSegIds();
+    if (!ids) return;
+    const before = new Set(project.segments.map((s) => s.id));
+    const r = ops.runMany(
+      segmentDuplicate,
+      ids.map((segmentId) => ({ segmentId })),
+      { label: tableCountLabel('Duplicate table') },
+    );
+    if (!reportMany(r, ids.length) || !r?.ok) return;
+    // select the COPIES, not the originals — whichever segments are new
+    const made = r.next.segments.filter((s) => !before.has(s.id)).map((s) => s.id);
+    setSelectedIds(r.next.panels.filter((p) => p.segmentId && made.includes(p.segmentId)).map((p) => p.id));
     setTableSheet(false);
   }
   function deleteTable() {
-    if (locked) return flashLock();
-    if (!selectedSegment) return;
-    report(ops.run(segmentDelete, { segmentId: selectedSegment.id }));
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentDelete,
+        ids.map((segmentId) => ({ segmentId })),
+        { label: ids.length > 1 ? `Delete ${ids.length} tables` : 'Delete table' },
+      ),
+      ids.length,
+    );
     setSelectedIds([]);
     setTableSheet(false);
   }
@@ -1506,6 +1652,7 @@ export function Step6Editor() {
             growShape={growShape}
             onGrow={growSelection}
             onGrowPreview={growPreviewCorners}
+            tableCount={selectedSegments.length}
             onTableSettings={() => setTableSheet(true)}
             canGroup={canGroup}
             onGroup={groupSelection}
@@ -2019,15 +2166,38 @@ export function Step6Editor() {
         </Dialog>
       )}
 
-      {tableSheet && selectedSegment && (() => {
-        const seg = selectedSegment;
-        const segPanels = project.panels.filter((p) => p.segmentId === seg.id);
+      {tableSheet && sheetSeg && (() => {
+        // The sheet reads its headline numbers from the FIRST selected table and
+        // writes to all of them. Fields whose values differ across the selection
+        // render "–" (see `mixed`), so nothing shows one table's number as if it
+        // were all twelve.
+        const seg = sheetSeg;
+        // Counts cover the WHOLE selection — the sheet's title must not say
+        // "40 modules · 18 kWp" while it is about to change twelve tables.
+        const segIds = selectedSegments.map((s) => s.id);
+        const segPanels = project.panels.filter((p) => p.segmentId && segIds.includes(p.segmentId));
         const kwp = Math.round(((segPanels.length * spec.watt) / 1000) * 10) / 10;
         const isFlush = seg.racking.kind === 'flush';
         // a tracker's tilt is the time of day, so its panel controls differ
         const isTracker = seg.racking.kind === 'tracker_hsat';
         const tilt = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 0;
-        const az = seg.azimuthDeg;
+        // `shared*` is the one value they ALL carry, or undefined when they
+        // differ — the fields render "–" for undefined rather than showing the
+        // first table's number as if it spoke for the rest.
+        const sharedAz = oneOf(selectedSegments.map((s) => s.azimuthDeg));
+        const sharedSlopeAz = oneOf(
+          selectedSegments.map((s) => project.roofs.find((r) => r.id === s.roofId)?.slopeAzimuthDeg ?? 180),
+        );
+        const sharedRackKind = oneOf(selectedSegments.map((s) => s.racking.kind));
+        const sharedTilt = oneOf(
+          selectedSegments.map((s) => (s.racking.kind !== 'flush' ? s.racking.tiltDeg : 0)),
+        );
+        // profile lives on the racking and only exists off-flush; '' stands for
+        // "flush, so no profile", which correctly reads as mixed beside a tilted one
+        const sharedProfile = oneOf(
+          selectedSegments.map((s) => (s.racking.kind !== 'flush' ? s.racking.profile.key : '')),
+        );
+        const az = sharedAz ?? seg.azimuthDeg;
         const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(az / 45) % 8];
         // a torque tube is a LINE, so it is named by the axis it lies on, not
         // by one end of it: bearing 90 and bearing 270 are the same tube
@@ -2045,10 +2215,24 @@ export function Step6Editor() {
           color: active ? '#08130c' : 'var(--editor-ink)',
         });
         return (
-          <Sheet title="Table settings" icon={<Settings2 />} onClose={() => setTableSheet(false)}>
+          <Sheet
+            title={multi ? `Table settings · ${selectedSegments.length} tables` : 'Table settings'}
+            icon={<Settings2 />}
+            onClose={() => setTableSheet(false)}
+          >
             <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 14, color: 'var(--editor-ink-2)' }}>
-              {seg.label} · {seg.rows}×{seg.cols} · {segPanels.length} panels · {kwp} kWp
+              {multi
+                ? `${selectedSegments.map((s) => s.label).join(', ')} · ${segPanels.length} panels · ${kwp} kWp`
+                : `${seg.label} · ${seg.rows}×${seg.cols} · ${segPanels.length} panels · ${kwp} kWp`}
             </div>
+            {multi && (
+              <div
+                style={{ fontSize: 11.5, marginBottom: 12, color: 'var(--editor-ink-2)' }}
+                role="note"
+              >
+                “–” means these tables differ. Set a value to give them all the same one.
+              </div>
+            )}
 
             {(() => {
               const roofFor = project.roofs.find((r) => r.id === seg.roofId);
@@ -2163,7 +2347,7 @@ export function Step6Editor() {
                   ...(selectedSegRoof?.roofType === 'ground' ? (['tracker_hsat'] as const) : []),
                 ] as const
               ).map((k) => (
-                <button key={k} style={seg3btn(seg.racking.kind === k) as React.CSSProperties} onClick={() => applyRacking(k)}>
+                <button key={k} style={seg3btn(sharedRackKind === k) as React.CSSProperties} onClick={() => applyRacking(k)}>
                   {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : k === 'dual_tilt' ? 'Dual tilt' : 'Tracker'}
                 </button>
               ))}
@@ -2202,16 +2386,22 @@ export function Step6Editor() {
 
             {!isFlush && !isTracker && (
               <>
-                <div style={lbl as React.CSSProperties}>Panel tilt · {tilt}°</div>
+                <div style={lbl as React.CSSProperties}>
+                  Panel tilt · {sharedTilt === undefined ? '–  mixed' : `${sharedTilt}°`}
+                </div>
                 <div style={rowStyle}>
-                  <button className="tool-btn" onClick={() => applyTilt(tilt - 1)}>−</button>
+                  {/* ± are RELATIVE, so each table steps from its own tilt; the
+                      slider is ABSOLUTE and gives them all the same one. With a
+                      mixed selection the slider sits at the first table's value
+                      and the label says "–", so nothing claims they agree. */}
+                  <button className="tool-btn" onClick={() => applyTiltDelta(-1)}>−</button>
                   <input
                     type="range" min={0} max={35} value={tilt}
                     onChange={(e) => applyTilt(Number(e.target.value))}
                     style={{ flex: 1 }}
-                    aria-label="Panel tilt"
+                    aria-label={multi ? `Panel tilt for ${selectedSegments.length} tables` : 'Panel tilt'}
                   />
-                  <button className="tool-btn" onClick={() => applyTilt(tilt + 1)}>+</button>
+                  <button className="tool-btn" onClick={() => applyTiltDelta(1)}>+</button>
                 </div>
               </>
             )}
@@ -2285,17 +2475,28 @@ export function Step6Editor() {
                 );
               })()}
 
-            <div style={lbl as React.CSSProperties}>Azimuth (facing) · {az}° {dir}</div>
+            <div style={lbl as React.CSSProperties}>
+              Azimuth (facing) · {sharedAz === undefined ? '–  mixed' : `${sharedAz}° ${dir}`}
+            </div>
             <div style={rowStyle}>
-              <button className="tool-btn" onClick={() => applyAzimuth(az - 5)}>−</button>
-              <button style={{ ...seg3btn(az === 180), flex: 'none', padding: '0 12px' } as React.CSSProperties} onClick={() => applyAzimuth(180)}>Due S</button>
+              {/* ±5 and "Roof slope" are RELATIVE — each table moves from its own
+                  current value, and the roof is looked up per table. Sending the
+                  first table's answer to all of them would flatten twelve
+                  azimuths into one. "Due S" is absolute and safely shared. */}
+              <button className="tool-btn" onClick={() => applyAzimuth((s) => s.azimuthDeg - 5, 'Azimuth −5°')}>−</button>
+              <button style={{ ...seg3btn(sharedAz === 180), flex: 'none', padding: '0 12px' } as React.CSSProperties} onClick={() => applyAzimuth(180, 'Face due south')}>Due S</button>
               <button
-                style={{ ...seg3btn(az === (selectedSegRoof?.slopeAzimuthDeg ?? 180)), flex: 'none', padding: '0 12px' } as React.CSSProperties}
-                onClick={() => applyAzimuth(selectedSegRoof?.slopeAzimuthDeg ?? 180)}
+                style={{ ...seg3btn(sharedAz !== undefined && sharedAz === sharedSlopeAz), flex: 'none', padding: '0 12px' } as React.CSSProperties}
+                onClick={() =>
+                  applyAzimuth(
+                    (s) => project.roofs.find((r) => r.id === s.roofId)?.slopeAzimuthDeg ?? 180,
+                    'Face the roof slope',
+                  )
+                }
               >
                 Roof slope
               </button>
-              <button className="tool-btn" onClick={() => applyAzimuth(az + 5)}>+</button>
+              <button className="tool-btn" onClick={() => applyAzimuth((s) => s.azimuthDeg + 5, 'Azimuth +5°')}>+</button>
             </div>
 
             {!isFlush && seg2.kind !== 'flush' && (
@@ -2305,7 +2506,7 @@ export function Step6Editor() {
                   {STRUCTURE_PROFILES.map((p) => (
                     <button
                       key={p.key}
-                      style={{ ...seg3btn(seg2.profile.key === p.key), flex: 'none', padding: '0 12px' } as React.CSSProperties}
+                      style={{ ...seg3btn(sharedProfile === p.key), flex: 'none', padding: '0 12px' } as React.CSSProperties}
                       onClick={() => applyProfile(p.key)}
                     >
                       {p.label} <span style={{ opacity: 0.6, fontSize: 10 }}>{p.kgPerM} kg/m</span>
@@ -2602,6 +2803,7 @@ function SelectionContextBar({
   panels,
   locked,
   growShape,
+  tableCount,
   onGrow,
   onGrowPreview,
   onTableSettings,
@@ -2616,6 +2818,9 @@ function SelectionContextBar({
   panels: PlacedPanel[];
   locked: boolean;
   growShape: SelectionShape;
+  /** how many TABLES the selection touches — 0, 1, or many. Grow needs exactly
+   *  one (a row across two tables means nothing); settings work on all of them. */
+  tableCount: number;
   /** returns false when there was no room — surfaced as an inline flash */
   onGrow: (axis: GrowAxis, side: GrowSide, count: number) => boolean;
   onGrowPreview: (axis: GrowAxis, side: GrowSide, count: number) => XY[][];
@@ -2637,6 +2842,10 @@ function SelectionContextBar({
   const [growMsg, setGrowMsg] = useState<string | null>(null);
   const growMsgTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(growMsgTimer.current), []);
+  // TWO gates, not one. Growing needs exactly ONE table, so it stays on
+  // growShape. Settings work on any number, so they ask tableCount — sharing
+  // one flag is what made the Table sheet vanish the moment a second table was
+  // selected, which is exactly when an EPC wants it.
   const hasSegment = growShape.kind !== 'other';
   const canGrow = hasSegment && !locked;
   // Which side (if any) still has room, per axis — drives the disabled state
@@ -2733,8 +2942,12 @@ function SelectionContextBar({
             role="toolbar"
             aria-label="Panel selection actions"
           >
+            {/* the table count matters as much as the module count: after a
+                marquee you cannot otherwise tell whether you grabbed one table
+                or clipped the edge of three */}
             <span className="ctx-count">
               {panels.length} panel{panels.length === 1 ? '' : 's'}
+              {tableCount > 0 && ` · ${tableCount} table${tableCount === 1 ? '' : 's'}`}
             </span>
             {canGroup && (
               <>
@@ -2863,15 +3076,19 @@ function SelectionContextBar({
               <ChevronsUp />
             </button>
             <span className="sep" />
-            {hasSegment && (
+            {tableCount > 0 && (
               <button
                 className="ctx-btn"
-                title="Table settings — racking, tilt, azimuth, structure"
-                aria-label="Table settings"
+                title={
+                  tableCount > 1
+                    ? `Settings for all ${tableCount} selected tables — racking, tilt, azimuth, structure`
+                    : 'Table settings — racking, tilt, azimuth, structure'
+                }
+                aria-label={tableCount > 1 ? `Settings for ${tableCount} tables` : 'Table settings'}
                 onClick={onTableSettings}
               >
                 <Settings2 />
-                Table…
+                {tableCount > 1 ? `${tableCount} tables…` : 'Table…'}
               </button>
             )}
             <button

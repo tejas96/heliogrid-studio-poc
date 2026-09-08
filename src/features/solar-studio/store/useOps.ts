@@ -2,7 +2,7 @@
 import { useCallback } from 'react';
 import { useActiveProject, useStore } from './store';
 import type { DesignOp } from '../lib/ops/types';
-import { previewOp, type OpPreview } from '../lib/ops/run';
+import { previewMany, previewOp, type OpBatchPreview, type OpPreview } from '../lib/ops/run';
 
 export function useOps() {
   const { dispatch } = useStore();
@@ -33,5 +33,33 @@ export function useOps() {
     [preview, dispatch],
   );
 
-  return { run, preview };
+  /**
+   * The same op over many targets as ONE undoable patch. Use this — never a
+   * loop over `run` — whenever more than one table is selected: `run` computes
+   * its patch from the project captured in the render closure, so a loop
+   * rebuilds `segments` from the original array every time and the store's
+   * shallow merge keeps only the last one. See `previewMany`.
+   */
+  const runMany = useCallback(
+    <A,>(
+      op: DesignOp<A>,
+      argsList: A[],
+      o: { undoable?: boolean; label?: string } = {},
+    ): OpBatchPreview | null => {
+      if (!project || argsList.length === 0) return null;
+      const r = previewMany(project, op, argsList, o.label);
+      if (r.ok) {
+        dispatch({
+          type: 'update-project',
+          patch: r.patch,
+          undoable: o.undoable ?? true,
+          label: r.impact.label,
+        });
+      }
+      return r;
+    },
+    [project, dispatch],
+  );
+
+  return { run, preview, runMany };
 }
