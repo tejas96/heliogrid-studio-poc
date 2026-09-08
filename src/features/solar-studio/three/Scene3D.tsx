@@ -467,6 +467,24 @@ const CAMERA_FOV = 40;
 const POST_ENABLED = true;
 
 /**
+ * Shadow normal bias, in WORLD METRES.
+ *
+ * Was 0.03 — thirty millimetres of bias on a module that is forty-five
+ * millimetres thick (`three/PanelsInstanced.tsx`, glass box `[w, 0.045, d]`)
+ * and a twenty-millimetre frame. Bias pushes the shadow lookup along the
+ * surface normal to stop a surface shadowing itself, so at 0.03 the module's
+ * own shadow was displaced by two thirds of its thickness: a ribbon of light
+ * survived under every module edge and every leg base, and the array read as
+ * floating above the roof rather than sitting on it.
+ *
+ * 0.007 is under a sixth of the module thickness, which is the range that still
+ * suppresses acne on the 4096 map while keeping the contact edge. Tuned WITH
+ * the PCSS change, not separately — a softer kernel changes the bias you need,
+ * so doing them apart means tuning twice.
+ */
+const NORMAL_BIAS = 0.007;
+
+/**
  * Where the camera was last left, per project.
  *
  * `presetPose` recomputes every preset from the design's bounding sphere on each
@@ -1562,6 +1580,19 @@ export function Scene3D({
           glRef.current = gl;
         }}
       >
+        {/* DO NOT add drei's <SoftShadows/> here. It is the obvious next move
+            for PCSS and it does not work with this three version: its injected
+            chunk calls `unpackRGBAToDepth(texture2D(shadowMap, …))`, but the
+            shadow map here is a DEPTH TEXTURE, not an RGBA-packed one, so there
+            is no matching overload and EVERY MeshStandard/MeshPhysical fragment
+            shader fails to compile. The scene renders pure white with only the
+            unlit line overlays visible. Tried on 2026-09-09; the patch is also
+            global and survives unmounting the component, so recovering needs a
+            full reload.
+
+            If soft shadows are wanted, the routes that fit this pipeline are a
+            hand-rolled PCSS chunk written against depth textures, or an
+            accumulation pass — not this component. */}
         <PickOrder wiring={wiring !== null} />
         <DevSceneHandle sceneRef={sceneRef} />
         <SceneContent
@@ -2965,7 +2996,7 @@ function SceneContent({
             shadow-camera-near={1}
             shadow-camera-far={shadowHalf * 6}
             shadow-bias={-0.00015}
-            shadow-normalBias={0.03}
+            shadow-normalBias={NORMAL_BIAS}
           />
           {/* fill light from the opposite side to lift shadows */}
           <directionalLight position={[-28, 22, -18]} intensity={0.3} color="#b9c9e0" />
@@ -3016,7 +3047,7 @@ function SceneContent({
               shadow-camera-near={1}
               shadow-camera-far={shadowHalf * 8}
               shadow-bias={-0.00015}
-              shadow-normalBias={0.03}
+              shadow-normalBias={NORMAL_BIAS}
             />
           )}
         </>

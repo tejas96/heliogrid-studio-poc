@@ -63,9 +63,13 @@ function stairStepRoof(rand: () => number): XY[] {
 }
 
 describe('insetPolygonRobust never blocks a valid large roof', () => {
-  // deterministic (seeded) but heavy: 3000 boolean-clipper runs need ~5-8s
-  // when vitest workers share cores — the 5s default was the '1-in-5 flake'
-  it('fuzz: 3000 hand-trace-like polygons all keep usable area at 0.3 m setback', { timeout: 30_000 }, () => {
+  // Deterministic (seeded with mulberry32) but heavy: 3000 boolean-clipper runs.
+  // ~12 s alone, and it has been measured at 32 s inside the full suite while a
+  // dev server was rebuilding on the same machine — so it timed out at 30 s
+  // while asserting nothing different. The seed makes a genuine failure
+  // reproducible; a timeout here only ever means the cores were busy. Raised
+  // 5s → 30s once before for exactly this, and 30s → 90s on 2026-09-09.
+  it('fuzz: 3000 hand-trace-like polygons all keep usable area at 0.3 m setback', { timeout: 90_000 }, () => {
     const rand = mulberry32(0xc0ffee);
     let tested = 0;
     for (let i = 0; i < 3000; i++) {
