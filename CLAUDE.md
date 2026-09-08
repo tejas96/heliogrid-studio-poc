@@ -72,5 +72,12 @@ utilities while the page background still flips. Verified the hard way.
   on reload, the unit selector resetting, the levitating tree) passed the entire suite.
 - **Restart the dev server before believing a blank screen.** Stale HMR after many edits
   produces blank studio routes that a clean restart fixes — do not "fix" working code.
-- Suite: `npx vitest run` · types: `npx tsc --noEmit` · both must be green before commit.
-- Push to `main` directly; not in production yet.
+- Four gates, all green before commit: `npx tsc --noEmit` · `npx vitest run` ·
+  `npm run cycles` (import loops + layer rules) · `npm run lint`.
+- **`npm run cycles` is a hard gate.** `lib/` is acyclic and layered
+  (`data < lib < store < components < three < screens`); every rule in
+  `.dependency-cruiser.cjs` is an `error`. Never downgrade a rule to let a new import
+  through — move the code instead.
+- `npm run dead` (knip) reports dead files, exports and unused packages. It should stay at
+  two known findings: `opById` / `listOps`, parked for the AI planner.
+- **This repo has no git remote.** Commit to `main` locally; there is nothing to push.

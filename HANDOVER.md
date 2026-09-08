@@ -1,21 +1,24 @@
 # Solar Studio — session handover
 
-**You are on `main`**, and `main` tracks `origin/main`. Push it normally.
+**You are on `main`, and this repo has NO REMOTE.** Nothing to push, nothing to pull. Work
+lands on `main` locally: gates green, commit.
 
-**GIT — this changed on 2026-09-03; the old warning no longer applies.** The studio now has
-its OWN repo: `origin` is `github.com-personal:tejas96/heliogrid-design-studio`. Work lands on
-`main`, gates green, `git push`. Real PRs are fine here.
+**GIT — this changed on 2026-09-08; every earlier remote note is superseded.** Both remotes
+were removed on the owner's instruction. For the record, `origin` was
+`git@github.com-personal:tejas96/heliogrid-design-studio.git`, and everything through
+`b05faf7` was pushed there before it went — so that copy still exists on GitHub if it is ever
+wanted back (`git remote add origin <url>`). The `heliogrid-saas` remote
+(`github.com-personal:tejas96/HelioGrid`) went earlier. It shares **no commits and no files**
+with this repo, and must never be re-added as a push target: a push or PR there would read as
+"delete the SaaS product, replace it with the POC".
 
-The SaaS monorepo is still reachable as the `heliogrid-saas` remote
-(`github.com-personal:tejas96/HelioGrid`). It shares **no commits and no files** with this
-repo — `git merge-base` between the two returns nothing. **Never push to it and never open a
-PR into it**: a PR would read as "delete the SaaS product, replace it with the POC". It is
-kept only so the old `studio-next` backup branch is not orphaned.
-
-Two local refs are pre-rewrite leftovers and are deliberately NOT pushed — they point at the
-old hashes of history that `main` already contains in full, so pushing them would double the
-repo: the `backup-before-author-rewrite` tag, and the stale `studio-next` / `site-frame`
-branches. Delete them whenever you like.
+**`main` is the only branch.** `studio-next`, `site-frame` and the leftover
+`claude/suspicious-mahavira-27a2a3` were deleted on 2026-09-08, along with the stray git
+worktree under `.claude/worktrees/`. None of them held unique work: each branch tip's file
+tree was already present in `main`'s history — matching tree hashes, checked one by one — so
+between them they carried 285 duplicate pre-rewrite commits and zero unique content. Merging
+them would have doubled the history and changed not one file. The whole pre-rewrite history
+is still reachable from the `backup-before-author-rewrite` tag; drop that tag and it goes.
 
 **Authorship was rewritten once**, on 2026-09-03, before the first push to the new repo: 192
 commits carried `devtejas@Tejass-MacBook-Pro.local`, a machine hostname GitHub cannot link to
@@ -24,8 +27,9 @@ left alone. Not one file changed — the tree hash was identical before and afte
 history again now that the repo is shared.
 
 **Ledger:** `.superpowers/sdd/2026-09-02-phase1-design-kernel/progress.md` (untracked, never commit).
-**Gates before every commit:** `npx tsc --noEmit` and `set -o pipefail; npx vitest run`.
-Currently **1819 tests green, tsc clean.**
+**Gates before every commit:** `npx tsc --noEmit`, `set -o pipefail; npx vitest run`,
+`npm run cycles` (import loops + layer rules, all `error`) and `npm run lint`.
+Currently **1859 tests green; tsc, cycles and lint all clean.**
 
 ---
 
