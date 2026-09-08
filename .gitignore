@@ -31,3 +31,7 @@ out
 # TypeScript incremental build cache — a build artifact, not source
 tsconfig.tsbuildinfo
 *.tsbuildinfo
+
+# Agent scratch: per-session task briefs, progress notes and review diffs.
+# Regenerable, and none of it is source.
+.superpowers/
