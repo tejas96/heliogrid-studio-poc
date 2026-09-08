@@ -3,11 +3,31 @@
 Solar EPC SaaS for the Indian market. Residential rooftop **and** C&I, both high volume.
 v1 scope is **Sell**: CRM → survey → design → quote → proposal → close.
 
+## This repo is the DESKTOP studio — mobile ships native elsewhere
+
+*Owner directive, 2026-09-08. This supersedes every mobile-parity rule below and in
+`docs/DESIGN-SYSTEM.md`.*
+
+The phone client is being built **natively (bare React Native)** in the separate HelioGrid
+repo. So in **this** repo:
+
+- **Do not build or verify for 375px.** Verify at desktop width.
+- **Do not spend effort on touch** — 44px targets, long-press, pinch, thumb reach, bottom
+  sheets for reachability. None of it will ship from this codebase.
+- **Do spend it on**, in order: **the 3D design studio** (the flagship), **the BOM and the
+  other commercial outputs**, and **the ResLink feature gaps** in `docs/RESLINK-GAP-REPORT.md`.
+
+The touch contract in DESIGN-SYSTEM §7 is not deleted — it is the **spec for the native app**,
+and it is good work. It is simply not a gate on anything built here.
+
+**Keep the accessibility rules.** Keyboard operability, focus order, contrast, accessible
+names and `prefers-reduced-motion` are not mobile rules and still bind (§9).
+
 ## Read before writing UI
 
-**`docs/DESIGN-SYSTEM.md` is binding.** Read it before building any screen. It contains the
-non-negotiables, the locked brand, the token contract, the touch/mobile contract and the
-definition of done. When it and your instincts disagree, it wins.
+**`docs/DESIGN-SYSTEM.md` is binding, except where the scope note above overrides it.** Read it
+before building any screen. It contains the non-negotiables, the locked brand, the token
+contract and the definition of done. When it and your instincts disagree, it wins.
 
 Live reference: **`/design`** — open it to see every token rendered. If you add a token,
 add it there too, or nobody can verify it looks right.

@@ -8,6 +8,38 @@ When this file is silent, follow the nearest precedent in `src/design/` and add 
 
 ---
 
+## 0. SCOPE — which of these rules bind in THIS repo
+
+*Owner directive, 2026-09-08. Read this before §1; it overrides the mobile-parity rules
+throughout.*
+
+The phone client is being built **natively (bare React Native)** in the separate HelioGrid
+repo. **`Solar-App-POC` is the desktop studio**, and the spec-and-donor codebase for
+HelioGrid. So this document now has two audiences:
+
+| Section | Binds here? |
+|---|---|
+| §2 non-negotiables N1, N3–N10 | **Yes** |
+| §2 **N2 (44×44 touch targets)** | **No** — see the amended rule in §2 |
+| §3 brand, §4 foundations (colour, type, space, radius, motion) | **Yes** |
+| §5 layout & responsive | **Partly** — desktop-first here; the mobile-first rule is the native app's |
+| §6 density doctrine | **Yes**, except the "card list below `md`" rule (§6.3) |
+| **§7 touch & pointer — the full-parity contract** | **No — this is the NATIVE APP's spec.** Do not treat it as a gate on anything built here |
+| §8 component contracts | **Yes** |
+| **§9 accessibility** | **Yes, in full.** Keyboard, focus, contrast, accessible names and reduced motion are not mobile rules |
+| §10 content & tone, §11 anti-patterns | **Yes** |
+| §12 craft | **Yes**, except "Mobile specifics" |
+| §13 definition of done | **Yes**, with the 375px line replaced — see §13 |
+
+**Nothing here is deleted.** §7 and the mobile rules are good work and remain the contract for
+the React Native client. They are simply not gates on this codebase.
+
+**Where to spend effort here instead**, in order: the **3D design studio** (the flagship), the
+**BOM and the other commercial outputs**, and the **ResLink feature gaps** in
+`docs/RESLINK-GAP-REPORT.md`.
+
+---
+
 ## 1. What we are building
 
 A multi-tenant SaaS for Indian solar EPC businesses — residential rooftop *and* C&I, both
@@ -16,10 +48,10 @@ Procurement, installation and O&M are explicitly out of v1.
 
 Three facts shape every decision below:
 
-1. **Full mobile parity, including the design studio.** Every screen works on a 375px
-   phone — roof tracing and 3D included. This is a deliberate differentiator; no
-   competitor does it. It is also the single hardest commitment in this document, so §7
-   (Touch) is not optional reading.
+1. **Full mobile parity, including the design studio** — every screen works on a 375px phone,
+   roof tracing and 3D included. Still the product commitment and still the differentiator,
+   but ⚠ **it is delivered by the NATIVE app in the HelioGrid repo, not from this codebase**
+   (§0). Here, §7 is reference, not a gate.
 2. **WhatsApp is the primary customer channel**, not email. Sending, follow-ups,
    reminders and acceptance all flow through it.
 3. **The customer never logs in.** They open a tokenised link and accept or reject.
@@ -34,7 +66,7 @@ These override aesthetics, convenience and speed. A screen that violates one is 
 | # | Rule | Why |
 |---|---|---|
 | N1 | **No hover-only affordance may carry meaning.** Every icon-only control has a visible label, or a persistent text alternative within one tap. | The old UI had 56 `data-tip` + 68 `title` attributes as the *only* visible label. Touch users saw unlabelled arrows. |
-| N2 | **Every interactive target ≥ 44×44 CSS px** on touch pointers. Visual size may be smaller; the hit area may not. | WCAG 2.5.8 / Apple HIG. Non-negotiable at 375px. |
+| N2 | ⚠ **AMENDED (§0).** In the **native app**: every interactive target ≥ 44×44 CSS px on touch pointers. **In THIS repo**: ≥ 24×24 CSS px, per WCAG 2.5.8 AA — enough that a mouse and a trackpad are never a fight, without paying the phone tax. The old 28px and 30px controls still fail; the 44px floor no longer applies. | WCAG 2.5.8 AA is 24px and applies to every pointer. The 44px figure is Apple HIG for fingers, and fingers do not reach this codebase. |
 | N3 | **No font size below 12px.** Ever. 14px is body. | The old UI shipped 23 sizes, nine below 11px. |
 | N4 | **Text contrast ≥ 4.5:1**, UI/graphic boundaries ≥ 3:1, verified — not eyeballed. | `--ink-3` shipped at ~4.1:1 across 149 uses. |
 | N5 | **Every control has an accessible name**, and modals trap + restore focus. | Ported from the existing, tested a11y layer. Do not regress it. |
@@ -239,7 +271,13 @@ than 320ms. Nothing blocks input while animating.
 
 ## 5. Layout & responsive
 
-**Mobile-first, always.** Author at 375px, then add complexity upward. Never the reverse.
+⚠ **AMENDED (§0). In THIS repo: desktop-first.** Author at 1280px, the density ceiling, and let
+it degrade gracefully to `md`. Do not tune below `md` — the phone is the native app's job.
+Everything else in this section still applies: the breakpoint tokens, container queries, `dvh`
+over `vh`, one shell, and safe-area insets on fixed chrome.
+
+*The original rule, which still binds in the HelioGrid native repo:* **mobile-first, always** —
+author at 375px, then add complexity upward, never the reverse.
 
 | Token | Min width | Reality |
 |---|---|---|
@@ -277,9 +315,11 @@ to prevent.
    Everything else is one tap away in a detail sheet.
 2. **Editing is a mode, not a state.** Rows are readable first. Tapping a value opens an
    editor; the whole table is not 12 live inputs per row.
-3. **A table wider than the viewport is a design failure, not a scroll problem.** Below
-   `md`, tabular data becomes a **card list**: primary line, secondary line, one metric,
-   chevron to detail. Above `md`, real tables with sticky header and sticky first column.
+3. **A table wider than the viewport is a design failure, not a scroll problem.** Real tables
+   with a sticky header and a sticky first column. ⚠ **AMENDED (§0):** the "card list below
+   `md`" half is the **native app's** rule — do not build it here. The failure this row exists
+   to prevent is still real at desktop width: the BOM's 1060px min-width table overflows a
+   1280px column once the sidebar is up.
 4. **Three densities** — `comfortable` (mobile default), `compact` (desktop default),
    `dense` (opt-in for power users on `xl`+). One prop, not three components.
 5. **Bulk actions over per-row controls.** Select rows, act once — do not put a delete
@@ -289,6 +329,15 @@ to prevent.
 ---
 
 ## 7. Touch & pointer — the full-parity contract
+
+> ⚠ **THIS SECTION IS THE NATIVE APP'S SPEC (§0). It does not gate anything in this repo.**
+> Read it when working in the HelioGrid React Native repo. Do not build long-press, loupes,
+> pinch or two-finger gestures here — that work will be thrown away.
+>
+> **Two things in it still apply at desktop width**, because they are not touch rules:
+> §7.2's "never require a wheel, a middle-click or a keyboard shortcut to reach a function"
+> (a wheel-only zoom has no keyboard path, which is a §9 failure), and §7.3's "numeric entry
+> is always available" — it is the accessible path and the precise one.
 
 We committed to drawing and 3D on a phone. This is how.
 
@@ -524,6 +573,8 @@ software people tolerate and software people like. Treat them as spec, not polis
 
 ### Mobile specifics
 
+> ⚠ **NATIVE APP ONLY (§0).** None of this block gates work in this repo.
+
 - Respect `env(safe-area-inset-*)` on every fixed element. Test with the iOS home indicator.
 - **Long-press gives haptic feedback** (`navigator.vibrate(10)` where supported) plus a
   visual pulse. A long-press with no acknowledgement feels broken.
@@ -549,11 +600,13 @@ software people tolerate and software people like. Treat them as spec, not polis
 
 A screen ships when **all** are true:
 
-- [ ] Works at 375px and at 1536px, no horizontal scroll at either
+- [ ] Works at 1024px and at 1536px, no horizontal scroll at either *(amended §0 — was 375px;
+      the phone is the native app's gate)*
 - [ ] Loading, empty, error and offline states exist
 - [ ] Keyboard-operable end to end; focus visible and ordered
 - [ ] axe clean; contrast verified against token pairs
-- [ ] Touch targets ≥44px; no hover-only meaning
+- [ ] Targets ≥24px (§2 N2 as amended); **no hover-only meaning** — this one is not a mobile
+      rule, it is N1, and a keyboard user has no hover either
 - [ ] Light and dark both correct
 - [ ] Every number carries its provenance
 - [ ] Destructive actions confirmed and undoable
