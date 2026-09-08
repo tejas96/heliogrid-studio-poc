@@ -2937,6 +2937,46 @@ function SceneContent({
   }, [sunVisible, sunAltitude, sunAzimuth]);
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
+  /**
+   * How the sun LOOKS at this altitude: strength, colour, and the colour the
+   * haze should take from it.
+   *
+   * `duskFactor` above is `sunAltitude / 0.25` clamped — and sunAltitude is in
+   * RADIANS, so 0.25 rad is 14.3°. Above that it pins at 1, which meant the
+   * light was a flat `0.4 + 1.35` = 1.75 with a fixed `#fff4e0` for the entire
+   * rest of the day: 10:00, noon and 16:00 were lit identically. Confirmed by
+   * eye — dragging the slider from 12:35 to 16:50 changed the shadows and
+   * nothing else. That is on the screen we sell as sun-path simulation.
+   *
+   * The strength here is not a hand-drawn curve; it is the standard clear-sky
+   * direct-beam transmittance, `0.7 ^ (AM ^ 0.678)`, with relative air mass
+   * `AM = 1/sin(altitude)`. Normalised against overhead, that gives 1.00 at the
+   * zenith, ~0.75 at 30°, ~0.46 at 10° and ~0.23 at 5° — the sun genuinely
+   * dimming as it goes through more atmosphere, which is the same reason it
+   * reddens. The 8760-hour engine already prices the day this way; the picture
+   * may as well agree with it.
+   *
+   * The colour and the haze come off the same number, so the sky, the light and
+   * the fog redden together instead of the fog staying cold blue under an
+   * orange sky — the visible seam in every wide evening shot.
+   */
+  const sunLook = useMemo(() => {
+    const warm = new THREE.Color('#ff9a4d'); // low sun, long path
+    const neutral = new THREE.Color('#fff4e0'); // high sun, near-white
+    const hazeWarm = new THREE.Color('#d9a789');
+    const hazeCool = new THREE.Color('#b9c7d8');
+    if (sunAltitude <= 0) {
+      return { strength: 0, color: '#20293a', haze: '#0a0f1c' };
+    }
+    const am = 1 / Math.max(0.05, Math.sin(sunAltitude));
+    const rel = Math.min(1, Math.pow(0.7, Math.pow(Math.min(am, 25), 0.678)) / 0.7);
+    return {
+      strength: rel,
+      color: `#${neutral.clone().lerp(warm, 1 - rel).getHexString()}`,
+      haze: `#${hazeCool.clone().lerp(hazeWarm, 1 - rel).getHexString()}`,
+    };
+  }, [sunAltitude]);
+
   // the sun light aims at the design's centre and its shadow frustum wraps the
   // design's footprint — a 300 m site keeps its shadows, a 20 m house gets a
   // sharp map instead of 60 m of wasted texels
@@ -3117,7 +3157,7 @@ function SceneContent({
               the far ground into the sky's own colour, which is what makes a
               horizon instead of an edge. */}
           <Atmosphere
-            color={sunVisible ? '#b9c7d8' : '#0a0f1c'}
+            color={sunVisible ? sunLook.haze : '#0a0f1c'}
             density={0.0006}
             background={sunVisible ? null : '#0a0f1c'}
           />
@@ -3130,8 +3170,8 @@ function SceneContent({
             <directionalLight
               position={sunPos}
               target={lightTarget}
-              intensity={0.4 + 1.35 * duskFactor}
-              color="#fff4e0"
+              intensity={0.15 + 1.6 * sunLook.strength}
+              color={sunLook.color}
               castShadow
               shadow-mapSize-width={4096}
               shadow-mapSize-height={4096}
