@@ -37,6 +37,29 @@ Every claim below carries a `file:line` or a quoted ResLink string. Anything unp
 | **80** camera persistence | ✅ returns to the angle you left; saved named views still to do |
 | **81** GLB export | ✅ design only — Google's tiles and the Solar API relief are excluded on licence grounds. Per-category toggles still to do. |
 
+### The 3D hyperrealism list
+
+*2026-09-09. The owner narrowed scope to the 3D design studio, so these are worked in
+the priority order the hyperrealism section sets out.*
+
+| Item | State |
+|---|---|
+| **The IBL never worked** (part of 1/2) | ✅ `scene.environment` was a raw `CubeTexture` (mapping 301); PBR needs PMREM (306), so it contributed **nothing**. `<PmremEnvironment/>` converts it. Proof: glass `envMapIntensity` at 0.2, 1.0 and 20 gave byte-identical pixels; after the fix `scene.environmentIntensity` 0 → 1 moves the glass from RGB(38,75,130) to RGB(135,172,212). Note `material.envMapIntensity` is the WRONG knob for a scene environment — see the comment in `three/textures.ts`. |
+| **Sun ramp** (part of 2) | ✅ `duskFactor = sunAltitude/0.25` had altitude in RADIANS, so it pinned at 1 above 14.3° and noon and 16:50 were lit identically. Now air-mass based. |
+| **Shadow bias** | ✅ `NORMAL_BIAS` 0.03 → 0.007. 30 mm of bias on a 45 mm module is what made the array look like it floated. |
+| **7** threshold bloom | ✅ added between AO and the tone-mapper. The threshold is measured, not chosen: at 1.1 it moved 97.3 % of the frame, at 2.0 it moves 43.7 %, at 5.0 nothing at all. The numbers are in `three/ScenePost.tsx`. |
+| **9(a)** the vent spun its own base | ✅ animation removed. The GLB is a SINGLE mesh (`Mesh_0`, one material) — there is no rotor node to turn on its own, so this could not be narrowed, only removed. The procedural fallback models the parts and still spins. |
+| **9(b)** square tank / dish footprint | ✅ one target per axis. A surveyed 3.0 × 1.5 m tank drew 1.5 × 1.5 m. |
+| **9(c)** both legs under one edge | ✅ four legs, the back pair rising with the tilt. Read-verified only: the path runs for a tilted panel with **no** table, and a table draws its real parametric structure instead. |
+| **9(d)** cells on all six faces | ✅ six materials in BoxGeometry group order — cells on +Y, backsheet on −Y, anodised frame on the four sides. `spec.bifacialityPct` switches the underside to muted rear glass, so the picture and the quote agree about which module this is. |
+| **10** AO tier | ✅ measured, not guessed. `hardwareConcurrency <= 4` or a mobile User-Agent regex described no GPU at all. Now: start optimistic, time real frames, drop AO once if the median is slower than 22 ms. |
+| **54** mesh decimation | ✅ **168.7 MB → 38.2 MB**, 4,770,015 → 148,265 triangles across the six props. `scripts/decimate-glb.mjs`, using meshoptimizer. Each mesh is rescaled back onto its authored bounding box, so the `*_REF` constants and `obstruction-assets.test.ts` are untouched. **The textures are now the remaining weight — about 32 of the 38 MB.** |
+
+**Still open on this list:** 8 (the hero render is `toDataURL` on the live canvas at
+dpr 1.5, not an offscreen pass at ~2500 px), the empty model folders (`building`,
+`elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws as a grey
+box), and texture downscaling now that the meshes are no longer the problem.
+
 **Still open in this cluster:** 34 (the on-object card — needs the three-way split,
 see the correction below), 35 (a table as a first-class 2D object — the hit-test half
 is done, the pick model is not), 38 (lasso, Tables mode, subtract), 41 (fill a roof
