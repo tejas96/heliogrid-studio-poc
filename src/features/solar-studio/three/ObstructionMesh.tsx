@@ -594,6 +594,13 @@ function WindmillAsset({
 // useGLTF.preload(WINDMILL_MODEL_URL);
 
 // Measured bbox extent (X, Z) of each GLB at its normalized 1m height.
+//
+// These are the divisor that turns a surveyed length into a mesh scale, so a
+// stale number here draws every prop of that type the wrong size.
+// three/__tests__/obstruction-assets.test.ts asserts each one against the actual
+// POSITION accessor bounds in the .glb, which is why the 2026-09-09 decimation
+// pass rescales each mesh back onto its authored box instead of moving these
+// numbers — see scripts/decimate-glb.mjs.
 const TANK_REF = { x: 0.73888, z: 0.73929 };
 const CHIMNEY_REF = { x: 0.89661, z: 0.76548 };
 const DISH_REF = { x: 0.62657, z: 0.60935 };
