@@ -56,10 +56,20 @@ the priority order the hyperrealism section sets out.*
 | **8** hero at print size | ✅ the capture raises the drawing buffer to a 2500 px long edge and restores it, so AO, bloom, SMAA and tone mapping all run at that resolution. Measured before: 1097 × 930, because `dpr={[1,1.5]}` clamps to the device's 1. A4 at 300 dpi wants ~2480 px. |
 | **54 / 11** model weight | ✅ **168.7 MB → 8.1 MB**, in two passes. Meshes first (`scripts/decimate-glb.mjs`, meshoptimizer): 4,770,015 → 148,265 triangles, each mesh rescaled back onto its authored bounding box so the `*_REF` constants and `obstruction-assets.test.ts` are untouched. Then the textures (`scripts/shrink-glb-textures.mjs`, sharp): 2048 → 1024 px, quality chosen per image against a PSNR floor, geometry copied byte for byte. The blanket `useGLTF.preload` is already per-type. |
 
+| **14** clamp orientation | ✅ `StructureNodesInstanced` composed every instance with a `Quaternion` that was created once and never assigned, so all hardware stood square to the WORLD while the rails ran at the table's azimuth. `lib/structure.ts` now exports `tableAxis` / `tableYawRad`, read from the table's own members, averaged as doubled angles so two rails stored head-to-tail cannot cancel. **Test-verified only** — `topologyOf` builds an elevated table solely on a roof with pitch < 0.5°, and the sample project's roof is 1.6°, so no hardware renders in it at all. |
+
 **Still open on this list:** the plain/realistic model toggle (the other half of 11 —
 ResLink's one tap is why their 3D works on a phone), the empty model folders
 (`building`, `elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws
-as a grey box — item 15), and items 2, 12, 13, 14, 16.
+as a grey box — item 15), and items 2, 12, 13, 16.
+
+**Item 12 is BLOCKED, and its description may be wrong.** I attempted it and reverted:
+the deck's own gate, `smoothstep(0.4, 0.8, normal.y)` in `roofPhotoMaterial`, measured
+as ~0 on the roof deck in three separate probes, which would mean neither the covering
+NOR the satellite photo has ever reached the deck and the roof has been flat
+`vec3(0.66,0.64,0.60)` all along. A fourth probe measured `normal.y ≈ 0.77`, which
+contradicts the first three. Resolve that before touching the material — the evidence
+and the traps are in the spawned task.
 
 **Still open in this cluster:** 34 (the on-object card — needs the three-way split,
 see the correction below), 35 (a table as a first-class 2D object — the hit-test half
