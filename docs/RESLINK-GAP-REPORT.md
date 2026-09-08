@@ -20,6 +20,33 @@ Every claim below carries a `file:line` or a quoted ResLink string. Anything unp
 
 ---
 
+## Status — what has shipped since Week 1
+
+*2026-09-08, after the Week-1 bug fixes (`23e22d9`).*
+
+| Item | State |
+|---|---|
+| **Hit test** (inside 35) | ✅ `lib/plan-pick.ts` — tap and eraser stop resolving to a neighbour |
+| **36** grow by width | ✅ span/offset on the grow popover, plus the edge-drag re-select fix |
+| **37** delete rows/columns | ✅ tappable lattice bands, live count and cost, one undoable delete |
+| **39** multi-table settings | ✅ N tables at once, "–" for mixed, `runMany` as one patch |
+| **40** the dead switches | ✅ landscape, module gap, free row-pitch slider with graded GCR |
+| **42** overlap resolver | ✅ **walkways and no-build zones only.** Rails are deliberately excluded — `lib/scene-model.ts` has no rail caster, so fixing displacement alone would trade a silent wrong number for a smaller one. **Own item.** |
+| **46** BOM header block | ✅ the file names the project, customer, site, capacity and margin |
+| **80** camera persistence | ✅ returns to the angle you left; saved named views still to do |
+| **81** GLB export | ✅ design only — Google's tiles and the Solar API relief are excluded on licence grounds. Per-category toggles still to do. |
+
+**Still open in this cluster:** 34 (the on-object card — needs the three-way split,
+see the correction below), 35 (a table as a first-class 2D object — the hit-test half
+is done, the pick model is not), 38 (lasso, Tables mode, subtract), 41 (fill a roof
+from the editor), 43 (shaded-panel slider), 77 (the sixteen missing BOM lines).
+
+**Scope note:** mobile work in this repo is cancelled — the phone client ships native
+from the HelioGrid repo. Any row here framed as a touch or 375px problem keeps its
+FEATURE and drops its mobile framing. See `CLAUDE.md` and DESIGN-SYSTEM §0.
+
+---
+
 ## Corrections — read before you use a line number
 
 *2026-09-08. Items 34–43 were re-verified against the working tree at `eb74da2` before Weeks 2–6
