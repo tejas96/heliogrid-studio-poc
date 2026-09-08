@@ -92,6 +92,8 @@ Two things to say plainly:
 
 ---
 
+## Gap register — wizard, roof, obstructions
+
 ### Wizard & shell
 
 **Verdict.** Our 10 steps cover 9 of their 11 — we fold their whole Layout Drawings step into a chip row inside Step 8, and we price the job two steps *after* the quote can leave the building — and we ship none of their support / tour / offline / plan scaffolding; but our per-step help, universal undo, engineer sign-off and disclaimer-on-every-sheet are things ResLink demonstrably does not have.
@@ -430,6 +432,8 @@ tracker, cable-route editing — **and none of it is reachable with a thumb.** 3
 
 ---
 
+## Gap register — ground mount, sun path, stringing
+
 ### Ground mount & carport
 
 **Verdict.** We have the better ground-mount **engine** — tracker, bifacial, physics-solved row pitch, foundation assemblies, free-field site works — and no ground-mount **product**. You reach a ground array by drawing a "roof" and then telling the app it is not a roof. Carport does not exist anywhere in the codebase.
@@ -664,6 +668,8 @@ tracker, cable-route editing — **and none of it is reachable with a thumb.** 3
 
 
 ---
+
+## Gap register — BOM and proposal
 
 ### BOM / BOS automation
 
@@ -917,6 +923,8 @@ itself closes the deal; ours ends at a Next button.
 
 
 ---
+
+## Gap register — 3D realism and UI
 
 ### 3D realism, objects & views
 
