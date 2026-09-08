@@ -31,7 +31,8 @@ Every claim below carries a `file:line` or a quoted ResLink string. Anything unp
 | **37** delete rows/columns | ✅ tappable lattice bands, live count and cost, one undoable delete |
 | **39** multi-table settings | ✅ N tables at once, "–" for mixed, `runMany` as one patch |
 | **40** the dead switches | ✅ landscape, module gap, free row-pitch slider with graded GCR |
-| **42** overlap resolver | ✅ **walkways and no-build zones only.** Rails are deliberately excluded — `lib/scene-model.ts` has no rail caster, so fixing displacement alone would trade a silent wrong number for a smaller one. **Own item.** |
+| **42** overlap resolver | ✅ **walkways and no-build zones.** Rails are shade-only by design — see the row below. |
+| **Safety rails** (was split out of 42) | ✅ rails now cast in the engine as the scene always drew them, modelled as bars and posts rather than a wall. Engine version 8 → 9. They do **not** displace modules: `lib/layout.ts` does not avoid them at fill time either, so removing them afterwards would re-create the fill-then-delete inconsistency. `heightMm` is still hardcoded 1100 at the Step 6 call site — **own gap**. |
 | **46** BOM header block | ✅ the file names the project, customer, site, capacity and margin |
 | **80** camera persistence | ✅ returns to the angle you left; saved named views still to do |
 | **81** GLB export | ✅ design only — Google's tiles and the Solar API relief are excluded on licence grounds. Per-category toggles still to do. |
