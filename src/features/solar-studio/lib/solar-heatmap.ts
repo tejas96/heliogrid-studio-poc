@@ -15,6 +15,8 @@ import { DIFFUSE_SHARE, poaBeamRatio } from './poa';
 import { DAYS_IN_MONTH } from './pvgis';
 import { buildShadowCasters, disposeGroup } from './scene-model';
 import { SAMPLE_YEAR } from './shading';
+import { loadSurroundHeights } from './surround';
+import type { SurroundHeights } from './surround-geometry';
 
 interface HeatCell {
   /** flat render position on the ground plane: (planX, 0.05, -planY) */
@@ -36,6 +38,13 @@ export interface HeatmapResult {
   monthlyRoofHours: number[];
   /** mean received irradiation across cells, kWh/m²·month — present only with PVGIS weather */
   monthlyRoofKwh?: number[];
+  /**
+   * Whether the REAL neighbourhood (Google's aerial height map) was among the
+   * casters. False when the site has no grid, it has not been read yet, or the
+   * user switched the real surroundings off — the map is then only as complete
+   * as what was drawn, and must not be presented as if the neighbours were in it.
+   */
+  surroundIncluded: boolean;
 }
 
 export interface HeatCancel {
@@ -179,6 +188,31 @@ function buildMonthlySamples(
   return { samples, daylength };
 }
 
+/**
+ * The REAL neighbourhood, for the map that has to agree with the engine.
+ *
+ * This map used to be built with no surround at all, so the picture and the
+ * solar-access number beside it answered different questions on the same
+ * screen: the shading engine counted the neighbour's second floor and the
+ * compound trees, the roof heatmap did not. It LOADS rather than peeks — the
+ * heatmap can be opened before the design sync has pulled the grid into
+ * memory, and a map cached under a fingerprint that already names the surround
+ * would then never be rebuilt with it.
+ *
+ * null (⇒ exactly the behaviour this had before, never a crash) when the site
+ * has no grid, the user switched the real surroundings off, or the blob store
+ * is unreachable. `HeatmapResult.surroundIncluded` reports which happened, so
+ * the UI never implies neighbours were counted when they were not.
+ */
+async function resolveSurround(project: Project): Promise<SurroundHeights | null> {
+  if (project.ignoreSurround || !project.surround) return null;
+  try {
+    return await loadSurroundHeights(project.surround);
+  } catch {
+    return null;
+  }
+}
+
 const defaultYield = (): Promise<void> =>
   new Promise((resolve) => {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
@@ -209,6 +243,7 @@ export async function computeHeatmap(
     stepM: opts.targetStepM ?? 0.5,
     monthlyRoofAvg: new Array(MONTHS).fill(0),
     monthlyRoofHours: new Array(MONTHS).fill(0),
+    surroundIncluded: false, // no cells were shaded by anything
   };
 
   const loc = project.location;
@@ -234,7 +269,10 @@ export async function computeHeatmap(
   const diffuse = weather?.monthlyDiffuseFrac;
   const monthlyGhi = weather?.monthlyGhi;
 
-  const { group, meshes } = buildShadowCasters(project);
+  // the real neighbourhood casts on the ROOF SURFACE too — the modules do not
+  // (see buildShadowCasters: this map answers a placement question)
+  const surround = await resolveSurround(project);
+  const { group, meshes } = buildShadowCasters(project, { surround });
   const raycaster = new THREE.Raycaster();
   raycaster.far = 250;
   const origin = new THREE.Vector3();
@@ -327,5 +365,12 @@ export async function computeHeatmap(
     }
   }
 
-  return { cells, stepM, monthlyRoofAvg, monthlyRoofHours, monthlyRoofKwh };
+  return {
+    cells,
+    stepM,
+    monthlyRoofAvg,
+    monthlyRoofHours,
+    monthlyRoofKwh,
+    surroundIncluded: !!surround,
+  };
 }

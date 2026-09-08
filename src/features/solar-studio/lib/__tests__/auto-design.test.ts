@@ -2,8 +2,10 @@
 // Deterministic structure, measured-access ranking, budget honoring, decision-
 // log completeness and the sanctioned-load soft warning.
 import { describe, it, expect } from 'vitest';
-import type { Obstruction, Project } from '../../types';
+import type { Obstruction, PlacedPanel, Project } from '../../types';
 import { autoDesign, rankRoofs } from '../auto-design';
+import { DEFAULT_FILL, fillRoofAsSegment } from '../layout';
+import { computeSolarAccess } from '../shading';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
 
 /** Two identical flat roofs side by side, pin at Pune (northern hemisphere). */
@@ -171,6 +173,39 @@ describe('autoDesign', () => {
     // small budget fits entirely on the winner — every panel on the open roof
     expect(r.panels.every((x) => x.roofId === 'roof_open')).toBe(true);
     expect(r.segments[0]?.label).toBe('A1');
+  });
+
+  it('a budget keeps the SUNNIEST positions, not the first ones in the grid', () => {
+    // One roof, a 6 m wall along its south edge (shadow only — capacity is
+    // unchanged). The lattice starts at the south-west corner, so plain
+    // truncation spent the whole budget in the wall's shadow while the open
+    // northern rows went unused: measured on a real fixture, 11 kept panels
+    // averaged 58.7% access where the best 11 available measured 100%.
+    const p = twoRoofProject();
+    p.roofs = p.roofs.filter((r) => r.id === 'roof_open');
+    const roof = p.roofs[0];
+    p.obstructions = [{ ...southWall(roof.id, 11), center: { x: 11, y: -5.5 }, lengthM: 14 }];
+    const spec = p.components.panel!;
+    const budget = 10;
+    p.components = { ...p.components, targetKwp: (budget * spec.watt) / 1000 };
+
+    const truncated =
+      fillRoofAsSegment(p, roof, spec, { ...DEFAULT_FILL, avoidPanels: [], maxPanels: budget })
+        ?.panels ?? [];
+    const designed = autoDesign(p, 'target_kwp').panels;
+    expect(designed).toHaveLength(budget);
+    expect(truncated).toHaveLength(budget);
+
+    // score both sets the same way the fill does — position against the static
+    // scene, so the two are directly comparable
+    const meanAccess = (panels: PlacedPanel[]): number => {
+      const m = computeSolarAccess({
+        ...p,
+        panels: panels.map((x) => ({ ...x, enabled: false })),
+      });
+      return panels.reduce((s, x) => s + (m.get(x.id) ?? 1), 0) / panels.length;
+    };
+    expect(meanAccess(designed)).toBeGreaterThan(meanAccess(truncated) + 0.05);
   });
 
   it('logs a complete decision trail: objective, one rank per roof, spacing, outcome', () => {

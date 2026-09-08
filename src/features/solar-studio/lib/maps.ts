@@ -1,10 +1,16 @@
 // ─── Google Maps JS API loader (script tag, no extra deps) ─────────────────
 
 /**
- * The zoom every satellite tile in this app is fetched at. It lives here, with
- * the functions it is always passed to, rather than in the canvas component:
- * the roof-AI client needs the same number, and reaching into a React component
- * for a constant put lib/ underneath the UI.
+ * The app's REFERENCE satellite zoom — the sharpest tile Static Maps serves,
+ * and the one the roof-AI path is pinned to (the server fetches this zoom, and
+ * gemini-client converts its pixels back to metres with it, so the pair must
+ * never drift). It lives here, with the functions it is always passed to,
+ * rather than in the canvas component: reaching into React for a constant put
+ * lib/ underneath the UI.
+ *
+ * It is NOT the only zoom fetched. A tile at this zoom spans ~90 m, which is
+ * narrower than a C&I shed, so anything that must cover a whole site — the 2D
+ * canvas, the 3D ground — steps back through `zoomCovering` instead.
  */
 export const SAT_ZOOM = 20;
 

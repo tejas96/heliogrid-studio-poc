@@ -178,6 +178,14 @@ export function Step7Proposal() {
     ready: { bg: 'var(--good-bg, #f0fdf4)', fg: 'var(--good, #15803d)', label: 'Ready to issue' },
   };
   const tone = REVIEW_TONE[review.overall];
+  // "Not ready to issue" used to print above a live Generate button. The
+  // review's own verdict now drives the control, and the reason travels WITH
+  // it — a disabled control must say why on hover and on focus (§ state &
+  // feedback), not leave the user to read the panel above and guess.
+  const blockedReason = review.items
+    .filter((i) => i.status === 'blocked')
+    .map((i) => i.detail)
+    .join(' ');
 
   return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '26px 20px 90px' }}>
@@ -366,6 +374,13 @@ export function Step7Proposal() {
         <button
           className="btn btn-primary"
           style={{ flex: 1 }}
+          disabled={!review.issuable}
+          title={review.issuable ? undefined : `${tone.label} — ${blockedReason}`}
+          aria-label={
+            review.issuable
+              ? undefined
+              : `Generate Proposal — unavailable. ${tone.label}: ${blockedReason}`
+          }
           onClick={() => {
             patch({ status: 'proposal_ready' });
             navigate('/proposal');
@@ -374,6 +389,12 @@ export function Step7Proposal() {
           <FileText size={15} /> Generate Proposal
         </button>
       </div>
+      {!review.issuable && (
+        <p style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 8 }}>
+          {blockedReason} Fix it in Step {review.items.find((i) => i.status === 'blocked')!.step},
+          then come back.
+        </p>
+      )}
     </div>
   );
 }

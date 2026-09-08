@@ -9,7 +9,7 @@ import type {
 } from '../types';
 import { vocAt, type DesignTemps } from './electrical/temps';
 import { stringSizing } from './electrical/window';
-import { autoStringPlan } from './electrical/autostring';
+import { autoStringPlan, parallelPerMppt } from './electrical/autostring';
 import { inverterLoadsKwp } from './electrical/balance';
 
 /** Re-exported for callers that only need one module's cold Voc. */
@@ -181,14 +181,52 @@ export function validateSystem(
     }
   }
 
-  const usedSlots = strings.length;
-  const slots = inverter.mppt.count * inverterCount;
-  if (usedSlots > slots)
+  // MPPT capacity is per INPUT, not per string. An input legally carries
+  // several IDENTICAL strings in parallel — up to the datasheet's
+  // strings-per-input and its current rating, which is `parallelPerMppt`, the
+  // same rule the planner places by (lib/electrical/balance). Comparing the
+  // string COUNT against the bare input count called every paralleled design
+  // an overflow, which blocked the wizard on ordinary 15–25 kW C&I systems and
+  // left the SLD unreachable.
+  const par = parallelPerMppt(panel, inverter);
+  const parallelAllowed = Math.max(1, par.allowed);
+  const boxes = Math.max(1, inverterCount);
+  const perInput = new Map<string, StringDef[]>();
+  const offHardware: StringDef[] = [];
+  for (const s of strings) {
+    const exists =
+      s.inverterIndex >= 0 &&
+      s.inverterIndex < boxes &&
+      s.mpptIndex >= 0 &&
+      s.mpptIndex < inverter.mppt.count;
+    if (!exists) {
+      offHardware.push(s);
+      continue;
+    }
+    const key = `${s.inverterIndex}/${s.mpptIndex}`;
+    perInput.set(key, [...(perInput.get(key) ?? []), s]);
+  }
+  // a string wired to an input the hardware does not have is the REAL overflow
+  if (offHardware.length > 0)
     issues.push({
       level: 'error',
       code: 'mppt_overflow',
-      message: `${usedSlots} strings exceed available ${slots} MPPT inputs`,
+      message: `${offHardware.map((s) => s.name).join(', ')} ${offHardware.length > 1 ? 'sit' : 'sits'} on an MPPT input this system does not have — ${boxes} × ${inverter.model} offers ${inverter.mppt.count * boxes}`,
+      focusPanelIds: offHardware.flatMap((s) => s.panelIds),
     });
+  const parallelLimitedBy = par.limitedByCurrent
+    ? `the ${inverter.mppt.maxCurrentA}A input limit against ${panel.iscA}A Isc`
+    : `${inverter.model}'s datasheet`;
+  for (const [key, on] of perInput) {
+    if (on.length <= parallelAllowed) continue;
+    const [i, m] = key.split('/').map(Number);
+    issues.push({
+      level: 'error',
+      code: 'mppt_overflow',
+      message: `Inverter ${i + 1} MPPT ${m + 1} carries ${on.length} strings in parallel — ${parallelLimitedBy} allows ${parallelAllowed}`,
+      focusPanelIds: on.flatMap((s) => s.panelIds),
+    });
+  }
   return issues;
 }
 

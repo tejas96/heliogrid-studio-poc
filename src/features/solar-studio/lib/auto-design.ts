@@ -14,6 +14,8 @@ import type {
 import { autoFillRoof, fillRoofAsSegment, fillRowPitchM, DEFAULT_FILL } from './layout';
 import { reindexSegment } from './segment-ops';
 import { computeSolarAccess } from './shading';
+import { peekSurroundHeights } from './surround';
+import type { SurroundHeights } from './surround-geometry';
 import { poaFactor } from './poa';
 import { isBridgedAt, requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
 import { resolveRacking } from './structure';
@@ -48,6 +50,34 @@ export interface AutoDesignResult {
 const PROBE_PANELS = 12;
 
 /**
+ * The REAL neighbourhood the rest of the app shades with — the same grid the
+ * energy sync, the 3D scene and the panel inspector pass to the engine. Without
+ * it auto-design ranked roofs against an empty horizon: the neighbour's second
+ * floor, the compound trees and the water tank next door were invisible to the
+ * ranking while the customer-facing shade picture showed them plainly.
+ *
+ * Synchronous by design: `autoDesign` is a pure function behind a button, and
+ * the grid is already in memory whenever the site has one (store/useSurroundSync
+ * fetches it, store/useDesignSync loads it before the engine runs). Not fetched
+ * yet ⇒ null ⇒ exactly the behaviour this had before — never a crash, and the
+ * decision log says so rather than implying the neighbours were counted.
+ * `ignoreSurround` is honoured so this agrees with the 3D view's own switch
+ * (the same rule as lib/sun-chart).
+ */
+function surroundFor(project: Project): SurroundHeights | null {
+  return project.ignoreSurround ? null : peekSurroundHeights(project.surround);
+}
+
+/** What the log tells the user the shading engine could actually see. */
+function neighbourProvenance(project: Project, surround: SurroundHeights | null): string {
+  if (surround) return 'included (Google aerial height map)';
+  if (project.ignoreSurround) return 'excluded — real surroundings switched off';
+  return project.surround === null
+    ? 'unavailable for this site'
+    : 'not read yet — only what you drew was counted';
+}
+
+/**
  * Rank every roof by EXPECTED YIELD PER PANEL, so the budget fills the
  * highest-producing positions first. Two independent factors combine:
  *  - measured beam ACCESS — up to 12 of the roof's own candidate panels run
@@ -63,6 +93,7 @@ const PROBE_PANELS = 12;
  */
 export function rankRoofs(project: Project, spec: PanelSpec): RoofRank[] {
   const ll = project.location?.latLng;
+  const surround = surroundFor(project);
   const ranks: RoofRank[] = [];
   for (const roof of project.roofs) {
     // avoidPanels: [] — ranking measures each roof's RAW capacity; the layout
@@ -87,7 +118,7 @@ export function rankRoofs(project: Project, spec: PanelSpec): RoofRank[] {
     // evenly-sampled probe subset, deterministic
     const step = Math.max(1, Math.floor(candidates.length / PROBE_PANELS));
     const probe = candidates.filter((_, i) => i % step === 0).slice(0, PROBE_PANELS);
-    const accessMap = computeSolarAccess({ ...project, panels: probe });
+    const accessMap = computeSolarAccess({ ...project, panels: probe }, { surround });
     const access =
       probe.length > 0 && accessMap.size > 0
         ? probe.reduce((s, p) => s + (accessMap.get(p.id) ?? 1), 0) / probe.length
@@ -150,6 +181,8 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
     inputs: [`targetKwp=${project.components.targetKwp}`, `panel=${spec.brand} ${spec.model}`],
   });
 
+  const surround = surroundFor(project);
+  const neighbours = neighbourProvenance(project, surround);
   const ranking = rankRoofs(project, spec);
   ranking.forEach((r, i) => {
     decisions.push({
@@ -163,7 +196,13 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
         r.capacityPanels === 0
           ? 'Setbacks, obstructions or shape leave no room for a full panel.'
           : `Ranked by expected yield per panel — measured sun access (${Math.round(r.access * 100)}%) × orientation factor (${Math.round(r.poa * 100)}% POA/GHI for this face's tilt & azimuth) = ${r.score}. Higher-yielding faces fill first, so a north-facing plane is used last even when unshaded.`,
-      inputs: [`capacityKwp=${r.capacityKwp}`, `beamAccess=${r.access}`, `orientationPoa=${r.poa}`],
+      inputs: [
+        `capacityKwp=${r.capacityKwp}`,
+        `beamAccess=${r.access}`,
+        `orientationPoa=${r.poa}`,
+        // never let the log imply the neighbourhood was counted when it wasn't
+        `neighbourShade=${neighbours}`,
+      ],
     });
   });
 
@@ -173,13 +212,35 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
   for (const rank of ranking) {
     if (remaining <= 0 || rank.capacityPanels === 0) continue;
     const roof = project.roofs.find((r) => r.id === rank.roofId)!;
+    // the budget for THIS roof, before the fill spends it
+    const budgetHere = Number.isFinite(remaining) ? remaining : undefined;
     // avoidPanels: [] — VERIFIED: Step6Editor.runAutoPlace applies this result
     // as patch({ panels: result.panels, segments: result.segments }), a full
     // REPLACE of the layout, so the panels being replaced must not block it.
     const filled = fillRoofAsSegment(project, roof, spec, {
       ...DEFAULT_FILL,
       avoidPanels: [],
-      maxPanels: Number.isFinite(remaining) ? remaining : undefined,
+      maxPanels: budgetHere,
+      // A BUDGET MUST KEEP THE BEST POSITIONS, NOT THE FIRST ONES. Only called
+      // when the budget is smaller than the roof — every candidate is measured
+      // by the REAL shading engine, the same one that ranked the roofs.
+      //
+      // The candidates go in DISABLED so they measure the position against the
+      // STATIC scene (roofs, parapets, obstructions, arresters, the real
+      // neighbourhood) and not against each other. Two reasons: candidate-on-
+      // candidate shade is a fiction — most of these are about to be discarded,
+      // and which survive is the very question being answered, so scoring them
+      // against each other is circular; and it keeps the cost linear in the
+      // candidate count (measured: 800 candidates in ~0.6 s, against ~22 s when
+      // every candidate also casts) so the button stays usable on a C&I roof.
+      // Rows are laid at the winter-solstice shadow-free pitch anyway, so real
+      // inter-row shading is ~0 by construction — useDesignSync then stamps the
+      // full Tier-2 access, self-shading included, on the panels that survive.
+      scoreCandidates: (candidates) =>
+        computeSolarAccess(
+          { ...project, panels: candidates.map((c) => ({ ...c, enabled: false })) },
+          { surround },
+        ),
     });
     if (!filled) continue;
     // geometric reindex (holes from mid-row obstructions recorded correctly)
@@ -188,6 +249,19 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
     segments.push(re.segment);
     panels.push(...re.panels);
     remaining -= re.panels.length;
+    if (budgetHere !== undefined && re.panels.length < rank.capacityPanels) {
+      decisions.push({
+        id: `budget:${roof.id}`,
+        topic: `Budget on ${roof.name}`,
+        choice: `${re.panels.length} of the ${rank.capacityPanels} positions this roof holds`,
+        reason: `The requested capacity does not take the whole roof, so the positions with the most measured sun were kept — not simply the first ones in the grid. Neighbour shade: ${neighbours}.`,
+        inputs: [
+          `capacityPanels=${rank.capacityPanels}`,
+          `kept=${re.panels.length}`,
+          `neighbourShade=${neighbours}`,
+        ],
+      });
+    }
 
     // §26c: log every obstruction the array BRIDGES, with the numbers that
     // made it legal — and flag engineer-confirmation bridges

@@ -217,6 +217,27 @@ describe('invalidation matrix', () => {
     );
   });
 
+  // The discount reaches the customer through bomMoney, and every money output
+  // is memoised on designFp — while it was missing from this string the quote
+  // kept printing the pre-discount figure until the project was reloaded. The
+  // second half pins the lazy-field contract: a project that never discounts
+  // must fingerprint exactly as it did before the field joined designFp.
+  it('setting a discount invalidates design only; no discount appends nothing', () => {
+    expectInvalidates(
+      (p) => ({ ...p, pricing: { ...p.pricing, discount: { kind: 'amount' as const, value: 25000 } } }),
+      ['design'],
+      'discount',
+    );
+    const none = proj();
+    expect(designFp(none)).not.toContain('|disc:');
+    // set, then CLEARED the way Step9Bom clears it at 0 (the key deleted, not
+    // stored as `{value: 0}`) — byte-identical to a project that never had one
+    const cleared = structuredClone(none);
+    cleared.pricing = { ...cleared.pricing, discount: { kind: 'percent', value: 5 } };
+    delete cleared.pricing.discount;
+    expect(designFp(cleared)).toBe(designFp(none));
+  });
+
   it('a BOM override invalidates design only', () => {
     expectInvalidates(
       (p) => ({

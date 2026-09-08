@@ -12,6 +12,7 @@ import {
   Sun,
   Trash2,
   Copy,
+  XCircle,
 } from 'lucide-react';
 import { useStore, newProject, newShareId } from '../store/store';
 import { genId } from '../lib/geo';
@@ -21,6 +22,7 @@ import { Dialog, EmptyState } from '../components/ui';
 import type { Project } from '../types';
 import { staticSatelliteUrl } from '../lib/maps';
 import { deriveEnergy, designFreshness } from '../lib/derive';
+import { stepGate } from '../lib/wizard-gate';
 
 type Filter = 'all' | 'in_progress' | 'proposal_ready';
 
@@ -49,6 +51,13 @@ export function Dashboard() {
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Project | null>(null);
   const [showLang, setShowLang] = useState(false);
+  // "Show Proposal" on a design that cannot legally exist. The row menu used to
+  // jump straight to /proposal, past the Step 6 gate the wizard enforces, and
+  // issue a GST-inclusive quote at the default margin. Now it says why, and
+  // sends the user to the step that can fix it.
+  const [blocked, setBlocked] = useState<
+    { project: Project; step: number; reason: string } | null
+  >(null);
 
   const projects = useMemo(() => {
     let list = [...state.projects];
@@ -97,6 +106,22 @@ export function Dashboard() {
   function openProject(p: Project) {
     dispatch({ type: 'open-project', id: p.id });
     navigate(`/wizard/${p.wizardStep}`);
+  }
+
+  /**
+   * The proposal is a commercial document, so it is reachable only from a
+   * project that clears the SAME gate the wizard's Next holds (lib/wizard-gate)
+   * — one predicate, one answer. A project that does not clear it is explained,
+   * not silently quoted.
+   */
+  function showProposal(p: Project) {
+    const gate = stepGate(p);
+    if (gate.blocker) {
+      setBlocked({ project: p, step: gate.allowedStep, reason: gate.blocker });
+      return;
+    }
+    dispatch({ type: 'open-project', id: p.id });
+    navigate('/proposal');
   }
 
   return (
@@ -275,7 +300,7 @@ export function Dashboard() {
                   )
                 : null;
               const menuItems: { label: string; icon: ReactNode; fn: () => void }[] = [
-                { label: 'Show Proposal', icon: <FileText size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate('/proposal'); } },
+                { label: 'Show Proposal', icon: <FileText size={14} />, fn: () => showProposal(p) },
                 { label: 'Show 3D', icon: <Box size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate('/wizard/6'); } },
                 { label: 'BOM & Pricing', icon: <ReceiptText size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate('/wizard/9'); } },
                 { label: 'Duplicate', icon: <Copy size={14} />, fn: () => duplicate(p) },
@@ -501,6 +526,41 @@ export function Dashboard() {
           <p>
             “{confirmDelete.info.name}” and its design will be permanently
             removed from this browser.
+          </p>
+        </Dialog>
+      )}
+
+      {blocked && (
+        <Dialog
+          title="Not ready to issue"
+          icon={<XCircle size={18} />}
+          onClose={() => setBlocked(null)}
+          actions={
+            <>
+              <button className="btn btn-secondary" onClick={() => setBlocked(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  const { project, step } = blocked;
+                  setBlocked(null);
+                  dispatch({ type: 'open-project', id: project.id });
+                  navigate(`/wizard/${step}`);
+                }}
+              >
+                Go to Step {blocked.step}
+              </button>
+            </>
+          }
+        >
+          <p>
+            “{blocked.project.info.name}” cannot be quoted yet — {blocked.reason}.
+          </p>
+          <p style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>
+            The proposal prices and the GST on it are derived from the design. Issuing one from
+            a design that cannot be built would put a number in front of the customer that no
+            engineer has seen.
           </p>
         </Dialog>
       )}

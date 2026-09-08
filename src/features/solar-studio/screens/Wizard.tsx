@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, Check, ChevronRight, CircleHelp, HeartPulse, Home, Redo2, Save, Undo2 } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, CircleHelp, Ellipsis, HeartPulse, Home, Redo2, Save, Undo2 } from 'lucide-react';
 import { navigate } from '../router';
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../store/useUnits';
 import { UnitToggle, Sheet } from '../components/ui';
 import { bandOf, describeHealthCode, explainDelta, healthKey, memoizedHealth, type HealthResult } from '../lib/health';
-import { electricalGate } from '../lib/electrical/gate';
+import { nextBlocker, stepGate } from '../lib/wizard-gate';
 import { resolveRules } from '../data/rules/india';
 import type { Project } from '../types';
 import { Step1Setup } from './Step1Setup';
@@ -107,38 +107,6 @@ export const STEP_HELP: { does: string; tips: string[] }[] = [
   },
 ];
 
-/** Per-step gate: returns a blocking message or null when Next is allowed. */
-function nextBlocker(step: number, p: NonNullable<ReturnType<typeof useActiveProject>>): string | null {
-  switch (step) {
-    case 1:
-      if (!p.info.state) return 'Select a state to continue';
-      if (!p.location?.confirmed) return 'Confirm the installation location to continue';
-      return null;
-    case 2:
-      return p.roofs.length === 0 ? 'Draw at least one roof to continue' : null;
-    case 4:
-      if (!p.components.panel) return 'Select a panel to continue';
-      if (!p.components.inverter) return 'Select an inverter to continue';
-      if (p.components.targetKwp <= 0) return 'Set a target capacity to continue';
-      return null;
-    case 6: {
-      if (p.panels.filter((x) => x.enabled).length === 0)
-        return 'Place at least one panel to continue';
-      // THE HARD GATE (plan §B/§9): the proposal, SLD and quote are where a
-      // mistake leaves the building. Held HERE, on the editor's own Next, so
-      // the user stays on the screen that can fix it. This also drives
-      // `allowedStep`, so a design that becomes invalid later cannot sit on a
-      // downstream step showing numbers derived from strings that can't exist.
-      const gate = electricalGate(p);
-      return gate
-        ? gate.message + (gate.autoStringable ? ' — use Stringing → Auto string' : '')
-        : null;
-    }
-    default:
-      return null;
-  }
-}
-
 /**
  * Undo/redo for EVERY step (design-system N8: a stray tap must never cost a
  * design). The labels come from the ops kernel, so the tooltip says what will
@@ -191,6 +159,10 @@ export function Wizard({ step }: { step: number }) {
   const [toast, setToast] = useState<string | null>(null);
   const [healthSheet, setHealthSheet] = useState(false);
   const [helpSheet, setHelpSheet] = useState(false);
+  // below `md` the header's secondary controls live here instead
+  const [moreSheet, setMoreSheet] = useState(false);
+  const lastUndo = state.undoLabels[state.undoLabels.length - 1];
+  const lastRedo = state.redoLabels[state.redoLabels.length - 1];
   // the chip reads the debounce-stamped snapshot — NEVER live computeHealth:
   // Step 2/3 drags patch the store per pointermove, and a memo-missing
   // computeHealth (O(panels²) DRC) in the header render path costs 10-40ms
@@ -204,14 +176,9 @@ export function Wizard({ step }: { step: number }) {
     ((snapEntry.provisional ?? false) || (project != null && snapEntry.key !== healthKey(project)));
 
   // Prerequisite gating: a step reached via deep link or stale state without its
-  // required data would crash (e.g. Step 6 reading a null panel spec). The highest
-  // viewable step is the first one whose "Next" requirements aren't yet met.
-  const allowedStep = project
-    ? (() => {
-        for (let s = 1; s <= 9; s++) if (nextBlocker(s, project)) return s;
-        return 10;
-      })()
-    : 1;
+  // required data would crash (e.g. Step 6 reading a null panel spec). The same
+  // predicate the project list asks before it offers a proposal (lib/wizard-gate).
+  const allowedStep = project ? stepGate(project).allowedStep : 1;
   useEffect(() => {
     if (project && step > allowedStep) navigate(`/wizard/${allowedStep}`);
   }, [project, step, allowedStep]);
@@ -284,33 +251,46 @@ export function Wizard({ step }: { step: number }) {
         background: dark ? 'var(--editor-bg)' : 'var(--paper)',
       }}
     >
+      {/* Back · title · Next are the persistent trio. The other seven controls
+          made this a ten-wide non-wrapping row, which put Next ~240px off the
+          right edge of a 390px phone — the product's primary action, unreachable.
+          Below `md` they collapse into the More sheet; above it nothing moves.
+          (DESIGN-SYSTEM §5 mobile-first, N2 44px targets, N9 no fixed-viewport
+          tuning — the title flexes and truncates instead of pushing.) */}
       <header
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          gap: 8,
           padding: '10px 16px',
           background: 'var(--paper)',
           borderBottom: '1px solid var(--line)',
           zIndex: 40,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            className="btn-ghost"
-            onClick={onBack}
-            disabled={step <= 1}
-            aria-label="Back"
-            data-tip="Back"
-            data-tip-right=""
-          >
-            <ArrowLeft size={16} />
-          </button>
-          <div style={{ fontSize: 13.5, fontWeight: 700 }}>
-            Step {step} of 10 · {STEP_NAMES[step - 1]}
-          </div>
+        <button
+          className="btn-ghost shrink-0 min-h-(--target-min) min-w-(--target-min)"
+          onClick={onBack}
+          disabled={step <= 1}
+          aria-label="Back"
+          data-tip="Back"
+          data-tip-right=""
+        >
+          <ArrowLeft size={16} />
+        </button>
+        <div className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 700 }}>
+          {/* the long form is the same string; only the prefix gives way */}
+          <span className="hidden sm:inline">Step {step} of 10 · </span>
+          <span className="sm:hidden">{step}/10 · </span>
+          {STEP_NAMES[step - 1]}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {/* Everything in here is ≥44px too (N2): `md` is a tablet, and a tablet
+            is a touch device — the breakpoint says nothing about the hand. One
+            rule on the group rather than two classes per control, so a control
+            added here later inherits the target instead of forgetting it.
+            `.btn-ghost` is 36px and `.chip` 30px in the legacy stylesheet, and
+            that file is shared with screens this fix does not cover. */}
+        <div className="hidden md:flex items-center gap-2 [&_.btn-ghost]:min-h-(--target-min) [&_.btn-ghost]:min-w-(--target-min) [&_.chip]:min-h-(--target-min) [&_.chip]:min-w-(--target-min)">
           <WizardUndoControls
             undoLabels={state.undoLabels}
             redoLabels={state.redoLabels}
@@ -389,16 +369,34 @@ export function Wizard({ step }: { step: number }) {
           >
             <CircleHelp size={16} />
           </button>
-          {step < 10 ? (
-            <button className="btn btn-primary" onClick={onNext} style={{ padding: '8px 16px 8px 20px' }}>
-              Next <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={() => navigate('/projects')} style={{ padding: '8px 20px' }}>
-              <Check size={16} /> Done
-            </button>
-          )}
         </div>
+        <button
+          className="btn-ghost md:hidden shrink-0 min-h-(--target-min) min-w-(--target-min)"
+          aria-label="More step tools"
+          aria-haspopup="dialog"
+          data-tip="More"
+          data-tip-left=""
+          onClick={() => setMoreSheet(true)}
+        >
+          <Ellipsis size={16} />
+        </button>
+        {step < 10 ? (
+          <button
+            className="btn btn-primary shrink-0 min-h-(--target-min)"
+            onClick={onNext}
+            style={{ padding: '8px 16px 8px 20px' }}
+          >
+            Next <ChevronRight size={16} />
+          </button>
+        ) : (
+          <button
+            className="btn btn-primary shrink-0 min-h-(--target-min)"
+            onClick={() => navigate('/projects')}
+            style={{ padding: '8px 20px' }}
+          >
+            <Check size={16} /> Done
+          </button>
+        )}
       </header>
       {/* progress bar */}
       <div style={{ height: 3, background: 'var(--paper-3)' }}>
@@ -414,6 +412,72 @@ export function Wizard({ step }: { step: number }) {
 
       <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>{body}</div>
 
+      {/* The narrow-viewport home of the controls the header cannot hold. Every
+          row carries its own visible label (N1 — the header versions are
+          icon-only) and a 44px target (N2). */}
+      {moreSheet && (
+        <Sheet title="Step tools" icon={<Ellipsis size={16} />} onClose={() => setMoreSheet(false)}>
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <button
+                className="btn btn-secondary flex-1 min-h-(--target-min) disabled:opacity-50"
+                disabled={!lastUndo}
+                onClick={() => dispatch({ type: 'undo' })}
+              >
+                <Undo2 size={16} />
+                {lastUndo ? `Undo ${lastUndo}` : 'Nothing to undo'}
+              </button>
+              <button
+                className="btn btn-secondary flex-1 min-h-(--target-min) disabled:opacity-50"
+                disabled={!lastRedo}
+                onClick={() => dispatch({ type: 'redo' })}
+              >
+                <Redo2 size={16} />
+                {lastRedo ? `Redo ${lastRedo}` : 'Nothing to redo'}
+              </button>
+            </div>
+            {/* UnitToggle's chips are 30px tall (components/ui.tsx); grow them
+                here rather than fork the shared control for one screen */}
+            <div className="flex items-center justify-between gap-4 min-h-(--target-min) [&_button]:min-h-(--target-min) [&_button]:min-w-(--target-min)">
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Units</span>
+              <UnitToggle
+                unit={units === 'imperial' ? 'ft' : 'm'}
+                onChange={(u) => setUnits(u === 'ft' ? 'imperial' : 'metric')}
+              />
+            </div>
+            <button
+              className="btn btn-secondary btn-block justify-start min-h-(--target-min) disabled:opacity-50"
+              aria-haspopup="dialog"
+              disabled={chipTotal === null}
+              onClick={() => { setMoreSheet(false); setHealthSheet(true); }}
+            >
+              <HeartPulse size={16} />
+              {chipTotal === null
+                ? 'Design health — appears once panels are placed'
+                : `Design health — ${BAND_LABEL[chipBand!]} ${chipTotal} of 100${chipProvisional ? ' (recalculating)' : ''}`}
+            </button>
+            <button
+              className="btn btn-secondary btn-block justify-start min-h-(--target-min)"
+              onClick={() => { patch({}); setMoreSheet(false); setToast('Project saved'); setTimeout(() => setToast(null), 1400); }}
+            >
+              <Save size={16} /> Save project
+            </button>
+            <button
+              className="btn btn-secondary btn-block justify-start min-h-(--target-min)"
+              onClick={() => { patch({}); navigate('/projects'); }}
+            >
+              <Home size={16} /> Save &amp; go home
+            </button>
+            <button
+              className="btn btn-secondary btn-block justify-start min-h-(--target-min)"
+              aria-haspopup="dialog"
+              onClick={() => { setMoreSheet(false); setHelpSheet(true); }}
+            >
+              <CircleHelp size={16} /> Help with this step
+            </button>
+          </div>
+        </Sheet>
+      )}
       {helpSheet && (
         <Sheet
           title={`Step ${step} — ${STEP_NAMES[step - 1]}`}

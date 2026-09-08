@@ -32,3 +32,29 @@ describe('pickScaleBar (scale-bar geometry)', () => {
     expect(oldBuggy.px / oldBuggy.m).toBeCloseTo((good.px / good.m) * 0.8, 6);
   });
 });
+
+describe('metersPerStaticMap: the tile ladder is exactly a factor of two', () => {
+  // SatCanvas widens its coverage by stepping the tile zoom back and doubling
+  // the view zoom to match. That is only a free trade — same ruler, same
+  // metres per screen pixel, every traced roof still the size it was — if one
+  // zoom step is EXACTLY twice the ground. Bought a bigger picture and moved
+  // the geometry if this ever fails.
+  const lat = 18.5202; // Pune
+
+  it('one zoom step out doubles the ground the same tile covers', () => {
+    for (const z of [20, 19, 18, 17]) {
+      expect(metersPerStaticMap(lat, z - 1, 640)).toBeCloseTo(
+        metersPerStaticMap(lat, z, 640) * 2,
+        9,
+      );
+    }
+  });
+
+  it('a wider tile at the matching view zoom is the same screen ruler', () => {
+    // frame.pxPerM = (sizePx / spanM) · zoom, the number every hit test and
+    // the scale bar are drawn from
+    const pxPerM = (z: number, view: number) => (1000 / metersPerStaticMap(lat, z, 640)) * view;
+    expect(pxPerM(19, 3.0)).toBeCloseTo(pxPerM(20, 1.5), 9); // the new default
+    expect(pxPerM(17, 12)).toBeCloseTo(pxPerM(20, 1.5), 9); // a ground-mount field
+  });
+});

@@ -8,10 +8,15 @@
 //   capture staleness  Step 7   do the pictures still show this design?
 //
 // This DERIVES from those functions rather than re-implementing them, so the
-// checklist can never disagree with the screen it points at (§A0). It is a
-// read-only summary: nothing here gates anything the wizard does not already
-// gate — a second, subtly different gate is how two answers to one question
-// get shipped.
+// checklist can never disagree with the screen it points at (§A0).
+//
+// `issuable` DOES drive Step 7's Generate control — a panel that printed
+// "Not ready to issue" above a live button was worse than no panel at all.
+// It still gates nothing the wizard does not already gate: only the electrical
+// item can be `blocked`, and it is `electricalGate` verbatim, the same
+// function Step 6's Next holds. Attention-level findings (stale captures,
+// preliminary quantities) inform, they do not block — a second, subtly
+// different gate is how two answers to one question get shipped.
 import type { Project } from '../types';
 import { electricalGate } from './electrical/gate';
 import { memoizedInsights } from './insights/registry';

@@ -7,6 +7,7 @@ import {
   dcConductorLabels,
 } from '../sld';
 import { normalizeProject } from '../../store/store';
+import { mergedBom } from '../bom';
 import { dcCableSizeMm2, dcFuseA, dcIsolatorA } from '../electrical-sizing';
 import { fixtureProject } from './fixtures/project';
 import { PANEL_DB } from '../../data/panels';
@@ -171,6 +172,25 @@ describe('max system voltage — the CEIG cold-Voc check (Phase 11 task 30)', ()
     expect(sld.inverterCount).toBe(3);
   });
 })
+
+describe('AC cable — the sheet and the quote size one cable', () => {
+  it('a 3-phase C&I plant prints the size the BOM emits, not the old constant', () => {
+    const p = fixtureProject(40);
+    const big: Project = {
+      ...p,
+      components: {
+        ...p.components,
+        inverter: INVERTER_DB.find((i) => i.id === 'inv_sol25')!, // 25 kW, 3-phase
+        inverterCount: 5, // 125 kW AC — no routes, so the run is the allowance
+      },
+    };
+    const sld = deriveSldDefaults(big)!;
+    const acLine = mergedBom(big).find((l) => l.item === 'AC Cable')!;
+    expect(acLine.spec).toContain(`${sld.acCableSizeMm2} sq.mm`);
+    // and it is genuinely derived: 10 sq.mm cannot carry this plant's breaker
+    expect(sld.acCableSizeMm2).toBeGreaterThan(10);
+  });
+});
 
 // ─── 3-line diagram conductors (task 30d) ───────────────────────────────────
 describe('acConductorLabels / dcConductorLabels', () => {

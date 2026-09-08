@@ -12,7 +12,7 @@ import {
   Stars,
 } from '@react-three/drei';
 import * as THREE from 'three';
-import { designBounds, type SceneBounds } from './scene-bounds';
+import { designBounds, shadowBounds, type SceneBounds } from './scene-bounds';
 import { projectForStage, stageShowsDesign } from '../lib/scene-stage';
 import { RadialMenu, type RadialGroup, type RadialItem } from '../components/RadialMenu';
 import { ACCESS_GRADIENT_CSS } from '../lib/shade-ramp';
@@ -270,6 +270,7 @@ import {
   Axis3d,
   BarChart3,
   Box,
+  BoxSelect,
   Building2,
   Cable,
   Camera,
@@ -517,13 +518,27 @@ export function Scene3D({
   const [measureCount, setMeasureCount] = useState(0);
   const [placeKind, setPlaceKind] = useState<PlaceKind | null>(null);
   const [showKeys, setShowKeys] = useState(false);
-  // box select: Shift-drag on the canvas. The rectangle lives here (DOM); the
-  // projection test lives inside the Canvas (MarqueeSelect).
+  // box select: a drag on the canvas with Shift held, or with Select mode on.
+  // The rectangle lives here (DOM); the projection test lives inside the Canvas
+  // (MarqueeSelect).
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [marqueeCommit, setMarqueeCommit] = useState<MarqueeCommit | null>(null);
   const marqueeRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /**
+   * Select mode — the touch way into a multi-module selection. Every route to
+   * more than one module went through Shift: the box, and adding a module to
+   * what is already picked. A phone has no Shift key, so a touch user could
+   * select exactly one module and no more, and half the toolbar (delete,
+   * rotate, tilt, group) was unreachable for a block of forty.
+   *
+   * A MODE rather than a gesture, because every free gesture on the canvas is
+   * already spoken for: one finger orbits, two pinch. While it is on, a drag
+   * draws the box and a tap adds; off, the camera has everything back. Shift
+   * still works on a keyboard, mode or no mode.
+   */
+  const [boxSelect, setBoxSelect] = useState(false);
   const onWrapPointerDownCapture = (e: React.PointerEvent) => {
-    if (!e.shiftKey || e.button !== 0) return;
+    if (!(e.shiftKey || boxSelect) || e.button !== 0) return;
     if ((e.target as HTMLElement).tagName !== 'CANVAS') return; // rails and cards keep their clicks
     // The camera must not orbit under the box — but this used to be done by
     // stopping the press dead, which meant the canvas never saw it and NO
@@ -534,9 +549,11 @@ export function Scene3D({
     const controls = controlsRef.current;
     const wasEnabled = controls?.enabled ?? true;
     if (controls) controls.enabled = false;
+    const pointerId = e.pointerId;
     const start = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
     marqueeRef.current = start;
     const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
       const m = marqueeRef.current;
       if (!m) return;
       const next = { ...m, x1: ev.clientX, y1: ev.clientY };
@@ -550,6 +567,7 @@ export function Scene3D({
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
       window.removeEventListener('blur', onUp);
+      window.removeEventListener('pointerdown', onSecondPointer, true);
       // ALWAYS give the camera back. A gesture that ends off-window, or is
       // cancelled by the OS, would otherwise leave the controls switched off
       // for good and the scene frozen with no way to recover but a reload.
@@ -564,10 +582,20 @@ export function Scene3D({
         setMarqueeCommit({ ...m, nonce: Date.now() });
       }
     };
+    // A SECOND finger means the user wants the CAMERA, not a box. Select mode
+    // stays on for as long as the user leaves it on, so without this it would
+    // swallow pinch-zoom the whole time — the mode would cost them the scene.
+    // Handing the gesture back in the capture phase lets the controls see that
+    // second press: the pinch itself is lost (they never saw the first finger),
+    // but the camera answers again on the next touch instead of being frozen.
+    function onSecondPointer(ev: PointerEvent) {
+      if (ev.pointerId !== pointerId) onUp();
+    }
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
     window.addEventListener('blur', onUp);
+    window.addEventListener('pointerdown', onSecondPointer, true);
   };
   const [hoverPick, setHoverPick] = useState<ScenePick | null>(null);
   // Phase 5: strings and cable runs on the model; `wiring` = module ids being
@@ -757,6 +785,13 @@ export function Scene3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [project.roofs, project.panels, focusRoofId],
   );
+  // the SHADOW box is wider than the camera's: it has to hold the neighbours
+  // that shade the design, which the camera has no business framing
+  const shadowFit = useMemo(
+    () => shadowBounds(project, focusRoofForBounds && focusRoofForBounds.length ? focusRoofForBounds : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [project.roofs, project.panels, project.obstructions, focusRoofId],
+  );
 
   const { sunrise, sunset } = useMemo(
     () => sunriseSunset(date, loc.latLng.lat, loc.latLng.lng),
@@ -793,6 +828,9 @@ export function Scene3D({
       // present flat, top-down over the satellite (not the 3D model)
       setViewMode('map');
       goView('top');
+      // no modules are drawn in here, so a select mode left on would only be a
+      // hint bar promising something the view cannot do
+      setBoxSelect(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmap]);
@@ -1085,11 +1123,12 @@ export function Scene3D({
     // Escape peels one layer at a time: a tool mode stops first (measure,
     // place, the key sheet), then walking, then isolation, then an open card
     // (its own listener does that); only a bare scene leaves the 3D view
-    if (e.key === 'Escape' && (measure !== 'off' || placeKind || showKeys)) {
+    if (e.key === 'Escape' && (measure !== 'off' || placeKind || showKeys || boxSelect)) {
       e.preventDefault();
       setMeasure('off');
       setPlaceKind(null);
       setShowKeys(false);
+      setBoxSelect(false);
       return;
     }
     if (e.key === 'Escape' && walk) {
@@ -1261,6 +1300,21 @@ export function Scene3D({
     const inspect: RadialItem[] = heatmap
       ? []
       : [
+          // the touch way into a multi-module selection; Shift is the other one
+          ...(structInteractive
+            ? [
+                {
+                  id: 'box-select',
+                  icon: <BoxSelect />,
+                  label: 'Select',
+                  tip: boxSelect
+                    ? 'Stop selecting (Esc) — one finger orbits again'
+                    : 'Select modules — drag a box, tap to add\nSame as holding Shift on a keyboard',
+                  active: boxSelect,
+                  onClick: () => setBoxSelect((v) => !v),
+                } satisfies RadialItem,
+              ]
+            : []),
           {
             id: 'fly',
             icon: <Crosshair />,
@@ -1366,6 +1420,8 @@ export function Scene3D({
     wiring,
     project.panels,
     readOnly,
+    structInteractive,
+    boxSelect,
     copied,
     project.shareId,
     pick,
@@ -1384,7 +1440,7 @@ export function Scene3D({
       // unreachable by keyboard — you could open it and then not move it.
       tabIndex={0}
       role="application"
-      aria-label="3D scene. Arrow keys orbit, Shift for finer steps, plus and minus zoom, 1 top view, 2 isometric, 3 front, Shift-drag box-selects modules, Escape closes."
+      aria-label="3D scene. Arrow keys orbit, Shift for finer steps, plus and minus zoom, 1 top view, 2 isometric, 3 front, Shift-drag box-selects modules — or turn on Select mode in the menu and drag, for a touch screen. Escape closes."
       onKeyDown={onSceneKeyDown}
       onPointerDownCapture={structInteractive ? onWrapPointerDownCapture : undefined}
       style={{
@@ -1453,6 +1509,8 @@ export function Scene3D({
           heatResult={heatResult}
           heatMonth={heatMonth}
           bounds={bounds}
+          shadowFit={shadowFit}
+          boxSelect={structInteractive && boxSelect}
           selectedIds={wiringSet ?? selectedSet}
           onSelectPanels={onSelectPanels}
           showElectrical={showElectrical}
@@ -1569,7 +1627,7 @@ export function Scene3D({
       )}
 
       {/* ── mode hints and refusals ── */}
-      {(measure !== 'off' || placeKind || notice) && !walk && (
+      {(measure !== 'off' || placeKind || notice || boxSelect) && !walk && (
         <div
           role="status"
           style={{
@@ -1593,13 +1651,15 @@ export function Scene3D({
             ? notice
             : placeKind
               ? `Tap a wall to hang the ${PLACE_NAME[placeKind]}, or the roof deck to stand it there · Esc cancels`
-              : measure === 'distance'
-                ? 'Distance · click two points on the model · Esc stops'
-                : measure === 'angle'
-                  ? 'Angle · click an arm, the corner, the other arm · Esc stops'
-                  : measure === 'area'
-                    ? 'Area · click the corners, then the first corner again (or double-click) · Esc stops'
-                    : 'Elevation · click a point to read its height · Esc stops'}
+              : measure === 'off'
+                ? 'Selecting modules · drag a box · tap a module to add or drop it · Esc stops'
+                : measure === 'distance'
+                  ? 'Distance · click two points on the model · Esc stops'
+                  : measure === 'angle'
+                    ? 'Angle · click an arm, the corner, the other arm · Esc stops'
+                    : measure === 'area'
+                      ? 'Area · click the corners, then the first corner again (or double-click) · Esc stops'
+                      : 'Elevation · click a point to read its height · Esc stops'}
         </div>
       )}
 
@@ -1630,7 +1690,7 @@ export function Scene3D({
           <div>1 2 3 4 5 6 — top · iso · front · back · left · right</div>
           <div>arrows · + − — orbit · zoom</div>
           <div>click · shift-click — select a module · add to the selection</div>
-          <div>shift-drag — box-select modules</div>
+          <div>shift-drag — box-select modules (or Select mode, with no keyboard)</div>
           <div>table edge handles — drag out to add rows or columns, in to remove them</div>
           <div>F — fly to the selection · I — isolate it · W — walk the site</div>
           <div>M — measure a distance · ? — this sheet</div>
@@ -2211,6 +2271,8 @@ function SceneContent({
   heatResult,
   heatMonth,
   bounds,
+  shadowFit,
+  boxSelect,
   selectedIds,
   onSelectPanels,
   pick,
@@ -2226,6 +2288,10 @@ function SceneContent({
 }: {
   project: Project;
   bounds: SceneBounds;
+  /** the same box grown to hold the obstructions that shade the design */
+  shadowFit: SceneBounds;
+  /** Select mode is on: a tap ADDS to the selection, as Shift-click does */
+  boxSelect: boolean;
   selectedIds: ReadonlySet<string>;
   onSelectPanels?: (ids: string[], additive: boolean) => void;
   pick: ScenePick | null;
@@ -2262,7 +2328,7 @@ function SceneContent({
   onPlaced: () => void;
   /** the roof card asks to start placing (null = read-only scene) */
   onPlaceKind: ((k: PlaceKind) => void) | null;
-  /** a released Shift-drag box, in client px */
+  /** a released box drag (Shift, or Select mode), in client px */
   marqueeCommit: MarqueeCommit | null;
   date: Date;
   meshMode: boolean;
@@ -2366,8 +2432,14 @@ function SceneContent({
         onWiringChange(wiring.includes(panelId) ? wiring.filter((id) => id !== panelId) : [...wiring, panelId]);
         return;
       }
-      onSelectPanels?.([panelId], additive);
-      if (additive) return;
+      // Select mode is the touch equivalent of holding Shift: without it a
+      // phone could hold exactly one module selected. It deliberately does NOT
+      // reach the wiring branch above — there Shift means "take the whole
+      // table", and a mode that silently swallowed forty modules per tap is a
+      // different thing entirely.
+      const add = additive || boxSelect;
+      onSelectPanels?.([panelId], add);
+      if (add) return;
       // In shading view the question being asked is about THIS module — what it
       // makes and what is taking the rest — so the click opens the module card
       // rather than its table's. Everywhere else a module still stands for its
@@ -2379,7 +2451,7 @@ function SceneContent({
       const pp = project.panels.find((x) => x.id === panelId);
       onPick(pp?.segmentId ? { kind: 'table', id: pp.segmentId } : null);
     },
-    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView],
+    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView, boxSelect],
   );
 
 
@@ -2715,11 +2787,19 @@ function SceneContent({
    * down to a sun altitude of about 34°. Lower than that it clips again, and
    * that is a deliberate trade: the 4096 map has to cover whatever this box
    * spans, so buying the last few degrees costs sharpness everywhere else.
+   *
+   * It is sized on `shadowFit`, not `bounds`: the CASTERS include the
+   * obstructions — the neighbouring block, the tree over the parapet — and a
+   * caster outside the frustum draws no shadow at all while the engine goes on
+   * charging the customer for its shade. Same centre, so the light target does
+   * not move; a distant tall neighbour does widen the box and therefore
+   * coarsens every shadow in the scene, which is the honest cost of drawing
+   * the shade the quote already assumes.
    */
-  const shadowHalf = Math.max(20, bounds.r * 1.2 + (bounds.yMax - bounds.yMin) * 1.5);
+  const shadowHalf = Math.max(20, shadowFit.r * 1.2 + (shadowFit.yMax - shadowFit.yMin) * 1.5);
   const sunPos = useMemo(
-    () => sunDir.clone().multiplyScalar(Math.max(80, bounds.r * 3 + bounds.yMax)).add(lightAnchor),
-    [sunDir, bounds, lightAnchor],
+    () => sunDir.clone().multiplyScalar(Math.max(80, shadowFit.r * 3 + shadowFit.yMax)).add(lightAnchor),
+    [sunDir, shadowFit, lightAnchor],
   );
 
   // heatmap mode: flat satellite ground + colored roof-surface cells only —

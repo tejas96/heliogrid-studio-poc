@@ -5,9 +5,27 @@
 // `sldParams` snapshot, which froze on first visit and silently went stale
 // when the inverter or module changed afterwards.
 import type { Project, SldParams } from '../types';
-import { acBreakerA, dcFuseA, dcIsolatorA } from './electrical-sizing';
+import { resolveRules } from '../data/rules/india';
+import { AC_ALLOWANCE_M } from './bom/context';
+import { acBreakerA, dcFuseA, dcIsolatorA, sizeAcCable } from './electrical-sizing';
 import { dcCableSizesInUse } from './electrical/dc-cable';
 import { resolveDesignTemps, vocAt } from './electrical/temps';
+import { acCableFromRoutes } from './routing';
+
+/**
+ * The AC run the cable is sized against, resolved the way the BOM resolves it
+ * (lib/bom/context): routed geometry, else the user's surveyed run, else the
+ * flat allowance. One length, so the sheet and the quote can never print two
+ * sections for one cable — and never NaN before the service entry is placed.
+ */
+function acRunM(project: Project): number {
+  const routed = acCableFromRoutes(project);
+  if (routed.routed) return routed.meters;
+  const surveyed = project.bom?.inputs?.avgAcRunM;
+  return surveyed != null && surveyed > 0
+    ? Math.round(surveyed * (1 + resolveRules().cable.slackPct))
+    : AC_ALLOWANCE_M;
+}
 
 /**
  * Derive the full SLD parameter set from the current components. Pure — no
@@ -49,7 +67,11 @@ export function deriveSldDefaults(project: Project): SldParams | null {
     dcFuseA: panel ? dcFuseA(panel) : 20,
     dcSpdType: 'Type-II',
     dcIsolatorA: panel ? dcIsolatorA(panel) : 32,
-    acCableSizeMm2: inv.phases === 3 ? 10 : 6,
+    // AC side sized, never asserted: the SAME sizeAcCable the BOM bills with
+    // (ampacity for the breaker AND drop over the run), over the same run
+    // metres. `phases === 3 ? 10 : 6` ignored system size, so a 120 kW plant
+    // printed 10 sq.mm on the DISCOM sheet while the BOM derived 150.
+    acCableSizeMm2: sizeAcCable(acKw, inv.phases, acRunM(project)).mm2,
     acCableType: 'PVC Cu',
     mccbA: mcb,
     acSpdType: 'Type-II',

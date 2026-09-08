@@ -1,7 +1,8 @@
 // ─── Box select in 3D ────────────────────────────────────────────────────────
-// Shift-drag on the scene draws a rectangle (Scene3D owns the DOM part and
-// stops the camera from orbiting). On release the rectangle arrives here, in
-// client pixels; every module whose glass centre projects inside it joins the
+// A drag on the scene draws a rectangle — with Shift held, or with Select mode
+// on, which is the touch way in (Scene3D owns the DOM part and stops the camera
+// from orbiting under it). On release the rectangle arrives here, in client
+// pixels; every module whose glass centre projects inside it joins the
 // selection. Modules behind others count too — from above that is what a box
 // on a roof means.
 import { useEffect } from 'react';

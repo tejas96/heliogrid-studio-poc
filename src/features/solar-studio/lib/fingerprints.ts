@@ -197,6 +197,19 @@ export function designFp(p: Project): string {
       p.arresters.map((x) => [x.id, x.pos]),
       p.inverterPlacements.map((x) => [x.id, x.roofId, x.edgeIndex, x.t, ...(x.pos ? [x.pos.x, x.pos.y, x.level] : [])]),
     ]) +
+    // NEGOTIATED DISCOUNT — CONDITIONAL suffix, for the same reason as every
+    // other lazy field here: `pricing.discount` is absent until someone gives
+    // one (Step9Bom deletes the key at value 0), so an undiscounted project
+    // serialises exactly the bytes it did before this field existed and no
+    // stored capture or quote goes stale on upgrade.
+    //
+    // Once present it MUST re-key. `bomMoney` deducts it from the taxable
+    // value and every money output is memoised on this string, so while it was
+    // missing the quote kept printing the PRE-discount figure until the
+    // project was reloaded. The whole object is stringified (like
+    // `structureDefaults`) rather than field-listed: `label` prints on the
+    // quote beside the deduction, so it reaches the customer too.
+    (p.pricing.discount ? '|disc:' + JSON.stringify(p.pricing.discount) : '') +
     // battery cabinets — conditional suffix, so battery-less projects keep
     // their fingerprint byte-identical
     ((p.batteryPlacements?.length ?? 0) > 0

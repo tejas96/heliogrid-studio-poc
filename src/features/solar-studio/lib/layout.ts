@@ -37,6 +37,13 @@ export interface FillOptions {
   /** row walkway gap every N rows (0 = none) */
   grouped: boolean;
   maxPanels?: number;
+  /**
+   * Which candidates a `maxPanels` budget KEEPS. Given every candidate the
+   * lattice produced (in lattice order), return a score per panel id — higher
+   * is better. Absent ⇒ the budget truncates in lattice order, as it always
+   * did. See `selectBudget` for why a budgeted fill must not just truncate.
+   */
+  scoreCandidates?: (candidates: PlacedPanel[]) => Map<string, number>;
   /** existing panels the fill must NOT overlap (collision-aware placement) */
   avoidPanels?: PlacedPanel[];
   /**
@@ -306,6 +313,40 @@ export function planCellM(
 }
 
 /**
+ * Which `keep` of a roof's candidates a panel budget survives.
+ *
+ * A budget used to TRUNCATE: the first `keep` positions in raw row-major
+ * lattice order, i.e. whichever corner of the roof the grid happens to start
+ * in. That threw away yield — on a real fixture the 11 kept panels averaged
+ * 58.7% solar access where the best 11 available measured 100%, roughly 40% of
+ * the annual production, while the design log still reported the ROOF's 91%
+ * average. A target-kWp design must keep the best positions, not the first.
+ *
+ * With a scorer the budget keeps the highest-scoring candidates. Two rules keep
+ * the result deterministic (the one-frame gate and the snapshots depend on it):
+ *  - scores are quantised to 1e-4 before comparison, so floating-point noise
+ *    between geometrically equal positions can never reorder them;
+ *  - ties fall back to lattice order — so on an unshaded roof, where every
+ *    score is equal, the budget keeps EXACTLY the panels it always did.
+ * Survivors come back in lattice order, so `cellIndex`, the segment's rows/cols
+ * and every downstream consumer read the same grid as before.
+ */
+function selectBudget(
+  panels: PlacedPanel[],
+  keep: number,
+  score?: (candidates: PlacedPanel[]) => Map<string, number>,
+): PlacedPanel[] {
+  if (!score) return panels.slice(0, keep);
+  const scores = score(panels);
+  const ranked = panels
+    .map((p, i) => ({ i, s: Math.round((scores.get(p.id) ?? 0) * 1e4) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .slice(0, keep);
+  const kept = new Set(ranked.map((r) => r.i));
+  return panels.filter((_, i) => kept.has(i));
+}
+
+/**
  * Grid-fill a roof with panels aligned to its dominant edge.
  * Every candidate slot must be fully inside the setback-inset polygon and
  * clear of all obstruction buffers + walkway strips.
@@ -395,7 +436,6 @@ export function autoFillRoof(
       let col = 0;
       let placedInRow = false;
       for (let x = minX + w / 2 + GRID_EPS_M; x + w / 2 <= maxX + 0.01; x += w + gap) {
-        if (opts.maxPanels && panels.length >= opts.maxPanels) return panels;
         const localCorners = [
           { x: x - w / 2, y: y - h / 2 },
           { x: x + w / 2, y: y - h / 2 },
@@ -435,7 +475,11 @@ export function autoFillRoof(
       }
     }
   }
-  return panels;
+  // the whole lattice is built before the budget is applied — the budget picks
+  // WHICH candidates to keep (selectBudget), it no longer stops the fill at the
+  // first N. Without a scorer that still yields the first N, unchanged.
+  if (!opts.maxPanels || panels.length <= opts.maxPanels) return panels;
+  return selectBudget(panels, opts.maxPanels, opts.scoreCandidates);
 }
 
 export interface FilledSegment {

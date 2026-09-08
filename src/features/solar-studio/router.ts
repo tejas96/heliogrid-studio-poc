@@ -5,7 +5,11 @@ import { useEffect, useMemo } from 'react';
 import { usePathname, useParams, useRouter } from 'next/navigation';
 
 export interface Route {
-  name: 'login' | 'projects' | 'wizard' | 'share' | 'bom' | 'proposal';
+  // No 'bom': the BOM is Step 9 and is reached through the wizard, which holds
+  // the step gate. `/bom` was mapped here but has no page and nothing navigates
+  // to it — a name for a route that does not exist reads as a second, ungated
+  // way into a commercial document.
+  name: 'login' | 'projects' | 'wizard' | 'share' | 'proposal';
   step?: number;
   shareId?: string;
 }
@@ -46,7 +50,6 @@ export function useRoute(): Route {
       return { name: 'wizard', step };
     }
     if (parts[0] === 'projects') return { name: 'projects' };
-    if (parts[0] === 'bom') return { name: 'bom' };
     if (parts[0] === 'proposal') return { name: 'proposal' };
     if (parts[0] === 'login') return { name: 'login' };
     return { name: 'login' };

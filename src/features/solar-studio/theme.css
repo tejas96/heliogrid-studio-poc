@@ -9,7 +9,10 @@
   --line: #e1e4e8;
   --line-2: #cfd4da;
   --accent: #0f1215;
-  --accent-contrast: #ffffff;
+  /* tokens.css (unlayered) overrides --accent to brass, so this legacy pairing
+     must follow it or every .btn-primary is white-on-brass at 3.09:1. INK, not
+     white — DESIGN-SYSTEM.md §3.2. */
+  --accent-contrast: var(--text-on-accent, #ffffff);
   --brand: #f59e0b;
   --good: #15803d;
   --good-bg: #e9f7ef;
@@ -123,7 +126,9 @@ textarea {
   box-shadow: var(--shadow-1);
 }
 .btn-primary:hover {
-  background: #24292f;
+  /* BRIGHTENS. The old near-black darkened the brass and dragged the ink label
+     under AA — DESIGN-SYSTEM.md §3.2. */
+  background: var(--accent-hover, #24292f);
 }
 .btn-primary:disabled {
   background: var(--paper-3);

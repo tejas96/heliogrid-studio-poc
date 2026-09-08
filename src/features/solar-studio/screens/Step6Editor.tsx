@@ -10,6 +10,7 @@ import {
 import {
   AlertTriangle,
   Box,
+  BoxSelect,
   Cable,
   Plug,
   CheckCircle2,
@@ -350,6 +351,16 @@ export function Step6Editor() {
     shift: boolean;
   } | null>(null);
   const [marquee, setMarquee] = useState<{ a: XY; b: XY } | null>(null);
+  /**
+   * Add-to-selection mode — the touch equivalent of holding Shift. Dragging a
+   * box already works under a finger, but every way to KEEP what it caught was
+   * behind the Shift key: a second box replaced the first, and a tap replaced
+   * the lot. On a phone that meant one module at a time, which puts the whole
+   * multi-module toolbar (rotate, tilt, group, delete) out of reach.
+   *
+   * Shift still works and still wins on a keyboard; this only ORs into it.
+   */
+  const [addSelect, setAddSelect] = useState(false);
   const [hoverPoint, setHoverPoint] = useState<XY | null>(null);
   const [tableSheet, setTableSheet] = useState(false);
   const canvasRef = useRef<SatCanvasHandle>(null);
@@ -790,21 +801,26 @@ export function Step6Editor() {
       case 'select': {
         if (manualString) {
           const hit = findPanelAt(m);
-          // A panel belongs to exactly ONE string and must be enabled. The old
-          // check only looked inside the string being built, so a panel could be
-          // wired into two strings at once (physically impossible — the audit's
-          // "manual string double-assignment") or a disabled panel could be
-          // wired into one. Tapping such a panel now says why instead of
-          // silently doing the wrong thing.
+          // A panel belongs to exactly ONE MANUAL string and must be enabled.
+          // Only hand-made strings own their modules: stringsAddManual keeps the
+          // manual strings and re-derives every auto string around the new one
+          // (lib/derive/electrical-sync), which is why its validate() refuses on
+          // `s.manual` alone. Guarding on ANY string refused every tap, because
+          // a fresh design is auto-strung end to end — the same rule the 3D path
+          // (three/Electrical + Scene3D's onPanelClickToEdit) has always used.
           if (!hit) return;
-          if (manualString.includes(hit.id)) return; // already in this string: no-op
+          if (manualString.includes(hit.id)) {
+            // tapping a module already in this string takes it back out, as in 3D
+            setManualString(manualString.filter((id) => id !== hit.id));
+            return;
+          }
           if (!hit.enabled) {
             flash('lock', 'That panel is disabled — enable it before wiring it into a string');
             return;
           }
-          const owner = project.strings.find((st) => st.panelIds.includes(hit.id));
+          const owner = project.strings.find((st) => st.manual && st.panelIds.includes(hit.id));
           if (owner) {
-            flash('lock', `That panel is already wired into ${owner.name}`);
+            flash('lock', `That panel is already wired into ${owner.name} — un-wire it first`);
             return;
           }
           setManualString([...manualString, hit.id]);
@@ -812,7 +828,7 @@ export function Step6Editor() {
         }
         const hit = findPanelAt(m);
         if (!hit) return; // empty clicks are handled by the marquee gesture
-        selectPanel(hit.id, e.shiftKey);
+        selectPanel(hit.id, e.shiftKey || addSelect);
         return;
       }
       default:
@@ -976,6 +992,7 @@ export function Step6Editor() {
         setDragLine(null);
         setMarquee(null);
         setSelectedIds([]);
+        setAddSelect(false);
         setTool('select');
         return;
       }
@@ -1098,6 +1115,22 @@ export function Step6Editor() {
             onClick: () => activate('select'),
           },
           {
+            id: 'add-select',
+            icon: <BoxSelect />,
+            label: 'Add',
+            // the touch way in: a phone has no Shift, and without this a box or
+            // a tap replaces the selection instead of growing it
+            tip: 'Add to the selection — boxes and taps keep what is already picked\nSame as holding Shift',
+            active: addSelect,
+            onClick: () => {
+              // the mode only means anything in Select, so go there — but never
+              // at the cost of a string being wired by hand, which activate()
+              // would throw away
+              if (!manualString) activate('select');
+              setAddSelect((v) => !v);
+            },
+          },
+          {
             id: 'panels',
             icon: <Grid3x3 />,
             label: 'Table',
@@ -1210,6 +1243,7 @@ export function Step6Editor() {
       measure.toggle,
       tool,
       manualString,
+      addSelect,
       locked,
       project.walkways.length,
       project.keepouts.length,
@@ -1342,7 +1376,7 @@ export function Step6Editor() {
             const dx = m.x - start.x;
             const dy = m.y - start.y;
             if (Math.hypot(dx, dy) < 0.3) {
-              selectPanel(id, e.shiftKey); // a press with no travel is a click
+              selectPanel(id, e.shiftKey || addSelect); // a press with no travel is a click
               return;
             }
             // drag a panel that was NOT selected ⇒ move just that one
@@ -1356,7 +1390,7 @@ export function Step6Editor() {
             return;
           }
           if (marquee) {
-            finishMarquee(m, e.shiftKey);
+            finishMarquee(m, e.shiftKey || addSelect);
             return;
           }
           if (!dragLine) return;
@@ -1671,6 +1705,17 @@ export function Step6Editor() {
           <div className="hint-bar" role="status">
             <MousePointer2 />
             {TOOL_HINTS[tool]}
+          </div>
+        )}
+        {/* a sticky mode with no visible state is a trap: say it is on, and
+            say how to leave. The way out is the same 56 px Add button that
+            turned it on — a 30 px chip in here would fail the touch contract
+            (DESIGN-SYSTEM N2) and this bar is a status line, not a toolbar. */}
+        {tool === 'select' && addSelect && !manualString && (
+          <div className="hint-bar" role="status">
+            <BoxSelect />
+            Adding to the selection — boxes and taps keep what is already picked · Add
+            again, or Esc, stops
           </div>
         )}
       </div>

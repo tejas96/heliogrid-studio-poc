@@ -13,6 +13,7 @@ import {
   Lock,
   LockOpen,
   MousePointer2,
+  Move,
   MoveVertical,
   PencilRuler,
   PenLine,
@@ -1618,17 +1619,36 @@ export function Step2Roof() {
         3D
       </button>
 
-      {/* roof chips */}
+      {/* TOP BAND — roof chips on the left, the selected roof's actions on the
+          right. They used to be two independent absolutes both pinned to
+          top:12 at z-index 30, so on a narrow viewport the action rail landed
+          on top of the chips and buried their delete buttons (the later
+          sibling wins at equal z). Sharing one flex row makes the overlap
+          impossible at any width instead of at the widths we happened to test
+          (DESIGN-SYSTEM N9). The band itself is pointer-transparent so the gap
+          between the two groups still pans the canvas. */}
       <div
         style={{
           position: 'absolute',
           top: 12,
           left: 12,
+          right: 14,
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+          zIndex: 30,
+          pointerEvents: 'none',
+        }}
+      >
+      <div
+        style={{
           display: 'flex',
           gap: 8,
           flexWrap: 'wrap',
-          zIndex: 30,
+          minWidth: 0,
           maxWidth: 'min(64%, 560px)',
+          pointerEvents: 'auto',
         }}
         role="list"
         aria-label="Roofs"
@@ -1642,9 +1662,16 @@ export function Step2Roof() {
               key={r.id}
               className={`chip ${sel ? 'on' : ''}`}
               role="listitem"
+              // the three controls each stand 44px tall (N2), so the chip's own
+              // vertical padding would only add to a box that is already large
+              // enough — it goes, and the row lands at 44px, not 56px.
+              // minWidth 0 lets the name give way rather than let the chip
+              // overflow the band and slide back under the action rail
+              style={{ padding: '0 4px 0 10px', gap: 4, minWidth: 0 }}
             >
               <button
                 type="button"
+                className="min-h-(--target-min)"
                 aria-label={`Select ${r.name}`}
                 aria-pressed={sel}
                 style={{
@@ -1652,6 +1679,7 @@ export function Step2Roof() {
                   alignItems: 'center',
                   gap: 5,
                   minWidth: 0,
+                  overflow: 'hidden',
                   color: 'inherit',
                 }}
                 onClick={() => selectRoof(r.id)}
@@ -1667,24 +1695,37 @@ export function Step2Roof() {
                     boxShadow: '0 0 0 1px rgba(255,255,255,0.5)',
                   }}
                 />
-                <span>{r.name}</span>
-                <small style={{ opacity: 0.75 }}>{fmtArea(polygonArea(r.polygon))}</small>
+                {/* the name gives way; the area never does — it is a
+                    quantity, and a truncated one is worse than none */}
+                <span className="truncate">{r.name}</span>
+                <small style={{ opacity: 0.75, flex: 'none', whiteSpace: 'nowrap' }}>
+                  {fmtArea(polygonArea(r.polygon))}
+                </small>
               </button>
               <button
                 type="button"
+                className="min-h-(--target-min) min-w-(--target-min)"
                 aria-label={locked ? `Unlock ${r.name}` : `Lock ${r.name}`}
                 data-tip={locked ? 'Unlock roof' : 'Lock roof\nProtects its geometry'}
-                style={{ display: 'inline-flex', color: 'inherit' }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'inherit',
+                }}
                 onClick={() => toggleLock(r.id)}
               >
                 {locked ? <Lock /> : <LockOpen />}
               </button>
               <button
                 type="button"
+                className="min-h-(--target-min) min-w-(--target-min)"
                 aria-label={`Delete ${r.name}`}
                 data-tip={locked ? 'Unlock to delete' : 'Delete roof'}
                 style={{
                   display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: sel ? '#fff' : 'var(--bad)',
                   opacity: locked ? 0.45 : 1,
                 }}
@@ -1697,11 +1738,11 @@ export function Step2Roof() {
         })}
       </div>
 
-      {/* selected-roof action bar */}
+      {/* selected-roof action bar — laid out by the band above, not pinned */}
       {selected && !draft && (
         <div
           className="tool-rail dark"
-          style={{ top: 12, right: 14, flexDirection: 'row' }}
+          style={{ position: 'static', flex: 'none', flexDirection: 'row', pointerEvents: 'auto' }}
           role="toolbar"
           aria-label="Roof actions"
         >
@@ -1763,6 +1804,7 @@ export function Step2Roof() {
           </button>
         </div>
       )}
+      </div>{/* /top band */}
 
       {selected && !draft && showVertexInspector && (
         <RoofVertexInspector
@@ -2825,24 +2867,19 @@ function RoofLayer({
         const centroid = frame.toPx(polygonCentroid(r.polygon));
         return (
           <g key={r.id} style={locked ? { filter: 'saturate(0.25)', opacity: 0.85 } : undefined}>
+            {/* The body is deliberately inert. It used to capture the pointer
+                whenever its roof was selected — and finishRoof() selects the
+                roof it has just traced — so the very next one-finger drag moved
+                the building instead of panning the map, with no way back. Moving
+                is now an explicit grab on the move handle below; a press on the
+                body falls through to SatCanvas, which pans (DESIGN-SYSTEM §7.2:
+                one-finger drag on the canvas pans, drag a HANDLE moves). */}
             <path
               d={polyPath(frame, r.polygon)}
               fill={roofRgba(color, sel ? 0.45 : 0.26)}
               stroke={sel ? lightenHex(color, 0.4) : color}
               strokeWidth={(sel ? 2.4 : 1.3) / frame.zoom}
-              style={sel && !locked ? { cursor: 'move' } : undefined}
-              onPointerDown={
-                sel && !locked
-                  ? (e) => {
-                      e.stopPropagation();
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                      onBodyDown(r.id, pointerToMeters(e));
-                    }
-                  : undefined
-              }
-            >
-              {sel && !locked && <title>Drag to move this roof</title>}
-            </path>
+            />
             {insetRegions.map((reg, ri) => (
               <path
                 key={ri}
@@ -2901,6 +2938,43 @@ function RoofLayer({
                     <RotateCw
                       x={handle.x - 5 / frame.zoom}
                       y={handle.y - 5 / frame.zoom}
+                      width={10 / frame.zoom}
+                      height={10 / frame.zoom}
+                      color="#f59e0b"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                    {/* move handle — the roof's only move affordance, sat on
+                        the centroid so it reads as "grab the whole shape".
+                        The hit circle is 44px (N2); the visible disc is the
+                        same size as its rotate twin so the pair reads as one
+                        family. Every radius is /zoom, so both stay constant
+                        on screen as the canvas scales. */}
+                    <circle
+                      cx={centroid.x}
+                      cy={centroid.y}
+                      r={22 / frame.zoom}
+                      fill="transparent"
+                      style={{ cursor: 'move' }}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        onBodyDown(r.id, pointerToMeters(e));
+                      }}
+                    >
+                      <title>Drag to move this roof</title>
+                    </circle>
+                    <circle
+                      cx={centroid.x}
+                      cy={centroid.y}
+                      r={9 / frame.zoom}
+                      fill="#fff"
+                      stroke="#f59e0b"
+                      strokeWidth={1.6 / frame.zoom}
+                      style={{ pointerEvents: 'none' }}
+                    />
+                    <Move
+                      x={centroid.x - 5 / frame.zoom}
+                      y={centroid.y - 5 / frame.zoom}
                       width={10 / frame.zoom}
                       height={10 / frame.zoom}
                       color="#f59e0b"
