@@ -80,4 +80,7 @@ utilities while the page background still flips. Verified the hard way.
   through — move the code instead.
 - `npm run dead` (knip) reports dead files, exports and unused packages. It should stay at
   two known findings: `opById` / `listOps`, parked for the AI planner.
-- **This repo has no git remote.** Commit to `main` locally; there is nothing to push.
+- **One branch, one remote.** `main` tracks
+  `git@github.com-personal:tejas96/heliogrid-studio-poc.git`. Commit to `main` and push.
+  `.env` / `.env.local` are ignored — only `.env.example` is tracked, and it stays that
+  way. `.superpowers/` is agent scratch and is ignored too.
