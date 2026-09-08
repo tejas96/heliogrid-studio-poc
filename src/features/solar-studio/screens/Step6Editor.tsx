@@ -90,6 +90,7 @@ import {
   growCandidates,
   oneOf,
   reindexSegment,
+  segmentLines,
   selectedSegmentIds,
   setSegmentTilt,
   STRUCTURE_PROFILES,
@@ -131,6 +132,7 @@ import { summarizeImpact } from '../lib/ops/metrics';
 import type { OpPreview } from '../lib/ops/run';
 import {
   layoutAutoDesign,
+  layoutDeleteLines,
   layoutGroup,
   layoutGrow,
   panelsDelete,
@@ -373,6 +375,8 @@ export function Step6Editor() {
   /** Live slider value while dragging; null means "show the committed value".
    *  Kept out of the project so a drag is not 200 undo entries. */
   const [pitchDraft, setPitchDraft] = useState<number | null>(null);
+  /** Row/column marking: which table, which axis, and what is marked so far. */
+  const [lineMark, setLineMark] = useState<LineMark | null>(null);
   const canvasRef = useRef<SatCanvasHandle>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // a table edge handle mid-drag (view state; the op runs on release)
@@ -877,6 +881,38 @@ export function Step6Editor() {
     setSelectedIds(r.next.panels.filter((p) => p.segmentId && made.includes(p.segmentId)).map((p) => p.id));
     setTableSheet(false);
   }
+  /** Open row/column marking on the sheet's table, and close the sheet so the
+   *  roof is visible — you cannot mark what a sheet is covering. */
+  function startLineMark(axis: GrowAxis) {
+    if (locked) return flashLock();
+    if (!sheetSeg) return;
+    setLineMark({ segId: sheetSeg.id, axis, marked: [] });
+    setTableSheet(false);
+  }
+  function toggleLine(index: number) {
+    setLineMark((m) =>
+      m === null
+        ? m
+        : {
+            ...m,
+            marked: m.marked.includes(index)
+              ? m.marked.filter((i) => i !== index)
+              : [...m.marked, index],
+          },
+    );
+  }
+  function commitLineMark() {
+    if (!lineMark || lineMark.marked.length === 0) return;
+    const r = ops.run(layoutDeleteLines, {
+      segmentId: lineMark.segId,
+      axis: lineMark.axis,
+      indices: lineMark.marked,
+    });
+    if (!report(r)) return;
+    setSelectedIds([]);
+    setLineMark(null);
+  }
+
   function deleteTable() {
     const ids = targetSegIds();
     if (!ids) return;
@@ -1704,6 +1740,8 @@ export function Step6Editor() {
           walkwayWidthMm={walkwayWidthMm}
           selected={selectedIds}
           tool={tool}
+          lineMark={lineMark}
+          onToggleLine={toggleLine}
         />
         {tool === 'select' && !manualString && (
           <SelectionContextBar
@@ -1863,6 +1901,51 @@ export function Step6Editor() {
               <Info />
             )}
             {notice.text}
+          </div>
+        )}
+        {/* Marking a row/column delete. The COUNT is the point of this feature:
+            "3 rows (27 modules) · −12.2 kWp · ₹ −…" before anything is destroyed,
+            not a −N inside a 9 px circle after the fact. The impact comes from
+            ops.preview, so it is the real op's answer, not a second estimate. */}
+        {lineMark && (
+          <div className="hint-bar" role="group" aria-label="Delete rows or columns">
+            <Trash2 />
+            {(() => {
+              const seg = project.segments.find((s) => s.id === lineMark.segId);
+              const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
+              const n = lineMark.marked.length;
+              if (!seg || !roof)
+                return <span>That table is gone</span>;
+              if (n === 0)
+                return <span>Tap {lineMark.axis === 'row' ? 'rows' : 'columns'} to mark them</span>;
+              const mark = new Set(lineMark.marked);
+              const mods = segmentLines(project, roof, spec, seg, lineMark.axis)
+                .filter((l) => mark.has(l.index))
+                .reduce((s, l) => s + l.panelIds.length, 0);
+              const pv = ops.preview(layoutDeleteLines, {
+                segmentId: lineMark.segId,
+                axis: lineMark.axis,
+                indices: lineMark.marked,
+              });
+              return (
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {n} {lineMark.axis}
+                  {n === 1 ? '' : 's'} ({mods} module{mods === 1 ? '' : 's'})
+                  {pv.ok ? ` · ${summarizeImpact(pv.impact)}` : ` · ${pv.refusal.reason}`}
+                </span>
+              );
+            })()}
+            <button className="tool-btn" onClick={() => setLineMark(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-danger"
+              style={{ minHeight: 30, fontSize: 12, fontWeight: 700 }}
+              disabled={lineMark.marked.length === 0}
+              onClick={commitLineMark}
+            >
+              Delete
+            </button>
           </div>
         )}
         {tool === 'walkway' && (
@@ -2741,6 +2824,22 @@ export function Step6Editor() {
               </>
             )}
 
+            {/* Row/column delete. Single-table only: marking spans one table's
+                lattice, and "row 3" means nothing across two of them. */}
+            {!multi && (
+              <>
+                <div style={lbl as React.CSSProperties}>Remove rows or columns</div>
+                <div style={rowStyle}>
+                  <button className="tool-btn" style={{ flex: 1 }} onClick={() => startLineMark('row')}>
+                    Delete rows…
+                  </button>
+                  <button className="tool-btn" style={{ flex: 1 }} onClick={() => startLineMark('column')}>
+                    Delete columns…
+                  </button>
+                </div>
+              </>
+            )}
+
             <div style={{ display: 'flex', gap: 8, marginTop: 18, borderTop: '1px solid var(--editor-line)', paddingTop: 14 }}>
               <button
                 className="btn"
@@ -2946,6 +3045,13 @@ export function Step6Editor() {
 }
 
 // ─── selection context bar (SVG-anchored, constant screen size) ─────────────
+
+/** Which table is being marked up for a row/column delete, and what is marked. */
+interface LineMark {
+  segId: string;
+  axis: GrowAxis;
+  marked: number[];
+}
 
 /** `null` span means "full width", which is simply no span option at all. */
 function spanOpts(span: number | null, offset: number): GrowSpan {
@@ -3454,6 +3560,8 @@ function EditorLayers({
   tableDrag,
   onTableDrag,
   onTableDragEnd,
+  lineMark,
+  onToggleLine,
 }: {
   heatmap: boolean;
   heatResult: HeatmapResult | null;
@@ -3474,6 +3582,9 @@ function EditorLayers({
   tableDrag: TableDragState | null;
   onTableDrag: (d: TableDragState | null) => void;
   onTableDragEnd: (d: TableDragState) => void;
+  /** row/column marking mode: which table, which axis, what is marked so far */
+  lineMark: LineMark | null;
+  onToggleLine: (index: number) => void;
 }) {
   const project = useActiveProject()!;
   const frame = useCanvasFrame();
@@ -3924,6 +4035,38 @@ function EditorLayers({
               {dragCorners && (
                 <path d={polyPath(frame, dragCorners)} fill="rgba(253,230,138,0.12)" stroke="#fde68a" strokeWidth={1.6} pointerEvents="none" />
               )}
+              {/* Row/column marking. One tappable band per lattice line, drawn
+                  over the table being edited. Marking by BAND, not by marquee:
+                  the marquee is world-axis-aligned and cannot cleanly grab a
+                  lattice row on a rotated table. The band IS the target, so
+                  there is no 9 px circle to hit. */}
+              {lineMark?.segId === seg.id &&
+                segmentLines(project, roof, spec, seg, lineMark.axis).map((line) => {
+                  const marked = lineMark.marked.includes(line.index);
+                  return (
+                    <path
+                      key={line.index}
+                      d={polyPath(frame, line.corners)}
+                      fill={marked ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.06)'}
+                      stroke={marked ? '#ef4444' : 'rgba(255,255,255,0.35)'}
+                      strokeWidth={(marked ? 2 : 1) / frame.zoom}
+                      style={{ cursor: 'pointer' }}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={marked}
+                      aria-label={`${marked ? 'Unmark' : 'Mark'} ${lineMark.axis} ${line.index + 1}, ${line.panelIds.length} modules`}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        onToggleLine(line.index);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                        e.preventDefault();
+                        onToggleLine(line.index);
+                      }}
+                    />
+                  );
+                })}
               {/* edge handles when the table is selected: drag out for more rows/columns, in for fewer */}
               {allSelected &&
                 (['top', 'bottom', 'left', 'right'] as const).map((side) => {

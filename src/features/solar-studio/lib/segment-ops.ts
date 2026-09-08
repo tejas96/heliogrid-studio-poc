@@ -13,6 +13,7 @@ import type {
   RackingSpec,
   Roof,
   StructureProfile,
+  XY,
 } from '../types';
 import { genId, rotate } from './geo';
 import {
@@ -387,6 +388,86 @@ export function classifySelection(panels: PlacedPanel[]): SelectionShape {
   if (rows.size === 1) return { segmentId: segId, kind: 'row' };
   if (cols.size === 1) return { segmentId: segId, kind: 'column' };
   return { segmentId: segId, kind: 'table' };
+}
+
+/** One lattice row or column of a table: which modules it holds, and the band
+ *  to draw over them so it can be tapped. */
+export interface SegmentLine {
+  /** the lattice index — row number for axis 'row', column number for 'column' */
+  index: number;
+  panelIds: string[];
+  /** plan-space quad covering the whole line, for the tap target and the mark */
+  corners: XY[];
+}
+
+/**
+ * The table's rows (or columns) as tappable bands.
+ *
+ * Deleting an interior row was already POSSIBLE — marquee it and press Delete,
+ * and `cascadeDeletePanels` → `reindexSegment` keeps the table's geometry and
+ * records the gap in `segment.removed`. What was missing was the affordance and
+ * the number. Two reasons to mark by BAND rather than by marquee: the 2D marquee
+ * is world-axis-aligned, so it cannot cleanly grab a lattice row on a rotated
+ * table; and a per-module marking would inherit the neighbour-hit-test problem
+ * that `lib/plan-pick.ts` exists to avoid.
+ *
+ * Lines come from the panels' own `cellIndex`, which `reindexSegment` stamps, so
+ * this reads the same grid every other table operation does. A line that has
+ * been trimmed to nothing simply is not returned.
+ */
+export function segmentLines(
+  project: Project,
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  axis: GrowAxis,
+): SegmentLine[] {
+  const mine = project.panels.filter((p) => p.segmentId === seg.id && p.cellIndex != null);
+  if (mine.length === 0) return [];
+  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
+  const locals = mine.map((p) => rotate(p.center, -angle));
+  const minX = Math.min(...locals.map((l) => l.x));
+  const maxX = Math.max(...locals.map((l) => l.x));
+  const minY = Math.min(...locals.map((l) => l.y));
+  const maxY = Math.max(...locals.map((l) => l.y));
+
+  const byIndex = new Map<number, string[]>();
+  mine.forEach((p) => {
+    const cell = p.cellIndex as number;
+    const i = axis === 'row' ? Math.floor(cell / COL_STRIDE) : cell % COL_STRIDE;
+    const bucket = byIndex.get(i);
+    if (bucket) bucket.push(p.id);
+    else byIndex.set(i, [p.id]);
+  });
+
+  // the band spans the table on the OTHER axis and one cell on its own
+  const halfX = pitchX / 2;
+  const halfY = pitchY / 2;
+  return [...byIndex.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([index, panelIds]) => {
+      const c =
+        axis === 'row'
+          ? (() => {
+              const y = minY + index * pitchY;
+              return [
+                { x: minX - halfX, y: y - halfY },
+                { x: maxX + halfX, y: y - halfY },
+                { x: maxX + halfX, y: y + halfY },
+                { x: minX - halfX, y: y + halfY },
+              ];
+            })()
+          : (() => {
+              const x = minX + index * pitchX;
+              return [
+                { x: x - halfX, y: minY - halfY },
+                { x: x + halfX, y: minY - halfY },
+                { x: x + halfX, y: maxY + halfY },
+                { x: x - halfX, y: maxY + halfY },
+              ];
+            })();
+      return { index, panelIds, corners: c.map((pt) => rotate(pt, angle)) };
+    });
 }
 
 /**

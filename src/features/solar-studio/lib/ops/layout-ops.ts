@@ -24,6 +24,7 @@ import {
   growSegment,
   relaySegment,
   respaceSegment,
+  segmentLines,
   setSegmentAzimuth,
   setSegmentProfile,
   setSegmentRacking,
@@ -383,6 +384,51 @@ export const segmentSetLayout = defineOp<{
   },
 });
 
+/**
+ * Delete whole lattice rows or columns of a table.
+ *
+ * The mechanism was never missing — `cascadeDeletePanels` already reindexes the
+ * table, prunes the strings and prunes the routes, and a marquee plus Delete
+ * always reached it. What was missing was a way to SAY "these three rows" and a
+ * number before committing. So this op is a thin wrapper whose real value is the
+ * honest label: "Delete 3 rows (27 modules)" rather than "Delete 27 modules",
+ * which reads like loose modules and hides that the table changed shape.
+ *
+ * A table keeps at least one line — emptying it is `segmentDelete`, which also
+ * takes the racking and the member model with it.
+ */
+export const layoutDeleteLines = defineOp<{
+  segmentId: string;
+  axis: GrowAxis;
+  indices: number[];
+}>({
+  id: 'layout.deleteLines',
+  layer: 'layout',
+  label: (a) => {
+    const n = a.indices.length;
+    return `Delete ${n} ${a.axis}${n === 1 ? '' : 's'}`;
+  },
+  validate: (p, a) => {
+    const v = needTable(p, a);
+    if (v) return v;
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    const lines = segmentLines(p, roof!, spec!, segment!, a.axis);
+    if (lines.length === 0) return { reason: 'This table has no modules' };
+    if (a.indices.length === 0) return { reason: 'Tap a row to mark it first' };
+    if (a.indices.length >= lines.length)
+      return { reason: `That is every ${a.axis} — remove the table instead` };
+    return null;
+  },
+  apply: (p, a) => {
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    const mark = new Set(a.indices);
+    const ids = segmentLines(p, roof!, spec!, segment!, a.axis)
+      .filter((l) => mark.has(l.index))
+      .flatMap((l) => l.panelIds);
+    return cascadeDeletePanels(p, ids);
+  },
+});
+
 export const segmentDuplicate = defineOp<{ segmentId: string }>({
   id: 'segment.duplicate',
   layer: 'layout',
@@ -452,6 +498,7 @@ for (const op of [
   segmentChoice,
   segmentRespace,
   segmentSetLayout,
+  layoutDeleteLines,
   segmentDuplicate,
   segmentDelete,
   layoutAutoDesign,
