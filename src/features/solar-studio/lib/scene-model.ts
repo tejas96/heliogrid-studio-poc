@@ -271,6 +271,68 @@ export function buildShadowCasters(
     meshes.push(mesh);
   }
 
+  // Safety rails. The scene has always DRAWN them and the engine has never
+  // known they exist, so a 1100 mm guardrail along the south parapet shaded the
+  // first row every winter morning and no number said so.
+  //
+  // Modelled as what it physically is — two thin bars and a line of posts — and
+  // NOT as a solid wall at rail height. That distinction is the whole point: a
+  // guardrail is mostly air, so a solid slab would behave like a parapet and
+  // over-shade by roughly the ratio of bar to gap. Thin casters are the honest
+  // answer here precisely BECAUSE the engine raycasts: a ray either clears the
+  // bar or it does not, and across the sample points and sun positions the
+  // blocked fraction converges on the rail's real occlusion. Averaging it into
+  // an opaque box would not.
+  //
+  // Dimensions match three/Scene3D.tsx's drawn rail exactly — top bar 50 mm,
+  // mid bar 35 mm at 55% height, posts 50 mm every ~1.5 m — so the shadow on
+  // the picture and the loss in the figure come from the same object.
+  //
+  // A rail does NOT displace modules, deliberately. It is a barrier along an
+  // edge, not a surface you walk on, and modules sit beside guardrails on real
+  // roofs. Adding after-the-fact removal without matching avoidance in
+  // lib/layout.ts would also create the exact inconsistency the walkway
+  // resolver removed — the fill placing a module the next op deletes. If rails
+  // should ever block placement, both halves land together.
+  for (const rl of project.rails ?? []) {
+    const roof = project.roofs.find((r) => r.id === rl.roofId);
+    if (!roof || roof.polygon.length < 3) continue;
+    const railH = rl.heightMm / 1000;
+    const len = Math.hypot(rl.b.x - rl.a.x, rl.b.y - rl.a.y);
+    if (!(railH > 0) || !(len > 0)) continue;
+    const cx = (rl.a.x + rl.b.x) / 2;
+    const cy = (rl.a.y + rl.b.y) / 2;
+    const baseY = surfaceHeightAt(roof, { x: cx, y: cy }, eaveRefs.get(roof.id));
+    // the scene's own frame: plan +y is world -z, so the bearing is negated
+    const yaw = -Math.atan2(-(rl.b.y - rl.a.y), rl.b.x - rl.a.x);
+    const tag = { casterKind: 'rail', casterId: rl.id, casterLabel: 'Safety rail' };
+
+    const bar = (y: number, thick: number) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(len, thick, thick), mat);
+      m.position.set(cx, baseY + y, -cy);
+      m.rotation.y = yaw;
+      m.userData = tag;
+      group.add(m);
+      meshes.push(m);
+    };
+    bar(railH, 0.05); // top rail
+    bar(railH * 0.55, 0.035); // mid rail
+
+    const posts = Math.max(2, Math.round(len / 1.5) + 1);
+    for (let i = 0; i < posts; i++) {
+      const t = i / (posts - 1);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, railH, 8), mat);
+      m.position.set(
+        rl.a.x + (rl.b.x - rl.a.x) * t,
+        baseY + railH / 2,
+        -(rl.a.y + (rl.b.y - rl.a.y) * t),
+      );
+      m.userData = tag;
+      group.add(m);
+      meshes.push(m);
+    }
+  }
+
   // ── Tier-2: the modules themselves (Phase 8) ─────────────────────────────
   const spec = opts.includePanels ? project.components?.panel : null;
   if (spec) {

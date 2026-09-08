@@ -79,7 +79,16 @@ export function geometryFp(p: Project): string {
     // survive byte-identical; explicit edits correctly stale downstream data
     p.obstructions
       .map((o) => (o.capabilities ? `|oc:${o.id}:${JSON.stringify(o.capabilities)}` : ''))
-      .join('')
+      .join('') +
+    // Safety rails became casters in engine v9. CONDITIONAL suffix, for the
+    // same reason as the capability overrides above: a project with no rails
+    // adds nothing and keeps its fingerprint byte-identical, so its captures
+    // survive. Without this the geometry key never moves when a rail is drawn,
+    // the cached access is stamped fresh, and the new caster never runs — the
+    // feature would look shipped and do nothing.
+    (p.rails?.length
+      ? `|rl:${JSON.stringify(p.rails.map((x) => [x.id, x.a, x.b, x.heightMm, x.roofId]))}`
+      : '')
   );
 }
 
@@ -284,7 +293,13 @@ export function designFp(p: Project): string {
 // 8: the engine now also reports per-sample access and per-caster loss (the
 // in-memory shade profile); stored access values are unchanged, but a saved
 // project must run once more so the profile exists this session
-export const SHADING_ENGINE_VERSION = 8;
+// 9: SAFETY RAILS cast, as the scene has always drawn them — the same defect
+// class as the arresters in v7. A 1100 mm guardrail along the south parapet
+// shades the first row every winter morning and no number said so. Modelled as
+// its real bars and posts, not as a solid wall: a guardrail is mostly air, and
+// an opaque slab would over-shade by the ratio of bar to gap. Any project with
+// a rail must re-run, because its stored access was computed without it.
+export const SHADING_ENGINE_VERSION = 9;
 
 /**
  * Recompute/stamp key for per-panel solar access (Class-A derived data).

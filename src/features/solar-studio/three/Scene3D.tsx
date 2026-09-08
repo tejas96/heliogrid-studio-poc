@@ -3547,17 +3547,25 @@ function SceneContent({
         const railH = r.heightMm / 1000;
         const posts = Math.max(2, Math.round(len / 1.5) + 1);
         return (
+          // scene = engine: these three now cast in lib/scene-model too, so the
+          // shadow you can see and the loss in the energy figure are the same
+          // object. They used to cast in NEITHER.
           <group key={r.id} position={[cx, h, -cy]} rotation={[0, -ang, 0]}>
-            <mesh position={[0, railH, 0]} userData={{ shadowCaster: false }}>
+            <mesh position={[0, railH, 0]} castShadow userData={{ shadowCaster: true }}>
               <boxGeometry args={[len, 0.05, 0.05]} />
               <meshStandardMaterial color="#c23b3b" metalness={0.5} roughness={0.5} />
             </mesh>
-            <mesh position={[0, railH * 0.55, 0]}>
+            <mesh position={[0, railH * 0.55, 0]} castShadow userData={{ shadowCaster: true }}>
               <boxGeometry args={[len, 0.035, 0.035]} />
               <meshStandardMaterial color="#c23b3b" metalness={0.5} roughness={0.5} />
             </mesh>
             {Array.from({ length: posts }, (_, i) => (
-              <mesh key={i} position={[-len / 2 + (i * len) / (posts - 1), railH / 2, 0]}>
+              <mesh
+                key={i}
+                position={[-len / 2 + (i * len) / (posts - 1), railH / 2, 0]}
+                castShadow
+                userData={{ shadowCaster: true }}
+              >
                 <cylinderGeometry args={[0.025, 0.025, railH, 8]} />
                 <meshStandardMaterial color="#a8a8a8" metalness={0.7} roughness={0.4} />
               </mesh>
