@@ -43,8 +43,15 @@ Use lowercase, hyphen-separated names:
   `src/features/solar-studio/three/ObstructionMesh.tsx` divides a surveyed length
   by that footprint, and `three/__tests__/obstruction-assets.test.ts` asserts it —
   a model that does not match its `*_REF` fails the suite.
-- Prefer PBR materials with reasonable texture sizes, ideally 1K or 2K.
-  After decimation the textures ARE the remaining weight (about 32 of the 38 MB).
+- **Downscale the textures too.** Run `node scripts/shrink-glb-textures.mjs` after the
+  decimation pass. It resamples every embedded image to 1024 px and re-encodes it in
+  its own format, choosing the quality PER IMAGE — it raises quality until the result
+  clears a PSNR floor against a lossless resample (40 dB colour, 42 dB normal), so a
+  detailed brick base colour and a near-flat roughness map are not handed the same
+  guess. Geometry is copied byte for byte and is provably untouched.
+- Prefer PBR materials with reasonable texture sizes, **1K**. 2048 px maps were 86–96 %
+  of every file after the meshes were fixed, on props that draw a couple of hundred
+  pixels wide.
 - If the model includes animation, keep animation clips named clearly, for example `gentle_wind_sway` or `rotor_spin`.
 
 ## App Integration Notes

@@ -53,12 +53,13 @@ the priority order the hyperrealism section sets out.*
 | **9(c)** both legs under one edge | ✅ four legs, the back pair rising with the tilt. Read-verified only: the path runs for a tilted panel with **no** table, and a table draws its real parametric structure instead. |
 | **9(d)** cells on all six faces | ✅ six materials in BoxGeometry group order — cells on +Y, backsheet on −Y, anodised frame on the four sides. `spec.bifacialityPct` switches the underside to muted rear glass, so the picture and the quote agree about which module this is. |
 | **10** AO tier | ✅ measured, not guessed. `hardwareConcurrency <= 4` or a mobile User-Agent regex described no GPU at all. Now: start optimistic, time real frames, drop AO once if the median is slower than 22 ms. |
-| **54** mesh decimation | ✅ **168.7 MB → 38.2 MB**, 4,770,015 → 148,265 triangles across the six props. `scripts/decimate-glb.mjs`, using meshoptimizer. Each mesh is rescaled back onto its authored bounding box, so the `*_REF` constants and `obstruction-assets.test.ts` are untouched. **The textures are now the remaining weight — about 32 of the 38 MB.** |
+| **8** hero at print size | ✅ the capture raises the drawing buffer to a 2500 px long edge and restores it, so AO, bloom, SMAA and tone mapping all run at that resolution. Measured before: 1097 × 930, because `dpr={[1,1.5]}` clamps to the device's 1. A4 at 300 dpi wants ~2480 px. |
+| **54 / 11** model weight | ✅ **168.7 MB → 8.1 MB**, in two passes. Meshes first (`scripts/decimate-glb.mjs`, meshoptimizer): 4,770,015 → 148,265 triangles, each mesh rescaled back onto its authored bounding box so the `*_REF` constants and `obstruction-assets.test.ts` are untouched. Then the textures (`scripts/shrink-glb-textures.mjs`, sharp): 2048 → 1024 px, quality chosen per image against a PSNR floor, geometry copied byte for byte. The blanket `useGLTF.preload` is already per-type. |
 
-**Still open on this list:** 8 (the hero render is `toDataURL` on the live canvas at
-dpr 1.5, not an offscreen pass at ~2500 px), the empty model folders (`building`,
-`elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws as a grey
-box), and texture downscaling now that the meshes are no longer the problem.
+**Still open on this list:** the plain/realistic model toggle (the other half of 11 —
+ResLink's one tap is why their 3D works on a phone), the empty model folders
+(`building`, `elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws
+as a grey box — item 15), and items 2, 12, 13, 14, 16.
 
 **Still open in this cluster:** 34 (the on-object card — needs the three-way split,
 see the correction below), 35 (a table as a first-class 2D object — the hit-test half
