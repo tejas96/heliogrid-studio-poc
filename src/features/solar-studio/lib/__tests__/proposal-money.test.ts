@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeFinancials, HORIZON_YEARS } from '../finance';
 import { computeEnergyReport } from '../energy/report';
+import { computeFinancing } from '../financing';
 import { proposalNarrative } from '../proposal-narrative';
 import { fixtureProject } from './fixtures/project';
 import type { EnergyReport, Project } from '../../types';
@@ -42,6 +43,22 @@ describe('payback never prints the horizon as if it were an answer', () => {
     expect(fin.paysBackWithinHorizon).toBe(true);
     expect(fin.paybackYears).toBeLessThan(HORIZON_YEARS);
     expect(fin.paybackYears).toBeGreaterThan(0);
+  });
+
+  it('the cash financing note stops promising one too', () => {
+    // This is the sentinel in PROSE, on the surface a prospect actually sees:
+    // the note renders through EnergyReportSheet, which ShareViewer mounts
+    // read-only. Fixing the tile and leaving this said "Over 25 yrs" and
+    // "payback in about 25 years" on the same page.
+    const p: Project = { ...project, info: { ...project.info, tariffInrPerKwh: 0.01 } };
+    const rep = computeEnergyReport(p);
+    const fin = computeFinancials(p, rep);
+    const cash = computeFinancing(fin, rep.annualKwh, p.info.tariffInrPerKwh).options.find(
+      (o) => o.mode === 'cash',
+    )!;
+    expect(fin.paysBackWithinHorizon).toBe(false);
+    expect(cash.note).not.toContain('payback in about');
+    expect(cash.note).toContain('does not pay back');
   });
 
   it('the narrative stays silent when there is no payback to promise', () => {

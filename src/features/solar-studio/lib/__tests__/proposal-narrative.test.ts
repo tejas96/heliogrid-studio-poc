@@ -74,7 +74,9 @@ describe('proposalNarrative', () => {
     expect(flat).toContain(`${r.capacityKwp} kWp`);
     expect(flat).toContain(`${r.annualMwh} MWh`);
     expect(flat).toContain('Test Site, Pune');
-    if (fin.paybackYears > 0 && fin.paybackYears < 25) {
+    // mirrors the production guard. It used to sniff the sentinel with `< 25`,
+    // which would have kept passing vacuously once the real field existed.
+    if (fin.paysBackWithinHorizon && fin.paybackYears > 0) {
       expect(flat).toContain(`${fin.paybackYears.toFixed(1)} years`);
     }
   });

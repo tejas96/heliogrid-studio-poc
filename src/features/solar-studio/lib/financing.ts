@@ -7,6 +7,7 @@
 // deferred; this is the calculation model only.
 import type { FinancialSummary } from '../types';
 import { resolveRules } from '../data/rules/india';
+import { HORIZON_YEARS } from './finance';
 
 type FinancingMode = 'cash' | 'loan' | 'lease' | 'ppa';
 
@@ -65,7 +66,13 @@ export function computeFinancing(
     firstYearNetInr: annualSavings,
     lifetimeCostInr: net,
     headline: `Pay ₹${inr(net)} once`,
-    note: `You own the system outright — payback in about ${fin.paybackYears} years, then free power.`,
+    // The same sentinel, in PROSE, and on the surface that matters most: this
+    // note renders through EnergyReportSheet, which ShareViewer mounts read-only
+    // for the prospect. Fixing the tile above it and leaving this said "Payback
+    // — Over 25 yrs" and "payback in about 25 years" on one page.
+    note: fin.paysBackWithinHorizon
+      ? `You own the system outright — payback in about ${fin.paybackYears} years, then free power.`
+      : `You own the system outright — at this tariff and price it does not pay back within ${HORIZON_YEARS} years.`,
   };
 
   // LOAN — finance the net cost after a down payment

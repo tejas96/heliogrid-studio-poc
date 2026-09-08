@@ -5,6 +5,7 @@ import { useActiveProject } from '../store/store';
 import { navigate } from '../router';
 import { computeFinancing } from '../lib/financing';
 import { HORIZON_YEARS } from '../lib/finance';
+import { stepGate } from '../lib/wizard-gate';
 import { effectiveSld } from '../lib/sld';
 import { proposalNarrative } from '../lib/proposal-narrative';
 import {
@@ -46,6 +47,24 @@ function QrCode({ url, size }: { url: string; size: number }) {
 /** Printable web proposal — use the browser's Print → Save as PDF. */
 export function ProposalView() {
   const project = useActiveProject()!;
+  /**
+   * THE GATE, on the document itself.
+   *
+   * `lib/wizard-gate.ts` says in its own doc comment that `allowedStep === 10`
+   * is "the ONLY state in which the commercial documents — the proposal and the
+   * quote — may be reached", and it was consumed by exactly two callers:
+   * Wizard.tsx and Dashboard.tsx. This screen, the one that actually prints the
+   * GST-inclusive quote a customer signs against, never asked.
+   *
+   * That left a working back door: components/EnergyReportSheet.tsx has a
+   * "Quick Generate" button that navigates straight to /proposal, and the route
+   * itself is reachable by URL. Verified by loading /proposal directly on a
+   * project and getting the full customer document.
+   *
+   * Held HERE rather than in the router because the router cannot say WHY —
+   * the blocker sentence is the useful half, and it names the step that fixes it.
+   */
+  const gate = stepGate(project);
   // Re-render when the shading analysis lands. The full shade profile lives
   // only in memory (lib/shade-profile-cache), so ANY page load — a refresh, or
   // opening /proposal by URL — starts cold. The hourly engine and the string
@@ -57,6 +76,39 @@ export function ProposalView() {
   // React would never re-render. Scene3D and the electrical overlay already
   // subscribe for exactly this reason; the printed document needs it more.
   useShadeProfileVersion();
+  const { fmtArea } = useUnits();
+  // Customer vs engineering doc (plan §31). A customer must NEVER see the
+  // installer's subtotal or margin %; they see the ONE final price (systemCost,
+  // which already has margin baked in — the single money path). The engineering
+  // doc shows how that price is built. Defaults to customer — the safe leak.
+  const [audience, setAudience] = useState<'customer' | 'engineering'>('customer');
+  // optional electrical page (plan §31). Off by default — many customer docs
+  // don't need it; banks and DISCOMs do. Only offered when strings exist.
+  const [includeSld, setIncludeSld] = useState(false);
+  // Every hook is above this line ON PURPOSE. The refusal below is an early
+  // return, and a hook after it would change the hook order between a gated and
+  // an ungated render — the "change in the order of Hooks" crash. Refusing
+  // before the derivations also matters: an incomplete design is exactly what
+  // makes deriveEnergy read a null panel spec, which is the crash stepGate was
+  // written to prevent in the first place.
+  if (gate.allowedStep < 10) {
+    return (
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 18px' }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10 }}>
+          This design is not ready to quote
+        </h1>
+        <p style={{ marginBottom: 6, lineHeight: 1.5 }}>{gate.blocker}</p>
+        <p style={{ marginBottom: 20, lineHeight: 1.5, opacity: 0.75 }}>
+          The proposal carries a GST-inclusive price and a shadow study. It stays closed until
+          every step behind it passes, so a customer cannot be sent numbers for a design that
+          cannot be built.
+        </p>
+        <button className="btn btn-primary" onClick={() => navigate(`/wizard/${gate.allowedStep}`)}>
+          Go to step {gate.allowedStep}
+        </button>
+      </div>
+    );
+  }
   // the 3D images are a separate freshness: money can be final while a capture
   // still shows last week's layout — say so on screen AND in print
   const captureNotes = capturesFresh(project)
@@ -80,15 +132,6 @@ export function ProposalView() {
     fin.systemCostInr > 0
       ? computeFinancing(fin, r.annualMwh * 1000, project.info.tariffInrPerKwh)
       : null;
-  const { fmtArea } = useUnits();
-  // Customer vs engineering doc (plan §31). A customer must NEVER see the
-  // installer's subtotal or margin %; they see the ONE final price (systemCost,
-  // which already has margin baked in — the single money path). The engineering
-  // doc shows how that price is built. Defaults to customer — the safe leak.
-  const [audience, setAudience] = useState<'customer' | 'engineering'>('customer');
-  // optional electrical page (plan §31). Off by default — many customer docs
-  // don't need it; banks and DISCOMs do. Only offered when strings exist.
-  const [includeSld, setIncludeSld] = useState(false);
   const sld = effectiveSld(project);
   const canSld = !!sld && project.strings.length > 0;
   const narrative = proposalNarrative(project, fmtArea);

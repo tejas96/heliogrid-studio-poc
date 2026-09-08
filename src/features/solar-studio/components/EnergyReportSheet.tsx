@@ -3,6 +3,7 @@ import { Sheet } from './ui';
 import type { Project } from '../types';
 import { computeEnergyReport } from '../lib/energy/report';
 import { computeFinancials, HORIZON_YEARS } from '../lib/finance';
+import { stepGate } from '../lib/wizard-gate';
 import { computeFinancing } from '../lib/financing';
 import { isShadingFresh } from '../lib/fingerprints';
 import { M2_TO_FT2 } from '../lib/units';
@@ -24,6 +25,9 @@ export function EnergyReportSheet({
   const fin = computeFinancials(project, r);
   const { units, areaUnit } = useUnits();
   const shadingFresh = isShadingFresh(project);
+  // the same predicate the wizard's Next and the proposal itself use — one gate,
+  // three callers, so they cannot drift into two answers about one question
+  const quoteGate = stepGate(project);
   const roofArea =
     units === 'imperial' ? Math.round(r.roofAreaM2 * M2_TO_FT2) : r.roofAreaM2;
   const maxMonth = Math.max(...r.monthlyKwh, 1);
@@ -283,9 +287,15 @@ export function EnergyReportSheet({
           <button className="btn btn-primary btn-block" onClick={() => navigate('/wizard/7')}>
             <FileText size={15} /> Customize Proposal
           </button>
+          {/* This was the back door: it jumped straight to /proposal, past the
+              gate the wizard's own Next enforces. The document now refuses on
+              arrival, but walking someone into a wall is worse than telling them
+              here — a disabled control must say why (DESIGN-SYSTEM §12). */}
           <button
             className="btn btn-secondary btn-block"
             style={{ marginTop: 8 }}
+            disabled={quoteGate.allowedStep < 10}
+            title={quoteGate.blocker ?? 'Generate the proposal with default settings'}
             onClick={() => navigate('/proposal')}
           >
             <Zap size={15} /> Quick Generate
