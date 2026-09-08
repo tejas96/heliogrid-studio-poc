@@ -80,7 +80,9 @@ export function proposalNarrative(project: Project, fmtArea: (m2: number) => str
       facts: [r.lifetimeMwh25],
     },
   ];
-  if (fin.paybackYears > 0 && fin.paybackYears < 25) {
+  // was `paybackYears < 25` — the right instinct, guessing at the sentinel from
+  // the outside. It is a real field now, so the guard says what it means.
+  if (fin.paysBackWithinHorizon && fin.paybackYears > 0) {
     money.push({
       text: `At your current tariff the system pays for itself in about ${fin.paybackYears.toFixed(1)} years, then keeps saving for the rest of its life — an estimated ${inr(fin.savings25YrInr)} over 25 years.`,
       facts: [fin.paybackYears, fin.savings25YrInr],

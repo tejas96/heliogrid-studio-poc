@@ -24,6 +24,9 @@ export function subsidyInr(
   return Math.min(s.capInr, Math.round(first + rest));
 }
 
+/** The commercial life the payback and the savings figure are quoted over. */
+export const HORIZON_YEARS = 25;
+
 export function computeFinancials(
   project: Project,
   report: EnergyReport,
@@ -39,19 +42,41 @@ export function computeFinancials(
   );
   const netCost = Math.max(0, systemCost - subsidy);
   const tariff = project.info.tariffInrPerKwh;
-  const annualKwh = report.annualMwh * 1000;
+  // The EXACT annual figure, not `annualMwh * 1000`. `annualMwh` is
+  // `Math.round(annualKwh / 100) / 10` (lib/energy/report.ts) — quantised to
+  // 100 kWh — and every rupee below is built on it and then compounded over 25
+  // years with escalation, so the rounding does not stay small. The unrounded
+  // value sits one line away in the same report and its own type comment calls
+  // itself "the basis annualMwh rounds".
+  const annualKwh = report.annualKwh;
   const annualSavings = Math.round(annualKwh * tariff);
   const escalation = 3; // % tariff escalation per year
   // payback with escalating tariff. Guards: zero net cost pays back at once;
   // zero yearly savings must not divide (0-panel candidates hit NaN otherwise)
   let cum = 0;
-  let payback = netCost <= 0 ? 0 : 25;
+  let payback = netCost <= 0 ? 0 : HORIZON_YEARS;
+  /**
+   * Whether the loop actually FOUND a payback year.
+   *
+   * `payback` starts at the horizon, so a system that never pays back within 25
+   * years ends up holding 25 — indistinguishable from one that pays back in
+   * exactly 25. `ProposalView` printed that as "25 yrs" and the energy sheet as
+   * "25.0 years", on a document a buyer signs against. The narrative already
+   * knew, guarding on `< 25`, but the headline number did not.
+   *
+   * A flag rather than a nullable number on purpose: `paybackYears` is also the
+   * RANKING key in lib/comparison.ts, where "did not pay back" sorting as 25 is
+   * the correct order, and a null there would have to be special-cased at every
+   * comparison. Callers that PRINT must consult this; callers that SORT need not.
+   */
+  let paysBack = netCost <= 0;
   let yearly = annualSavings;
   let gen = annualKwh;
-  for (let y = 1; netCost > 0 && y <= 25; y++) {
+  for (let y = 1; netCost > 0 && y <= HORIZON_YEARS; y++) {
     cum += yearly;
-    if (cum >= netCost && payback === 25) {
+    if (cum >= netCost && !paysBack) {
       payback = yearly > 0 ? y - 1 + Math.max(0, (netCost - (cum - yearly)) / yearly) : y;
+      paysBack = true;
       break;
     }
     gen *= 1 - report.degradationPctPerYear / 100;
@@ -60,7 +85,7 @@ export function computeFinancials(
   // 25-yr savings
   let total = 0;
   gen = annualKwh;
-  for (let y = 0; y < 25; y++) {
+  for (let y = 0; y < HORIZON_YEARS; y++) {
     total += gen * tariff * Math.pow(1 + escalation / 100, y);
     gen *= 1 - report.degradationPctPerYear / 100;
   }
@@ -75,6 +100,7 @@ export function computeFinancials(
     netCostInr: netCost,
     annualSavingsInr: annualSavings,
     paybackYears: Math.round(payback * 10) / 10,
+    paysBackWithinHorizon: paysBack,
     savings25YrInr: Math.round(total),
     emiPerMonthInr: emi,
     tariffEscalationPct: escalation,

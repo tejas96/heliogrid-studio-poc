@@ -11,6 +11,7 @@ const FIN: FinancialSummary = {
   netCostInr: 422000,
   annualSavingsInr: 60000,
   paybackYears: 7,
+  paysBackWithinHorizon: true,
   savings25YrInr: 2000000,
   emiPerMonthInr: 0,
   tariffEscalationPct: 3,

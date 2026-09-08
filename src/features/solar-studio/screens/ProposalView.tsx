@@ -4,6 +4,7 @@ import { ArrowLeft, Link2, Printer } from 'lucide-react';
 import { useActiveProject } from '../store/store';
 import { navigate } from '../router';
 import { computeFinancing } from '../lib/financing';
+import { HORIZON_YEARS } from '../lib/finance';
 import { effectiveSld } from '../lib/sld';
 import { proposalNarrative } from '../lib/proposal-narrative';
 import {
@@ -342,7 +343,13 @@ export function ProposalView() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
             <Big label="Annual Savings" value={`₹${fin.annualSavingsInr.toLocaleString('en-IN')}`} />
-            <Big label="Payback" value={`${fin.paybackYears} yrs`} />
+            {/* never print the horizon as if it were an answer — a system that
+                does not pay back inside 25 years left paybackYears at 25, and
+                this said "25 yrs" on a document the customer signs against */}
+            <Big
+              label="Payback"
+              value={fin.paysBackWithinHorizon ? `${fin.paybackYears} yrs` : `Over ${HORIZON_YEARS} yrs`}
+            />
             <Big label="25-yr Savings" value={`₹${Math.round(fin.savings25YrInr / 100000)} L`} accent="var(--good)" />
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginBottom: 18 }}>

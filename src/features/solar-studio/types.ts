@@ -849,6 +849,15 @@ export interface FinancialSummary {
   netCostInr: number;
   annualSavingsInr: number;
   paybackYears: number;
+  /**
+   * Whether `paybackYears` is a real answer or the horizon it fell back to.
+   *
+   * A system that never pays back inside 25 years leaves `paybackYears` at 25,
+   * which reads exactly like one that pays back in 25. Anything that PRINTS the
+   * number must check this first; anything that SORTS by it (lib/comparison.ts)
+   * can ignore it, because 25 is the right place for "never" in the order.
+   */
+  paysBackWithinHorizon: boolean;
   savings25YrInr: number;
   /**
    * @deprecated A bare EMI on the FULL net cost (no down payment). Superseded by

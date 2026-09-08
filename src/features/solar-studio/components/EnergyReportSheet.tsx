@@ -2,7 +2,7 @@ import { BarChart3, FileText, RefreshCw, Sun, TrendingUp, Zap } from 'lucide-rea
 import { Sheet } from './ui';
 import type { Project } from '../types';
 import { computeEnergyReport } from '../lib/energy/report';
-import { computeFinancials } from '../lib/finance';
+import { computeFinancials, HORIZON_YEARS } from '../lib/finance';
 import { computeFinancing } from '../lib/financing';
 import { isShadingFresh } from '../lib/fingerprints';
 import { M2_TO_FT2 } from '../lib/units';
@@ -234,7 +234,12 @@ export function EnergyReportSheet({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 18 }}>
         <Stat label="Net Cost" value={`₹${(fin.netCostInr / 1000).toFixed(0)}k`} unit={`after ₹${(fin.subsidyInr / 1000).toFixed(0)}k subsidy`} />
         <Stat label="Yearly Savings" value={`₹${(fin.annualSavingsInr / 1000).toFixed(0)}k`} unit={`@₹${project.info.tariffInrPerKwh}/kWh`} />
-        <Stat label="Payback" value={fin.paybackYears.toFixed(1)} unit="years" />
+        {/* same sentinel as the proposal: 25 means "never" as often as it means 25 */}
+        {fin.paysBackWithinHorizon ? (
+          <Stat label="Payback" value={fin.paybackYears.toFixed(1)} unit="years" />
+        ) : (
+          <Stat label="Payback" value={`over ${HORIZON_YEARS}`} unit="years" />
+        )}
       </div>
 
       {fin.systemCostInr > 0 && (
