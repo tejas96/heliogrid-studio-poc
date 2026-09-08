@@ -208,6 +208,27 @@ export function reindexSegment(
  * (existing + added, reindexed), the updated segment, and how many were added.
  */
 /**
+ * How wide a grown row (or tall a grown column) is, and where along the table
+ * it starts. Both are cell counts on the CROSS axis, both optional, and both
+ * default to the table's full width — the behaviour every caller had before.
+ *
+ * This is the "6 wide next to a 9-wide table" case. Real roofs step in and out
+ * around a stair head, and every added row used to be forced to full width and
+ * then trimmed one module at a time with the eraser.
+ *
+ * KNOWN LIMIT, mitigated by the ghost rather than hidden: `cols`/`rows` come
+ * from the panels' BOUNDING BOX, so a table already trimmed into an L reports
+ * the full rectangle and a narrow row can land beside a gap. The live preview
+ * paints exactly the modules that will appear, so the user sees it before Add.
+ */
+export interface GrowSpan {
+  /** modules along the cross axis; default = the table's full width */
+  span?: number;
+  /** first cell on the cross axis; default 0 */
+  offset?: number;
+}
+
+/**
  * The NEW panels a grow would add (collision-aware), without mutating the
  * segment. Powers both growSegment and the live grow ghost preview.
  */
@@ -219,6 +240,7 @@ export function growCandidates(
   axis: GrowAxis,
   side: GrowSide,
   count: number,
+  opts: GrowSpan = {},
 ): PlacedPanel[] {
   const mine = project.panels.filter((p) => p.segmentId === seg.id);
   if (mine.length === 0 || count < 1) return [];
@@ -259,18 +281,25 @@ export function growCandidates(
     };
   };
 
+  // How wide the new line is, and where it starts, along the CROSS axis. The
+  // default is the table's full width — what every caller got before this
+  // existed — so a row is only narrower when someone asks for it.
+  const full = axis === 'row' ? cols : rows;
+  const span = Math.max(1, Math.min(opts.span ?? full, full));
+  const offset = Math.max(0, Math.min(opts.offset ?? 0, full - span));
+
   const added: PlacedPanel[] = [];
   for (let k = 1; k <= count; k++) {
     if (axis === 'row') {
       // higher world-Y is UP on screen, so 'top' extends toward +Y
       const y = side === 'top' ? maxY + k * pitchY : minY - k * pitchY;
-      for (let c = 0; c < cols; c++) {
+      for (let c = offset; c < offset + span; c++) {
         const p = make(minX + c * pitchX, y);
         if (p) added.push(p);
       }
     } else {
       const x = side === 'left' ? minX - k * pitchX : maxX + k * pitchX;
-      for (let r = 0; r < rows; r++) {
+      for (let r = offset; r < offset + span; r++) {
         const p = make(x, minY + r * pitchY);
         if (p) added.push(p);
       }
@@ -293,9 +322,10 @@ export function growSegment(
   axis: GrowAxis,
   side: GrowSide,
   count: number,
+  opts: GrowSpan = {},
 ): { segment: ArraySegment; panels: PlacedPanel[]; added: number } {
   const mine = project.panels.filter((p) => p.segmentId === seg.id);
-  const added = growCandidates(project, roof, spec, seg, axis, side, count);
+  const added = growCandidates(project, roof, spec, seg, axis, side, count, opts);
   const re = reindexSegment(roof, spec, seg, [...mine, ...added]);
   return { segment: re.segment, panels: re.panels, added: added.length };
 }

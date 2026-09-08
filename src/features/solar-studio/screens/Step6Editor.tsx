@@ -95,6 +95,7 @@ import {
   STRUCTURE_PROFILES,
   type GrowAxis,
   type GrowSide,
+  type GrowSpan,
   type SelectionShape,
 } from '../lib/segment-ops';
 import { resolveRules } from '../data/rules/india';
@@ -608,32 +609,46 @@ export function Step6Editor() {
    * button that was pressed (lock/no-segment paths report through their own
    * channels and return true so the bar stays quiet about them).
    */
-  function growSelection(axis: GrowAxis, side: GrowSide, count: number): boolean {
+  /** null when it landed (or was not attempted); otherwise the op's own reason. */
+  function growSelection(
+    axis: GrowAxis,
+    side: GrowSide,
+    count: number,
+    opts: GrowSpan = {},
+  ): string | null {
     if (locked) {
       flashLock();
-      return true;
+      return null;
     }
     const seg = growShape.segmentId
       ? project.segments.find((s) => s.id === growShape.segmentId)
       : undefined;
     const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
-    if (!seg || !roof) return true;
-    const r = ops.run(layoutGrow, { segmentId: seg.id, axis, side, count });
-    if (!r.ok) return false; // "no room" — the context bar shows it inline
+    if (!seg || !roof) return null;
+    const r = ops.run(layoutGrow, { segmentId: seg.id, axis, side, count, ...opts });
+    // Hand the OP's reason back rather than letting the bar invent one. The op
+    // knows the request was for a 5-wide row; a generic "no room to add a row"
+    // sends the user hunting for an obstruction that is not the problem.
+    if (!r.ok) return r.refusal.reason;
     flash('ok', summarizeImpact(r.impact));
     setSelectedIds(r.next.panels.filter((p) => p.segmentId === seg.id).map((p) => p.id));
-    return true;
+    return null;
   }
 
   // Live ghost for the grow popover: the exact panels a grow would add, so the
   // user sees the new rows/columns before pressing Add.
-  function growPreviewCorners(axis: GrowAxis, side: GrowSide, count: number): XY[][] {
+  function growPreviewCorners(
+    axis: GrowAxis,
+    side: GrowSide,
+    count: number,
+    opts: GrowSpan = {},
+  ): XY[][] {
     const seg = growShape.segmentId
       ? project.segments.find((s) => s.id === growShape.segmentId)
       : undefined;
     const roof = seg && project.roofs.find((r) => r.id === seg.roofId);
     if (!seg || !roof) return [];
-    return growCandidates(project, roof, spec, seg, axis, side, count).map((p) =>
+    return growCandidates(project, roof, spec, seg, axis, side, count, opts).map((p) =>
       panelCornersOnRoof(p, spec, roof),
     );
   }
@@ -1669,11 +1684,19 @@ export function Step6Editor() {
             setTableDrag(null);
             if (d.count === 0) return;
             const axis = d.side === 'top' || d.side === 'bottom' ? 'row' : 'column';
-            report(
+            const r =
               d.count > 0
                 ? ops.run(layoutGrow, { segmentId: d.segId, axis, side: d.side, count: d.count })
-                : ops.run(layoutShrink, { segmentId: d.segId, axis, side: d.side, count: -d.count }),
-            );
+                : ops.run(layoutShrink, { segmentId: d.segId, axis, side: d.side, count: -d.count });
+            if (!report(r)) return;
+            // Re-select the whole table. The four edge handles render only while
+            // EVERY module of the table is selected, so an OUTWARD drag used to
+            // add modules that were not in the selection, flip that test false,
+            // and unmount the handles mid-gesture: three rows meant three drags
+            // and three re-select taps. (A shrink survived by luck — the
+            // selection stayed a superset.) `growSelection` already does this;
+            // this path simply never did.
+            setSelectedIds(r.next.panels.filter((p) => p.segmentId === d.segId).map((p) => p.id));
           }}
           panelDrag={panelDrag}
           marquee={marquee}
@@ -1690,6 +1713,8 @@ export function Step6Editor() {
             onGrow={growSelection}
             onGrowPreview={growPreviewCorners}
             tableCount={selectedSegments.length}
+            tableRows={selectedSegment?.rows ?? 1}
+            tableCols={selectedSegment?.cols ?? 1}
             onTableSettings={() => setTableSheet(true)}
             canGroup={canGroup}
             onGroup={groupSelection}
@@ -2922,11 +2947,18 @@ export function Step6Editor() {
 
 // ─── selection context bar (SVG-anchored, constant screen size) ─────────────
 
+/** `null` span means "full width", which is simply no span option at all. */
+function spanOpts(span: number | null, offset: number): GrowSpan {
+  return span === null ? {} : { span, offset };
+}
+
 function SelectionContextBar({
   panels,
   locked,
   growShape,
   tableCount,
+  tableRows,
+  tableCols,
   onGrow,
   onGrowPreview,
   onTableSettings,
@@ -2944,9 +2976,13 @@ function SelectionContextBar({
   /** how many TABLES the selection touches — 0, 1, or many. Grow needs exactly
    *  one (a row across two tables means nothing); settings work on all of them. */
   tableCount: number;
-  /** returns false when there was no room — surfaced as an inline flash */
-  onGrow: (axis: GrowAxis, side: GrowSide, count: number) => boolean;
-  onGrowPreview: (axis: GrowAxis, side: GrowSide, count: number) => XY[][];
+  /** the grown table's OWN grid, which bounds "panels in row" — never the
+   *  selection's, or tapping one module caps the width at 1 */
+  tableRows: number;
+  tableCols: number;
+  /** null when it landed; otherwise the op's own refusal, shown inline verbatim */
+  onGrow: (axis: GrowAxis, side: GrowSide, count: number, opts?: GrowSpan) => string | null;
+  onGrowPreview: (axis: GrowAxis, side: GrowSide, count: number, opts?: GrowSpan) => XY[][];
   onTableSettings: () => void;
   canGroup: boolean;
   onGroup: () => void;
@@ -2961,6 +2997,9 @@ function SelectionContextBar({
   const [axis, setAxis] = useState<GrowAxis>('row');
   const [side, setSide] = useState<GrowSide>('bottom');
   const [count, setCount] = useState(1);
+  /** modules across the new line; null = the table's full width (the default) */
+  const [span, setSpan] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
   // brief inline failure flash next to the grow controls ("No room…")
   const [growMsg, setGrowMsg] = useState<string | null>(null);
   const growMsgTimer = useRef<number | undefined>(undefined);
@@ -2989,9 +3028,16 @@ function SelectionContextBar({
           : null;
     return { row, col };
   }, [canGrow, onGrowPreview]);
+  // The TABLE's size on the cross axis — not the selection's. Reading it from
+  // the selected panels made the stepper useless the moment you tapped a single
+  // module to grow from: one panel is one column wide, so "panels in row" could
+  // only ever be 1. The segment carries the real grid.
+  const crossFull = Math.max(1, axis === 'row' ? tableCols : tableRows);
+  // the ghost and the commit call the SAME function with the SAME span, so what
+  // is painted is exactly what lands — no second derivation to drift
   const growGhost = useMemo(
-    () => (growOpen && canGrow ? onGrowPreview(axis, side, count) : []),
-    [growOpen, canGrow, axis, side, count, onGrowPreview],
+    () => (growOpen && canGrow ? onGrowPreview(axis, side, count, spanOpts(span, offset)) : []),
+    [growOpen, canGrow, axis, side, count, span, offset, onGrowPreview],
   );
   if (panels.length === 0) return null;
 
@@ -3002,13 +3048,8 @@ function SelectionContextBar({
   }
   /** One-click grow: adds a single row/column on the side that has room. */
   function quickGrow(growAxis: GrowAxis, growSide: GrowSide | null) {
-    const ok = onGrow(
-      growAxis,
-      growSide ?? (growAxis === 'row' ? 'bottom' : 'right'),
-      1,
-    );
-    if (!ok)
-      flashGrow(growAxis === 'row' ? 'No room for a row' : 'No room for a column');
+    const reason = onGrow(growAxis, growSide ?? (growAxis === 'row' ? 'bottom' : 'right'), 1);
+    if (reason) flashGrow(reason);
   }
   const growDisabledReason = locked
     ? 'Layout is locked'
@@ -3298,6 +3339,59 @@ function SelectionContextBar({
                   <button className="tool-btn" onClick={() => setCount((n) => Math.min(20, n + 1))}>+</button>
                 </div>
               </div>
+              {/* How WIDE the new row is. Real roofs step in and out around a
+                  stair head, so a row that must be 6 wide beside a 9-wide table
+                  used to mean adding 9 and erasing 3, one module at a time.
+                  "Full" is the default and keeps the old behaviour exactly. */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: 'var(--editor-ink-2)' }}>
+                <span>{axis === 'row' ? 'Panels in row' : 'Panels in column'}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    className="tool-btn"
+                    aria-label={axis === 'row' ? 'Fewer panels in the new row' : 'Fewer panels in the new column'}
+                    onClick={() => setSpan((n) => (n === null ? crossFull - 1 : Math.max(1, n - 1)))}
+                  >
+                    −
+                  </button>
+                  <span
+                    aria-live="polite"
+                    style={{ minWidth: 30, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {span === null ? 'full' : span}
+                  </span>
+                  <button
+                    className="tool-btn"
+                    aria-label={axis === 'row' ? 'More panels in the new row' : 'More panels in the new column'}
+                    onClick={() => setSpan((n) => (n === null || n + 1 >= crossFull ? null : n + 1))}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+              {span !== null && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, color: 'var(--editor-ink-2)' }}>
+                  <span>Start at</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      className="tool-btn"
+                      aria-label="Start the new line closer to the table's start"
+                      onClick={() => setOffset((n) => Math.max(0, n - 1))}
+                    >
+                      −
+                    </button>
+                    <span aria-live="polite" style={{ minWidth: 16, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                      {offset + 1}
+                    </span>
+                    <button
+                      className="tool-btn"
+                      aria-label="Start the new line further along the table"
+                      onClick={() => setOffset((n) => Math.min(Math.max(0, crossFull - span), n + 1))}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 6 }}>
                 {(axis === 'row' ? (['top', 'bottom'] as GrowSide[]) : (['left', 'right'] as GrowSide[])).map((s) => (
                   <button
@@ -3321,10 +3415,11 @@ function SelectionContextBar({
                 className="btn btn-primary"
                 style={{ minHeight: 30, fontSize: 12, fontWeight: 700 }}
                 onClick={() => {
-                  // the ghost already shows what will land; a failed add still
-                  // says so inline instead of closing silently
-                  if (onGrow(axis, side, count)) setGrowOpen(false);
-                  else flashGrow(`No room to add a ${axis} there`);
+                  // the ghost already shows what will land; a failed add says
+                  // WHY inline instead of closing silently
+                  const reason = onGrow(axis, side, count, spanOpts(span, offset));
+                  if (reason) flashGrow(reason);
+                  else setGrowOpen(false);
                 }}
               >
                 Add {count} {axis}

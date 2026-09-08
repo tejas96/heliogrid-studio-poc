@@ -141,21 +141,38 @@ export const layoutGroup = defineOp<{ panelIds: string[] }>({
   },
 });
 
-export const layoutGrow = defineOp<{ segmentId: string; axis: GrowAxis; side: GrowSide; count: number }>({
+export const layoutGrow = defineOp<{
+  segmentId: string;
+  axis: GrowAxis;
+  side: GrowSide;
+  count: number;
+  /** modules along the cross axis; omit for the table's full width */
+  span?: number;
+  /** first cell on the cross axis; omit for 0 */
+  offset?: number;
+}>({
   id: 'layout.grow',
   layer: 'layout',
-  label: (a) => `Add ${a.count} ${a.axis}${a.count === 1 ? '' : 's'} (${a.side})`,
+  label: (a) =>
+    a.span
+      ? `Add ${a.count} ${a.axis}${a.count === 1 ? '' : 's'} of ${a.span} (${a.side})`
+      : `Add ${a.count} ${a.axis}${a.count === 1 ? '' : 's'} (${a.side})`,
   validate: (p, a) => {
     const v = needTable(p, a);
     if (v) return v;
     const { segment, roof, spec } = segmentOf(p, a.segmentId);
-    return growSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count).added === 0
-      ? { reason: 'No room to add modules there' }
-      : null;
+    if (growSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count, a).added > 0) return null;
+    // Say WHICH request failed. The generic sentence sent people hunting for an
+    // obstruction when the real answer was "a 6-wide row does not fit there".
+    return {
+      reason: a.span
+        ? `No room for a ${a.span}-wide ${a.axis} there`
+        : 'No room to add modules there',
+    };
   },
   apply: (p, a) => {
     const { segment, roof, spec } = segmentOf(p, a.segmentId);
-    const res = growSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count);
+    const res = growSegment(p, roof!, spec!, segment!, a.axis, a.side, a.count, a);
     return {
       panels: [...p.panels.filter((m) => m.segmentId !== segment!.id), ...res.panels],
       segments: p.segments.map((s) => (s.id === segment!.id ? res.segment : s)),
