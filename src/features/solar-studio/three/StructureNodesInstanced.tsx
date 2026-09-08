@@ -15,7 +15,7 @@
 // label wherever it is shown.
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import type { SegmentStructure } from '../lib/structure';
+import { tableYawRad, type SegmentStructure } from '../lib/structure';
 import {
   foundationAssembly,
   foundationKindOfSpec,
@@ -29,7 +29,11 @@ interface Placement {
   /** node position in EN metres */
   at: { x: number; y: number; z: number };
   nodeId: string;
+  /** rotation about three's Y that lays this part along its own table's rails */
+  yaw: number;
 }
+
+const UP = new THREE.Vector3(0, 1, 0);
 
 const PLAIN = new THREE.Color('#ffffff');
 const LIT = new THREE.Color('#ffb454');
@@ -71,6 +75,9 @@ export function StructureNodesInstanced({
   const buckets = useMemo(() => {
     const map = new Map<string, Placement[]>();
     for (const s of structures) {
+      // one yaw per TABLE, not per node: a table is a rigid frame, so its
+      // clamps cannot disagree with each other about which way the rail runs
+      const yaw = tableYawRad(s);
       for (const node of s.nodes) {
         // A foundation for a leg base; plain hardware for every other joint.
         // Both yield the same part shape, so one loop places them all — and
@@ -84,7 +91,7 @@ export function StructureNodesInstanced({
             : nodeHardware(node.kind);
         for (const part of parts) {
           const list = map.get(part.bucket) ?? [];
-          list.push({ part, at: node.position, nodeId: node.id });
+          list.push({ part, at: node.position, nodeId: node.id, yaw });
           map.set(part.bucket, list);
         }
       }
@@ -97,6 +104,7 @@ export function StructureNodesInstanced({
     const q = new THREE.Quaternion();
     const pos = new THREE.Vector3();
     const scl = new THREE.Vector3();
+    const off = new THREE.Vector3();
 
     return buckets.map(([bucket, places]) => {
       const first = places[0].part;
@@ -105,14 +113,19 @@ export function StructureNodesInstanced({
         bucket === 'pedestal' || bucket === 'ballast' || bucket === 'grout' ? concrete : steel;
       const m = new THREE.InstancedMesh(geometry, material, places.length);
       places.forEach((p, i) => {
+        // Turn the part to face along its own table's rails. This used to be a
+        // never-assigned identity quaternion, so every clamp, plate and bolt
+        // stood square to the WORLD while the steel it grips ran at the table's
+        // azimuth — visible the moment you ghost the modules to inspect the
+        // structure, which is the one thing that view exists for.
+        q.setFromAxisAngle(UP, p.yaw);
+        // the offset is in the assembly's own frame, so its horizontal part
+        // turns with it; `offset.y` is height and never does
+        off.set(p.part.offset.x, 0, p.part.offset.z).applyQuaternion(q);
         // EN(x east, y north, z up) → three.js (x, z, −y). The assembly's local
         // y = 0 sits at the roof surface under the leg, which is exactly where
         // the roof_anchor node is.
-        pos.set(
-          p.at.x + p.part.offset.x,
-          p.at.z + p.part.offset.y,
-          -p.at.y + p.part.offset.z,
-        );
+        pos.set(p.at.x + off.x, p.at.z + p.part.offset.y, -p.at.y + off.z);
         scl.set(p.part.size.x, p.part.size.y, p.part.size.z);
         mat.compose(pos, q, scl);
         m.setMatrixAt(i, mat);

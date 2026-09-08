@@ -328,6 +328,62 @@ export interface SegmentStructure {
   warnings: string[];
 }
 
+/**
+ * The plan direction a table's rails run along, as a unit vector in EN metres.
+ *
+ * The hardware at a node — a mid clamp, an end clamp, a bolted plate — has to
+ * sit the way the steel under it sits. `StructureNodesInstanced` had no way to
+ * know that and placed every part axis-aligned to the world, so a table turned
+ * to any azimuth showed rotated rails held by unrotated clamps. This gives the
+ * renderer the one answer, derived from the table's OWN members rather than
+ * re-derived from the segment (§A0).
+ *
+ * Directions are averaged as DOUBLED angles because a rail is a line, not an
+ * arrow: a member running 30° and its neighbour stored 210° are the same
+ * direction, and averaging them raw would cancel to nothing. Each member is
+ * weighted by its length, so a long rail outvotes a short brace.
+ *
+ * Returns `{ x: 1, y: 0 }` for a structure with no horizontal members to read —
+ * an arbitrary but stable answer, which is what the old code did everywhere.
+ */
+export function tableAxis(s: SegmentStructure): { x: number; y: number } {
+  const byKind = (k: MemberKind) => s.members.filter((m) => m.kind === k);
+  // rails carry the clamps, so they are the truth; purlins run the same way
+  const run = byKind('rail').length ? byKind('rail') : byKind('purlin').length ? byKind('purlin') : s.members;
+  let sx = 0;
+  let sy = 0;
+  for (const m of run) {
+    const dx = m.b.x - m.a.x;
+    const dy = m.b.y - m.a.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1e-6) continue; // a leg is vertical in plan — it says nothing
+    const a2 = 2 * Math.atan2(dy, dx);
+    sx += Math.cos(a2) * len;
+    sy += Math.sin(a2) * len;
+  }
+  if (sx === 0 && sy === 0) return { x: 1, y: 0 };
+  const a = Math.atan2(sy, sx) / 2;
+  return { x: Math.cos(a), y: Math.sin(a) };
+}
+
+/**
+ * `tableAxis` as a rotation about the SCENE's up axis, in radians.
+ *
+ * The scene is EN(x east, y north, z up) → three(x, z, −y), so a plan direction
+ * (dx, dy) points along three's (dx, 0, −dy). A rotation of θ about Y carries
+ * the part's local +Z — the long axis `lib/hardware.ts` dimensions a clamp on —
+ * to (sin θ, 0, cos θ). Equating the two gives θ = atan2(dx, −dy).
+ *
+ * It lives here, not in the renderer, because that sign convention is the one
+ * thing in this change that is easy to get backwards and hard to see: a clamp
+ * turned 90° wrong still looks like a clamp. `__tests__/table-axis.test.ts`
+ * pins it by rotating a +Z vector and checking where it lands.
+ */
+export function tableYawRad(s: SegmentStructure): number {
+  const axis = tableAxis(s);
+  return Math.atan2(axis.x, -axis.y);
+}
+
 const rnd = (v: number) => Math.round(v * 1000) / 1000;
 
 /** Every member kind, so `memberSummary` is complete whatever the topology. */
