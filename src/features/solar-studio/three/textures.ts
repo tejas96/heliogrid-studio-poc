@@ -217,9 +217,21 @@ export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials
       roughness: 0.08,
       clearcoat: 0.5,
       clearcoatRoughness: 0.06,
-      // the environment's overhead light panel fills a module's whole mirror
-      // image; at full strength every cell read as sky-grey
-      envMapIntensity: 0.2,
+      // Was 0.2, to stop "every cell reading as sky-grey" against the old flat
+      // slab environment.
+      //
+      // MEASURED 2026-09-09: this knob does NOTHING here, at any value. In this
+      // three version `material.envMapIntensity` scales a material's OWN
+      // `envMap`; a map inherited from `scene.environment` is scaled by
+      // `scene.environmentIntensity` instead. Sampling the rendered glass at
+      // 0.2, 1.0 and 20 gave byte-identical pixels, while changing this
+      // material's colour or roughness moved them immediately. So the 0.2 was
+      // never dimming anything — the real lever is in Scene3D.
+      //
+      // Left at the neutral 1.0 so it stops implying a control that is not
+      // wired, and so it is already correct if this material is ever given its
+      // own envMap.
+      envMapIntensity: 1.0,
       map: getModuleTexture(spec, o),
     });
   const mats: PanelMaterials = {

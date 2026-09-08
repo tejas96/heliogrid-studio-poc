@@ -1,6 +1,6 @@
 // ─── 3D Studio v2: photoreal scene, sun sim, solar access, pro HUD ──────────
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import {
   CameraControls,
   CameraControlsImpl,
@@ -212,6 +212,53 @@ function PickOrder({ wiring }: { wiring: boolean }) {
  * reading the scene graph, and r3f keeps it behind its own store. Costs
  * nothing in production, where the block is stripped.
  */
+/**
+ * Make the environment map usable by the PBR materials.
+ *
+ * THE DEFECT THIS FIXES, measured on the live renderer: `<Environment>` leaves
+ * `scene.environment` as a raw CubeTexture with `mapping = 301`
+ * (CubeReflectionMapping). Three's standard/physical shader needs a
+ * PMREM-prefiltered map — `mapping = 306` (CubeUVReflectionMapping) — because
+ * roughness has to select a mip level. Handed a raw cube, it contributes
+ * NOTHING. Proof: setting the module glass `envMapIntensity` to 0.2, 1.0 and
+ * even 20 produced a byte-identical frame at three separate sample points on
+ * the glass itself, while changing the same material's colour moved the pixels
+ * immediately. So the IBL was inert, and the `envMapIntensity: 0.2` workaround
+ * in three/textures.ts was blaming a light that was never reaching the glass.
+ *
+ * Prefiltering it here rather than replacing <Environment> keeps drei owning
+ * the bake (including the re-bake when the sun bucket changes) and adds one
+ * conversion on top. The check is a mapping comparison per frame, and it
+ * self-heals: when the environment is re-baked, mapping goes back to 301 and
+ * this converts the new one and disposes the old target.
+ */
+function PmremEnvironment() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const rt = useRef<THREE.WebGLRenderTarget | null>(null);
+  useFrame(() => {
+    const env = scene.environment;
+    if (!env || env.mapping === THREE.CubeUVReflectionMapping) return;
+    const gen = new THREE.PMREMGenerator(gl);
+    try {
+      const next = gen.fromCubemap(env as THREE.CubeTexture);
+      rt.current?.dispose();
+      rt.current = next;
+      scene.environment = next.texture;
+    } finally {
+      gen.dispose();
+    }
+  });
+  useEffect(
+    () => () => {
+      rt.current?.dispose();
+      rt.current = null;
+    },
+    [],
+  );
+  return null;
+}
+
 function DevSceneHandle({ sceneRef }: { sceneRef?: React.RefObject<THREE.Scene | null> }) {
   const three = useThree();
   // The scene ref is NOT dev-only: the .glb export needs the live scene in
@@ -1594,6 +1641,7 @@ export function Scene3D({
             hand-rolled PCSS chunk written against depth textures, or an
             accumulation pass — not this component. */}
         <PickOrder wiring={wiring !== null} />
+        <PmremEnvironment />
         <DevSceneHandle sceneRef={sceneRef} />
         <SceneContent
           project={project}
@@ -2873,6 +2921,20 @@ function SceneContent({
   );
 
   const sunVisible = sunAltitude > 0;
+  /**
+   * Re-bake key for the environment map: the sun bucketed to ~5° in each axis.
+   *
+   * `<Environment frames={1}>` renders its children into a cube map ONCE, so
+   * with the live sky inside it the reflection would otherwise freeze at
+   * whatever time the scene mounted — the array would still be mirroring
+   * morning sky at sunset. Keying on a bucket re-mounts it only when the sun
+   * has visibly moved, so dragging the time slider updates the reflections
+   * while orbiting the camera costs nothing.
+   */
+  const envKey = useMemo(() => {
+    const b = (rad: number) => Math.round((rad * 180) / Math.PI / 5);
+    return sunVisible ? `d${b(sunAltitude)}:${b(sunAzimuth)}` : 'night';
+  }, [sunVisible, sunAltitude, sunAzimuth]);
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
   // the sun light aims at the design's centre and its shadow frustum wraps the
@@ -2944,33 +3006,66 @@ function SceneContent({
 
   return (
     <group>
-      {/* Image-based lighting: a procedural sky dome + ground bounce rendered
-          once into a small cube map. Every PBR material finally has something
-          to reflect — glass reads as glass, steel as steel — with no HDR file. */}
-      <Environment resolution={128} frames={1} background={false}>
-        <Lightformer
-          form="rect"
-          intensity={sunVisible ? 1.4 : 0.35}
-          color="#dbe7f7"
-          position={[0, 14, 0]}
-          rotation-x={Math.PI / 2}
-          scale={[40, 40, 1]}
-        />
-        <Lightformer
-          form="rect"
-          intensity={sunVisible ? 0.9 : 0.2}
-          color="#f6ecd8"
-          position={[0, 4, -16]}
-          scale={[36, 10, 1]}
-        />
-        <Lightformer
-          form="rect"
-          intensity={0.3}
-          color="#6b6357"
-          position={[0, -6, 0]}
-          rotation-x={-Math.PI / 2}
-          scale={[40, 40, 1]}
-        />
+      {/* Image-based lighting.
+
+          This used to be three flat colour rectangles — a 40×40 sky slab
+          overhead, a horizon strip and a ground bounce — baked once at
+          resolution 128. Every reflective surface therefore mirrored a
+          featureless panel, and because that slab filled a module's whole
+          mirror image from the usual bird's-eye view, the glass had to be
+          turned down to `envMapIntensity: 0.2` to stop every cell reading as
+          sky-grey. That 0.2 was a fix applied to a symptom.
+
+          The scene ALREADY renders a Preetham <Sky> with the real sun
+          direction. Rendering that same sky into the environment gives the
+          reflection structure — a gradient, a horizon, a sun disc in the right
+          place — so a module reflects a sky instead of a slab, and the glass
+          can go back to full strength. Same shader, same sun, one source of
+          truth for what the sky looks like.
+
+          `frames={1}` bakes it once, so it is keyed on a coarse sun bucket
+          (~5°): the map re-bakes when the sun has visibly moved and costs
+          nothing while the user is just orbiting. */}
+      {/* The environment's strength lives HERE, not on the materials. In this
+          three version `material.envMapIntensity` scales a material's own
+          envMap only; a map inherited from `scene.environment` is scaled by
+          this. Measured on the glass: 0 → RGB(38,75,130), a dark navy with no
+          sky in it at all; 1 → RGB(135,172,212). Left at the physically honest
+          1.0 rather than dialled down, because dimming the sky to taste is what
+          produced the `envMapIntensity: 0.2` workaround this replaced — if the
+          modules read too bright, the right lever is the glass roughness and
+          clearcoat, not the sky. */}
+      <Environment key={envKey} resolution={256} frames={1} background={false}>
+        {sunVisible ? (
+          <>
+            <Sky
+              distance={4500}
+              sunPosition={sunDir.clone().multiplyScalar(450).toArray()}
+              turbidity={5.5}
+              rayleigh={2.0}
+              mieCoefficient={0.006}
+              mieDirectionalG={0.85}
+            />
+            {/* the ground half of the environment: a roof/terrain albedo the
+                undersides and the frame bounce off, standing in for everything
+                below the horizon that the sky shader does not draw */}
+            <mesh position={[0, -8, 0]} rotation-x={-Math.PI / 2}>
+              <planeGeometry args={[400, 400]} />
+              <meshBasicMaterial color="#6b6357" />
+            </mesh>
+          </>
+        ) : (
+          /* night: no sky shader to sample, so a dim dome keeps materials from
+             going pure black rather than pretending there is light */
+          <Lightformer
+            form="rect"
+            intensity={0.35}
+            color="#20293a"
+            position={[0, 14, 0]}
+            rotation-x={Math.PI / 2}
+            scale={[40, 40, 1]}
+          />
+        )}
       </Environment>
       <primitive object={lightTarget} />
 
