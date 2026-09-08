@@ -6,10 +6,12 @@ import type {
   ArraySegment,
   FoundationKind,
   FoundationShape,
+  Keepout,
   Obstruction,
   PlacedPanel,
   Project,
   Roof,
+  Walkway,
   XY,
 } from '../types';
 import {
@@ -19,7 +21,7 @@ import {
   setSegmentProfile,
   STRUCTURE_PROFILES,
 } from './segment-ops';
-import { rectCorners, rectsOverlap } from './geo';
+import { pointInPolygon, rectCorners, rectsOverlap, stripFootprint } from './geo';
 import { panelCornersOnRoof } from './layout';
 import { requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
 import { resolveRacking } from './structure';
@@ -205,28 +207,55 @@ function unblocked(x: PlacedPanel, enabled: boolean): PlacedPanel {
 }
 
 /**
- * Recompute panel enabled-state against blocking obstructions after an edit.
- * `next` carries the not-yet-committed slices (segments/roofs/panels/
- * obstructions); returns the adjusted panels array, or null when nothing
- * changes. A module under something it cannot bridge goes OFF and remembers
- * why (`blockedBy`); when that blocker moves, lowers, gets bridged, or is
- * removed, the module comes back by itself. A module the user turned off
- * (no `blockedBy`) is the user's call and is never switched on here.
+ * Recompute panel enabled-state against everything that blocks placement, after
+ * an edit. `next` carries the not-yet-committed slices; returns the adjusted
+ * panels array, or null when nothing changes. A module under something it cannot
+ * bridge goes OFF and remembers why (`blockedBy`); when that blocker moves,
+ * lowers, gets bridged, or is removed, the module comes back by itself. A module
+ * the user turned off (no `blockedBy`) is the user's call and is never switched
+ * on here.
+ *
+ * THREE kinds of blocker, not one. This used to consider obstructions only,
+ * which meant drawing a walkway or a no-build zone ACROSS a finished array did
+ * nothing at all: the buried modules stayed enabled and kept counting toward
+ * kWp, annual kWh, the BOM and the quote, while physically sitting under the
+ * access route. Placement-time avoidance already existed (`lib/layout.ts`), but
+ * it only runs when a fill runs — and drawing the access route AFTER the layout
+ * is the normal order of work.
+ *
+ * NOT handled here: safety rails. `lib/scene-model.ts` has no rail caster at
+ * all, so a 1100 mm barrier neither displaces a module nor shades one; fixing
+ * only the displacement half would trade a silent wrong number for a smaller
+ * one. Rails are their own item.
  */
 export function reconcileBridgedPanels(
   base: Project,
   next: Partial<
-    Pick<Project, 'segments' | 'roofs' | 'panels' | 'obstructions' | 'structureDefaults'>
+    Pick<
+      Project,
+      'segments' | 'roofs' | 'panels' | 'obstructions' | 'structureDefaults' | 'walkways' | 'keepouts'
+    >
   > = {},
 ): PlacedPanel[] | null {
   const p = { ...base, ...next } as Project;
   const spec = p.components?.panel;
   if (!spec || p.panels.length === 0) return null;
-  /** panelId → the first obstruction it overlaps and cannot bridge */
+  /** panelId → the id of the first thing it overlaps and cannot bridge */
   const blocker = new Map<string, string>();
   for (const roof of p.roofs) {
     const onRoof = p.panels.filter((x) => x.roofId === roof.id);
     if (onRoof.length === 0) continue;
+    /** this module's footprint, shrunk so edge-adjacency is not overlap */
+    const footOf = new Map<string, XY[]>();
+    const cornersFor = (x: PlacedPanel) => {
+      let c = footOf.get(x.id);
+      if (!c) {
+        c = shrink(panelCornersOnRoof(x, spec, roof));
+        footOf.set(x.id, c);
+      }
+      return c;
+    };
+
     for (const o of p.obstructions) {
       if (!o.blocksPlacement || o.roofId !== roof.id) continue;
       const caps = resolveCapabilities(o);
@@ -238,7 +267,7 @@ export function reconcileBridgedPanels(
           : rectCorners(o.center, o.lengthM, o.widthM, o.rotationDeg);
       for (const x of onRoof) {
         if (blocker.has(x.id)) continue;
-        if (!rectsOverlap(shrink(panelCornersOnRoof(x, spec, roof)), foot)) continue;
+        if (!rectsOverlap(cornersFor(x), foot)) continue;
         let ok = false;
         if (bridgeable) {
           const seg = x.segmentId ? p.segments.find((sg) => sg.id === x.segmentId) : undefined;
@@ -246,6 +275,38 @@ export function reconcileBridgedPanels(
           ok = clearance >= needM - 1e-9;
         }
         if (!ok) blocker.set(x.id, o.id);
+      }
+    }
+
+    // Walkways. Never bridgeable: the strip is a person's route across the roof,
+    // so the clearance that matters is standing height, not the 100-200 mm a
+    // flush array offers. An elevated table tall enough to walk under would be a
+    // deliberate carport, which is its own roof type — not this.
+    for (const wk of p.walkways) {
+      if (wk.roofId !== roof.id) continue;
+      const foot = stripFootprint(wk.a, wk.b, wk.widthMm);
+      for (const x of onRoof) {
+        if (blocker.has(x.id)) continue;
+        if (rectsOverlap(cornersFor(x), foot)) blocker.set(x.id, wk.id);
+      }
+    }
+
+    // No-build zones. `shade` keepouts only MARK shade — they do not forbid
+    // placement — which is the same rule the fill applies (`lib/layout.ts`).
+    // A keepout is an arbitrary polygon, so test the module's corners against it
+    // AND the zone's own vertices against the module: a zone smaller than a
+    // module, or a module straddling an edge, must still count as covered.
+    for (const k of p.keepouts) {
+      if (k.kind === 'shade') continue;
+      if (k.roofId !== roof.id && k.roofId !== null) continue;
+      if (k.shape.length < 3) continue;
+      for (const x of onRoof) {
+        if (blocker.has(x.id)) continue;
+        const c = cornersFor(x);
+        const hit =
+          c.some((pt) => pointInPolygon(pt, k.shape)) ||
+          k.shape.some((v) => pointInPolygon(v, c));
+        if (hit) blocker.set(x.id, k.id);
       }
     }
   }
@@ -271,6 +332,24 @@ export function withObstructions(
 ): { obstructions: Obstruction[]; panels?: PlacedPanel[] } {
   const panels = reconcileBridgedPanels(p, { obstructions });
   return { obstructions, ...(panels ? { panels } : {}) };
+}
+
+/** A walkway edit as ONE patch — the strip plus the modules it buries or frees. */
+export function withWalkways(
+  p: Project,
+  walkways: Walkway[],
+): { walkways: Walkway[]; panels?: PlacedPanel[] } {
+  const panels = reconcileBridgedPanels(p, { walkways });
+  return { walkways, ...(panels ? { panels } : {}) };
+}
+
+/** A no-build-zone edit as ONE patch — the zone plus the modules inside it. */
+export function withKeepouts(
+  p: Project,
+  keepouts: Keepout[],
+): { keepouts: Keepout[]; panels?: PlacedPanel[] } {
+  const panels = reconcileBridgedPanels(p, { keepouts });
+  return { keepouts, ...(panels ? { panels } : {}) };
 }
 
 /**

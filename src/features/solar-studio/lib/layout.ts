@@ -23,6 +23,7 @@ import {
   rectsOverlap,
   rotate,
   add,
+  stripFootprint,
 } from './geo';
 import { higherOverlapFootprints } from './roof-topology';
 import { isBridgedAt, resolveCapabilities } from './capabilities';
@@ -153,17 +154,13 @@ function obstructionBlockers(
     });
 }
 
-/** Walkway strips as placement blockers. */
+/** Walkway strips as placement blockers. Geometry from `stripFootprint`, which
+ *  the after-the-fact resolver in `structure-edit.ts` shares, so a strip drawn
+ *  before the fill and a strip drawn after it block exactly the same modules. */
 function walkwayBlockersFor(roof: Roof, walkways: Walkway[]): Blocker[] {
   return walkways
     .filter((wk) => wk.roofId === roof.id)
-    .map((wk) => {
-      const cx = (wk.a.x + wk.b.x) / 2;
-      const cy = (wk.a.y + wk.b.y) / 2;
-      const len = Math.hypot(wk.b.x - wk.a.x, wk.b.y - wk.a.y);
-      const ang = (Math.atan2(wk.b.y - wk.a.y, wk.b.x - wk.a.x) * 180) / Math.PI;
-      return { corners: rectCorners({ x: cx, y: cy }, len, wk.widthMm / 1000, ang) };
-    });
+    .map((wk) => ({ corners: stripFootprint(wk.a, wk.b, wk.widthMm) }));
 }
 
 /** Already-placed panels as blockers (footprints shrunk ~10% so exact

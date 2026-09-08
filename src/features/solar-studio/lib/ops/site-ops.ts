@@ -3,7 +3,7 @@ import type { Keepout, LightningArrester, SafetyRail, Walkway, XY } from '../../
 import { defineOp } from './types';
 import { registerOp } from './registry';
 import { genId } from '../geo';
-import { withObstructions } from '../structure-edit';
+import { withKeepouts, withObstructions, withWalkways } from '../structure-edit';
 
 export const arresterAdd = defineOp<{ roofId: string; pos: XY; heightMm: number }>({
   id: 'arrester.add',
@@ -23,19 +23,25 @@ export const arresterRemove = defineOp<{ id: string }>({
   apply: (p, a) => ({ arresters: p.arresters.filter((x) => x.id !== a.id) }),
 });
 
+// Walkways and no-build zones go through `withWalkways` / `withKeepouts` for the
+// same reason obstructions go through `withObstructions`: the modules the strip
+// buries go OFF in the SAME patch, so one undo puts them back. Before this, both
+// ops just appended — a walkway drawn across a finished array removed nothing,
+// warned nothing, and the buried modules kept counting toward kWp, energy, the
+// BOM and the quote while standing in the access route.
 export const walkwayAdd = defineOp<{ walkway: Walkway }>({
   id: 'walkway.add',
   layer: 'layout',
   label: (a) => `Add walkway (${Math.round(a.walkway.widthMm)} mm)`,
   validate: (p, a) => (p.roofs.some((r) => r.id === a.walkway.roofId) ? null : { reason: 'Roof not found' }),
-  apply: (p, a) => ({ walkways: [...p.walkways, a.walkway] }),
+  apply: (p, a) => withWalkways(p, [...p.walkways, a.walkway]),
 });
 
 export const walkwayRemove = defineOp<{ id: string }>({
   id: 'walkway.remove',
   layer: 'layout',
   label: () => 'Remove walkway',
-  apply: (p, a) => ({ walkways: p.walkways.filter((w) => w.id !== a.id) }),
+  apply: (p, a) => withWalkways(p, p.walkways.filter((w) => w.id !== a.id)),
 });
 
 export const railAdd = defineOp<{ rail: SafetyRail }>({
@@ -57,14 +63,14 @@ export const keepoutAdd = defineOp<{ keepout: Keepout }>({
   id: 'keepout.add',
   layer: 'layout',
   label: (a) => `Add ${a.keepout.kind.replace('_', ' ')} zone`,
-  apply: (p, a) => ({ keepouts: [...p.keepouts, a.keepout] }),
+  apply: (p, a) => withKeepouts(p, [...p.keepouts, a.keepout]),
 });
 
 const keepoutRemove = defineOp<{ id: string }>({
   id: 'keepout.remove',
   layer: 'layout',
   label: () => 'Remove zone',
-  apply: (p, a) => ({ keepouts: p.keepouts.filter((k) => k.id !== a.id) }),
+  apply: (p, a) => withKeepouts(p, p.keepouts.filter((k) => k.id !== a.id)),
 });
 
 // ── obstructions (the 3D scene's on-object actions; Step 3 keeps its own tools) ──

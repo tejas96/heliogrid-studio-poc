@@ -460,6 +460,20 @@ export function rectCorners(
   ].map((c) => add(rotate(c, rotationDeg), center));
 }
 
+/**
+ * The rectangular strip a two-point walkway or safety rail occupies, centred on
+ * the line and `widthMm` wide. ONE definition, because two answers used to
+ * exist: the fill avoided a strip computed in `lib/layout.ts` while nothing at
+ * all checked a strip drawn AFTER the modules were placed. Placement-time
+ * avoidance and after-the-fact reconciliation must agree on the same rectangle
+ * or a module can be legal at fill time and buried a second later.
+ */
+export function stripFootprint(a: XY, b: XY, widthMm: number): XY[] {
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const angDeg = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  return rectCorners({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, len, widthMm / 1000, angDeg);
+}
+
 export function rectsOverlap(a: XY[], b: XY[]): boolean {
   // SAT for convex quads
   const polys = [a, b];
