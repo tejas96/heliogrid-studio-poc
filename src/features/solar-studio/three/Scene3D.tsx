@@ -514,6 +514,24 @@ const CAMERA_FOV = 40;
 const POST_ENABLED = true;
 
 /**
+ * Long edge of the captured proposal hero, in pixels.
+ *
+ * A4 at 300 dpi is 2480 px across and this image goes into the customer PDF, so
+ * anything less is visibly soft on the one page they look at hardest.
+ */
+const HERO_LONG_EDGE_PX = 2500;
+/**
+ * Ceiling on how far the drawing buffer may be scaled for a capture.
+ *
+ * Without it a small window would ask for a very large buffer — 4× the on-screen
+ * pixels is already 16× the shading work for a single frame, and past that the
+ * allocation is a real risk on modest hardware for detail nobody will see.
+ */
+const HERO_MAX_SCALE = 4;
+/** 0.85 was the old value. This image is the deliverable; 0.95 costs a few hundred KB. */
+const HERO_JPEG_QUALITY = 0.95;
+
+/**
  * Shadow normal bias, in WORLD METRES.
  *
  * Was 0.03 — thirty millimetres of bias on a module that is forty-five
@@ -879,6 +897,8 @@ export function Scene3D({
   const [heatProgress, setHeatProgress] = useState<{ done: number; total: number } | null>(null);
   const heatCacheRef = useRef<{ fp: string; res: HeatmapResult } | null>(null);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
+  /** a capture holds the canvas at print size for two frames — don't start a second */
+  const capturing = useRef(false);
   const controlsRef = useRef<CameraControlsImpl | null>(null);
   // the design's footprint drives the camera director AND the shadow frustum
   const focusRoofForBounds = focusRoofId ? project.roofs.filter((r) => r.id === focusRoofId) : undefined;
@@ -1303,10 +1323,62 @@ export function Scene3D({
 
   const selectedSet = useMemo(() => new Set(selectedIds ?? []), [selectedIds]);
 
+  /**
+   * The proposal hero, rendered at print resolution instead of at whatever size
+   * the browser window happened to be.
+   *
+   * This used to be one line: `toDataURL` on the LIVE canvas. On an 1100 px
+   * viewport at dpr 1.5 that is ~1650 px, on a small laptop window far less —
+   * and it goes straight into the customer PDF, where A4 at 300 dpi wants about
+   * 2480 px. The one picture the customer actually looks at was the one thing
+   * rendered at no particular resolution.
+   *
+   * The trick is to raise the DRAWING BUFFER without touching anything else.
+   * `setSize(w, h, false)` leaves the canvas's CSS box alone, so nothing on
+   * screen moves; scaling both axes by the same factor leaves the aspect ratio,
+   * and therefore the camera, exactly as the user framed it. The EffectComposer
+   * picks the new size up on its own — it compares `gl.getSize()` every frame —
+   * so AO, bloom, SMAA and tone mapping all run at the higher resolution too,
+   * which is the point: a downsampled screenshot would not have.
+   *
+   * `preserveDrawingBuffer: true` on the Canvas is what makes reading it back
+   * safe, and it is already set for the old path.
+   */
   function capture() {
     const gl = glRef.current;
-    if (!gl || !onCapture) return;
-    onCapture(gl.domElement.toDataURL('image/jpeg', 0.85), `${preset} ${fmtHour(hour)}`);
+    if (!gl || !onCapture || capturing.current) return;
+    const label = `${preset} ${fmtHour(hour)}`;
+    const size = gl.getSize(new THREE.Vector2());
+    if (size.width < 1 || size.height < 1) return;
+
+    const nowLongEdge = Math.max(size.width, size.height) * gl.getPixelRatio();
+    const scale = Math.min(HERO_MAX_SCALE, HERO_LONG_EDGE_PX / nowLongEdge);
+    if (scale <= 1.01) {
+      // already at or above print size — don't pay for a resize to gain nothing
+      onCapture(gl.domElement.toDataURL('image/jpeg', HERO_JPEG_QUALITY), label);
+      return;
+    }
+
+    capturing.current = true;
+    gl.setSize(size.width * scale, size.height * scale, false);
+    // Two frames, not one. The composer resizes itself inside its own useFrame,
+    // and this callback and r3f's loop are both rAF callbacks whose order is
+    // registration-dependent — two guarantees at least one COMPLETE frame was
+    // rendered at the new size before the buffer is read.
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        let url: string | null = null;
+        try {
+          url = gl.domElement.toDataURL('image/jpeg', HERO_JPEG_QUALITY);
+        } finally {
+          // restore in a finally: leaving the canvas at 2500 px because an
+          // encode threw would tank the frame rate with no visible cause
+          gl.setSize(size.width, size.height, false);
+          capturing.current = false;
+        }
+        if (url) onCapture(url, label);
+      }),
+    );
   }
 
   const meshMode = viewMode === 'mesh';
