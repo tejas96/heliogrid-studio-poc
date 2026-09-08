@@ -215,7 +215,52 @@ export function bomToCsv(lines: BomLine[], project?: Project): string {
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(',');
   });
-  const out = [head, ...rows];
+  // ── The header block ──────────────────────────────────────────────────────
+  // This file used to start at the column row, so 17 columns of parts arrived
+  // naming NOTHING: not the project, not the customer, not the site, not the
+  // capacity, not the day it was priced. A purchasing clerk holding two of them
+  // could not tell which job either belonged to, and neither could the EPC a
+  // week later. A BOM is a commercial document; it says whose it is.
+  //
+  // Kept as two-column "field, value" rows rather than a wide banner so the
+  // sheet still opens cleanly and a naive parser can skip to the column row by
+  // looking for "Category".
+  const info = project?.info;
+  const kv = (k: string, v: string | number) =>
+    `"${k}","${String(v).replace(/"/g, '""')}"${',""'.repeat(COLS.length - 2)}`;
+  const enabled = project?.panels?.filter((m) => m.enabled) ?? [];
+  const kwp = ((enabled.length * (project?.components?.panel?.watt ?? 0)) / 1000).toFixed(2);
+  const head2: string[] = [];
+  if (info) {
+    head2.push(kv('BILL OF MATERIALS', info.name));
+    if (info.customerName) head2.push(kv('Customer', info.customerName));
+    if (info.customerPhone) head2.push(kv('Phone', info.customerPhone));
+    const site = [info.state, info.discom].filter(Boolean).join(' · ');
+    if (site) head2.push(kv('Site', site));
+    head2.push(kv('System', `${kwp} kWp DC · ${enabled.length} modules`));
+    if (project?.location?.address) head2.push(kv('Address', project.location.address));
+    // The margin is already named in a column header; say the discount here too
+    // so the person reading the top of the file knows the sell columns moved.
+    head2.push(kv('Margin', `${marginPct}%`));
+    // The design's OWN stamp, never a fresh clock read: printing "exported now"
+    // would claim the BOM was priced now, which is exactly the staleness lie the
+    // money rules forbid. Formatted, because an epoch number tells a purchasing
+    // clerk nothing.
+    if (project?.updatedAt) {
+      const d = new Date(project.updatedAt);
+      if (!Number.isNaN(d.getTime())) {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        head2.push(
+          kv(
+            'Design last changed',
+            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`,
+          ),
+        );
+      }
+    }
+    head2.push(kv('', ''));
+  }
+  const out = [...head2, head, ...rows];
   // notes travel WITH the exported quote (plan §F/§F3 gates). The padding is
   // derived from COLS so adding a column cannot silently misalign them.
   const note = (t: string) => `"NOTE","${t}"${',""'.repeat(COLS.length - 2)}`;

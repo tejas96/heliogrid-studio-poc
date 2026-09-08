@@ -7,9 +7,13 @@ import { bomMoney, bomToCsv, deriveBom, mergedBom, orderQtyOf } from '../bom';
 import { fixtureProject } from './fixtures/project';
 import type { Project } from '../../types';
 
+// The file now opens with a header block naming the project, the customer and
+// the system, so the column row is no longer line 0. Find it by its first cell
+// — the documented contract, and the same thing a receiving parser must do.
 const parse = (csv: string) => {
   const rows = csv.split('\n').map((r) => r.match(/"((?:[^"]|"")*)"/g)!.map((c) => c.slice(1, -1).replace(/""/g, '"')));
-  return { head: rows[0], body: rows.slice(1) };
+  const at = rows.findIndex((r) => r[0] === 'Category');
+  return { head: rows[at], body: rows.slice(at + 1), preamble: rows.slice(0, at) };
 };
 
 describe('CSV is the file a purchase order is raised from', () => {
@@ -94,13 +98,40 @@ describe('the proposal’s engineering breakdown is arithmetically true', () => 
   });
 });
 
+// ─── The file has to say whose job it is ────────────────────────────────────
+// It used to begin at the column row: 17 columns of parts naming nothing — not
+// the project, not the customer, not the site, not the capacity. Two of them on
+// a purchasing clerk's desk were indistinguishable.
+describe('the BOM names the job it belongs to', () => {
+  const p = fixtureProject(8);
+  const { preamble, head } = parse(bomToCsv(mergedBom(p), p));
+
+  it('opens with the project and the customer, before the columns', () => {
+    expect(preamble.length).toBeGreaterThan(0);
+    const flat = preamble.map((r) => r.join('|')).join('\n');
+    expect(flat).toContain('BILL OF MATERIALS');
+    expect(flat).toContain(p.info.name);
+    expect(flat).toContain('System');
+    // the column row still follows, so the file stays machine-readable
+    expect(head[0]).toBe('Category');
+  });
+
+  it('states no date it cannot honestly claim', () => {
+    // a fresh timestamp here would assert the BOM was priced NOW, which is the
+    // staleness lie the money rules forbid; the design's own stamp is the truth
+    const flat = preamble.map((r) => r.join('|')).join('\n');
+    expect(flat).not.toContain('Exported');
+    expect(flat).not.toContain('Printed');
+  });
+});
+
 // ─── The two gaps the CSV still had after the Step-9 row gained them ─────────
 // Both are the same shape: a value became editable/derivable on screen and the
 // file procurement actually orders from never learned about it.
 describe('brand reaches the file people order from', () => {
   it('there is a Brand column', () => {
     const csv = bomToCsv(deriveBom(fixtureProject(8)), fixtureProject(8));
-    expect(csv.split('\n')[0]).toContain('"Brand"');
+    expect(parse(csv).head).toContain('Brand');
   });
 
   it('a brand set on a line is exported', () => {
@@ -149,9 +180,13 @@ function parseCsv(csv: string): string[][] {
   });
 }
 
-/** Sum one numeric column over the data rows (NOTE rows excluded). */
+/** Sum one numeric column over the data rows (header block and NOTEs excluded). */
 function sumColumn(csv: string, header: string): number {
-  const rows = parseCsv(csv);
+  const all = parseCsv(csv);
+  // skip the project header block — the column row is the one starting "Category"
+  const at = all.findIndex((r) => r[0] === 'Category');
+  expect(at, 'no Category column row').toBeGreaterThanOrEqual(0);
+  const rows = all.slice(at);
   const i = rows[0].indexOf(header);
   expect(i, `no ${header} column`).toBeGreaterThanOrEqual(0);
   return rows
