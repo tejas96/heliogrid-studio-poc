@@ -54,6 +54,7 @@ import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { ObstructionLayer } from './Step3Obstructions';
 import type {
   ArraySegment,
+  PanelOrientation,
   PlacedPanel,
   Walkway,
   SafetyRail,
@@ -140,6 +141,7 @@ import {
   segmentDuplicate,
   segmentRespace,
   segmentSetAzimuth,
+  segmentSetLayout,
   segmentSetProfile,
   segmentSetRacking,
   segmentSetTrackerLimit,
@@ -367,6 +369,9 @@ export function Step6Editor() {
   const [addSelect, setAddSelect] = useState(false);
   const [hoverPoint, setHoverPoint] = useState<XY | null>(null);
   const [tableSheet, setTableSheet] = useState(false);
+  /** Live slider value while dragging; null means "show the committed value".
+   *  Kept out of the project so a drag is not 200 undo entries. */
+  const [pitchDraft, setPitchDraft] = useState<number | null>(null);
   const canvasRef = useRef<SatCanvasHandle>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // a table edge handle mid-drag (view state; the op runs on release)
@@ -713,6 +718,38 @@ export function Step6Editor() {
         segmentSetTilt,
         ids.map((segmentId) => ({ segmentId, tiltDeg: t })),
         { label: tableCountLabel(`Set tilt to ${t}°`) },
+      ),
+      ids.length,
+    );
+  }
+  /**
+   * Module orientation and module gap. The engine has honoured both since the
+   * beginning — `lib/layout.ts` lays either orientation and
+   * `three/PanelsInstanced.tsx` keeps a separate instanced mesh for landscape —
+   * but five call sites in this file passed the literal 'portrait', so the
+   * renderer could draw a case nothing in the product could produce. Indian
+   * metal-shed and north-light roofs are laid landscape along the purlins.
+   */
+  function applyOrientation(orientation: PanelOrientation) {
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetLayout,
+        ids.map((segmentId) => ({ segmentId, orientation })),
+        { label: tableCountLabel(`Modules ${orientation}`) },
+      ),
+      ids.length,
+    );
+  }
+  function applyModuleGap(gapMm: number) {
+    const ids = targetSegIds();
+    if (!ids) return;
+    reportMany(
+      ops.runMany(
+        segmentSetLayout,
+        ids.map((segmentId) => ({ segmentId, moduleGapM: gapMm / 1000 })),
+        { label: tableCountLabel(`Module gap ${gapMm} mm`) },
       ),
       ids.length,
     );
@@ -2189,6 +2226,8 @@ export function Step6Editor() {
           selectedSegments.map((s) => project.roofs.find((r) => r.id === s.roofId)?.slopeAzimuthDeg ?? 180),
         );
         const sharedRackKind = oneOf(selectedSegments.map((s) => s.racking.kind));
+        const sharedOrientation = oneOf(selectedSegments.map((s) => s.orientation));
+        const sharedGapMm = oneOf(selectedSegments.map((s) => Math.round(s.moduleGapM * 1000)));
         const sharedTilt = oneOf(
           selectedSegments.map((s) => (s.racking.kind !== 'flush' ? s.racking.tiltDeg : 0)),
         );
@@ -2464,6 +2503,53 @@ export function Step6Editor() {
                         earns. Widen them to the pitch above.
                       </div>
                     )}
+                    {/* A FREE row pitch, not just the one recommended number.
+                        An EPC trading 3% winter shading for six more modules
+                        could not express it before: the only control was the
+                        one-shot button below, so every pitch between "packed"
+                        and "shadow-free" was unreachable.
+
+                        Commit on RELEASE, never per frame: each commit re-lays
+                        the lattice, reindexes, reconciles blocked modules and
+                        re-derives the electrical layer, and would push one undo
+                        entry per pixel dragged. */}
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ color: 'var(--editor-ink-2)' }}>Set row pitch</span>
+                        <b style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          {(pitchDraft ?? built ?? pitch).toFixed(2)} m · GCR{' '}
+                          {gcr(collectorLen, pitchDraft ?? built ?? pitch).toFixed(2)}
+                          {(() => {
+                            // ResLink coaches this number; so should we. The band
+                            // is the usual fixed-tilt working range — outside it
+                            // the user is trading yield for area on purpose.
+                            const gv = gcr(collectorLen, pitchDraft ?? built ?? pitch);
+                            if (gv > 0.5) return ' · packed';
+                            if (gv < 0.35) return ' · sparse';
+                            return ' · optimal';
+                          })()}
+                        </b>
+                      </div>
+                      <input
+                        type="range"
+                        min={Math.round(collectorLen * 100) / 100}
+                        max={Math.round(collectorLen * 3 * 100) / 100}
+                        step={0.01}
+                        value={pitchDraft ?? built ?? pitch}
+                        onChange={(e) => setPitchDraft(Number(e.target.value))}
+                        onPointerUp={() => {
+                          if (pitchDraft !== null) applyRespace(pitchDraft);
+                          setPitchDraft(null);
+                        }}
+                        onKeyUp={(e) => {
+                          if (!e.key.startsWith('Arrow') || pitchDraft === null) return;
+                          applyRespace(pitchDraft);
+                          setPitchDraft(null);
+                        }}
+                        style={{ width: '100%' }}
+                        aria-label={multi ? `Row pitch for ${selectedSegments.length} tables` : 'Row pitch'}
+                      />
+                    </div>
                     <button
                       className="btn"
                       style={{ width: '100%', marginTop: 10, minHeight: 30, fontSize: 12, fontWeight: 700 }}
@@ -2474,6 +2560,43 @@ export function Step6Editor() {
                   </div>
                 );
               })()}
+
+            {/* Orientation and module gap: both re-lay the table, so both can
+                drop modules inside the same extent. The impact toast says how
+                many — never let a table quietly get smaller. */}
+            <div style={lbl as React.CSSProperties}>
+              Module orientation · {sharedOrientation ?? '–  mixed'}
+            </div>
+            <div style={rowStyle}>
+              {(['portrait', 'landscape'] as const).map((o) => (
+                <button
+                  key={o}
+                  style={seg3btn(sharedOrientation === o) as React.CSSProperties}
+                  onClick={() => applyOrientation(o)}
+                >
+                  {o === 'portrait' ? 'Portrait' : 'Landscape'}
+                </button>
+              ))}
+            </div>
+
+            <div style={lbl as React.CSSProperties}>
+              Module gap ·{' '}
+              {sharedGapMm === undefined ? '–  mixed' : `${sharedGapMm} mm`}
+              <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, opacity: 0.75 }}>
+                {' '}— both axes
+              </span>
+            </div>
+            <div style={rowStyle}>
+              {[10, 20, 50].map((mm) => (
+                <button
+                  key={mm}
+                  style={seg3btn(sharedGapMm === mm) as React.CSSProperties}
+                  onClick={() => applyModuleGap(mm)}
+                >
+                  {mm} mm
+                </button>
+              ))}
+            </div>
 
             <div style={lbl as React.CSSProperties}>
               Azimuth (facing) · {sharedAz === undefined ? '–  mixed' : `${sharedAz}° ${dir}`}

@@ -6,6 +6,7 @@ import type {
   FoundationKind,
   FoundationShape,
   ArraySegment,
+  PanelOrientation,
   PanelSpec,
   PlacedPanel,
   Project,
@@ -645,26 +646,26 @@ export function duplicateSegment(
 }
 
 /**
- * Re-lay a table's rows at a given centre-to-centre pitch (e.g. the shadow-free
- * pitch), within the table's current extent. Wider spacing means fewer rows fit
- * — the physically correct result. Stores the pitch on the racking so grow/
- * reindex keep it. Returns null if nothing fits.
+ * Re-lay a table's modules on a given lattice, inside the extent its CURRENT
+ * modules occupy. Shared by respace (new row pitch) and relay (new orientation
+ * or module gap) so there is exactly one definition of "lay a table out and
+ * keep only what fits". Returns null if nothing fits.
+ *
+ * The extent does not grow: widening the pitch, or flipping to landscape,
+ * therefore DROPS modules rather than spilling the table across the roof. That
+ * is the physically honest answer, and the caller must surface the loss — the
+ * op kernel's impact line does it for free.
  */
-export function respaceSegment(
+function layOnLattice(
   project: Project,
   roof: Roof,
   spec: PanelSpec,
   seg: ArraySegment,
-  rowPitchM: number,
-): { segment: ArraySegment; panels: PlacedPanel[] } | null {
-  const mine = project.panels.filter((p) => p.segmentId === seg.id);
-  if (mine.length === 0 || rowPitchM <= 0) return null;
-  // A row pitch below the module's own length puts steel through steel. The
-  // fill has always floored it (fillRowPitchM); respace did not, so dragging
-  // the spacing slider down produced physically overlapping rows that only DRC
-  // caught after the fact. Same floor, one rule: the module footprint + 1 cm.
-  const pitch = Math.max(rowPitchM, panelFootprintM(spec, seg.orientation).h + 0.01);
-  const { angle, pitchX } = segmentGrid(roof, spec, seg, mine);
+  mine: PlacedPanel[],
+  angle: number,
+  pitchX: number,
+  pitchY: number,
+): PlacedPanel[] | null {
   const locals = mine.map((p) => rotate(p.center, -angle));
   const minX = Math.min(...locals.map((l) => l.x));
   const maxX = Math.max(...locals.map((l) => l.x));
@@ -677,7 +678,7 @@ export function respaceSegment(
   const out: PlacedPanel[] = [];
   // local y IS the facing axis on an azimuth-lattice table (gridAngleFor), so
   // the pitch applies along the direction the rows shade each other in
-  for (let y = minY; y <= maxY + 0.01; y += pitch) {
+  for (let y = minY; y <= maxY + 0.01; y += pitchY) {
     for (let x = minX; x <= maxX + 0.01; x += pitchX) {
       const world = rotate({ x, y }, angle);
       if (
@@ -701,8 +702,77 @@ export function respaceSegment(
       });
     }
   }
-  if (out.length === 0) return null;
+  return out.length > 0 ? out : null;
+}
+
+/**
+ * Re-lay a table's rows at a given centre-to-centre pitch (e.g. the shadow-free
+ * pitch), within the table's current extent. Wider spacing means fewer rows fit
+ * — the physically correct result. Stores the pitch on the racking so grow/
+ * reindex keep it. Returns null if nothing fits.
+ */
+export function respaceSegment(
+  project: Project,
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  rowPitchM: number,
+): { segment: ArraySegment; panels: PlacedPanel[] } | null {
+  const mine = project.panels.filter((p) => p.segmentId === seg.id);
+  if (mine.length === 0 || rowPitchM <= 0) return null;
+  // A row pitch below the module's own length puts steel through steel. The
+  // fill has always floored it (fillRowPitchM); respace did not, so dragging
+  // the spacing slider down produced physically overlapping rows that only DRC
+  // caught after the fact. Same floor, one rule: the module footprint + 1 cm.
+  const pitch = Math.max(rowPitchM, panelFootprintM(spec, seg.orientation).h + 0.01);
+  const { angle, pitchX } = segmentGrid(roof, spec, seg, mine);
+  const out = layOnLattice(project, roof, spec, seg, mine, angle, pitchX, pitch);
+  if (!out) return null;
   const racking: RackingSpec =
     seg.racking.kind !== 'flush' ? { ...seg.racking, rowPitchM } : seg.racking;
   return reindexSegment(roof, spec, { ...seg, racking }, out);
+}
+
+/**
+ * Change a table's module ORIENTATION or its module GAP and re-lay it.
+ *
+ * Both are engine capabilities that had no control. `lib/layout.ts` has honoured
+ * `orientation` end to end since the beginning and `three/PanelsInstanced.tsx`
+ * even keeps a separate instanced mesh and material for landscape modules — the
+ * renderer could draw a case nothing in the product could produce, because five
+ * call sites in the editor passed the literal `'portrait'`. Indian metal-shed
+ * and north-light roofs are laid landscape along the purlins, and half our
+ * declared scope is C&I.
+ *
+ * Neither field can be written on its own: both change the lattice pitch, so the
+ * modules must be re-laid or the stored grid stops describing the panels — which
+ * is what corrupts reindex, grow and duplicate. Hence one function, not a setter.
+ *
+ * `moduleGapM` is ONE scalar and drives BOTH axes (`segmentGrid`). Independent
+ * row and column gaps would need a new field on `ArraySegment`, and it would have
+ * to be optional and lazily written, because `lib/fingerprints.ts` serialises the
+ * segment tuple — an always-present field re-keys every existing project and
+ * stales its captures. Not done here.
+ */
+export function relaySegment(
+  project: Project,
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  fields: { orientation?: PanelOrientation; moduleGapM?: number },
+): { segment: ArraySegment; panels: PlacedPanel[] } | null {
+  const mine = project.panels.filter((p) => p.segmentId === seg.id);
+  if (mine.length === 0) return null;
+  const next: ArraySegment = {
+    ...seg,
+    ...(fields.orientation ? { orientation: fields.orientation } : {}),
+    ...(fields.moduleGapM !== undefined ? { moduleGapM: Math.max(0, fields.moduleGapM) } : {}),
+  };
+  if (next.orientation === seg.orientation && next.moduleGapM === seg.moduleGapM) return null;
+  // the lattice of the NEW pose — angle included, because planCellM swaps the
+  // axes with orientation on a pitched roof
+  const { angle, pitchX, pitchY } = segmentGrid(roof, spec, next, mine);
+  const out = layOnLattice(project, roof, spec, next, mine, angle, pitchX, pitchY);
+  if (!out) return null;
+  return reindexSegment(roof, spec, next, out);
 }

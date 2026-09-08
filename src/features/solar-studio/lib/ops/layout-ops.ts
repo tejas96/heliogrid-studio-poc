@@ -3,7 +3,13 @@
 // the AI planner all mutate the layout through the same typed operations.
 // Every op is pure: it returns the patch; lib/ops/run re-derives strings and
 // routes and computes the impact before anything is dispatched.
-import type { ArraySegment, DesignDecision, PlacedPanel, Project } from '../../types';
+import type {
+  ArraySegment,
+  DesignDecision,
+  PanelOrientation,
+  PlacedPanel,
+  Project,
+} from '../../types';
 import { defineOp } from './types';
 import { registerOp } from './registry';
 import { autoDesign, type DesignObjective } from '../auto-design';
@@ -16,6 +22,7 @@ import {
   duplicateSegment,
   groupIntoTable,
   growSegment,
+  relaySegment,
   respaceSegment,
   setSegmentAzimuth,
   setSegmentProfile,
@@ -322,6 +329,43 @@ export const segmentRespace = defineOp<{ segmentId: string; rowPitchM: number }>
   },
 });
 
+/**
+ * Module orientation and module gap — the two engine capabilities the editor
+ * never exposed. Both change the lattice pitch, so both re-lay the table inside
+ * its current extent; that can DROP modules, and the impact line says so rather
+ * than the table quietly getting smaller.
+ */
+export const segmentSetLayout = defineOp<{
+  segmentId: string;
+  orientation?: PanelOrientation;
+  moduleGapM?: number;
+}>({
+  id: 'segment.setLayout',
+  layer: 'layout',
+  label: (a) =>
+    a.orientation
+      ? `Modules ${a.orientation}`
+      : `Module gap ${Math.round((a.moduleGapM ?? 0) * 1000)} mm`,
+  validate: (p, a) => {
+    const v = needTable(p, a);
+    if (v) return v;
+    if (a.orientation === undefined && a.moduleGapM === undefined)
+      return { reason: 'Nothing to change' };
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    return relaySegment(p, roof!, spec!, segment!, a)
+      ? null
+      : {
+          reason: a.orientation
+            ? `No room to lay this table ${a.orientation}`
+            : 'No room for that module gap',
+        };
+  },
+  apply: (p, a) => {
+    const { segment, roof, spec } = segmentOf(p, a.segmentId);
+    return withSegment(p, relaySegment(p, roof!, spec!, segment!, a)!);
+  },
+});
+
 export const segmentDuplicate = defineOp<{ segmentId: string }>({
   id: 'segment.duplicate',
   layer: 'layout',
@@ -390,6 +434,7 @@ for (const op of [
   segmentSetStructureFields,
   segmentChoice,
   segmentRespace,
+  segmentSetLayout,
   segmentDuplicate,
   segmentDelete,
   layoutAutoDesign,
