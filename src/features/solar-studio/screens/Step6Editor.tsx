@@ -118,6 +118,7 @@ import { memoizedInsights } from '../lib/insights/registry';
 
 registerAllAnalyzers();
 import { movePanels, nudgeDelta } from '../lib/panel-move';
+import { nearestPanelAt } from '../lib/plan-pick';
 import { Scene3D } from '../three/Scene3D';
 import { findEraseTargetAt } from './step6-erase';
 import { useOps } from '../store/useOps';
@@ -695,10 +696,11 @@ export function Step6Editor() {
 
   // ── canvas interactions ────────────────────────────────────────────────────
 
+  // Nearest centre, not the first panel within range — see lib/plan-pick.ts.
+  // The 1.3 m radius is wider than the ~1.18 m column pitch, so the old find()
+  // resolved most of a module's own width to its NEIGHBOUR.
   function findPanelAt(m: XY): PlacedPanel | undefined {
-    return project.panels.find(
-      (p) => Math.hypot(m.x - p.center.x, m.y - p.center.y) < 1.3,
-    );
+    return nearestPanelAt(project.panels, m);
   }
 
   function handleClick(m: XY, e: ReactPointerEvent) {

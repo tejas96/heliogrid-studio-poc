@@ -5,6 +5,7 @@
 // small point targets win over long strip targets that may pass under them.
 import type { Project, XY } from '../types';
 import { pointSegDist } from '../lib/geo';
+import { nearestPanelAt, PANEL_HIT_R } from '../lib/plan-pick';
 import { unitPlanPos } from '../lib/unit-pos';
 
 export type EraseTarget =
@@ -18,7 +19,6 @@ export type EraseTarget =
   | { kind: 'rail'; id: string };
 
 /** Hit radii / tolerances in plan metres. */
-const PANEL_R = 1.3; // matches the editor's findPanelAt
 const MARKER_R = 0.8; // arrester / inverter / meter point markers
 const WALKWAY_SLOP = 0.3; // beyond the painted half-width
 const RAIL_R = 0.4;
@@ -33,9 +33,9 @@ export function inverterPlacementPos(
 
 /** What the eraser at plan point `m` would remove, or null over empty roof. */
 export function findEraseTargetAt(project: Project, m: XY): EraseTarget | null {
-  const panel = project.panels.find(
-    (p) => Math.hypot(m.x - p.center.x, m.y - p.center.y) < PANEL_R,
-  );
+  // nearest, not first-within-range: the column pitch is smaller than the hit
+  // radius, so a find() here erased the module NEXT to the one under the finger
+  const panel = nearestPanelAt(project.panels, m, PANEL_HIT_R);
   if (panel) return { kind: 'panel', id: panel.id };
 
   const la = project.arresters.find(
