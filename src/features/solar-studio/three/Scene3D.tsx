@@ -455,6 +455,32 @@ function presetPose(b: SceneBounds, v: ViewPreset, fovDeg: number) {
 const CAMERA_FOV = 40;
 const POST_ENABLED = true;
 
+/**
+ * Where the camera was last left, per project.
+ *
+ * `presetPose` recomputes every preset from the design's bounding sphere on each
+ * mount, and the framing effect ran it on first mount unconditionally — so you
+ * never returned to the angle you left. Leave Step 6 to price the BOM, come
+ * back, and the view you had lined up on the north-light purlins was gone.
+ *
+ * Keyed by project id AND by the bounds key, so this only restores a pose that
+ * still frames the same design: change the footprint and the scene re-frames as
+ * it always did, which is the behaviour that stops a 300 m site opening
+ * off-screen. Module-level rather than in the project, because a camera angle is
+ * not part of the engineering record — it must never enter a fingerprint or
+ * stale a capture. It lives as long as the tab.
+ *
+ * Not the same thing as SAVED NAMED VIEWS, which the gap report also asks for;
+ * this is only "put me back where I was".
+ */
+// (a plain record, not a Map — `Map` in this module is the lucide icon)
+interface CameraPose {
+  pos: readonly [number, number, number];
+  target: readonly [number, number, number];
+  key: string;
+}
+const lastPose: Record<string, CameraPose> = {};
+
 export function Scene3D({
   onClose,
   captureMode = false,
@@ -909,16 +935,53 @@ export function Scene3D({
     c.boundaryEnclosesCamera = true;
   }, [controlsReady, walk, bounds]);
 
+  const boundsKey = `${bounds.cx.toFixed(1)}|${bounds.cz.toFixed(1)}|${bounds.r.toFixed(1)}`;
   const framedFor = useRef<string>('');
   useEffect(() => {
-    if (!controlsReady || !controlsRef.current) return;
-    const key = `${bounds.cx.toFixed(1)}|${bounds.cz.toFixed(1)}|${bounds.r.toFixed(1)}`;
-    if (framedFor.current === key) return;
+    const c = controlsRef.current;
+    if (!controlsReady || !c) return;
+    if (framedFor.current === boundsKey) return;
     const first = framedFor.current === '';
-    framedFor.current = key;
+    framedFor.current = boundsKey;
+    // On the FIRST mount, go back to the angle this design was left at — but
+    // only if it still frames the same design. A changed footprint re-frames,
+    // which is what keeps a 300 m site from opening off-screen.
+    const saved = first ? lastPose[project.id] : undefined;
+    if (saved && saved.key === boundsKey) {
+      void c.setLookAt(
+        saved.pos[0], saved.pos[1], saved.pos[2],
+        saved.target[0], saved.target[1], saved.target[2],
+        false,
+      );
+      return;
+    }
     goView('iso', !first);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bounds, controlsReady]);
+  }, [bounds, boundsKey, controlsReady, project.id]);
+
+  /**
+   * Remember the pose whenever the camera comes to rest, and once more on the
+   * way out. 'rest' fires after an orbit or a fly-to settles, so what is stored
+   * is a pose the user actually chose rather than a frame mid-animation.
+   *
+   * Skipped for capture and read-only mounts: a screenshot pass or a shared
+   * viewer drives the camera itself, and letting it overwrite the EPC's working
+   * angle would be a worse bug than the one this fixes.
+   */
+  useEffect(() => {
+    const c = controlsRef.current;
+    if (!controlsReady || !c || captureMode || readOnly) return;
+    const save = () => {
+      const p = c.getPosition(new THREE.Vector3());
+      const t = c.getTarget(new THREE.Vector3());
+      lastPose[project.id] = { pos: [p.x, p.y, p.z], target: [t.x, t.y, t.z], key: boundsKey };
+    };
+    c.addEventListener('rest', save);
+    return () => {
+      c.removeEventListener('rest', save);
+      save(); // the pose on the way out, even if it never came to rest
+    };
+  }, [controlsReady, captureMode, readOnly, project.id, boundsKey]);
 
   /**
    * Orbit the camera from the keyboard (Phase 22p).
