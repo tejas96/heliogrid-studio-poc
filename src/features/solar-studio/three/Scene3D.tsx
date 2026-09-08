@@ -212,8 +212,17 @@ function PickOrder({ wiring }: { wiring: boolean }) {
  * reading the scene graph, and r3f keeps it behind its own store. Costs
  * nothing in production, where the block is stripped.
  */
-function DevSceneHandle() {
+function DevSceneHandle({ sceneRef }: { sceneRef?: React.RefObject<THREE.Scene | null> }) {
   const three = useThree();
+  // The scene ref is NOT dev-only: the .glb export needs the live scene in
+  // production too, and r3f keeps it behind its own store.
+  useEffect(() => {
+    if (!sceneRef) return;
+    sceneRef.current = three.scene;
+    return () => {
+      sceneRef.current = null;
+    };
+  }, [three, sceneRef]);
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
     (window as unknown as { __three?: unknown }).__three = three;
@@ -225,6 +234,7 @@ function DevSceneHandle() {
 }
 
 // defined in ./scene-pick so the overlays can read it without importing Scene3D
+import { exportSceneGlb, glbFilename } from './glb-export';
 import type { ScenePick } from './scene-pick';
 export type { ScenePick };
 type RunOp = <A>(op: DesignOp<A>, args: A) => OpPreview;
@@ -286,6 +296,7 @@ import {
   Play,
   Route,
   Share2,
+  Download,
   SunMedium,
   Sunrise,
   Sunset,
@@ -902,6 +913,9 @@ export function Scene3D({
   // first open (tile streaming, texture bakes) and leave the camera at the raw
   // default pose: a horizon view with the building off to one side. The
   // controls now announce themselves through state instead.
+  /** The live scene, for the .glb export — r3f keeps it inside its own store. */
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const [glbBusy, setGlbBusy] = useState(false);
   const [controlsReady, setControlsReady] = useState(false);
   const attachControls = useCallback((c: CameraControlsImpl | null) => {
     controlsRef.current = c;
@@ -1345,6 +1359,22 @@ export function Scene3D({
           });
         },
       });
+      // The model a C&I client's architect asks for once the design is agreed.
+      // GLTFExporter already ships inside `three`; nothing exposed it.
+      scene.push({
+        id: 'glb',
+        icon: <Download />,
+        label: glbBusy ? 'Saving…' : 'Export 3D',
+        tip: 'Save the design as a .glb model\nThe streamed surroundings are NOT included — they are Google’s data',
+        onClick: () => {
+          const s = sceneRef.current;
+          if (!s || glbBusy) return;
+          setGlbBusy(true);
+          exportSceneGlb(s, glbFilename(project.info.name))
+            .catch(() => undefined)
+            .finally(() => setGlbBusy(false));
+        },
+      });
     }
 
     const views: RadialItem[] = heatmap
@@ -1533,7 +1563,7 @@ export function Scene3D({
         }}
       >
         <PickOrder wiring={wiring !== null} />
-        <DevSceneHandle />
+        <DevSceneHandle sceneRef={sceneRef} />
         <SceneContent
           project={project}
           structEdit={structInteractive ? structEdit : null}
