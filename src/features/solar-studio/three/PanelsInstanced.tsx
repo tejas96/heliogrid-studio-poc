@@ -169,23 +169,37 @@ export function PanelsInstanced({
     // stand legs under the raised edge (elevated mounts only, 2 per panel)
     // heuristic legs are suppressed while ghosting: they belong to the modules
     // we are seeing past, and would clutter the real structure underneath
+    // FOUR legs, front pair short and back pair tall — a tilted table stands on
+    // a low front edge and a raised back one.
+    //
+    // This used to compute ONE `legZ` and reuse it for both instances, which
+    // differed only in ±legX. So both legs sat under the SAME edge and the
+    // module had no front support at all: it leaned on two posts under its high
+    // side. It is also the first thing a user sees, because this heuristic
+    // stand is what draws before the parametric structure resolves.
+    const LEG_CLEARANCE_M = 0.18;
     const legMesh =
       legs.length > 0 && !ghost
-        ? new THREE.InstancedMesh(legGeom, mats.leg, legs.length * 2)
+        ? new THREE.InstancedMesh(legGeom, mats.leg, legs.length * 4)
         : null;
     if (legMesh) {
       legs.forEach((p, i) => {
-        const legLen = 0.18 + Math.sin(p.tiltRad) * (p.d / 2);
+        // the module centre sits at the clearance; the back edge is half the
+        // depth × sin(tilt) above that and the front edge the same below
+        const rise = Math.sin(p.tiltRad) * (p.d / 2);
+        const backLen = LEG_CLEARANCE_M + rise;
+        const frontLen = Math.max(0.06, LEG_CLEARANCE_M - rise);
         const legZ = (p.d / 2 - 0.1) * Math.cos(p.tiltRad);
         const legX = Math.max(0.1, p.w / 2 - 0.15);
-        legMesh.setMatrixAt(
-          i * 2,
-          composeInstance(m, p, false, [-legX, legLen / 2 - 0.18, legZ], [1, legLen, 1]),
-        );
-        legMesh.setMatrixAt(
-          i * 2 + 1,
-          composeInstance(m, p, false, [legX, legLen / 2 - 0.18, legZ], [1, legLen, 1]),
-        );
+        const put = (n: number, x: number, z: number, len: number) =>
+          legMesh.setMatrixAt(
+            n,
+            composeInstance(m, p, false, [x, len / 2 - LEG_CLEARANCE_M, z], [1, len, 1]),
+          );
+        put(i * 4, -legX, legZ, backLen);
+        put(i * 4 + 1, legX, legZ, backLen);
+        put(i * 4 + 2, -legX, -legZ, frontLen);
+        put(i * 4 + 3, legX, -legZ, frontLen);
       });
     }
 

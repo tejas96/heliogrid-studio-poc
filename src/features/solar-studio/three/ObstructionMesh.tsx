@@ -611,8 +611,14 @@ function TankAsset({
   fallback: { r: number; heightM: number };
 }) {
   const gltf = useGLTF(TANK_MODEL_URL);
-  const target = o.shape === 'circle' ? o.diameterM : Math.min(o.lengthM, o.widthM);
-  const scale = glbScale(target, target, o.heightM, TANK_REF.x, TANK_REF.z);
+  // Per axis, NOT one square from the smaller side. This used to be
+  // `Math.min(lengthM, widthM)` fed to both axes, so a surveyed 3.0 × 1.5 m
+  // tank drew as 1.5 × 1.5 m — the picture contradicting the dimension the
+  // surveyor typed, and the footprint the shading engine actually uses.
+  // ChimneyAsset below has always done it this way.
+  const targetX = o.shape === 'circle' ? o.diameterM : o.lengthM;
+  const targetZ = o.shape === 'circle' ? o.diameterM : o.widthM;
+  const scale = glbScale(targetX, targetZ, o.heightM, TANK_REF.x, TANK_REF.z);
   return gltf.scene ? (
     <Clone object={gltf.scene} scale={scale} castShadow={caster.shadowCaster} receiveShadow userData={caster} />
   ) : (
@@ -652,8 +658,11 @@ function DishAsset({
   fallback: { heightM: number; dishR: number };
 }) {
   const gltf = useGLTF(DISH_MODEL_URL);
-  const target = o.shape === 'circle' ? o.diameterM : Math.min(o.lengthM, o.widthM);
-  const scale = glbScale(target, target, o.heightM, DISH_REF.x, DISH_REF.z);
+  // same square-footprint bug as the tank had: a rectangular dish drew from its
+  // smaller side on both axes
+  const targetX = o.shape === 'circle' ? o.diameterM : o.lengthM;
+  const targetZ = o.shape === 'circle' ? o.diameterM : o.widthM;
+  const scale = glbScale(targetX, targetZ, o.heightM, DISH_REF.x, DISH_REF.z);
   return gltf.scene ? (
     <Clone object={gltf.scene} scale={scale} castShadow={caster.shadowCaster} receiveShadow userData={caster} />
   ) : (
@@ -693,17 +702,18 @@ function TurbineVentAsset({
   fallback: { r: number };
 }) {
   const gltf = useGLTF(TURBINE_VENT_MODEL_URL);
-  const rotorRef = useRef<Group>(null);
-  useFrame((_, delta) => {
-    if (rotorRef.current) rotorRef.current.rotation.y += delta * 3.5;
-  });
   const targetX = o.shape === 'circle' ? o.diameterM : o.lengthM;
   const targetZ = o.shape === 'circle' ? o.diameterM : o.widthM;
   const scale = glbScale(targetX, targetZ, o.heightM, TURBINE_VENT_REF.x, TURBINE_VENT_REF.z);
+  // NOT ANIMATED, and it cannot be. A `<group ref={rotorRef}>` used to wrap the
+  // whole <Clone> and turn it on Y at 3.5 rad/s — about 200°/s — so the base,
+  // the kerb and the flashing spun with the cowl. This asset is a SINGLE mesh
+  // ("Mesh_0", one material), so there is no rotor node to turn on its own; the
+  // procedural fallback below models the parts separately and spins correctly.
+  // A still vent is honest. A spinning kerb is the sort of thing that makes an
+  // engineer distrust everything else in the frame.
   return gltf.scene ? (
-    <group ref={rotorRef}>
-      <Clone object={gltf.scene} scale={scale} castShadow={caster.shadowCaster} receiveShadow userData={caster} />
-    </group>
+    <Clone object={gltf.scene} scale={scale} castShadow={caster.shadowCaster} receiveShadow userData={caster} />
   ) : (
     <ProceduralTurbineVent o={o} r={fallback.r} caster={caster} />
   );
