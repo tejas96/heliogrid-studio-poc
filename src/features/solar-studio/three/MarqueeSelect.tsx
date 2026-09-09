@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import type { SelectMode } from '../lib/plan-select';
 
 export interface MarqueeCommit {
   /** client pixels, any corner order */
@@ -15,6 +16,8 @@ export interface MarqueeCommit {
   y0: number;
   x1: number;
   y1: number;
+  /** what the box does to the selection: Alt held ⇒ subtract, else add (a box is never a replace here — it needs Shift or Select mode to exist) */
+  mode: SelectMode;
   /** bumps per release, so the same rectangle twice still selects */
   nonce: number;
 }

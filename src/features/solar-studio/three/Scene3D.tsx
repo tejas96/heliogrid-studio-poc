@@ -41,6 +41,7 @@ import { casterCost } from '../lib/energy/report';
 import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { SunChart } from './SunChart';
 import { MarqueeSelect, type MarqueeCommit } from './MarqueeSelect';
+import type { SelectMode } from '../lib/plan-select';
 import { RealSurround } from './RealSurround';
 import { SurroundRelief } from './SurroundRelief';
 import { ROOF_HEIGHT_TOLERANCE_M, roofReadings } from '../lib/surround-check';
@@ -662,7 +663,7 @@ export function Scene3D({
   visible?: boolean;
   /** the editor's module selection — 2D and 3D pick the same things */
   selectedIds?: string[];
-  onSelectPanels?: (ids: string[], additive: boolean) => void;
+  onSelectPanels?: (ids: string[], mode: SelectMode) => void;
 }) {
   const storeProject = useActiveProject();
   const fullProject = projectOverride ?? storeProject!;
@@ -695,7 +696,7 @@ export function Scene3D({
   // (MarqueeSelect).
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [marqueeCommit, setMarqueeCommit] = useState<MarqueeCommit | null>(null);
-  const marqueeRef = useRef<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const marqueeRef = useRef<{ x0: number; y0: number; x1: number; y1: number; mode: SelectMode } | null>(null);
   /**
    * Select mode — the touch way into a multi-module selection. Every route to
    * more than one module went through Shift: the box, and adding a module to
@@ -722,7 +723,10 @@ export function Scene3D({
     const wasEnabled = controls?.enabled ?? true;
     if (controls) controls.enabled = false;
     const pointerId = e.pointerId;
-    const start = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    // Alt while boxing takes modules OUT; otherwise a box adds (one selection
+    // model, lib/plan-select — the bridge no longer toggles, so the same box
+    // twice is the same selection)
+    const start = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY, mode: (e.altKey ? 'subtract' : 'add') as SelectMode };
     marqueeRef.current = start;
     const onMove = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
@@ -1311,7 +1315,7 @@ export function Scene3D({
       e.preventDefault();
       if (selectedSet.size > 0 && !wiring) {
         runOp(panelsDelete, { ids: [...selectedSet] });
-        onSelectPanels?.([], false);
+        onSelectPanels?.([], 'replace');
         setPick(null);
         return;
       }
@@ -2597,7 +2601,7 @@ function SceneContent({
   /** Select mode is on: a tap ADDS to the selection, as Shift-click does */
   boxSelect: boolean;
   selectedIds: ReadonlySet<string>;
-  onSelectPanels?: (ids: string[], additive: boolean) => void;
+  onSelectPanels?: (ids: string[], mode: SelectMode) => void;
   pick: ScenePick | null;
   hoverPick: ScenePick | null;
   onPick: (p: ScenePick | null) => void;
@@ -2744,7 +2748,9 @@ function SceneContent({
       // table", and a mode that silently swallowed forty modules per tap is a
       // different thing entirely.
       const add = additive || boxSelect;
-      onSelectPanels?.([panelId], add);
+      // a tap in add mode toggles THIS module (lib/plan-select tapSelection
+      // semantics); the bridge itself never toggles any more
+      onSelectPanels?.([panelId], add ? (selectedIds.has(panelId) ? 'subtract' : 'add') : 'replace');
       if (add) return;
       // In shading view the question being asked is about THIS module — what it
       // makes and what is taking the rest — so the click opens the module card
@@ -2757,7 +2763,7 @@ function SceneContent({
       const pp = project.panels.find((x) => x.id === panelId);
       onPick(pp?.segmentId ? { kind: 'table', id: pp.segmentId } : null);
     },
-    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView, boxSelect],
+    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView, boxSelect, selectedIds],
   );
 
 
@@ -3724,7 +3730,7 @@ function SceneContent({
                   danger: true,
                   onClick: () => {
                     runOp(segmentDelete, { segmentId: seg.id });
-                    onSelectPanels?.([], false);
+                    onSelectPanels?.([], 'replace');
                     onPick(null);
                   },
                 },
@@ -3766,7 +3772,7 @@ function SceneContent({
             if (add.length) onWiringChange([...wiring, ...add]);
             return;
           }
-          onSelectPanels?.(ids, true);
+          onSelectPanels?.(ids, marqueeCommit?.mode ?? 'add');
         }}
       />
 

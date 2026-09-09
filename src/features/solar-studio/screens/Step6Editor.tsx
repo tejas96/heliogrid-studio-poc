@@ -11,6 +11,9 @@ import {
   AlertTriangle,
   Box,
   BoxSelect,
+  LassoSelect,
+  SquareMinus,
+  Table2,
   Cable,
   Plug,
   CheckCircle2,
@@ -121,6 +124,18 @@ import { memoizedInsights } from '../lib/insights/registry';
 
 registerAllAnalyzers();
 import { movePanels, nudgeDelta } from '../lib/panel-move';
+import {
+  applySelection,
+  extendLasso,
+  gestureMode,
+  panelsInRegion,
+  regionIsTap,
+  tableOf,
+  tapSelection,
+  type SelectMode,
+  type SelectRegion,
+  type SelectTarget,
+} from '../lib/plan-select';
 import { nearestPanelAt } from '../lib/plan-pick';
 import { Scene3D } from '../three/Scene3D';
 import { findEraseTargetAt } from './step6-erase';
@@ -356,17 +371,22 @@ export function Step6Editor() {
     pos: XY;
     shift: boolean;
   } | null>(null);
-  const [marquee, setMarquee] = useState<{ a: XY; b: XY } | null>(null);
+  /** the region being dragged: a box, or a freehand lasso (lib/plan-select) */
+  const [marquee, setMarquee] = useState<SelectRegion | null>(null);
   /**
-   * Add-to-selection mode — the touch equivalent of holding Shift. Dragging a
-   * box already works under a finger, but every way to KEEP what it caught was
-   * behind the Shift key: a second box replaced the first, and a tap replaced
-   * the lot. On a phone that meant one module at a time, which puts the whole
-   * multi-module toolbar (rotate, tilt, group, delete) out of reach.
-   *
-   * Shift still works and still wins on a keyboard; this only ORs into it.
+   * The selection model, sticky between gestures (lib/plan-select):
+   *   mode   — replace / add / subtract. Add was a lone toggle ("the touch
+   *            Shift"); subtract did not exist, so "all this bay except the
+   *            four under the AC" was a box and four Shift-taps.
+   *   target — modules, or whole TABLES: a tap or a region takes every module
+   *            of each table it touched. "Set these three tables to 12°" had
+   *            no gesture in plan view.
+   *   lasso  — freehand instead of a box: a terrace is rarely rectangular.
+   * Shift still adds and Alt subtracts on a keyboard, mode or no mode.
    */
-  const [addSelect, setAddSelect] = useState(false);
+  const [selectMode, setSelectMode] = useState<SelectMode>('replace');
+  const [selectTarget, setSelectTarget] = useState<SelectTarget>('panels');
+  const [lassoSelect, setLassoSelect] = useState(false);
   const [hoverPoint, setHoverPoint] = useState<XY | null>(null);
   const [tableSheet, setTableSheet] = useState(false);
   /** Live slider value while dragging; null means "show the committed value".
@@ -524,12 +544,11 @@ export function Step6Editor() {
   }
 
   /** Shared by click-to-select and the release of a drag that never moved. */
-  function selectPanel(id: string, shift: boolean) {
-    setSelectedIds((cur) => {
-      if (shift)
-        return cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
-      return cur.length === 1 && cur[0] === id ? [] : [id];
-    });
+  function selectPanel(id: string, e: { shiftKey?: boolean; altKey?: boolean }) {
+    // in the tables target a tap on a module means its whole table
+    const ids = selectTarget === 'tables' ? tableOf(project.panels, id) : [id];
+    const mode = gestureMode(selectMode, e);
+    setSelectedIds((cur) => tapSelection(cur, ids, mode));
   }
 
   function nudgeSelected(dx: number, dy: number) {
@@ -1069,7 +1088,7 @@ export function Step6Editor() {
         }
         const hit = findPanelAt(m);
         if (!hit) return; // empty clicks are handled by the marquee gesture
-        selectPanel(hit.id, e.shiftKey || addSelect);
+        selectPanel(hit.id, e);
         return;
       }
       default:
@@ -1125,25 +1144,19 @@ export function Step6Editor() {
     }
   }
 
-  function finishMarquee(m: XY, shift: boolean) {
-    const a = marquee!.a;
+  function finishMarquee(m: XY, e: { shiftKey?: boolean; altKey?: boolean }) {
+    const drawn = marquee!;
     setMarquee(null);
-    if (Math.abs(m.x - a.x) < 0.3 && Math.abs(m.y - a.y) < 0.3) {
-      // treated as a click on empty canvas
-      if (!shift) setSelectedIds([]);
+    const region: SelectRegion =
+      drawn.kind === 'box' ? { ...drawn, b: m } : { ...drawn, points: extendLasso(drawn.points, m) };
+    const mode = gestureMode(selectMode, e);
+    if (regionIsTap(region)) {
+      // a tap on empty canvas clears — unless the gesture was only adding or taking away
+      if (mode === 'replace') setSelectedIds([]);
       return;
     }
-    const minX = Math.min(a.x, m.x);
-    const maxX = Math.max(a.x, m.x);
-    const minY = Math.min(a.y, m.y);
-    const maxY = Math.max(a.y, m.y);
-    const inside = project.panels
-      .filter(
-        (p) =>
-          p.center.x >= minX && p.center.x <= maxX && p.center.y >= minY && p.center.y <= maxY,
-      )
-      .map((p) => p.id);
-    setSelectedIds((cur) => (shift ? [...new Set([...cur, ...inside])] : inside));
+    const inside = panelsInRegion(project.panels, region, selectTarget);
+    setSelectedIds((cur) => applySelection(cur, inside, mode));
   }
 
   // ── stringing ──────────────────────────────────────────────────────────────
@@ -1233,7 +1246,7 @@ export function Step6Editor() {
         setDragLine(null);
         setMarquee(null);
         setSelectedIds([]);
-        setAddSelect(false);
+        setSelectMode('replace');
         setTool('select');
         return;
       }
@@ -1355,20 +1368,46 @@ export function Step6Editor() {
             active: tool === 'select' && !manualString,
             onClick: () => activate('select'),
           },
+          // the selection model (lib/plan-select): mode, target, shape. Each
+          // only means anything in Select, so each goes there — but never at
+          // the cost of a string being wired by hand, which activate() would
+          // throw away
           {
-            id: 'add-select',
-            icon: <BoxSelect />,
-            label: 'Add',
-            // the touch way in: a phone has no Shift, and without this a box or
-            // a tap replaces the selection instead of growing it
-            tip: 'Add to the selection — boxes and taps keep what is already picked\nSame as holding Shift',
-            active: addSelect,
+            id: 'select-mode',
+            icon: selectMode === 'subtract' ? <SquareMinus /> : <BoxSelect />,
+            label: selectMode === 'subtract' ? 'Subtract' : 'Add',
+            tip:
+              selectMode === 'replace'
+                ? 'Add to the selection — boxes and taps keep what is already picked\nSame as holding Shift · press again for Subtract'
+                : selectMode === 'add'
+                  ? 'Adding. Press again to SUBTRACT — boxes and taps take modules out\nSame as holding Alt'
+                  : 'Subtracting. Press again to stop',
+            active: selectMode !== 'replace',
             onClick: () => {
-              // the mode only means anything in Select, so go there — but never
-              // at the cost of a string being wired by hand, which activate()
-              // would throw away
               if (!manualString) activate('select');
-              setAddSelect((v) => !v);
+              setSelectMode((m) => (m === 'replace' ? 'add' : m === 'add' ? 'subtract' : 'replace'));
+            },
+          },
+          {
+            id: 'select-tables',
+            icon: <Table2 />,
+            label: 'Tables',
+            tip: 'Select whole tables — a tap or a box takes every module of each table it touches\n"These three tables to 12°" starts here',
+            active: selectTarget === 'tables',
+            onClick: () => {
+              if (!manualString) activate('select');
+              setSelectTarget((t) => (t === 'tables' ? 'panels' : 'tables'));
+            },
+          },
+          {
+            id: 'select-lasso',
+            icon: <LassoSelect />,
+            label: 'Lasso',
+            tip: 'Draw a freehand loop instead of a box — a terrace is rarely rectangular',
+            active: lassoSelect,
+            onClick: () => {
+              if (!manualString) activate('select');
+              setLassoSelect((v) => !v);
             },
           },
           {
@@ -1484,7 +1523,9 @@ export function Step6Editor() {
       measure.toggle,
       tool,
       manualString,
-      addSelect,
+      selectMode,
+      selectTarget,
+      lassoSelect,
       locked,
       project.walkways.length,
       project.keepouts.length,
@@ -1508,13 +1549,9 @@ export function Step6Editor() {
             visible={show3D}
             onClose={() => setShow3D(false)}
             selectedIds={selectedIds}
-            onSelectPanels={(ids, additive) =>
-              setSelectedIds((cur) => {
-                if (!additive) return ids;
-                const all = ids.every((id) => cur.includes(id));
-                return all ? cur.filter((x) => !ids.includes(x)) : [...new Set([...cur, ...ids])];
-              })
-            }
+            // the same model as the plan: replace / add / subtract, never a
+            // toggle — a second identical 3D box used to deselect the block
+            onSelectPanels={(ids, mode) => setSelectedIds((cur) => applySelection(cur, ids, mode))}
           />
         </div>
       )}
@@ -1593,7 +1630,7 @@ export function Step6Editor() {
               setPanelDrag({ id: hitPanel.id, start: m, pos: m, shift: false });
               return true;
             }
-            setMarquee({ a: m, b: m });
+            setMarquee(lassoSelect ? { kind: 'lasso', points: [m] } : { kind: 'box', a: m, b: m });
             return true;
           }
         }}
@@ -1602,7 +1639,10 @@ export function Step6Editor() {
           if (routeDrag) setRouteDrag({ ...routeDrag, pos: m });
           else if (dragLine) setDragLine({ ...dragLine, b: m });
           else if (panelDrag) setPanelDrag({ ...panelDrag, pos: m });
-          else if (marquee) setMarquee({ ...marquee, b: m });
+          else if (marquee)
+            setMarquee(
+              marquee.kind === 'box' ? { ...marquee, b: m } : { ...marquee, points: extendLasso(marquee.points, m) },
+            );
           else if (tool === 'panels' || tool === 'erase' || tool === 'arrester' || tool === 'inverter')
             setHoverPoint(m);
         }}
@@ -1617,7 +1657,7 @@ export function Step6Editor() {
             const dx = m.x - start.x;
             const dy = m.y - start.y;
             if (Math.hypot(dx, dy) < 0.3) {
-              selectPanel(id, e.shiftKey || addSelect); // a press with no travel is a click
+              selectPanel(id, e); // a press with no travel is a click
               return;
             }
             // drag a panel that was NOT selected ⇒ move just that one
@@ -1631,7 +1671,7 @@ export function Step6Editor() {
             return;
           }
           if (marquee) {
-            finishMarquee(m, e.shiftKey || addSelect);
+            finishMarquee(m, e);
             return;
           }
           if (!dragLine) return;
@@ -2031,11 +2071,21 @@ export function Step6Editor() {
             say how to leave. The way out is the same 56 px Add button that
             turned it on — a 30 px chip in here would fail the touch contract
             (DESIGN-SYSTEM N2) and this bar is a status line, not a toolbar. */}
-        {tool === 'select' && addSelect && !manualString && (
+        {tool === 'select' && !manualString && (selectMode !== 'replace' || selectTarget === 'tables' || lassoSelect) && (
           <div className="hint-bar" role="status">
-            <BoxSelect />
-            Adding to the selection — boxes and taps keep what is already picked · Add
-            again, or Esc, stops
+            {selectMode === 'subtract' ? <SquareMinus /> : selectTarget === 'tables' ? <Table2 /> : lassoSelect ? <LassoSelect /> : <BoxSelect />}
+            {[
+              selectMode === 'add'
+                ? 'Adding to the selection — boxes and taps keep what is already picked'
+                : selectMode === 'subtract'
+                  ? 'Subtracting — boxes and taps take modules out of the selection'
+                  : null,
+              selectTarget === 'tables' ? 'whole tables' : null,
+              lassoSelect ? 'freehand lasso' : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+            {selectMode !== 'replace' ? ' · Esc stops' : ''}
           </div>
         )}
       </div>
@@ -3597,7 +3647,7 @@ function EditorLayers({
   manualString: string[] | null;
   dragLine: { a: XY; b: XY } | null;
   panelDrag: { id: string; start: XY; pos: XY; shift: boolean } | null;
-  marquee: { a: XY; b: XY } | null;
+  marquee: SelectRegion | null;
   hoverPoint: XY | null;
   walkwayWidthMm: number;
   selected: string[];
@@ -4173,8 +4223,8 @@ function EditorLayers({
         );
       })}
 
-      {/* marquee selection */}
-      {marquee && (
+      {/* marquee selection: a box, or the lasso being drawn (closed back to its start) */}
+      {marquee && marquee.kind === 'box' && (
         <rect
           x={Math.min(frame.toPx(marquee.a).x, frame.toPx(marquee.b).x)}
           y={Math.min(frame.toPx(marquee.a).y, frame.toPx(marquee.b).y)}
@@ -4184,6 +4234,16 @@ function EditorLayers({
           stroke="#38bdf8"
           strokeWidth={1.4}
           strokeDasharray="6 4"
+        />
+      )}
+      {marquee && marquee.kind === 'lasso' && marquee.points.length >= 2 && (
+        <path
+          d={polyPath(frame, marquee.points)}
+          fill="rgba(56,189,248,0.14)"
+          stroke="#38bdf8"
+          strokeWidth={1.4}
+          strokeDasharray="6 4"
+          strokeLinejoin="round"
         />
       )}
 
