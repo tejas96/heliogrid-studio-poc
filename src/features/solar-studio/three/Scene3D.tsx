@@ -1955,7 +1955,12 @@ export function Scene3D({
         // retina at 3× rendered four times the pixels for no visible gain; 1.5 is
         // the sweet spot for a scene with SMAA on top
         dpr={[1, 1.5]}
-        gl={{ preserveDrawingBuffer: true, antialias: false, alpha: meshMode }}
+        // MSAA on the canvas itself. The post chain replaces it with SMAA — but
+        // the heatmap draws WITHOUT the chain (its colours are the data and
+        // must not be tone-mapped), so it had no anti-aliasing at all: the most
+        // number-heavy customer picture was the jaggiest. With the chain up the
+        // canvas only ever receives one full-screen quad, where MSAA is free.
+        gl={{ preserveDrawingBuffer: true, antialias: true, alpha: meshMode }}
         camera={{ position: [30, 42, 42], fov: CAMERA_FOV, near: 0.3, far: 3000 }}
         onCreated={(state) => {
           const { gl } = state;
