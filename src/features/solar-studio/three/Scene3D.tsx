@@ -3410,9 +3410,10 @@ function SceneContent({
    */
   const envKey = useMemo(() => {
     const b = (rad: number) => Math.round((rad * 180) / Math.PI / 5);
-    // `glEpoch` re-keys after a restored GPU context: the bake was GPU-only
-    return `${sunVisible ? `d${b(sunAltitude)}:${b(sunAzimuth)}` : 'night'}|g${glEpoch}`;
-  }, [sunVisible, sunAltitude, sunAzimuth, glEpoch]);
+    // `glEpoch` re-keys after a restored GPU context: the bake was GPU-only.
+    // The photo toggle re-keys too: the ground half of the bake wears it.
+    return `${sunVisible ? `d${b(sunAltitude)}:${b(sunAzimuth)}` : 'night'}|g${glEpoch}|p${showPhoto ? 1 : 0}`;
+  }, [sunVisible, sunAltitude, sunAzimuth, glEpoch, showPhoto]);
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
   /**
@@ -3564,11 +3565,24 @@ function SceneContent({
               mieCoefficient={0.006}
               mieDirectionalG={0.85}
             />
-            {/* the ground half of the environment: a roof/terrain albedo the
-                undersides and the frame bounce off, standing in for everything
-                below the horizon that the sky shader does not draw */}
+            {/* The ground half of the environment. It was ONE flat colour, so
+                every metal in the scene — legs, rails, frames — reflected a
+                grey rectangle below the horizon and read as grey plastic. Now
+                it is the same aerial photo the ground plane wears: roads,
+                roofs and trees at their real brightness, over the flat
+                backstop, so a rail post carries the structured reflection a
+                real one does. With the photo off it is the same plain grey as
+                the ground, so the reflection still agrees with the picture. */}
             <mesh position={[0, -8, 0]} rotation-x={-Math.PI / 2}>
-              <planeGeometry args={[400, 400]} />
+              <planeGeometry args={[wideSpanM, wideSpanM]} />
+              <meshBasicMaterial
+                key={showPhoto ? 'photo' : 'plain'}
+                map={showPhoto ? wideGroundTex : undefined}
+                color={showPhoto ? '#8a8a8a' : PLAIN_GROUND}
+              />
+            </mesh>
+            <mesh position={[0, -9, 0]} rotation-x={-Math.PI / 2}>
+              <planeGeometry args={[4000, 4000]} />
               <meshBasicMaterial color="#6b6357" />
             </mesh>
           </>
