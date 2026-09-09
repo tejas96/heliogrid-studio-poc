@@ -1562,6 +1562,35 @@ export function Scene3D({
     }
 
     capturing.current = true;
+    // The shadow map was the one thing the resize did not sharpen. At 2.5× the
+    // pixels the same 4096 map drew every shadow edge 2.5× blockier than the
+    // engineer had approved on screen — the PDF disagreed with the review.
+    // Double it for the two frames the capture takes (8192² is 256 MB, so only
+    // as far as this GPU allows), and keep the penumbra at its METRE width by
+    // scaling the texel kernel with the map. Both go back in the finally.
+    const bumped: { light: THREE.DirectionalLight; px: number; radius: number }[] = [];
+    const maxPx = Math.min(8192, gl.capabilities.maxTextureSize);
+    sceneRef.current?.traverse((o) => {
+      const l = o as THREE.DirectionalLight;
+      if (!l.isDirectionalLight || !l.castShadow) return;
+      const px = l.shadow.mapSize.x;
+      const next = Math.min(maxPx, px * 2);
+      if (next <= px) return;
+      bumped.push({ light: l, px, radius: l.shadow.radius });
+      l.shadow.mapSize.set(next, next);
+      l.shadow.radius = (l.shadow.radius * next) / px;
+      // the old map is the old size: drop it, three allocates the new one
+      l.shadow.map?.dispose();
+      l.shadow.map = null;
+    });
+    const restoreShadows = () => {
+      for (const b of bumped) {
+        b.light.shadow.mapSize.set(b.px, b.px);
+        b.light.shadow.radius = b.radius;
+        b.light.shadow.map?.dispose();
+        b.light.shadow.map = null;
+      }
+    };
     gl.setSize(size.width * scale, size.height * scale, false);
     // A resize is not a scene-graph change, so an asleep loop would not draw
     // at the new size on its own: ask for the frame explicitly.
@@ -1579,9 +1608,19 @@ export function Scene3D({
           // restore in a finally: leaving the canvas at 2500 px because an
           // encode threw would tank the frame rate with no visible cause
           gl.setSize(size.width, size.height, false);
+          restoreShadows();
           capturing.current = false;
         }
-        if (url) onCapture(url, label);
+        if (url) {
+          // what went into the proposal, on the record: the print size and
+          // the shadow map it was drawn with
+          recordDiagnostic('hero-capture', {
+            longEdgePx: Math.round(nowLongEdge * scale),
+            shadowMapPx: bumped.length ? Math.min(maxPx, bumped[0].px * 2) : null,
+            label,
+          });
+          onCapture(url, label);
+        }
       }),
     );
   }
