@@ -76,8 +76,15 @@ a shading tool. The coarse escape hatch is already built and free: the plain tog
 ~30 the axis that bites is draw calls, not triangles, and the tool for that is
 `<Instances>`/`<Merged>`.
 
-**Still open on this list:** the empty model folders (`building`, `elevated`,
-`ladder`, `other`, `windmill` ship no GLB, so a ladder draws as a grey box — item 15),
+| **15** the ladder (partial) | ✅ **a ladder is a ladder now**, not the grey box the report names. Built from its own parts — two leaning rails, level rungs at a 300 mm pitch, rubber feet — all derived from the surveyed box, so `lengthM` is the foot's stand-off, `heightM` is the climb, and the lean falls out of the two. Deliberately NOT a GLB: for a regular object made of straight sections a parametric mesh is sharper than photogrammetry (AI reconstruction turns thin rungs to sludge), it is ~200 triangles against a scanned prop's 46,000, and it is exactly the size the surveyor drew rather than scaled to it. One shared box geometry and two shared materials across the whole project, with the rungs instanced — the habit item 23 complains about. Caveat, pre-existing and unchanged: the engine still shades a ladder as a solid slab, because `lib/scene-model.ts` approximates every obstruction by its bounding solid. That is conservative, the same way it is for trees. |
+
+**Still open on this list:** the remaining empty model folders (`building`,
+`elevated`, `other` and `windmill` ship no GLB — but `building`, `elevated` and
+`other` are deliberately generic types, and a massing box is the honest drawing for
+them; inventing a specific mesh for "other" would be worse than the box. What is
+genuinely missing is `windmill`, and the types an Indian rooftop has that we cannot
+represent at all: AC outdoor unit, skylight, light pole, fence — those need new
+`ObstructionType` values, not just meshes),
 tree species meshes (the rest of 16, blocked on the same missing art), item 2 (soft
 shadows — drei's `<SoftShadows/>` does not work with this three build; see the note at
 the Canvas), and the three remaining pieces of 13 above.

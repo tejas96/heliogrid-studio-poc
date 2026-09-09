@@ -339,6 +339,13 @@ export function ObstructionMesh({
         </group>
       );
 
+    case 'ladder':
+      return (
+        <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
+          <ProceduralLadder o={o} caster={caster} />
+        </group>
+      );
+
     default:
       return (
         <mesh
@@ -357,6 +364,138 @@ export function ObstructionMesh({
         </mesh>
       );
   }
+}
+
+// ─── Shared box, shared metal ───────────────────────────────────────────────
+// One geometry and one material for every rail, rung and foot in the project.
+// Gap-report item 23 is about the opposite habit: a 30 m safety rail draws as
+// 23 separate meshes, each with its own inline geometry AND its own inline
+// material. Scale lives on the mesh, so a unit box serves every size.
+const UNIT_BOX = new THREE.BoxGeometry(1, 1, 1);
+const LADDER_ALU = new THREE.MeshStandardMaterial({
+  color: '#b6babf',
+  metalness: 0.7,
+  roughness: 0.4,
+});
+const LADDER_RUBBER = new THREE.MeshStandardMaterial({
+  color: '#23262a',
+  metalness: 0,
+  roughness: 0.9,
+});
+
+/** 300 mm — the top of the range a real access ladder is built to */
+const RUNG_PITCH_M = 0.3;
+/** 35 mm aluminium side rail, 28 mm rung — both taken from stock sections */
+const RAIL_T = 0.035;
+const RUNG_T = 0.028;
+
+/**
+ * A rooftop access ladder, built from its own parts.
+ *
+ * It used to fall through to `default` and draw as one flat grey box, which the
+ * gap report names outright: "A ladder renders as a grey box" (item 15). This
+ * is not a GLB — for a regular man-made object made of straight sections, a
+ * parametric mesh beats photogrammetry on every axis that matters here. It is
+ * sharper (AI reconstruction turns thin rungs to sludge), it is ~200 triangles
+ * against a scanned prop's 46,000, and it is EXACTLY the size the surveyor
+ * drew, because it is built from those numbers rather than scaled to them.
+ *
+ * The surveyed box is the ladder: `lengthM` is how far the foot stands out from
+ * the wall, `heightM` is the rise, so the lean falls out of the two and the
+ * drawn object fills the rectangle on the plan. Rungs stay level while the
+ * rails lean, the way a ladder you can actually climb is built.
+ *
+ * ONE HONEST CAVEAT, and it is pre-existing: the shading engine approximates
+ * every obstruction by its bounding solid (`lib/scene-model.ts`), so a ladder
+ * shades as though it were a solid slab. A real ladder is mostly air. That is
+ * the same conservatism the engine already applies to trees, and it errs
+ * towards under-promising energy — but the picture now shows the gaps that the
+ * number does not credit.
+ */
+export function ladderFrame(o: Obstruction) {
+  const circle = o.shape === 'circle';
+  const run = Math.max(0.12, circle ? o.diameterM : o.lengthM);
+  const spacing = Math.max(0.25, circle ? o.diameterM : o.widthM);
+  const rise = Math.max(0.3, o.heightM);
+  const railLen = Math.hypot(run, rise);
+  return {
+    /** how far the foot stands out from the wall — the plan box's X extent */
+    run,
+    /** gap between the rails — the plan box's Z extent */
+    spacing,
+    /** the climb — the obstruction's own height */
+    rise,
+    railLen,
+    /** lean off vertical; rotating a rail by −lean about Z puts its top at +X */
+    lean: Math.atan2(run, rise),
+    rungs: Math.max(2, Math.round(railLen / RUNG_PITCH_M)),
+    railZ: (spacing - RAIL_T) / 2,
+  };
+}
+
+function ProceduralLadder({
+  o,
+  caster,
+}: {
+  o: Obstruction;
+  caster: { shadowCaster: boolean };
+}) {
+  const { run, spacing, rise, railLen, lean, rungs, railZ } = ladderFrame(o);
+
+  const rungRef = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const m = rungRef.current;
+    if (!m) return;
+    const mat = new THREE.Matrix4();
+    const pos = new THREE.Vector3();
+    const scl = new THREE.Vector3(RUNG_T, RUNG_T, spacing - RAIL_T * 2);
+    const q = new THREE.Quaternion(); // rungs stay LEVEL — only the rails lean
+    for (let i = 0; i < rungs; i++) {
+      // half a pitch in from each end, so no rung sits on the foot or the tip
+      const t = (i + 0.5) / rungs;
+      mat.compose(pos.set(-run / 2 + t * run, t * rise, 0), q, scl);
+      m.setMatrixAt(i, mat);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere();
+  }, [run, rise, spacing, rungs]);
+
+  return (
+    <>
+      {[-railZ, railZ].map((z) => (
+        <mesh
+          key={z}
+          geometry={UNIT_BOX}
+          material={LADDER_ALU}
+          position={[0, rise / 2, z]}
+          rotation={[0, 0, -lean]}
+          scale={[RAIL_T, railLen, RAIL_T * 1.6]}
+          castShadow={caster.shadowCaster}
+          receiveShadow
+          userData={caster}
+        />
+      ))}
+      <instancedMesh
+        ref={rungRef}
+        args={[UNIT_BOX, LADDER_ALU, rungs]}
+        castShadow={caster.shadowCaster}
+        receiveShadow
+        userData={caster}
+      />
+      {[-railZ, railZ].map((z) => (
+        <mesh
+          key={z}
+          geometry={UNIT_BOX}
+          material={LADDER_RUBBER}
+          position={[-run / 2, 0.02, z]}
+          scale={[RAIL_T * 1.8, 0.04, RAIL_T * 2.2]}
+          castShadow={caster.shadowCaster}
+          receiveShadow
+          userData={caster}
+        />
+      ))}
+    </>
+  );
 }
 
 function ProceduralWindmill({
