@@ -58,10 +58,14 @@ the priority order the hyperrealism section sets out.*
 
 | **14** clamp orientation | ✅ `StructureNodesInstanced` composed every instance with a `Quaternion` that was created once and never assigned, so all hardware stood square to the WORLD while the rails ran at the table's azimuth. `lib/structure.ts` now exports `tableAxis` / `tableYawRad`, read from the table's own members, averaged as doubled angles so two rails stored head-to-tail cannot cancel. **Test-verified only** — `topologyOf` builds an elevated table solely on a roof with pitch < 0.5°, and the sample project's roof is 1.6°, so no hardware renders in it at all. |
 
+| **13** module variation | ✅ mostly. Chasing it found that **`instanceColor` never reached the module fragment at all** — three declares the `vColor` varying in the vertex shader for `USE_INSTANCING_COLOR` but in the fragment only for `USE_COLOR`, which comes from `material.vertexColors`. So the per-module soiling, the brass SELECTED tint and the hover tint were all uploaded and discarded: **selecting a module in 3D highlighted nothing**. Fixing it needs the flag AND a white per-vertex `color` attribute, or `color_vertex` reads (0,0,0) and the modules lose their whole diffuse. Painting every instance brass now moves 30.5 % of the frame; it moved 0 % before. Also shipped: per-module soiling (23 modules, 23 distinct values, stable across reloads), soiling that ROUGHENS as well as dims (12 % of frame), and glass waviness at a measured strength (0.25 — 0.045 was inert at 0.04 %). **Open:** frame anisotropy, junction box, MC4 tail. |
+
 **Still open on this list:** the plain/realistic model toggle (the other half of 11 —
 ResLink's one tap is why their 3D works on a phone), the empty model folders
 (`building`, `elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws
-as a grey box — item 15), and items 2, 13, 16.
+as a grey box — item 15), item 16, item 2 (soft shadows — drei's `<SoftShadows/>`
+does not work with this three build; see the note at the Canvas), and the three
+remaining pieces of 13 above.
 
 **Item 12 is DONE, and the row above was wrong about what shipped.** It said the roof
 carried "the satellite tile planar-projected by world XZ at 1280 px over ~93 m = 7.3
