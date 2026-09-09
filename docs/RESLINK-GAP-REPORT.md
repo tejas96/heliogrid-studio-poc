@@ -60,12 +60,27 @@ the priority order the hyperrealism section sets out.*
 
 | **13** module variation | ✅ mostly. Chasing it found that **`instanceColor` never reached the module fragment at all** — three declares the `vColor` varying in the vertex shader for `USE_INSTANCING_COLOR` but in the fragment only for `USE_COLOR`, which comes from `material.vertexColors`. So the per-module soiling, the brass SELECTED tint and the hover tint were all uploaded and discarded: **selecting a module in 3D highlighted nothing**. Fixing it needs the flag AND a white per-vertex `color` attribute, or `color_vertex` reads (0,0,0) and the modules lose their whole diffuse. Painting every instance brass now moves 30.5 % of the frame; it moved 0 % before. Also shipped: per-module soiling (23 modules, 23 distinct values, stable across reloads), soiling that ROUGHENS as well as dims (12 % of frame), and glass waviness at a measured strength (0.25 — 0.045 was inert at 0.04 %). **Open:** frame anisotropy, junction box, MC4 tail. |
 
-**Still open on this list:** the plain/realistic model toggle (the other half of 11 —
-ResLink's one tap is why their 3D works on a phone), the empty model folders
-(`building`, `elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws
-as a grey box — item 15), item 16, item 2 (soft shadows — drei's `<SoftShadows/>`
-does not work with this three build; see the note at the Canvas), and the three
-remaining pieces of 13 above.
+| **11** plain/realistic toggle | ✅ the other half of 11. Plain mode does not draw a box over the model — `AssetBoundary` returns the fallback **without mounting the child**, so `useGLTF` never fires and the GLB is never requested; `useWarmObstructionAssets` returns early too. Measured on a roof with a water tank: realistic = 29 meshes / 9,177 tris / `tank.glb` fetched; plain = 30 meshes / 2,870 tris / no fetch, `Mesh_0` gone. Shadows unchanged both ways — solar access reads the proxies in `lib/scene-model.ts`. Also fixed the menu lying about its own state: `plainModels` and `project.obstructions` were missing from the `haloGroups` deps, so the button read "Plain" with `aria-pressed=false` while plain mode was on, and the item would not have appeared when a user added their first obstruction. `exhaustive-deps` does not flag that memo; the browser did. |
+| **16** tree variety (partial) | ✅ **the two halves that were real.** Per-instance character keyed on the obstruction id — yaw, a permanent lean off plumb (±0.05 rad), sway phase and rate, and a foliage tint — so four trees no longer read as four copies of one mesh swaying in lockstep. Measured on four deliberately same-sized trees: yaw + lean alone moves **12.31 %** of the frame, the tint alone **9.73 %**, two-grab control **0.00 %**. Nothing that a surveyor typed varies (height, footprint) — the shading engine builds its solid from those, and a test pins the allow-list so a `scale` cannot be added later without someone reading the rule. Also shipped, and overdue: **`prefers-reduced-motion` now reaches the 3D scene.** All four decorative `useFrame` loops (tree sway, turbine vent, both windmills) ran regardless of the setting; the repo's three reduced-motion blocks are CSS and cannot touch a WebGL frame. **Open:** real species meshes, which need 3D art, not code — same blocker as item 15. |
+
+**Item 16's LOD half is obsolete, and the report's own number was the reason.** The
+row above says "five trees is 5.7 M triangles"; that was true of the pre-decimation
+asset and is not true now. Measured from the shipped GLB's JSON chunk: `tree.glb` is
+**46,239 triangles / 2.50 MB**, so five trees is **231 k triangles**, 4 % of the
+figure that motivated the remedy — and the whole prop set is 8.08 MB, so the download
+argument is gone outright. `<Detailed>` would also need decimated levels that do not
+exist (the tree is one mesh, one primitive, one material), and an alpha billboard
+would change the cast-shadow silhouette, which is the one thing an EPC scrutinises in
+a shading tool. The coarse escape hatch is already built and free: the plain toggle.
+**So the LOD and billboard remedy is struck, not deferred.** If tree counts ever pass
+~30 the axis that bites is draw calls, not triangles, and the tool for that is
+`<Instances>`/`<Merged>`.
+
+**Still open on this list:** the empty model folders (`building`, `elevated`,
+`ladder`, `other`, `windmill` ship no GLB, so a ladder draws as a grey box — item 15),
+tree species meshes (the rest of 16, blocked on the same missing art), item 2 (soft
+shadows — drei's `<SoftShadows/>` does not work with this three build; see the note at
+the Canvas), and the three remaining pieces of 13 above.
 
 **Item 12 is DONE, and the row above was wrong about what shipped.** It said the roof
 carried "the satellite tile planar-projected by world XZ at 1280 px over ~93 m = 7.3

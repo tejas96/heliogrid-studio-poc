@@ -25,6 +25,8 @@ import * as THREE from 'three';
 import type { Group, Object3D } from 'three';
 import type { Obstruction, ObstructionType } from '../types';
 import { castsAnalyticalShadow } from '../lib/capabilities';
+import { fnv1a } from '../lib/hash';
+import { useReducedMotion } from './useReducedMotion';
 
 /**
  * Renders `children`, but if the GLB asset fails to load (404 / corrupt), falls
@@ -141,6 +143,56 @@ function GroundedClone({
   );
 }
 
+/**
+ * The same GLB scene with its own copy of the materials, tinted.
+ *
+ * `<Clone>` shares the source materials by reference, so writing a colour onto
+ * one would repaint every tree in the project. drei's `deep="materialsOnly"`
+ * looks like the answer and is not: it re-clones inside the render body, so the
+ * very next re-render (GroundedClone's `setDy` guarantees one) throws away the
+ * tinted material and puts a fresh white one back. Measured — all four trees
+ * came out with distinct material uuids and colour `ffffff`.
+ *
+ * So the copy is made ONCE, here, memoised on the scene and the colour, the way
+ * `WindmillAsset` below already clones to name its rotor. Geometry and textures
+ * stay shared — `Object3D.clone` copies the graph, not the buffers — so the
+ * cost of a tinted tree is one extra material, not another 46k triangles.
+ *
+ * `multiply`, not `copy`: the tint is a filter over whatever albedo the asset
+ * ships, so a model authored with a non-white base factor keeps it.
+ */
+function useTintedScene(scene: Object3D, tint: THREE.Color): Object3D {
+  const built = useMemo(() => {
+    const root = scene.clone(true);
+    const mats: THREE.Material[] = [];
+    const tinted = (m: THREE.Material) => {
+      const c = m.clone();
+      if ('color' in c) (c as THREE.MeshStandardMaterial).color.multiply(tint);
+      mats.push(c);
+      return c;
+    };
+    root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(tinted)
+        : tinted(mesh.material);
+    });
+    return { root, mats };
+  }, [scene, tint]);
+
+  // the clones are ours, so freeing them is ours too — r3f only disposes what
+  // it created itself
+  useEffect(() => {
+    const { mats } = built;
+    return () => {
+      for (const m of mats) m.dispose();
+    };
+  }, [built]);
+
+  return built.root;
+}
+
 const BUILDING_TINTS = ['#8d8579', '#9a9287', '#7f7a70'];
 
 function hashStr(s: string): number {
@@ -202,9 +254,17 @@ export function ObstructionMesh({
     case 'tree': {
       const trunkH = Math.max(0.6, o.heightM * 0.4);
       const crownR = Math.max(0.5, Math.max(r, (o.heightM - trunkH) * 0.55));
+      // the boundary's fallback is what plain mode draws AND what the loading
+      // and 404 paths draw, so it takes the same character as the model would
+      const tint = treeCharacter(o.id).tint;
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary plain={plain} fallback={<ProceduralTree trunkH={trunkH} crownR={crownR} caster={caster} />}>
+          <AssetBoundary
+            plain={plain}
+            fallback={
+              <ProceduralTree trunkH={trunkH} crownR={crownR} caster={caster} tint={tint} />
+            }
+          >
             <TreeAsset o={o} caster={caster} fallback={{ trunkH, crownR }} />
           </AssetBoundary>
         </group>
@@ -309,8 +369,10 @@ function ProceduralWindmill({
   caster: { shadowCaster: boolean };
 }) {
   const rotorRef = useRef<Group>(null);
+  const reduced = useReducedMotion();
   useFrame((_, delta) => {
-    if (rotorRef.current) rotorRef.current.rotation.z += delta * 4.2;
+    if (reduced || !rotorRef.current) return;
+    rotorRef.current.rotation.z += delta * 4.2;
   });
   const towerH = Math.max(0.8, heightM * 0.86);
   const rotorR = Math.max(0.35, radiusM * 0.8);
@@ -351,15 +413,36 @@ function ProceduralWindmill({
   );
 }
 
+const CROWN_LOWER = new THREE.Color('#2f6b3a');
+const CROWN_UPPER = new THREE.Color('#3a7d46');
+
 function ProceduralTree({
   trunkH,
   crownR,
   caster,
+  tint,
 }: {
   trunkH: number;
   crownR: number;
   caster: { shadowCaster: boolean };
+  /**
+   * The same per-instance foliage multiplier the GLB gets, so a plain-mode
+   * canopy is not a row of identical green balls either. Only the CROWN takes
+   * it — the trunk stays the one brown, because a green-shifted trunk reads as
+   * a bug rather than as a species. Deliberately nothing else varies here: in
+   * plain mode these are massing blocks for judging what shades what, and a
+   * block whose size wandered would be worse than a stamped one.
+   */
+  tint?: THREE.Color;
 }) {
+  const lower = useMemo(
+    () => (tint ? CROWN_LOWER.clone().multiply(tint) : CROWN_LOWER),
+    [tint],
+  );
+  const upper = useMemo(
+    () => (tint ? CROWN_UPPER.clone().multiply(tint) : CROWN_UPPER),
+    [tint],
+  );
   return (
     <>
       <mesh position={[0, trunkH / 2, 0]} castShadow userData={caster}>
@@ -370,11 +453,11 @@ function ProceduralTree({
       </mesh>
       <mesh position={[0, trunkH + crownR * 0.55, 0]} castShadow userData={caster}>
         <sphereGeometry args={[crownR, 18, 14]} />
-        <meshStandardMaterial color="#2f6b3a" roughness={0.9} />
+        <meshStandardMaterial color={lower} roughness={0.9} />
       </mesh>
       <mesh position={[0, trunkH + crownR * 1.25, 0]} castShadow userData={caster}>
         <sphereGeometry args={[crownR * 0.66, 16, 12]} />
-        <meshStandardMaterial color="#3a7d46" roughness={0.9} />
+        <meshStandardMaterial color={upper} roughness={0.9} />
       </mesh>
     </>
   );
@@ -486,8 +569,10 @@ function ProceduralTurbineVent({
   caster: { shadowCaster: boolean };
 }) {
   const rotorRef = useRef<Group>(null);
+  const reduced = useReducedMotion();
   useFrame((_, delta) => {
-    if (rotorRef.current) rotorRef.current.rotation.y += delta * 3.5;
+    if (reduced || !rotorRef.current) return;
+    rotorRef.current.rotation.y += delta * 3.5;
   });
   const baseH = Math.max(0.06, o.heightM * 0.22);
   const domeR = Math.max(0.12, r);
@@ -527,6 +612,77 @@ function ProceduralTurbineVent({
 // lifted every tree by half its height.
 const TREE_REF = { x: 1.2623, y: 1.89677, z: 1.21922 };
 
+// ─── Per-instance tree character ────────────────────────────────────────────
+// One tree.glb serves coconut, neem, banyan and gulmohar alike. Real species
+// meshes are the honest fix and they need 3D art, not code — that is item 15's
+// problem, not this one. Until they exist, this stops five copies of the same
+// mesh reading as five copies of the same mesh.
+//
+// The clone-army tell is three things, and only one of them is the model:
+//   · every tree faced the same way          → a hashed yaw
+//   · every tree stood perfectly plumb       → a small permanent lean
+//   · every tree swayed in exact lockstep    → a hashed phase and rate
+// Foliage colour on top of that, because a neem is not a gulmohar green.
+//
+// WHAT IT MAY NOT VARY: height and footprint. A surveyor typed those, the
+// shading engine builds its bounding solid from them (`lib/scene-model.ts`
+// approximates an obstruction by a full-height box or cylinder), and CLAUDE.md
+// says the picture and the model agree. Jittering the size would make the tree
+// on screen disagree with the tree in the kWh — so every value below is
+// something nobody measured and the engine never reads.
+//
+// Keyed on the obstruction's own id, the way `soilTint` is keyed on the panel's
+// (`three/PanelsInstanced.tsx`): a tree keeps its own character across reloads,
+// camera moves and re-renders. `Math.random()` here would re-roll every tree on
+// every remount, which reads as a glitch rather than as variety.
+type TreeCharacter = {
+  /** radians of yaw ON TOP of the rotation the user set — a tree has no front */
+  yaw: number;
+  /** permanent lean off plumb, radians */
+  leanX: number;
+  leanZ: number;
+  /** head start on the sway, radians */
+  phaseX: number;
+  phaseZ: number;
+  /** sway speed multiplier — a heavier crown answers the wind more slowly */
+  rate: number;
+  /** foliage multiplier: cool blue-green through to warm yellow-green */
+  tint: THREE.Color;
+};
+
+/** ~2.9° — visible as character, small enough that no tree looks storm-damaged */
+export const TREE_LEAN_MAX = 0.05;
+
+const treeCharCache = new Map<string, TreeCharacter>();
+
+/** 0..1 from an id and a salt, so each trait gets its own independent stream */
+function unitOf(id: string, salt: string): number {
+  return (fnv1a(id + salt) % 10000) / 10000;
+}
+
+export function treeCharacter(id: string): TreeCharacter {
+  const hit = treeCharCache.get(id);
+  if (hit) return hit;
+  const lum = 0.84 + 0.26 * unitOf(id, ':lum'); // 0.84 .. 1.10
+  const warm = unitOf(id, ':warm'); // 0 = cool/blue-green, 1 = warm/yellow-green
+  const ch: TreeCharacter = {
+    yaw: unitOf(id, ':yaw') * Math.PI * 2,
+    leanX: (unitOf(id, ':leanx') - 0.5) * 2 * TREE_LEAN_MAX,
+    leanZ: (unitOf(id, ':leanz') - 0.5) * 2 * TREE_LEAN_MAX,
+    phaseX: unitOf(id, ':phx') * Math.PI * 2,
+    phaseZ: unitOf(id, ':phz') * Math.PI * 2,
+    rate: 0.72 + unitOf(id, ':rate') * 0.56, // 0.72 .. 1.28
+    tint: new THREE.Color(lum * (0.9 + 0.2 * warm), lum, lum * (1.06 - 0.22 * warm)),
+  };
+  treeCharCache.set(id, ch);
+  return ch;
+}
+
+/** rad/s of the sway's slower axis; the other runs at 0.83× so they never repeat */
+const SWAY_RATE = 0.6;
+const SWAY_Z = 0.02;
+const SWAY_X = 0.015;
+
 function TreeAsset({
   o,
   caster,
@@ -539,28 +695,48 @@ function TreeAsset({
   const gltf = useGLTF(TREE_MODEL_URL);
   const swayRef = useRef<Group>(null);
   const t = useRef(0);
+  const ch = useMemo(() => treeCharacter(o.id), [o.id]);
+  const reduced = useReducedMotion();
+  const foliage = useTintedScene(gltf.scene, ch.tint);
+
+  // The lean is the tree's resting pose, so it is set outside the frame loop:
+  // with reduced motion on, the loop never runs and this is the whole answer.
+  useLayoutEffect(() => {
+    const g = swayRef.current;
+    if (!g) return;
+    g.rotation.x = ch.leanX;
+    g.rotation.z = ch.leanZ;
+  }, [ch, reduced]);
+
   useFrame((_, delta) => {
+    const g = swayRef.current;
+    if (reduced || !g) return;
     t.current += delta;
-    if (swayRef.current) {
-      swayRef.current.rotation.z = Math.sin(t.current * 0.6) * 0.02;
-      swayRef.current.rotation.x = Math.sin(t.current * 0.5 + 1.3) * 0.015;
-    }
+    // sway rides ON TOP of the lean, so a tree returns to its own rest pose
+    g.rotation.z = ch.leanZ + Math.sin(t.current * SWAY_RATE * ch.rate + ch.phaseZ) * SWAY_Z;
+    g.rotation.x =
+      ch.leanX + Math.sin(t.current * SWAY_RATE * 0.83 * ch.rate + ch.phaseX) * SWAY_X;
   });
+
   const footprintM = o.shape === 'circle' ? o.diameterM : Math.max(o.lengthM, o.widthM);
   const scaleX = Math.max(0.05, footprintM / TREE_REF.x);
   const scaleZ = Math.max(0.05, footprintM / TREE_REF.z);
   const scaleY = Math.max(0.05, o.heightM / TREE_REF.y);
   return gltf.scene ? (
-    // sway rotates about the BASE, which is where GroundedClone puts the model
-    <group ref={swayRef}>
-      <GroundedClone
-        object={gltf.scene}
-        scale={[scaleX, scaleY, scaleZ]}
-        caster={caster}
-      />
+    // yaw is static character; the inner group is the one that leans and sways,
+    // and it rotates about the BASE, which is where GroundedClone puts the model
+    <group rotation={[0, ch.yaw, 0]}>
+      <group ref={swayRef}>
+        <GroundedClone object={foliage} scale={[scaleX, scaleY, scaleZ]} caster={caster} />
+      </group>
     </group>
   ) : (
-    <ProceduralTree trunkH={fallback.trunkH} crownR={fallback.crownR} caster={caster} />
+    <ProceduralTree
+      trunkH={fallback.trunkH}
+      crownR={fallback.crownR}
+      caster={caster}
+      tint={ch.tint}
+    />
   );
 }
 
@@ -585,6 +761,7 @@ function WindmillAsset({
   fallback: { heightM: number; radiusM: number };
 }) {
   const rotorRef = useRef<Object3D | null>(null);
+  const reduced = useReducedMotion();
   const gltf = useGLTF(WINDMILL_MODEL_URL);
   const scene = useMemo(() => {
     const clone = gltf.scene.clone(true);
@@ -601,7 +778,8 @@ function WindmillAsset({
     return clone;
   }, [caster, gltf.scene]);
   useFrame((_, delta) => {
-    if (rotorRef.current) rotorRef.current.rotation.z += delta * 4.2;
+    if (reduced || !rotorRef.current) return;
+    rotorRef.current.rotation.z += delta * 4.2;
   });
   const footprintM = o.shape === 'circle' ? o.diameterM : Math.max(o.lengthM, o.widthM);
   const scale = glbScale(footprintM, footprintM, o.heightM, WINDMILL_REF.x, WINDMILL_REF.z);
