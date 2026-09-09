@@ -3452,7 +3452,11 @@ function SceneContent({
                 position={[c.x, r.heightM + 1.2, -c.y]}
                 title={r.name}
                 lines={[
-                  `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave · ${HEIGHT_SOURCE_NAME[r.heightSource ?? 'unknown']}`,
+                  // open ground has no eave and its level carries no source —
+                  // "0.0 m eave · from the aerial map" was two lies in one line
+                  r.roofType === 'ground'
+                    ? `${Math.round(polygonArea(r.polygon))} m² · ${r.heightM > 0 ? `${fmtLen(r.heightM, 1)} above grade` : 'at grade'} · array area`
+                    : `${Math.round(polygonArea(r.polygon))} m² · ${fmtLen(r.heightM, 1)} eave · ${HEIGHT_SOURCE_NAME[r.heightSource ?? 'unknown']}`,
                   `${r.pitchDeg > 0 ? `${r.pitchDeg}° pitch facing ${Math.round(r.slopeAzimuthDeg)}°` : 'flat'} · ${r.roofType.replace('_', ' ')} · ${OUTLINE_SOURCE_NAME[r.provenance?.source ?? 'manual']}`,
                   `${project.panels.filter((p) => p.roofId === r.id && p.enabled).length} modules`,
                   // what Google's height map reads over this polygon (only while the card is open)

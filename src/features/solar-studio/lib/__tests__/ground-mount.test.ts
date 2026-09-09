@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ArraySegment, PanelSpec, PlacedPanel, Project, Roof, XY } from '../../types';
-import { makeGroundSurface, nextGroundName } from '../roof-factory';
+import { groundSurfaceFrom, makeGroundSurface, nextGroundName } from '../roof-factory';
 import { autoFillRoof, defaultPanelPose } from '../layout';
 import { deriveBom } from '../bom';
 import { resolveRules } from '../../data/rules/india';
@@ -42,6 +42,30 @@ describe('makeGroundSurface', () => {
       { id: 'r2', roofType: 'metal_shed' } as Roof,
     ];
     expect(nextGroundName(roofs)).toBe('Array Area A');
+  });
+
+  it('converting a DSM-fitted roof to ground drops the height AND its provenance — grade is not measured', () => {
+    // Step 2's "Ground" type change takes exactly this path. The old branch
+    // wrote heightM: 0 by hand and left heightSource: 'aerial_map' behind, so
+    // the pick card asserted a measured 0.0 m eave on open ground.
+    const fitted: Roof = {
+      ...fixtureProject(0).roofs[0],
+      heightM: 6.4,
+      heightSource: 'aerial_map',
+      parapet: { ...fixtureProject(0).roofs[0].parapet, enabled: true },
+      provenance: { source: 'gemini', confidence: 0.8 } as Roof['provenance'],
+    };
+    const g = groundSurfaceFrom(fitted, []);
+    expect(g.id).toBe(fitted.id);
+    expect(g.polygon).toEqual(fitted.polygon);
+    expect(g.provenance).toEqual(fitted.provenance);
+    expect(g.roofType).toBe('ground');
+    expect(g.heightM).toBe(0);
+    expect(g.pitchDeg).toBe(0);
+    expect(g.parapet.enabled).toBe(false);
+    expect(g.name).toBe('Array Area A');
+    expect(g.setbackM).toBe(resolveRules().defaults.groundSetbackM);
+    expect('heightSource' in g).toBe(false);
   });
 });
 

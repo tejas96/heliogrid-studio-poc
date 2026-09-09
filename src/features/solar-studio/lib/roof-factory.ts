@@ -184,6 +184,33 @@ export function makeGroundSurface(opts: {
   };
 }
 
+/**
+ * An EXISTING roof converted to a ground surface, in place: same id, outline
+ * and outline provenance; the ground fields exactly as makeGroundSurface
+ * builds them. This is the one path Step 2's "Ground" type change takes, so
+ * a converted roof and a drawn array area cannot differ.
+ *
+ * The height's provenance goes with the height. The old conversion wrote
+ * `heightM: 0` by hand and never touched `heightSource`, so a roof the aerial
+ * height map had measured kept `'aerial_map'` on open ground — and the pick
+ * card asserted a MEASURED 0.0 m eave on a surface the map is explicitly
+ * excluded from. Grade is not measured and not typed; it carries no source.
+ */
+export function groundSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
+  const g = makeGroundSurface({ polygon: roof.polygon, existing, provenance: roof.provenance });
+  const out: Roof = {
+    ...roof,
+    roofType: 'ground',
+    heightM: 0,
+    pitchDeg: 0,
+    setbackM: g.setbackM,
+    parapet: { ...roof.parapet, enabled: false },
+    name: g.name,
+  };
+  delete out.heightSource;
+  return out;
+}
+
 /** Ground areas are named "Array Area A/B/…" — calling one "Roof 3" is a lie. */
 export function nextGroundName(existing: Roof[]): string {
   const n = existing.filter((r) => r.roofType === 'ground').length;

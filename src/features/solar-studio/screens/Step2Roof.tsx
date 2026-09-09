@@ -74,7 +74,7 @@ import {
   MIN_ROOF_EDGE_M,
   makeRoof,
   sanitizeRoofPolygon,
-  nextGroundName,
+  groundSurfaceFrom,
 } from '../lib/roof-factory';
 import { useSurroundGrid } from '../lib/use-surround-grid';
 import { roofMapFit, roofsWithMapFit, TRUSTED_RMSE_M } from '../lib/roof-map-fit';
@@ -85,7 +85,6 @@ import { applyArtifact, validateArtifact, type RoofArtifact } from '../lib/roof-
 import { lightenHex, roofColor, roofRgba } from '../lib/roof-colors';
 import { effectiveParapetEdges, pickRoofAt } from '../lib/roof-topology';
 import { useUnits } from '../store/useUnits';
-import { resolveRules } from '../data/rules/india';
 import { Scene3D } from '../three/Scene3D';
 
 type SheetKind = null | 'roofType' | 'height';
@@ -464,14 +463,13 @@ export function Step2Roof() {
       // loses its parapet (a boundary is not a parapet) and takes the wider
       // boundary setback. Renamed too — "Roof 2" at height 0 would read as a
       // bug. Panel poses follow via patchRoofAndPose (ground tilt ≠ 10°).
-      patchRoofAndPose(id, {
-        roofType,
-        heightM: 0,
-        pitchDeg: 0,
-        setbackM: resolveRules().defaults.groundSetbackM,
-        parapet: { ...roof.parapet, enabled: false },
-        name: nextGroundName(project.roofs.filter((r) => r.id !== id)),
-      });
+      // Built by the same factory as a drawn array area, so the two cannot
+      // differ — and the height's provenance is dropped WITH the height: this
+      // used to leave a DSM-fitted roof stamped 'aerial_map' at 0.0 m, so the
+      // pick card asserted a measured eave on open ground. The spread below
+      // cannot delete a key, so the drop is explicit.
+      const g = groundSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id));
+      patchRoofAndPose(id, { ...g, heightSource: undefined });
       return;
     }
     patchRoofAndPose(id, { roofType });
@@ -1757,8 +1755,8 @@ export function Step2Roof() {
           </button>
           <button
             className="tool-btn"
-            aria-label="Height and parapet"
-            data-tip="Height & parapet"
+            aria-label={selected.roofType === 'ground' ? 'Level and setback' : 'Height and parapet'}
+            data-tip={selected.roofType === 'ground' ? 'Level & setback' : 'Height & parapet'}
             data-tip-bottom=""
             onClick={() => setSheet('height')}
           >
@@ -2056,7 +2054,7 @@ export function Step2Roof() {
 
       {sheet === 'height' && selected && (
         <Sheet
-          title="Height & Parapet"
+          title={selected.roofType === 'ground' ? 'Level & Setback' : 'Height & Parapet'}
           icon={<MoveVertical size={16} />}
           onClose={() => setSheet(null)}
           right={
@@ -2066,28 +2064,36 @@ export function Step2Roof() {
             />
           }
         >
+          {/* A ground surface IS the ground. This slider used to keep its
+              2 m roof minimum for it, so the readout said 0.0 m while the
+              thumb sat at 2, and the first drag lifted the whole field — modules,
+              tables, obstructions, every shadow — two metres into the air with
+              no way back to 0 through the control. */}
           <SliderRow
-            label="Height from Ground"
+            label={selected.roofType === 'ground' ? 'Level above grade' : 'Height from Ground'}
             value={selected.heightM}
-            min={2}
+            min={selected.roofType === 'ground' ? 0 : 2}
             max={150}
             step={0.5}
             unit={units === 'imperial' ? 'ft' : 'm'}
             format={(v) => lenValue(v, 1)}
             onChange={(v) => updateRoof(selected.id, { heightM: v, heightSource: 'user' })}
             hint={
-              selected.faceGroupId
-                ? 'Low-side (eave) wall height — shared by every face of this roof, so it applies to all of them.'
-                : selected.pitchDeg > 0.5
-                  ? 'Low-side (eave) wall height. The roof rises from here toward the ridge.'
-                  : 'Height of roof surface from ground level. Used for accurate shadow calculations.'
+              selected.roofType === 'ground'
+                ? '0 = the array area is the ground itself. Raise it only for a plinth or a raised platform. Module clearance above ground is set by the structure, not here.'
+                : selected.faceGroupId
+                  ? 'Low-side (eave) wall height — shared by every face of this roof, so it applies to all of them.'
+                  : selected.pitchDeg > 0.5
+                    ? 'Low-side (eave) wall height. The roof rises from here toward the ridge.'
+                    : 'Height of roof surface from ground level. Used for accurate shadow calculations.'
             }
           />
           {(() => {
             // what the aerial height map measured over this polygon — one tap to take it
             const grid = surroundGrid;
             const fit = grid ? roofMapFit(grid, selected, project.calibration.northOffsetDeg) : null;
-            if (!grid || !fit) return null;
+            // the aerial height map is excluded from open ground by definition
+            if (!grid || !fit || selected.roofType === 'ground') return null;
             const differs =
               Math.abs(fit.heightM - selected.heightM) > ROOF_HEIGHT_TOLERANCE_M ||
               (fit.rmseM <= TRUSTED_RMSE_M && Math.abs(fit.pitchDeg - selected.pitchDeg) >= 1);
@@ -2109,7 +2115,7 @@ export function Step2Roof() {
               </div>
             );
           })()}
-          {roofHint && (
+          {roofHint && selected.roofType !== 'ground' && (
             <div
               style={{
                 display: 'flex',
@@ -2169,22 +2175,25 @@ export function Step2Roof() {
               </button>
             </div>
           )}
-          <SliderRow
-            label="Roof Pitch"
-            value={selected.pitchDeg}
-            // a face of a gable/hip cannot be flat — 0° would leave overlapping
-            // coplanar faces where a ridge used to be, not a flat roof
-            min={selected.faceGroupId ? 1 : 0}
-            max={45}
-            step={1}
-            unit="°"
-            onChange={(v) => patchRoofAndPose(selected.id, { pitchDeg: v })}
-            hint={
-              selected.faceGroupId
-                ? 'Slope angle from horizontal — shared by every face of this roof, so it applies to all of them and keeps the ridge level.'
-                : 'Slope angle from horizontal. 0° = flat. Panels flush-mount and inherit this tilt.'
-            }
-          />
+          {/* v1 ground surfaces are flat terrain (lib/roof-factory) — no pitch */}
+          {selected.roofType !== 'ground' && (
+            <SliderRow
+              label="Roof Pitch"
+              value={selected.pitchDeg}
+              // a face of a gable/hip cannot be flat — 0° would leave overlapping
+              // coplanar faces where a ridge used to be, not a flat roof
+              min={selected.faceGroupId ? 1 : 0}
+              max={45}
+              step={1}
+              unit="°"
+              onChange={(v) => patchRoofAndPose(selected.id, { pitchDeg: v })}
+              hint={
+                selected.faceGroupId
+                  ? 'Slope angle from horizontal — shared by every face of this roof, so it applies to all of them and keeps the ridge level.'
+                  : 'Slope angle from horizontal. 0° = flat. Panels flush-mount and inherit this tilt.'
+              }
+            />
+          )}
           {selected.pitchDeg > 0.5 && (
             <div className="field">
               <label>Slopes toward (panels face)</label>
@@ -2201,7 +2210,7 @@ export function Step2Roof() {
             </div>
           )}
           <SliderRow
-            label="Edge Setback"
+            label={selected.roofType === 'ground' ? 'Boundary Setback' : 'Edge Setback'}
             value={selected.setbackM}
             min={0}
             max={3}
@@ -2209,7 +2218,11 @@ export function Step2Roof() {
             unit={units === 'imperial' ? 'ft' : 'm'}
             format={(v) => lenValue(v, 1)}
             onChange={(v) => updateRoof(selected.id, { setbackM: v })}
-            hint="Clear margin kept inside the roof edge — panels won't be placed in this band."
+            hint={
+              selected.roofType === 'ground'
+                ? 'Clear margin kept inside the array-area boundary — no modules in this band.'
+                : "Clear margin kept inside the roof edge — panels won't be placed in this band."
+            }
           />
           <details style={{ marginBottom: 12 }}>
             <summary style={{ fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
@@ -2262,6 +2275,8 @@ export function Step2Roof() {
               )}
             </div>
           </details>
+          {/* a boundary is not a parapet: no wall controls on a ground surface */}
+          {selected.roofType !== 'ground' && (
           <div style={{ borderTop: '1px solid var(--line)', paddingTop: 8 }}>
             <ToggleRow
               label="Parapet Wall"
@@ -2349,6 +2364,7 @@ export function Step2Roof() {
               </>
             )}
           </div>
+          )}
         </Sheet>
       )}
     </div>
