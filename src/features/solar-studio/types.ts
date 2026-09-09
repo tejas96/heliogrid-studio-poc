@@ -218,6 +218,14 @@ export interface Roof {
 
 // ─── Step 3: Obstructions ───────────────────────────────────────────────────
 
+// Adding a member here is NOT just a union edit. Three exhaustive
+// `Record<ObstructionType, …>` tables will fail tsc and lead you to themselves
+// (CAPABILITY_PRESETS, OBSTRUCTION_PRESETS, OBSTRUCTION_NAME) — but four more
+// places accept a new member SILENTLY and behave wrong: the Step-3 palette
+// array (the type becomes unplaceable), the ObstructionMesh switch (it draws as
+// a grey box), and the two AI whitelists (a correct detection is thrown away
+// and rewritten to 'other'). `lib/__tests__/obstruction-type-coverage.test.ts`
+// is the gate that turns those four into failures.
 export type ObstructionType =
   | 'tank'
   | 'dish'
@@ -226,6 +234,7 @@ export type ObstructionType =
   | 'elevated'
   | 'building'
   | 'solar_wh'
+  | 'ac_outdoor'
   | 'ladder'
   | 'windmill'
   | 'turbine_vent'

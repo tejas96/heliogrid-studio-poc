@@ -28,7 +28,7 @@ function buildPrompt(widthPx: number, heightPx: number, kind: 'satellite' | 'pho
       ? `The image is a top-down satellite view, exactly ${widthPx}×${heightPx} pixels. The property of interest is at the image CENTER.`
       : `The image is a property photograph (possibly oblique), ${widthPx}×${heightPx} pixels.`,
     ``,
-    `TASK: outline each CLEARLY VISIBLE roof surface of the central building(s) as a pixel-coordinate polygon, and mark clearly visible rooftop objects (water tanks, solar water heaters, dishes, chimneys, staircase rooms).`,
+    `TASK: outline each CLEARLY VISIBLE roof surface of the central building(s) as a pixel-coordinate polygon, and mark clearly visible rooftop objects (water tanks, solar water heaters, dishes, chimneys, staircase rooms, air-conditioner outdoor units).`,
     ``,
     `RULES — precision beats recall:`,
     `1. Trace only edges you can actually SEE. Never guess occluded, shadowed or ambiguous edges — omit that roof instead.`,

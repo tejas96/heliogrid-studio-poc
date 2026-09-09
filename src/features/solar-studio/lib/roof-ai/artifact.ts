@@ -84,9 +84,14 @@ const isXY = (v: unknown): v is XY =>
 
 const clamp01 = (v: unknown): number => (isNum(v) ? Math.min(1, Math.max(0, v)) : 0);
 
+// Must list EVERY ObstructionType. A member missing here is not a type error —
+// the entity is silently rewritten to 'other' at the includes() below, which
+// throws away a correct detection and quietly gives it 'other's OB label, box
+// size and conservative capabilities. `obstruction-type-coverage.test.ts`
+// pins this array against the union so the miss fails a test instead.
 const OBSTRUCTION_TYPES: ObstructionType[] = [
   'tank', 'dish', 'chimney', 'tree', 'elevated', 'building',
-  'solar_wh', 'ladder', 'windmill', 'turbine_vent', 'other',
+  'solar_wh', 'ac_outdoor', 'ladder', 'windmill', 'turbine_vent', 'other',
 ];
 
 /**

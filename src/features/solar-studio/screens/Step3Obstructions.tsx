@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
+  AirVent,
   ArrowUpFromLine,
   Box,
   Building2,
@@ -73,6 +74,7 @@ const OBSTRUCTION_TYPES: {
     ['elevated', 'Elevated', Layers],
     ['building', 'Building', Building2],
     ['solar_wh', 'Solar WH', Flame],
+    ['ac_outdoor', 'AC Unit', AirVent],
     ['ladder', 'Ladder', ArrowUpFromLine],
     ['windmill', 'Windmill', Wind],
     ['turbine_vent', 'Turbine Vent', Fan],

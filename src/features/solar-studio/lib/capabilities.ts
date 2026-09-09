@@ -36,6 +36,24 @@ export const CAPABILITY_PRESETS: Record<ObstructionType, ObstructionCapabilities
     maintenanceAccess: 'top',
     requiresEngineerConfirmation: true,
   },
+  // A split-AC condenser. It CAN be bridged — modules over an AC on a raised
+  // table is an ordinary Indian terrace job — but the OEM install manuals are
+  // consistent about the clearances, so they are the numbers here:
+  //   · 500 mm above (side-discharge, so this is intake/service room, not the
+  //     fan's throw — a top-discharge unit would have to be open to sky)
+  //   · 500 mm at the service end, to get the panel off and reach the valves
+  // Both are OEM minima rather than a standard: a search attributed them to
+  // IS 1391, which is a product standard, not an installation one — so do not
+  // print a standard number against them on a customer document.
+  // Engineer confirmation because bridging it puts a load path over a machine
+  // someone has to service, the same reason a tank carries the flag.
+  ac_outdoor: {
+    ...BASE,
+    panelsMayCross: true,
+    minVerticalClearanceM: 0.5,
+    minHorizontalClearanceM: 0.5,
+    requiresEngineerConfirmation: true,
+  },
   dish: { ...BASE, panelsMayCross: true, removable: true },
   ladder: { ...BASE, panelsMayCross: true, minVerticalClearanceM: 0.5, removable: true },
   chimney: { ...BASE, mustRemainOpenToSky: true },

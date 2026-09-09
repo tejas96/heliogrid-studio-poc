@@ -317,6 +317,7 @@ const OBSTRUCTION_NAME: Record<ObstructionType, string> = {
   elevated: 'Elevated structure',
   building: 'Building',
   solar_wh: 'Solar water heater',
+  ac_outdoor: 'AC outdoor unit',
   ladder: 'Ladder',
   windmill: 'Windmill',
   turbine_vent: 'Turbine vent',

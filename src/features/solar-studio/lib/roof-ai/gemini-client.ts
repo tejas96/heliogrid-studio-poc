@@ -38,6 +38,12 @@ const KIND_MAP: Record<string, ObstructionType> = {
   tree: 'tree',
   staircase: 'elevated',
   staircase_room: 'elevated',
+  // the model is asked for these words in src/app/api/gemini/route.ts — a kind
+  // it can emit but that is missing here resolves to 'other' at the ?? below
+  ac_outdoor_unit: 'ac_outdoor',
+  ac_unit: 'ac_outdoor',
+  air_conditioner: 'ac_outdoor',
+  condenser: 'ac_outdoor',
 };
 
 /**

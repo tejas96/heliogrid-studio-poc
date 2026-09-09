@@ -346,6 +346,13 @@ export function ObstructionMesh({
         </group>
       );
 
+    case 'ac_outdoor':
+      return (
+        <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
+          <ProceduralAcOutdoor o={o} caster={caster} />
+        </group>
+      );
+
     default:
       return (
         <mesh
@@ -382,6 +389,241 @@ const LADDER_RUBBER = new THREE.MeshStandardMaterial({
   metalness: 0,
   roughness: 0.9,
 });
+
+// The three finishes an Indian terrace condenser actually comes in — ivory
+// (Voltas, Blue Star, Hitachi, Lloyd), warm grey (Daikin, some LG) and mid grey
+// (Samsung, O General, most C&I). Picked by hashing the obstruction's own id,
+// the same way a building takes its tint, so a row of units is not a row of
+// clones and no per-instance material is allocated to get it.
+const AC_CASE_TINTS = ['#e9e5dd', '#d6d2cb', '#b9bcbe'].map(
+  (c) => new THREE.MeshStandardMaterial({ color: c, metalness: 0, roughness: 0.62 }),
+);
+/** grille, coil guards, louvres — all the same dark pressed steel */
+const AC_DARK = new THREE.MeshStandardMaterial({
+  color: '#6e7276',
+  metalness: 0.25,
+  roughness: 0.75,
+});
+/** the MS angle stand it sits on */
+const AC_STAND = new THREE.MeshStandardMaterial({
+  color: '#3c4044',
+  metalness: 0.5,
+  roughness: 0.7,
+});
+
+/** radial wires in the fan guard; each box is a full diameter, so 5 makes 10 */
+const AC_SPOKES = 5;
+
+// Unit-sized fan parts, scaled per unit on the mesh. Written this way for the
+// same reason as UNIT_BOX: an inline <cylinderGeometry> allocates a fresh
+// geometry for every AC in the project, which is gap-report item 23 exactly.
+/** open bell-mouth, slightly tapered inward */
+const AC_BELL = new THREE.CylinderGeometry(1, 0.94, 1, 20, 1, true);
+/** the dark disc behind the grille — the fan you cannot see into */
+const AC_BACK = new THREE.CircleGeometry(1, 20);
+/** the wire rim; the tube scales with the radius, which is how real ones look */
+const AC_RIM = new THREE.TorusGeometry(1, 0.09, 6, 24);
+/** outer rim plus two inner rings — the guard is a spiral, not a wheel */
+const AC_RING_RADII = [1, 0.63, 0.33];
+
+/**
+ * A split-AC outdoor unit — the object an Indian terrace has more of than
+ * anything else we could draw, and the one ResLink ships that we could not
+ * even represent: there was no `ac_outdoor` type at all, so a surveyor had to
+ * record one as "Other" and it drew as a grey box.
+ *
+ * Built rather than scanned, for the same reasons as the ladder: it is a
+ * painted sheet-metal box, which is exactly what a parametric mesh is good at
+ * and what photogrammetry rounds off.
+ *
+ * The shape is the real machine, not a generic box:
+ *   · it stands on an MS angle stand — an AC drawn flat on the slab looks
+ *     wrong to anyone who has been on a terrace, and the gap is where the
+ *     drain and the monsoon water go
+ *   · ONE axial fan on the long face, offset towards one end because the
+ *     compressor and the electrical box sit behind the other
+ *   · the condenser coil is L-shaped in plan: the whole back and one end
+ *   · the other end is the service side — plain sheet with a valve cover
+ *
+ * Sizes come from the units that actually sell here: a 1.5 T is 845 × 300 ×
+ * 595 mm (Daikin RKM50) or 835 × 295 × 555 (Voltas), on a ~300 mm stand. The
+ * preset in `lib/roof-factory.ts` is that unit; the mesh scales to whatever
+ * the surveyor typed, so a 2 T or a C&I unit is still drawn from its own box.
+ */
+function ProceduralAcOutdoor({
+  o,
+  caster,
+}: {
+  o: Obstruction;
+  caster: { shadowCaster: boolean };
+}) {
+  const circle = o.shape === 'circle';
+  const L = Math.max(0.3, circle ? o.diameterM : o.lengthM); // long fan face
+  const D = Math.max(0.15, circle ? o.diameterM : o.widthM); // depth
+  const H = Math.max(0.25, o.heightM); // stand + case, as surveyed
+  // a stand is 150–450 mm, ~300 typical; as a fraction it stays sane when the
+  // surveyor types a tall C&I unit or a squat one sitting on brick pieces
+  const standH = Math.min(0.35, Math.max(0.08, H * 0.34));
+  const caseH = H - standH;
+  const caseY = standH + caseH / 2;
+  const front = D / 2;
+
+  const tint = AC_CASE_TINTS[hashStr(o.id) % AC_CASE_TINTS.length];
+
+  // fan: one, offset towards the far end from the service side
+  const rG = Math.min(caseH * 0.38, L * 0.26);
+  const fanX = -L * 0.14;
+  const fanY = standH + caseH * 0.54;
+
+  const standRef = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const m = standRef.current;
+    if (!m) return;
+    const mat = new THREE.Matrix4();
+    const p = new THREE.Vector3();
+    const s = new THREE.Vector3();
+    const q = new THREE.Quaternion();
+    const lx = L * 0.3;
+    const lz = D * 0.3;
+    let i = 0;
+    // four legs
+    for (const x of [-lx, lx])
+      for (const z of [-lz, lz])
+        mat.compose(p.set(x, standH / 2, z), q, s.set(0.032, standH, 0.032)),
+          m.setMatrixAt(i++, mat);
+    // two rails the base pan bolts down to
+    for (const z of [-lz, lz])
+      mat.compose(p.set(0, standH - 0.018, z), q, s.set(L * 0.72, 0.036, 0.04)),
+        m.setMatrixAt(i++, mat);
+    m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere();
+  }, [L, D, standH]);
+
+  const spokeRef = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const m = spokeRef.current;
+    if (!m) return;
+    const mat = new THREE.Matrix4();
+    const p = new THREE.Vector3(0, 0, 0);
+    const s = new THREE.Vector3(rG * 1.9, 0.008, 0.008);
+    const q = new THREE.Quaternion();
+    const axis = new THREE.Vector3(0, 0, 1);
+    for (let i = 0; i < AC_SPOKES; i++) {
+      q.setFromAxisAngle(axis, (i * Math.PI) / AC_SPOKES);
+      mat.compose(p, q, s);
+      m.setMatrixAt(i, mat);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere();
+  }, [rG]);
+
+  const ringRef = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const m = ringRef.current;
+    if (!m) return;
+    const mat = new THREE.Matrix4();
+    const p = new THREE.Vector3(0, 0, 0);
+    const q = new THREE.Quaternion();
+    const s = new THREE.Vector3();
+    // spokes alone read as a bicycle wheel; a real guard is a wire spiral, and
+    // two concentric rings inside the rim are what the eye takes for one
+    AC_RING_RADII.forEach((f, i) => {
+      mat.compose(p, q, s.set(rG * f, rG * f, rG * f));
+      m.setMatrixAt(i, mat);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    m.computeBoundingSphere();
+  }, [rG]);
+
+  return (
+    <>
+      <instancedMesh
+        ref={standRef}
+        args={[UNIT_BOX, AC_STAND, 6]}
+        castShadow={caster.shadowCaster}
+        receiveShadow
+        userData={caster}
+      />
+      <mesh
+        geometry={UNIT_BOX}
+        material={tint}
+        position={[0, caseY, 0]}
+        scale={[L, caseH, D]}
+        castShadow={caster.shadowCaster}
+        receiveShadow
+        userData={caster}
+      />
+      {/* condenser coil: the whole back and one end, L-shaped in plan. Fins are
+          1.5 mm apart — at any camera distance that reads as a dark panel, so
+          it is a panel, not geometry nobody will resolve. */}
+      <mesh
+        geometry={UNIT_BOX}
+        material={AC_DARK}
+        position={[0, caseY, -front - 0.005]}
+        scale={[L * 0.97, caseH * 0.88, 0.012]}
+        receiveShadow
+        userData={caster}
+      />
+      <mesh
+        geometry={UNIT_BOX}
+        material={AC_DARK}
+        position={[-L / 2 - 0.005, caseY, 0]}
+        scale={[0.012, caseH * 0.88, D * 0.92]}
+        receiveShadow
+        userData={caster}
+      />
+      {/* service side: the valve cover you unscrew to reach the flare nuts */}
+      <mesh
+        geometry={UNIT_BOX}
+        material={AC_DARK}
+        position={[L / 2 + 0.005, standH + caseH * 0.28, 0]}
+        scale={[0.012, caseH * 0.34, D * 0.55]}
+        receiveShadow
+        userData={caster}
+      />
+      {/* the louvre band along the bottom of the fan face */}
+      <mesh
+        geometry={UNIT_BOX}
+        material={AC_DARK}
+        position={[0, standH + caseH * 0.13, front + 0.004]}
+        scale={[L * 0.94, caseH * 0.14, 0.01]}
+        receiveShadow
+        userData={caster}
+      />
+      {/* fan: a recessed bell-mouth, a wire rim and its spokes. No blades —
+          they are a blur on a running unit and a detail nobody can see on a
+          stopped one. */}
+      <mesh
+        geometry={AC_BELL}
+        material={AC_DARK}
+        position={[fanX, fanY, front - 0.018]}
+        rotation={[Math.PI / 2, 0, 0]}
+        scale={[rG, 0.035, rG]}
+        receiveShadow
+        userData={caster}
+      />
+      <mesh
+        geometry={AC_BACK}
+        material={AC_DARK}
+        position={[fanX, fanY, front - 0.03]}
+        scale={[rG * 0.95, rG * 0.95, 1]}
+        userData={caster}
+      />
+      <instancedMesh
+        ref={ringRef}
+        args={[AC_RIM, AC_DARK, AC_RING_RADII.length]}
+        position={[fanX, fanY, front + 0.006]}
+        userData={caster}
+      />
+      <instancedMesh
+        ref={spokeRef}
+        args={[UNIT_BOX, AC_DARK, AC_SPOKES]}
+        position={[fanX, fanY, front + 0.006]}
+        userData={caster}
+      />
+    </>
+  );
+}
 
 /** 300 mm — the top of the range a real access ladder is built to */
 const RUNG_PITCH_M = 0.3;

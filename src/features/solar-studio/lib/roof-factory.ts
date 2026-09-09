@@ -204,7 +204,16 @@ export const OBSTRUCTION_PRESETS: Record<
   elevated: { code: 'EL', size: [3, 2.5, 2.6] },
   building: { code: 'BL', size: [8, 6, 9] },
   solar_wh: { code: 'SW', size: [2, 1.2, 1.5] },
-  ladder: { code: 'LD', size: [0.6, 1.5, 3] },
+  // A 1.5-ton split condenser, the volume seller in India: the case is
+  // 845 × 300 × 595 mm (Daikin RKM50) / 835 × 295 × 555 (Voltas), and it stands
+  // on a ~300 mm MS angle stand, so the object the surveyor draws is the case
+  // plus the stand. Length is the long fan face, width the shallow depth.
+  ac_outdoor: { code: 'AC', size: [0.85, 0.35, 0.88] },
+  // length is how far the foot stands out from the wall, width is the rail
+  // spacing — real ladders are 400–500 mm between rails, and the old preset had
+  // these two the wrong way round (0.6 out, 1.5 wide), which drew a ladder you
+  // could not climb once ProceduralLadder started building it for real
+  ladder: { code: 'LD', size: [1.2, 0.5, 3.5] },
   windmill: { code: 'WM', size: [1.8, 1.8, 3.5] },
   turbine_vent: { code: 'TV', size: [0.4, 0.4, 0.5] },
   other: { code: 'OB', size: [1.5, 1.5, 1] },
