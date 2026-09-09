@@ -125,10 +125,38 @@ export function PanelsInstanced({
   const mats = getPanelMaterials(spec);
 
   // unit geometries, scaled per instance
-  const boxGeom = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
+  const boxGeom = useMemo(() => {
+    const g = new THREE.BoxGeometry(1, 1, 1);
+    /**
+     * A white per-vertex colour, so `vertexColors` can be switched on.
+     *
+     * This is the price of getting `instanceColor` into the fragment at all.
+     * three declares the `vColor` varying in the VERTEX shader for
+     * `USE_INSTANCING_COLOR`, but `color_pars_fragment` declares it — and
+     * `color_fragment` multiplies it in — only for `USE_COLOR`, which comes
+     * from `material.vertexColors`. So an InstancedMesh with a fully populated
+     * `instanceColor` renders with those colours silently discarded unless the
+     * material opts in.
+     *
+     * And `USE_COLOR` makes `color_vertex` do `vColor.rgb *= color`, reading a
+     * `color` ATTRIBUTE. Turn the flag on without supplying one and it reads
+     * (0,0,0): every module loses its whole diffuse and the array goes to flat
+     * sky reflection with no cells on it. Measured, on the way to this fix.
+     *
+     * White here is the identity, so the instance colour passes through
+     * untouched and nothing else changes.
+     */
+    g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(1), 3));
+    return g;
+  }, []);
   const legGeom = useMemo(() => new THREE.CylinderGeometry(0.05, 0.05, 1, 10), []);
+  // `vertexColors` is what lets `instanceColor` reach the fragment at all —
+  // three declares the vColor varying for USE_INSTANCING_COLOR in the vertex
+  // shader but only for USE_COLOR in the fragment. In THIS view the colour IS
+  // the data (N6), so without it every module renders the same flat white and
+  // the solar-access readout says nothing.
   const accessMat = useMemo(
-    () => new THREE.MeshBasicMaterial({ toneMapped: false }),
+    () => new THREE.MeshBasicMaterial({ toneMapped: false, vertexColors: true }),
     [],
   );
   // Own material, not a mutated clone of the shared glass — mutating that would

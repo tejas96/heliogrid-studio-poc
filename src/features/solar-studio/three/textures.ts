@@ -184,6 +184,94 @@ function getModuleTexture(spec: PanelSpec | null, orientation: ModuleOrientation
   return tex;
 }
 
+/**
+ * Tempered module glass is not optically flat.
+ *
+ * It comes off a float line and through a toughening furnace, and it keeps a
+ * gentle long-wavelength waviness — tens of centimetres across, a few tens of
+ * microns deep. You never see the glass itself; you see what it does to the
+ * REFLECTION. On a real array the sky's reflection ripples and breaks up
+ * between modules. On a perfectly flat plane it does not, which is most of why
+ * a rendered array reads as plastic: every module mirrors the sky identically.
+ *
+ * So: one low-frequency height field, converted to a normal map, applied at a
+ * deliberately tiny `normalScale`. It must be invisible as texture and visible
+ * only as movement in the reflection.
+ */
+const GLASS_WAVE_N = 64;
+/**
+ * How hard the waviness bends the reflection.
+ *
+ * MEASURED against the same frame with the map off: 0.045 moved 0.04 % of the
+ * pixels — an inert setting, the kind this file already carries a scar from —
+ * 0.15 moved 3.5 %, 0.4 moved 12 % and 1.0 moved 20 %. 0.25 is the value that
+ * is clearly doing something while the modules still read as flat glass rather
+ * than dented panels.
+ */
+const GLASS_WAVE_SCALE = 0.25;
+/**
+ * How much a module's soiling roughens its glass, on top of dimming it.
+ *
+ * Dust does two things to a sheet of glass: it absorbs (which the per-module
+ * tint in PanelsInstanced already does) and it SCATTERS, which a tint cannot
+ * express. Without this the dirtiest module still mirrors the sky as sharply as
+ * the cleanest one — the reflection gives the game away even when the albedo
+ * does not.
+ *
+ * The soiling amount is read back out of the instance colour rather than
+ * carried in a second instanced attribute: it is already there, already
+ * per-module, and already deterministic.
+ */
+const SOIL_ROUGHNESS_GAIN = 0.5;
+function glassWavinessTexture(): THREE.CanvasTexture {
+  const N = GLASS_WAVE_N;
+  const rnd = mulberry(20260909);
+  // a few summed sine lobes: smooth, seamless-ish, and no octave noise needed
+  // at this scale — waviness is long-wavelength by definition
+  const lobes = Array.from({ length: 5 }, () => ({
+    ax: (1 + Math.floor(rnd() * 3)) * Math.PI * 2,
+    ay: (1 + Math.floor(rnd() * 3)) * Math.PI * 2,
+    px: rnd() * Math.PI * 2,
+    py: rnd() * Math.PI * 2,
+    amp: 0.35 + rnd() * 0.65,
+  }));
+  const h = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const u = x / N;
+      const v = y / N;
+      let s = 0;
+      for (const l of lobes) s += l.amp * Math.sin(u * l.ax + l.px) * Math.sin(v * l.ay + l.py);
+      h[y * N + x] = s;
+    }
+  }
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(N, N);
+  // central differences on a wrapping grid → tangent-space normal
+  const at = (x: number, y: number) => h[((y + N) % N) * N + ((x + N) % N)];
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const nx = (at(x - 1, y) - at(x + 1, y)) * 0.5;
+      const ny = (at(x, y - 1) - at(x, y + 1)) * 0.5;
+      const len = Math.hypot(nx, ny, 1);
+      const i = (y * N + x) * 4;
+      img.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      img.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      img.data[i + 2] = (1 / len) * 0.5 * 255 + 127;
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+let sharedWaviness: THREE.CanvasTexture | null = null;
+
 export interface PanelMaterials {
   glass: Record<ModuleOrientation, THREE.MeshPhysicalMaterial>;
   /**
@@ -254,9 +342,63 @@ export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials
       // own envMap.
       envMapIntensity: 1.0,
       map: getModuleTexture(spec, o),
+      /**
+       * WITHOUT THIS, `instanceColor` NEVER REACHES THE FRAGMENT.
+       *
+       * three declares the `vColor` varying in the VERTEX shader for
+       * `USE_INSTANCING_COLOR`, but `color_pars_fragment` declares it — and
+       * `color_fragment` multiplies it in — only for `USE_COLOR`, which is what
+       * this flag sets. So an InstancedMesh with a fully populated
+       * `instanceColor` renders with those colours silently discarded unless the
+       * material opts in here.
+       *
+       * Measured 2026-09-09: flipping this on moved 34 % of the frame. Until
+       * then `PanelsInstanced`'s per-module soiling, its brass SELECTED tint and
+       * its hover tint were all being written to the buffer and thrown away —
+       * clicking a module in the 3D scene highlighted nothing.
+       *
+       * This REQUIRES the geometry to carry a white `color` attribute; see the
+       * note on `boxGeom` in PanelsInstanced. Without one, `color_vertex` reads
+       * (0,0,0) and every module loses its diffuse entirely.
+       */
+      vertexColors: true,
+      // the waviness that stops every module mirroring the sky identically —
+      // see glassWavinessTexture. Kept tiny: it must read as movement in the
+      // reflection, never as texture on the glass.
+      normalMap: (sharedWaviness ??= glassWavinessTexture()),
+      normalScale: new THREE.Vector2(GLASS_WAVE_SCALE, GLASS_WAVE_SCALE),
     });
+  /**
+   * Dust scatters as well as dims.
+   *
+   * `PanelsInstanced` gives every module its own soiling tint through
+   * `instanceColor`, which three exposes to the fragment shader as `vColor`
+   * under USE_INSTANCING_COLOR. Reading the shortfall back out of it costs
+   * nothing and needs no second instanced attribute to keep in step.
+   *
+   * Guarded on the define, because the same cached material is also used by
+   * meshes that carry no instance colour — without the guard those fail to
+   * compile, and a material that will not compile takes the whole scene white.
+   */
+  const addSoilScatter = (m: THREE.MeshPhysicalMaterial) => {
+    m.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+#ifdef USE_INSTANCING_COLOR
+  // vColor.r is 1.0 for a clean module and ~0.9 for the dirtiest one
+  roughnessFactor = clamp( roughnessFactor + ( 1.0 - vColor.r ) * ${SOIL_ROUGHNESS_GAIN.toFixed(2)}, 0.0, 1.0 );
+#endif`,
+      );
+    };
+    m.customProgramCacheKey = () => 'panelGlass:soilScatter';
+    return m;
+  };
   const mats: PanelMaterials = {
-    glass: { portrait: glassFor('portrait'), landscape: glassFor('landscape') },
+    glass: {
+      portrait: addSoilScatter(glassFor('portrait')),
+      landscape: addSoilScatter(glassFor('landscape')),
+    },
     back: spec?.bifacialityPct
       ? { portrait: backFor('portrait'), landscape: backFor('landscape') }
       : { portrait: sharedBacksheet, landscape: sharedBacksheet },
