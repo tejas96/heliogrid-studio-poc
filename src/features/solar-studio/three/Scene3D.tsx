@@ -54,6 +54,7 @@ import { getRoofSurface, type RoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
+import { RailsInstanced, railFrameOf, type RailFrame } from './RailsInstanced';
 
 /** the first selected module of a table, so "Edit table" opens on the module the user picked */
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
@@ -2803,6 +2804,18 @@ function SceneContent({
     const roof = project.roofs.find((r) => r.id === roofId);
     return roof ? surfaceHeightAt(roof, p, eaveRefs.get(roof.id)) : 3;
   };
+  // safety rails in scope, as frames for the two instanced meshes that draw
+  // every one of them (three/RailsInstanced — gap-report item 83)
+  const railFrames = useMemo<RailFrame[]>(
+    () =>
+      project.rails
+        .filter((r) => !focusRoof || r.roofId === focusRoof.id)
+        .map((r) => {
+          const roof = project.roofs.find((x) => x.id === r.roofId);
+          return railFrameOf(r, roof, roof ? eaveRefs.get(roof.id) : undefined);
+        }),
+    [project.rails, project.roofs, eaveRefs, focusRoof],
+  );
 
   /**
    * Modules split into how each must be drawn (Phase 22l). One pose source
@@ -3852,42 +3865,10 @@ function SceneContent({
         );
       })}
 
-      {/* safety rails: posts + top bar */}
-      {project.rails.filter((r) => inScope(r.roofId)).map((r) => {
-        const cx = (r.a.x + r.b.x) / 2;
-        const cy = (r.a.y + r.b.y) / 2;
-        const h = surfAt(r.roofId, { x: cx, y: cy });
-        const len = Math.hypot(r.b.x - r.a.x, r.b.y - r.a.y);
-        const ang = Math.atan2(-(r.b.y - r.a.y), r.b.x - r.a.x);
-        const railH = r.heightMm / 1000;
-        const posts = Math.max(2, Math.round(len / 1.5) + 1);
-        return (
-          // scene = engine: these three now cast in lib/scene-model too, so the
-          // shadow you can see and the loss in the energy figure are the same
-          // object. They used to cast in NEITHER.
-          <group key={r.id} position={[cx, h, -cy]} rotation={[0, -ang, 0]}>
-            <mesh position={[0, railH, 0]} castShadow userData={{ shadowCaster: true }}>
-              <boxGeometry args={[len, 0.05, 0.05]} />
-              <meshStandardMaterial color="#c23b3b" metalness={0.5} roughness={0.5} />
-            </mesh>
-            <mesh position={[0, railH * 0.55, 0]} castShadow userData={{ shadowCaster: true }}>
-              <boxGeometry args={[len, 0.035, 0.035]} />
-              <meshStandardMaterial color="#c23b3b" metalness={0.5} roughness={0.5} />
-            </mesh>
-            {Array.from({ length: posts }, (_, i) => (
-              <mesh
-                key={i}
-                position={[-len / 2 + (i * len) / (posts - 1), railH / 2, 0]}
-                castShadow
-                userData={{ shadowCaster: true }}
-              >
-                <cylinderGeometry args={[0.025, 0.025, railH, 8]} />
-                <meshStandardMaterial color="#a8a8a8" metalness={0.7} roughness={0.4} />
-              </mesh>
-            ))}
-          </group>
-        );
-      })}
+      {/* safety rails: two instanced meshes for all of them. scene = engine:
+          the same bars and posts cast in lib/scene-model, so the shadow you
+          can see and the loss in the energy figure are the same object. */}
+      <RailsInstanced rails={railFrames} />
 
       {/* lightning arresters */}
       {project.arresters.filter((la) => inScope(la.roofId)).map((la) => {
