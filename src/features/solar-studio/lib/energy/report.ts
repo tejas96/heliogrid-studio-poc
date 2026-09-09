@@ -99,37 +99,54 @@ export function computeEnergyReport(project: Project): EnergyReport {
   // 8760 hours, module by module: sun, Perez sky, near shade by the hour,
   // incidence angle, soiling, module temperature, inverter curve, clipping.
   // The monthly estimate below is what stands in until the year has loaded.
+  // ── Series wiring: a shaded module pulls its whole string down ───────────
+  // The strings lose MORE than the module-by-module shade already in the
+  // report. Known only once the full analysis has run this session and strings
+  // exist — null until then, and the row is simply absent.
+  //
+  // This row used to be PRINTED in the waterfall and deducted from nothing:
+  // the annual kWh, the PR and the total were all taken before it, so a sheet
+  // could show a 6% row, a total that excluded it, and an unchanged MWh
+  // headline above both. It is composed in here, once, for both engines.
+  const electricalPct = electricalShadingLossPct(project);
+  const electricalRow: LossItem[] =
+    electricalPct !== null && electricalPct > 0
+      ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
+      : [];
+  const electricalFactor = electricalRow.length > 0 ? 1 - electricalPct! / 100 : 1;
+
   const tmyYear = peekTmy(project.location?.tmy);
   const hourly = tmyYear ? hourlyEnergyForProject(project, tmyYear) : null;
   if (hourly && project.location?.tmy) {
     const meta = project.location.tmy;
     const beamAccess =
       panels.length > 0 ? panels.reduce((s, p) => s + (p.solarAccess ?? 1), 0) / panels.length : 1;
-    const electricalPct = electricalShadingLossPct(project);
+    // the engine's year, with the string term taken off every figure that is
+    // downstream of it — energy, months, PR, lifetime, uncertainty
+    const annualKwh = hourly.annualKwh * electricalFactor;
+    const prPct = Math.round(hourly.prPct * electricalFactor * 10) / 10;
     const degradation = 0.0075;
-    const { lifetime, year25 } = lifetimeFrom(hourly.annualKwh, degradation);
+    const { lifetime, year25 } = lifetimeFrom(annualKwh, degradation);
     return {
       capacityKwp: Math.round(capacityKwp * 100) / 100,
       panelCount: panels.length,
       roofAreaM2: Math.round(roofAreaM2),
       poaFactor: hourly.ghiKwhM2 > 0 ? Math.round((hourly.poaKwhM2 / hourly.ghiKwhM2) * 1000) / 1000 : 1,
-      annualMwh: Math.round(hourly.annualKwh / 100) / 10,
-      annualKwh: hourly.annualKwh,
-      specificYield: capacityKwp > 0 ? Math.round(hourly.annualKwh / capacityKwp) : 0,
-      performanceRatio: hourly.prPct,
-      monthlyKwh: hourly.monthlyKwh,
+      annualMwh: Math.round(annualKwh / 100) / 10,
+      annualKwh,
+      specificYield: capacityKwp > 0 ? Math.round(annualKwh / capacityKwp) : 0,
+      performanceRatio: prPct,
+      monthlyKwh: hourly.monthlyKwh.map((v) => Math.round(v * electricalFactor)),
       monsoonMonths: MONSOON_MONTHS,
-      losses: [
-        ...hourly.losses.map((l) =>
+      // the string row sits right after the near-shading row it adds to
+      losses: hourly.losses.flatMap((l) => {
+        const row =
           l.key === 'shading' && project.surround && project.ignoreSurround
             ? { ...l, label: `${l.label} — neighbour shade OFF by your choice` }
-            : l,
-        ),
-        ...(electricalPct !== null && electricalPct > 0
-          ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
-          : []),
-      ],
-      totalLossPct: Math.round((100 - hourly.prPct) * 10) / 10,
+            : l;
+        return l.key === 'shading' ? [row, ...electricalRow] : [row];
+      }),
+      totalLossPct: Math.round((100 - prPct) * 10) / 10,
       // the heatmap's floored scale, AND the raw beam figure it was built from —
       // the floored one alone reads as "% of sunlight", which it is not
       avgSolarAccessPct: Math.round((DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * beamAccess) * 100),
@@ -139,7 +156,7 @@ export function computeEnergyReport(project: Project): EnergyReport {
       degradationPctPerYear: degradation * 100,
       irradianceSource: 'PVGIS',
       engine: 'hourly',
-      uncertainty: uncertaintyFor(hourly.annualKwh, activeWeather(project.location)),
+      uncertainty: uncertaintyFor(annualKwh, activeWeather(project.location)),
       hourly: {
         radiationDb: meta.radiationDb,
         yearMin: meta.yearMin,
@@ -240,13 +257,16 @@ export function computeEnergyReport(project: Project): EnergyReport {
     monthlyKwh = MONTH_FACTORS.map((f) => Math.round((annualKwh * f) / monthTotal));
     irradianceSource = 'estimate';
   }
-  // PR (display) includes equipment losses AND the beam-shading effect, but
-  // excludes orientation (POA is the reference plane) — always within (0,1]
-  const pr = Math.min(1, Math.max(0.005, prEquip * shadeFactor));
+  // the string term comes off the delivered energy AFTER the POA readout was
+  // taken from it — orientation is not a loss, so reportPoa must not see it
+  annualKwh *= electricalFactor;
+  monthlyKwh = monthlyKwh.map((v) => Math.round(v * electricalFactor));
+  // PR (display) includes equipment losses, the beam-shading effect AND the
+  // string term, but excludes orientation (POA is the reference plane) —
+  // always within (0,1]. Every printed row is in this product, so the total
+  // and the rows can be added up by a reader and agree.
+  const pr = Math.min(1, Math.max(0.005, prEquip * shadeFactor * electricalFactor));
   const shadingLossPct = Math.max(0, (1 - shadeFactor) * 100);
-  // series wiring: a shaded module pulls its whole string down — known only
-  // once the full analysis has run this session and strings exist
-  const electricalPct = electricalShadingLossPct(project);
   const reportLosses: LossItem[] = [
     ...losses,
     // includes obstruction AND row-on-row shading — one measured beam term
@@ -258,9 +278,7 @@ export function computeEnergyReport(project: Project): EnergyReport {
           : 'Shading (beam)',
       pct: Math.round(shadingLossPct * 10) / 10,
     },
-    ...(electricalPct !== null && electricalPct > 0
-      ? [{ key: 'shading_electrical', label: 'Shading — electrical (strings)', pct: electricalPct }]
-      : []),
+    ...electricalRow,
   ];
   const totalLossPct = Math.round((1 - pr) * 1000) / 10;
   const degradation = 0.0075;
