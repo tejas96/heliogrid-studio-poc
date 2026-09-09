@@ -55,6 +55,7 @@ import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 import { RailsInstanced, railFrameOf, type RailFrame } from './RailsInstanced';
+import { WalkwaysInstanced, walkwayFrameOf, type WalkwayFrame } from './WalkwaysInstanced';
 import { useSceneActivity } from './useSceneActivity';
 import { attachContextGuard, describeGpu, webglAvailable } from './gpu-guard';
 import { SceneErrorBoundary } from './SceneErrorBoundary';
@@ -3049,6 +3050,17 @@ function SceneContent({
         }),
     [project.rails, project.roofs, eaveRefs, focusRoof],
   );
+  // walkways in scope — one instanced mesh for all of them (three/WalkwaysInstanced)
+  const walkwayFrames = useMemo<WalkwayFrame[]>(
+    () =>
+      project.walkways
+        .filter((w) => !focusRoof || w.roofId === focusRoof.id)
+        .map((w) => {
+          const roof = project.roofs.find((x) => x.id === w.roofId);
+          return walkwayFrameOf(w, roof, roof ? eaveRefs.get(roof.id) : undefined);
+        }),
+    [project.walkways, project.roofs, eaveRefs, focusRoof],
+  );
 
   /**
    * Modules split into how each must be drawn (Phase 22l). One pose source
@@ -4085,20 +4097,8 @@ function SceneContent({
         <WallGizmo project={project} kind={pick.kind} id={pick.id} runOp={runOp} />
       )}
 
-      {/* walkways */}
-      {project.walkways.filter((w) => inScope(w.roofId)).map((w) => {
-        const cx = (w.a.x + w.b.x) / 2;
-        const cy = (w.a.y + w.b.y) / 2;
-        const h = surfAt(w.roofId, { x: cx, y: cy }) + 0.06;
-        const len = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
-        const ang = Math.atan2(-(w.b.y - w.a.y), w.b.x - w.a.x);
-        return (
-          <mesh key={w.id} position={[cx, h, -cy]} rotation={[0, -ang, 0]} receiveShadow castShadow>
-            <boxGeometry args={[len, w.heightMm / 1000, w.widthMm / 1000]} />
-            <meshStandardMaterial color="#d9a410" roughness={0.75} />
-          </mesh>
-        );
-      })}
+      {/* walkways: one instanced mesh for all of them */}
+      <WalkwaysInstanced walkways={walkwayFrames} />
 
       {/* safety rails: two instanced meshes for all of them. scene = engine:
           the same bars and posts cast in lib/scene-model, so the shadow you
