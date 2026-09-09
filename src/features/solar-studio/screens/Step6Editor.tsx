@@ -52,7 +52,7 @@ import {
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { SatCanvas, type SatCanvasHandle, polyPath, useCanvasFrame } from '../components/SatCanvas';
 import { MeasureOverlay, useMeasure } from '../components/MeasureTool';
-import { Dialog, EmptyState, OptionCard, Sheet, SliderRow } from '../components/ui';
+import { Dialog, EmptyState, NumberField, OptionCard, Sheet, SliderRow } from '../components/ui';
 import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { ObstructionLayer } from './Step3Obstructions';
 import type {
@@ -85,6 +85,7 @@ import { peekHeatmap, requestHeatmap } from '../lib/heatmap-cache';
 import { gcr, shadowFreePitchM } from '../lib/spacing';
 import { heatmapFp, isShadingFresh } from '../lib/fingerprints';
 import { shadedBelow } from '../lib/shade-cut';
+import { planRoofFill } from '../lib/roof-fill';
 import { panelEnergyShares } from '../lib/energy/report';
 import {
   classifySelection,
@@ -145,7 +146,6 @@ import { useOps } from '../store/useOps';
 import { summarizeImpact } from '../lib/ops/metrics';
 import type { OpPreview } from '../lib/ops/run';
 import {
-  layoutAutoDesign,
   layoutDeleteLines,
   layoutGroup,
   layoutGrow,
@@ -346,7 +346,15 @@ export function Step6Editor() {
     was3D.current = show3D;
   }, [show3D]);
   const [locked, setLocked] = useState(false);
-  const [confirmPlace, setConfirmPlace] = useState(false);
+  /**
+   * "Fill a roof" (lib/roof-fill): one new table around what is already there,
+   * with an optional kWp cap that keeps the sunniest positions when the roof
+   * heatmap is cached. This replaces a dead "Auto-fill this roof?" dialog that
+   * nothing could open — and must stay unopenable, because it ran the whole-
+   * project design, which replaces every hand-placed module on every roof.
+   */
+  const [fillSheet, setFillSheet] = useState(false);
+  const [fillCapKwp, setFillCapKwp] = useState<number | undefined>(undefined);
   const [whySheet, setWhySheet] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [stringSheet, setStringSheet] = useState(false);
@@ -480,6 +488,19 @@ export function Step6Editor() {
     [shadeSheet, project, shadeCutoffPct],
   );
   const shadeShares = useMemo(() => (shadeSheet ? panelEnergyShares(project) : null), [shadeSheet, project]);
+  // the fill sheet: a dry run per roof, so the button says what it will do
+  const fillPlans = useMemo(
+    () =>
+      fillSheet
+        ? project.roofs
+            .filter((r) => r.polygon.length >= 3)
+            .map((roof) => ({
+              roof,
+              plan: planRoofFill(project, roof, spec, { capKwp: fillCapKwp, heat: peekHeatmap(heatFp) }),
+            }))
+        : [],
+    [fillSheet, project, spec, fillCapKwp, heatFp],
+  );
 
   const selectedPanels = useMemo(
     () => project.panels.filter((p) => selectedIds.includes(p.id)),
@@ -530,15 +551,6 @@ export function Step6Editor() {
       return;
     }
     setStringSheet(true);
-  }
-
-  function runAutoPlace(objective: 'target_kwp' | 'max_roof' = 'target_kwp') {
-    // ranked, budgeted, EXPLAINED layout (Phase 6) — roofs fill in order of
-    // measured expected energy, and every choice lands in the decision log
-    const r = ops.run(layoutAutoDesign, { objective });
-    setConfirmPlace(false);
-    if (!report(r)) return;
-    if ((r.next.designLog ?? []).length > 0) setWhySheet(true);
   }
 
   // ── selection actions ──────────────────────────────────────────────────────
@@ -1257,7 +1269,7 @@ export function Step6Editor() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       // sheets & dialogs own the keyboard while open (Escape closes them)
-      if (confirmPlace || confirmClear || stringSheet || stringInfo || issuesSheet || shadeSheet) return;
+      if (fillSheet || confirmClear || stringSheet || stringInfo || issuesSheet || shadeSheet) return;
       if (e.key === 'Escape') {
         setManualString(null);
         setDragLine(null);
@@ -1434,6 +1446,14 @@ export function Step6Editor() {
               if (!manualString) activate('select');
               setLassoSelect((v) => !v);
             },
+          },
+          {
+            id: 'fill',
+            icon: <Sparkles />,
+            label: 'Fill',
+            tip: 'Fill a roof\nOne new table around what is already there — nothing placed by hand moves',
+            active: fillSheet,
+            onClick: () => setFillSheet((v) => !v),
           },
           {
             id: 'panels',
@@ -2320,34 +2340,70 @@ export function Step6Editor() {
         3D
       </button>
 
-      {confirmPlace && (
-        <Dialog
-          title="Auto-fill this roof?"
-          icon={<Sparkles />}
-          onClose={() => setConfirmPlace(false)}
-          actions={
-            <>
-              <button className="btn btn-secondary" onClick={() => setConfirmPlace(false)}>
-                Place manually
-              </button>
-              <button className="btn btn-primary" onClick={() => runAutoPlace()}>
-                <Sparkles />
-                Auto-fill panels
-              </button>
-              <button className="btn btn-secondary" onClick={() => runAutoPlace('max_roof')}>
-                Use max roof capacity
-              </button>
-            </>
-          }
-        >
-          <p>
-            Design automatically with {spec.brand} {spec.watt} W panels up to{' '}
-            {project.components.targetKwp} kWp: roofs are RANKED by measured sun access ×
-            capacity and filled best-first, honoring setbacks, obstructions, walkways and
-            shadow-free row spacing. Every choice is explained in the &ldquo;Why this
-            layout?&rdquo; panel afterwards — and everything stays editable.
+      {fillSheet && (
+        <Sheet title="Fill a roof" icon={<Sparkles />} onClose={() => setFillSheet(false)}>
+          <p style={{ fontSize: 12.5, color: 'var(--ink-2)', marginTop: 0 }}>
+            One new table of {spec.brand} {spec.watt} W modules on the roof&rsquo;s own grid, clear of setbacks,
+            obstructions, walkways, no-build zones and every module already there. Nothing placed by hand
+            moves. Undo takes it back.
           </p>
-        </Dialog>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700 }}>Cap each fill at</span>
+            <NumberField
+              value={fillCapKwp}
+              onCommit={setFillCapKwp}
+              min={0}
+              step={0.5}
+              suffix="kWp"
+              placeholder="no cap"
+              ariaLabel="Cap each fill at kWp"
+              style={{ width: 120 }}
+            />
+          </div>
+          {fillCapKwp !== undefined && fillCapKwp > 0 && (
+            <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginBottom: 12 }}>
+              {peekHeatmap(heatFp)
+                ? 'The cap keeps the sunniest positions first — scored by the roof heatmap.'
+                : 'Turn the heatmap on once (View · Heat) and the cap will keep the sunniest positions first. Until then it keeps the first rows.'}
+            </div>
+          )}
+          {fillPlans.map(({ roof, plan }) => (
+            <div key={roof.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 12, marginBottom: 8 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 800 }}>{roof.name}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+                  {plan
+                    ? `${plan.count} module${plan.count === 1 ? '' : 's'} · ${plan.kwp} kWp fit around what is there${plan.bestFirst ? ' · sunniest first' : ''}`
+                    : 'Nothing more fits'}
+                </div>
+              </div>
+              <button
+                className="btn btn-primary"
+                style={{ minHeight: 32, padding: '6px 14px', fontSize: 12.5 }}
+                disabled={!plan}
+                onClick={() => {
+                  if (!plan) return;
+                  if (locked) {
+                    flashLock();
+                    return;
+                  }
+                  // the same commit the Table tool makes on release: one undo step
+                  patch(
+                    {
+                      panels: [...project.panels, ...plan.panels],
+                      segments: [...project.segments, plan.segment],
+                    },
+                    true,
+                  );
+                  flash('ok', `Filled ${roof.name}: +${plan.count} modules · +${plan.kwp} kWp`);
+                  setFillSheet(false);
+                }}
+              >
+                Fill
+              </button>
+            </div>
+          ))}
+        </Sheet>
       )}
 
       {whySheet && (
