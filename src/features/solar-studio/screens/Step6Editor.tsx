@@ -122,6 +122,7 @@ import {
 } from '../lib/structure';
 import { StructurePreview } from '../components/StructurePreview';
 import { AccessScale } from '../components/AccessScale';
+import { ModuleCard } from '../components/ModuleCard';
 import { registerAllAnalyzers } from '../lib/insights/analyzers';
 import { memoizedInsights } from '../lib/insights/registry';
 
@@ -187,6 +188,7 @@ import {
   arresterAdd,
   arresterRemove,
   keepoutAdd,
+  obstructionRemove,
   railAdd,
   railRemove,
   walkwayAdd,
@@ -1833,6 +1835,32 @@ export function Step6Editor() {
           tool={tool}
           lineMark={lineMark}
           onToggleLine={toggleLine}
+          // the on-object card: one module picked in Select, nothing being wired
+          card={tool === 'select' && !manualString && selectedIds.length === 1 ? selectedIds[0] : null}
+          onCloseCard={() => setSelectedIds([])}
+          onTableSettings={() => setTableSheet(true)}
+          onFocusBlocker={(kind, id) => {
+            // "click to look": in the plan that means bringing the thing into view
+            if (kind === 'obstruction') {
+              const o = project.obstructions.find((x) => x.id === id);
+              if (o) canvasRef.current?.centerOn(o.center);
+              return;
+            }
+            if (kind === 'panel') {
+              const q = project.panels.find((x) => x.id === id);
+              if (q) canvasRef.current?.centerOn(q.center);
+              return;
+            }
+            flash('info', 'That is the neighbourhood — open 3D to see it');
+          }}
+          onEraseObstruction={(id) => {
+            if (locked) {
+              flashLock();
+              return;
+            }
+            // one op, one undo step; report() prints what the plant gains
+            report(ops.run(obstructionRemove, { id }));
+          }}
         />
         {tool === 'select' && !manualString && (
           <SelectionContextBar
@@ -3822,6 +3850,11 @@ function EditorLayers({
   onTableDragEnd,
   lineMark,
   onToggleLine,
+  card,
+  onCloseCard,
+  onTableSettings,
+  onFocusBlocker,
+  onEraseObstruction,
 }: {
   heatmap: boolean;
   heatResult: HeatmapResult | null;
@@ -3845,6 +3878,12 @@ function EditorLayers({
   /** row/column marking mode: which table, which axis, what is marked so far */
   lineMark: LineMark | null;
   onToggleLine: (index: number) => void;
+  /** the module whose on-object card is open (one module selected in Select) */
+  card: string | null;
+  onCloseCard: () => void;
+  onTableSettings: () => void;
+  onFocusBlocker: (kind: string, id: string) => void;
+  onEraseObstruction: (id: string, label: string) => void;
 }) {
   const project = useActiveProject()!;
   const frame = useCanvasFrame();
@@ -4430,6 +4469,38 @@ function EditorLayers({
           strokeLinejoin="round"
         />
       )}
+
+      {/* the on-object card, beside the tapped module. HTML inside the SVG
+          through <foreignObject>, counter-scaled like the label chips so it
+          stays crisp at any zoom; its pointer events stop here so a tap on
+          the card never starts a marquee or a move underneath it. */}
+      {card &&
+        (() => {
+          const p = byId.get(card);
+          if (!p) return null;
+          const px = frame.toPx(p.center);
+          return (
+            <g transform={`translate(${px.x + 14}, ${px.y - 12}) scale(${1 / frame.zoom})`}>
+              <foreignObject x={0} y={0} width={300} height={420} style={{ overflow: 'visible' }}>
+                <div
+                  style={{ width: 'max-content', pointerEvents: 'auto' }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ModuleCard
+                    project={project}
+                    panelId={card}
+                    onClose={onCloseCard}
+                    onTableSettings={p.segmentId ? onTableSettings : undefined}
+                    onFocusBlocker={onFocusBlocker}
+                    onEraseObstruction={onEraseObstruction}
+                  />
+                </div>
+              </foreignObject>
+            </g>
+          );
+        })()}
 
       {/* drag ghost — where the modules will land. Outlines only, translated:
           deliberately NOT re-validated every frame (§H — the hover-preview
