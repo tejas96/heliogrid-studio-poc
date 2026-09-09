@@ -370,13 +370,9 @@ import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../store/useUnits';
 import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
 import { COL_STRIDE } from '../lib/layout';
-import { shadingFp } from '../lib/fingerprints';
-import {
-  accessLabel,
-  computeHeatmap,
-  type HeatCancel,
-  type HeatmapResult,
-} from '../lib/solar-heatmap';
+import { heatmapFp } from '../lib/fingerprints';
+import { accessLabel, type HeatmapResult } from '../lib/solar-heatmap';
+import { peekHeatmap, requestHeatmap } from '../lib/heatmap-cache';
 import { HeatmapLayer } from './HeatmapLayer';
 import type { Project, XY } from '../types';
 import { sunPosition, sunriseSunset, fmtHour } from '../lib/solar';
@@ -961,7 +957,6 @@ export function Scene3D({
   const [heatMonth, setHeatMonth] = useState(new Date().getMonth());
   const [heatResult, setHeatResult] = useState<HeatmapResult | null>(null);
   const [heatProgress, setHeatProgress] = useState<{ done: number; total: number } | null>(null);
-  const heatCacheRef = useRef<{ fp: string; res: HeatmapResult } | null>(null);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
   /** a capture holds the canvas at print size for two frames — don't start a second */
   const capturing = useRef(false);
@@ -1010,7 +1005,7 @@ export function Scene3D({
     sun.azimuth + (project.calibration.northOffsetDeg * Math.PI) / 180;
 
   // ── solar-access heatmap: flat top-down satellite + per-month sun-hours ──
-  const heatFp = useMemo(() => shadingFp(project), [project]);
+  const heatFp = useMemo(() => heatmapFp(project), [project]);
   useEffect(() => {
     if (heatmap) {
       // present flat, top-down over the satellite (not the 3D model)
@@ -1022,29 +1017,30 @@ export function Scene3D({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmap]);
+  // ONE map per geometry, shared with the 2D editor (lib/heatmap-cache): a
+  // module nudge no longer re-keys it, and 2D → 3D no longer recomputes it
   useEffect(() => {
     if (!heatmap) return;
-    if (heatCacheRef.current?.fp === heatFp) {
-      setHeatResult(heatCacheRef.current.res);
+    const cached = peekHeatmap(heatFp);
+    if (cached) {
+      setHeatResult(cached);
       setHeatProgress(null);
       return;
     }
-    const signal: HeatCancel = { aborted: false };
+    let live = true;
     setHeatResult(null);
     setHeatProgress({ done: 0, total: 1 });
-    computeHeatmap(project, {
-      onProgress: (done, total) => setHeatProgress({ done, total }),
-      signal,
-    })
-      .then((res) => {
-        if (signal.aborted) return;
-        heatCacheRef.current = { fp: heatFp, res };
-        setHeatResult(res);
-        setHeatProgress(null);
-      })
-      .catch(() => {});
+    const req = requestHeatmap(project, heatFp, (done, total) => {
+      if (live) setHeatProgress({ done, total });
+    });
+    void req.promise.then((res) => {
+      if (!live || !res) return;
+      setHeatResult(res);
+      setHeatProgress(null);
+    });
     return () => {
-      signal.aborted = true;
+      live = false;
+      req.release();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmap, heatFp]);

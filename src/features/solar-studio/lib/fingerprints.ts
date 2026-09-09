@@ -352,6 +352,25 @@ export function shadingFp(p: Project | null): string {
   );
 }
 
+/**
+ * Recompute key for the ROOF-SURFACE heatmap (lib/solar-heatmap). The map
+ * raycasts a grid over the roofs against the geometry casters and the real
+ * neighbourhood — never the modules (`includePanels` is off: it answers a
+ * placement question). Both views used to key it on shadingFp, which
+ * serialises every module centre to the centimetre, so nudging one module
+ * threw the whole 12-month map away and rebuilt it. geometryFp alone is not
+ * the key either: the map reads the neighbourhood grid, and switching it off
+ * must re-key. Returns '' with no site (nothing to compute).
+ */
+export function heatmapFp(p: Project): string {
+  if (!p.location) return '';
+  return (
+    'h1|' +
+    geometryFp(p) +
+    (p.surround ? (p.ignoreSurround ? '|sur:off' : `|sur:${surroundKey(p.surround)}`) : '')
+  );
+}
+
 // ─── Freshness checks (drive the staleness badges) ──────────────────────────
 
 /**

@@ -77,14 +77,10 @@ import {
   panelFitsAt,
   snapPanelCenter,
 } from '../lib/layout';
-import {
-  computeHeatmap,
-  heatColor,
-  type HeatCancel,
-  type HeatmapResult,
-} from '../lib/solar-heatmap';
+import { heatColor, type HeatmapResult } from '../lib/solar-heatmap';
+import { peekHeatmap, requestHeatmap } from '../lib/heatmap-cache';
 import { gcr, shadowFreePitchM } from '../lib/spacing';
-import { shadingFp } from '../lib/fingerprints';
+import { heatmapFp } from '../lib/fingerprints';
 import {
   classifySelection,
   growCandidates,
@@ -316,7 +312,7 @@ export function Step6Editor() {
   const [heatmap, setHeatmap] = useState(false);
   const [heatMonth, setHeatMonth] = useState(new Date().getMonth());
   const [heatResult, setHeatResult] = useState<HeatmapResult | null>(null);
-  const heatCacheRef = useRef<{ fp: string; res: HeatmapResult } | null>(null);
+  const [heatProgress, setHeatProgress] = useState<{ done: number; total: number } | null>(null);
   const [showStrings, setShowStrings] = useState(true);
   const [show3D, setShow3D] = useState(false);
   // Phase 22p: leaving the 3D view must put focus back on the button that
@@ -415,25 +411,33 @@ export function Step6Editor() {
   useEffect(() => () => window.clearTimeout(noticeTimer.current), []);
 
   // Real rasterised solar-access heatmap for the 2D canvas — same engine as 3D,
-  // cached by the shading fingerprint so it only recomputes on a geometry change.
-  const heatFp = useMemo(() => shadingFp(project), [project]);
+  // ONE map per geometry shared with the 3D view (lib/heatmap-cache): keyed on
+  // the geometry + neighbourhood, never the modules, so a nudge does not
+  // rebuild it and 2D → 3D does not compute it twice. Progress is reported
+  // here too — the roof used to just empty while it rebuilt.
+  const heatFp = useMemo(() => heatmapFp(project), [project]);
   useEffect(() => {
     if (!heatmap) return;
-    if (heatCacheRef.current?.fp === heatFp) {
-      setHeatResult(heatCacheRef.current.res);
+    const cached = peekHeatmap(heatFp);
+    if (cached) {
+      setHeatResult(cached);
+      setHeatProgress(null);
       return;
     }
-    const signal: HeatCancel = { aborted: false };
+    let live = true;
     setHeatResult(null);
-    computeHeatmap(project, { signal })
-      .then((res) => {
-        if (signal.aborted) return;
-        heatCacheRef.current = { fp: heatFp, res };
-        setHeatResult(res);
-      })
-      .catch(() => {});
+    setHeatProgress({ done: 0, total: 1 });
+    const req = requestHeatmap(project, heatFp, (done, total) => {
+      if (live) setHeatProgress({ done, total });
+    });
+    void req.promise.then((res) => {
+      if (!live || !res) return;
+      setHeatResult(res);
+      setHeatProgress(null);
+    });
     return () => {
-      signal.aborted = true;
+      live = false;
+      req.release();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [heatmap, heatFp]);
@@ -1766,6 +1770,29 @@ export function Step6Editor() {
         )}
         <MeasureOverlay measure={measure} fmt={(m) => `${m.toFixed(2)} m`} />
       </SatCanvas>
+
+      {/* while the map rebuilds the roof is bare — say why, as the 3D view does */}
+      {heatmap && !heatResult && heatProgress && (
+        <div
+          role="status"
+          style={{
+            position: 'absolute',
+            bottom: 60,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 40,
+            background: 'rgba(12,16,20,0.92)',
+            color: '#eaf3f1',
+            borderRadius: 12,
+            padding: '10px 14px',
+            fontSize: 12,
+            boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Computing solar access… {Math.round((heatProgress.done / Math.max(1, heatProgress.total)) * 100)}%
+        </div>
+      )}
 
       {/* heatmap legend + month scrubber (2D parity with the 3D view) */}
       {heatmap && heatResult && (
