@@ -17,6 +17,7 @@ import { projectForStage, stageShowsDesign } from '../lib/scene-stage';
 import { RadialMenu, type RadialGroup, type RadialItem } from '../components/RadialMenu';
 import { ACCESS_GRADIENT_CSS } from '../lib/shade-ramp';
 import { PanelYieldCard, usePanelYield } from '../components/PanelYieldCard';
+import { AccessScale } from '../components/AccessScale';
 import { PanelLabels } from './PanelLabels';
 import { InverterBay, bayInverters } from '../components/InverterBay';
 import { wireTableToggle } from '../lib/electrical/wire-table';
@@ -2418,42 +2419,9 @@ export function Scene3D({
             }}
           >
             <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>Solar access</div>
-            <div
-              style={{
-                height: 8,
-                borderRadius: 4,
-                background: 'linear-gradient(90deg,#dc2626,#ca8a04,#16a34a)',
-              }}
-            />
-            {/* qualitative bands under the ramp */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 9,
-                color: 'var(--editor-ink-2)',
-                marginTop: 3,
-              }}
-            >
-              <span>Poor</span>
-              <span>Moderate</span>
-              <span>Good</span>
-              <span>Excellent</span>
-            </div>
-            {/* percentage scale */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                fontSize: 9.5,
-                color: 'var(--editor-ink-2)',
-                marginTop: 2,
-              }}
-            >
-              <span>0%</span>
-              <span>50%</span>
-              <span>100%</span>
-            </div>
+            {/* the ramp, its band words and its ticks come from the same table
+                the cells are painted with — see components/AccessScale */}
+            <AccessScale />
             {/* current month summary: % access + band + direct hours */}
             {(() => {
               const t = heatResult.monthlyRoofAvg[heatMonth]; // already 0..1

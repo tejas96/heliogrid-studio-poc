@@ -119,6 +119,7 @@ import {
   validateStructure,
 } from '../lib/structure';
 import { StructurePreview } from '../components/StructurePreview';
+import { AccessScale } from '../components/AccessScale';
 import { registerAllAnalyzers } from '../lib/insights/analyzers';
 import { memoizedInsights } from '../lib/insights/registry';
 
@@ -1792,12 +1793,10 @@ export function Step6Editor() {
               {Math.round(heatResult.monthlyRoofAvg[heatMonth] * 100)}% avg access
             </span>
           </div>
-          <div style={{ height: 8, borderRadius: 4, marginBottom: 5, background: 'linear-gradient(90deg,#dc2626,#ca8a04,#16a34a)' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, opacity: 0.7, marginBottom: 8 }}>
-            <span>Poor</span>
-            <span>Moderate</span>
-            <span>Good</span>
-            <span>Excellent</span>
+          {/* the ramp, its band words and its ticks come from the same table
+              the cells are painted with — see components/AccessScale */}
+          <div style={{ marginBottom: 8 }}>
+            <AccessScale />
           </div>
           <input
             type="range"

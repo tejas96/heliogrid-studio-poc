@@ -801,7 +801,15 @@ export interface EnergyReport {
   monsoonMonths: number[]; // month indices
   losses: LossItem[];
   totalLossPct: number;
+  /**
+   * Mean solar access, %, on the heatmap's scale: the fixed diffuse floor (35)
+   * plus the rest × direct-beam access. It can never read below 35, so it must
+   * be printed WITH beamAccessPct or with the floor named — never as "% of the
+   * available sunlight", which it is not.
+   */
   avgSolarAccessPct: number;
+  /** Mean direct-beam access of the enabled modules, % — 0 = always shaded, 100 = never. */
+  beamAccessPct: number;
   lifetimeMwh25: number;
   year25Mwh: number;
   degradationPctPerYear: number;

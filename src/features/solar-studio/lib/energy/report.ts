@@ -130,7 +130,10 @@ export function computeEnergyReport(project: Project): EnergyReport {
           : []),
       ],
       totalLossPct: Math.round((100 - hourly.prPct) * 10) / 10,
+      // the heatmap's floored scale, AND the raw beam figure it was built from —
+      // the floored one alone reads as "% of sunlight", which it is not
       avgSolarAccessPct: Math.round((DIFFUSE_SHARE + (1 - DIFFUSE_SHARE) * beamAccess) * 100),
+      beamAccessPct: Math.round(beamAccess * 100),
       lifetimeMwh25: Math.round(lifetime / 100) / 10,
       year25Mwh: Math.round(year25 / 100) / 10,
       degradationPctPerYear: degradation * 100,
@@ -275,8 +278,11 @@ export function computeEnergyReport(project: Project): EnergyReport {
     monsoonMonths: MONSOON_MONTHS,
     losses: reportLosses,
     totalLossPct,
-    // the UNIFIED metric (diffuse-floored, = heatmap's definition)
+    // the UNIFIED metric (diffuse-floored, = heatmap's definition), AND the raw
+    // beam figure it was built from — the floored one alone reads as "% of
+    // sunlight", which it is not
     avgSolarAccessPct: Math.round(effectiveAccess * 100),
+    beamAccessPct: Math.round(beamAccess * 100),
     lifetimeMwh25: Math.round(lifetime / 100) / 10,
     year25Mwh: Math.round(year25 / 100) / 10,
     degradationPctPerYear: degradation * 100,

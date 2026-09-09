@@ -62,25 +62,74 @@ interface GridPoint {
 
 const MONTHS = 12;
 
-/** Qualitative band for a normalised access value (0..1), for the legend. */
-export function accessLabel(t01: number): string {
-  const t = Math.max(0, Math.min(1, t01));
-  if (t < 0.5) return 'Poor';
-  if (t < 0.75) return 'Moderate';
-  if (t < 0.9) return 'Good';
-  return 'Excellent';
+// ─── The access scale: ONE table, read by the colour, the word and the legend ─
+//
+// A cell's access is DIFFUSE_SHARE + (1 − DIFFUSE_SHARE) · beamFrac (see the
+// loop below), so the metric can never read below DIFFUSE_SHARE: 35% is a cell
+// that gets NO direct sun at all. Both legends printed "0%" under the red end
+// anyway, and the colour ramp started at 0 — so the reddest colour could not be
+// reached, and a cell at the floor, which accessLabel called "Poor", painted
+// 70% of the way to amber. The colour and the word disagreed inside this file.
+//
+// Everything below is expressed on the value the user actually reads, from one
+// table, so the paint, the band word and the legend's tick marks are the same
+// scale by construction. The floor itself is deliberate (stable shadow
+// contrast — see the loop) and is not touched here.
+
+/** The lowest value the access metric can read: diffuse light only, no direct sun. */
+export const ACCESS_FLOOR = DIFFUSE_SHARE;
+
+/** Band edges on the DISPLAYED access value (floor..1), ascending. */
+export const ACCESS_BANDS: readonly { min: number; label: string }[] = [
+  { min: ACCESS_FLOOR, label: 'Poor' },
+  { min: 0.5, label: 'Moderate' },
+  { min: 0.75, label: 'Good' },
+  { min: 0.9, label: 'Excellent' },
+];
+
+/**
+ * The colour stops, on the same axis: red AT the floor (not below it), amber
+ * exactly where Moderate ends and Good begins, green at full sun.
+ */
+export const ACCESS_STOPS: readonly { at: number; hex: string }[] = [
+  { at: ACCESS_FLOOR, hex: '#dc2626' },
+  { at: 0.75, hex: '#ca8a04' },
+  { at: 1, hex: '#16a34a' },
+];
+
+/**
+ * Where a displayed access value sits along the legend bar, 0..1 — 0 at the
+ * floor, 1 at full sun. Because of how the metric is built this is also the
+ * cell's direct-beam fraction itself.
+ */
+export function accessBarPos(t: number): number {
+  return Math.max(0, Math.min(1, (t - ACCESS_FLOOR) / (1 - ACCESS_FLOOR)));
 }
 
-/** Continuous red→amber→green ramp matching the existing solar-access legend. */
-export function heatColor(t01: number): THREE.Color {
-  const t = Math.max(0, Math.min(1, t01));
-  const lo = new THREE.Color('#dc2626');
-  const mid = new THREE.Color('#ca8a04');
-  const hi = new THREE.Color('#16a34a');
-  return t < 0.5
-    ? lo.clone().lerp(mid, t / 0.5)
-    : mid.clone().lerp(hi, (t - 0.5) / 0.5);
+/** Qualitative band for a displayed access value, for the legend and the readout. */
+export function accessLabel(t: number): string {
+  let label = ACCESS_BANDS[0].label;
+  for (const b of ACCESS_BANDS) if (t >= b.min) label = b.label;
+  return label;
 }
+
+/** Red→amber→green through ACCESS_STOPS; clamps to the floor and to full sun. */
+export function heatColor(t: number): THREE.Color {
+  const v = Math.max(ACCESS_FLOOR, Math.min(1, t));
+  for (let i = 1; i < ACCESS_STOPS.length; i++) {
+    const a = ACCESS_STOPS[i - 1];
+    const b = ACCESS_STOPS[i];
+    if (v <= b.at) {
+      return new THREE.Color(a.hex).lerp(new THREE.Color(b.hex), (v - a.at) / (b.at - a.at));
+    }
+  }
+  return new THREE.Color(ACCESS_STOPS[ACCESS_STOPS.length - 1].hex);
+}
+
+/** The legend's ramp — the same stops at the same bar positions, as CSS. */
+export const ACCESS_GRADIENT_CSS = `linear-gradient(90deg,${ACCESS_STOPS.map(
+  (s) => `${s.hex} ${Math.round(accessBarPos(s.at) * 1000) / 10}%`,
+).join(',')})`;
 
 /** Grid angle used to align samples to the roof — the canonical frame. */
 function roofAngleDeg(roof: Roof): number {

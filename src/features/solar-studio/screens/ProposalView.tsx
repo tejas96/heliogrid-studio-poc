@@ -369,7 +369,8 @@ export function ProposalView() {
               <KV k="Capacity" v={`${r.capacityKwp} kWp`} />
               <KV k="Panels" v={`${r.panelCount} (${project.components.panel?.watt}W)`} />
               <KV k="Roof Area" v={fmtArea(r.roofAreaM2)} />
-              <KV k="Solar Access" v={`${r.avgSolarAccessPct}%`} />
+              {/* the floored scale cannot read below 35 — name the direct-sun figure with it */}
+              <KV k="Solar Access" v={`${r.avgSolarAccessPct}% (35–100 scale) · direct sun ${r.beamAccessPct}%`} />
               <KV k="25-yr Generation" v={`${r.lifetimeMwh25} MWh`} />
               <KV k="Year 25 Output" v={`${r.year25Mwh} MWh (${Math.round((r.year25Mwh / Math.max(0.01, r.annualMwh)) * 100)}% of Y1)`} />
             </div>

@@ -152,6 +152,17 @@ describe('loss model (multiplicative, clamped — PVWatts convention)', () => {
     expect(rZeroW.avgSolarAccessPct).toBe(35);
   });
 
+  it('prints the raw direct-beam access beside the floored figure, in both branches', () => {
+    // the floored figure alone reads as "% of sunlight" — it is not: at ZERO
+    // direct sun it still says 35. The beam figure is what that sentence means.
+    for (const w of [weather, undefined]) {
+      expect(computeEnergyReport(withAccess(0, w)).beamAccessPct).toBe(0);
+      expect(computeEnergyReport(withAccess(0.6, w)).beamAccessPct).toBe(60);
+      const r = computeEnergyReport(withAccess(0.6, w));
+      expect(r.avgSolarAccessPct).toBe(Math.round((0.35 + 0.65 * 0.6) * 100));
+    }
+  });
+
   it('shading loss line reflects the BEAM-only effect, never 100%', () => {
     const r = computeEnergyReport(withAccess(0, weather));
     const shading = r.losses.find((l) => l.key === 'shading')!;

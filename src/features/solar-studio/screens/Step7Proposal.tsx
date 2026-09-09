@@ -363,7 +363,8 @@ export function Step7Proposal() {
       <div className="card" style={{ marginBottom: 24 }}>
         <Row k="Capacity" v={`${report.capacityKwp} kWp`} />
         <Row k="Panels" v={`${report.panelCount} × ${project.components.panel?.watt}W`} />
-        <Row k="Solar Access" v={`${report.avgSolarAccessPct}%`} />
+        {/* the floored scale cannot read below 35 — name the direct-sun figure with it */}
+        <Row k="Solar Access" v={`${report.avgSolarAccessPct}% (35–100 scale) · direct sun ${report.beamAccessPct}%`} />
         <Row k="Annual Generation" v={`${report.annualMwh} MWh`} />
       </div>
 

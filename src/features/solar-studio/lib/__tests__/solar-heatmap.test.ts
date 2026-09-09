@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import * as THREE from 'three';
 import type { Obstruction, Project, Roof, SiteWeather, XY } from '../../types';
-import { accessLabel, computeHeatmap, generateHeatGrid, heatColor } from '../solar-heatmap';
+import {
+  ACCESS_BANDS,
+  ACCESS_FLOOR,
+  ACCESS_GRADIENT_CSS,
+  ACCESS_STOPS,
+  accessBarPos,
+  accessLabel,
+  computeHeatmap,
+  generateHeatGrid,
+  heatColor,
+} from '../solar-heatmap';
 import { pointInPolygon } from '../geo';
 import { DIFFUSE_SHARE } from '../poa';
 import { DAYS_IN_MONTH, pvgisToWeather, type PvgisResponse } from '../pvgis';
@@ -257,7 +268,7 @@ describe('computeHeatmap — real PVGIS kWh layer', () => {
 });
 
 describe('accessLabel', () => {
-  it('bands the normalised access value and clamps', () => {
+  it('bands the displayed access value and clamps', () => {
     expect(accessLabel(0.2)).toBe('Poor');
     expect(accessLabel(0.6)).toBe('Moderate');
     expect(accessLabel(0.8)).toBe('Good');
@@ -273,5 +284,39 @@ describe('heatColor', () => {
     expect(heatColor(2).getHexString()).toBe(heatColor(1).getHexString());
     expect(heatColor(0).getHexString()).toBe('dc2626');
     expect(heatColor(1).getHexString()).toBe('16a34a');
+  });
+});
+
+describe('the access scale is one table: paint, word and legend agree', () => {
+  it('the floor — the lowest value a cell can read — is the reddest colour, not 70% of the way to amber', () => {
+    // the metric is DIFFUSE_SHARE + (1 − DIFFUSE_SHARE)·beam, so no cell can
+    // read below the floor; the ramp used to start at 0 and never got there
+    expect(ACCESS_FLOOR).toBe(DIFFUSE_SHARE);
+    expect(heatColor(ACCESS_FLOOR).getHexString()).toBe('dc2626');
+    expect(accessBarPos(ACCESS_FLOOR)).toBe(0);
+    expect(accessBarPos(1)).toBe(1);
+  });
+
+  it('a cell the word calls "Poor" is painted in the Poor colour range, and amber sits at the Moderate/Good edge', () => {
+    const amber = new THREE.Color('#ca8a04');
+    const red = new THREE.Color('#dc2626');
+    const edge = ACCESS_BANDS.find((b) => b.label === 'Good')!.min;
+    expect(heatColor(edge).getHexString()).toBe(amber.getHexString());
+    // every Poor value is closer to red than to amber
+    const poorMax = ACCESS_BANDS.find((b) => b.label === 'Moderate')!.min - 1e-6;
+    for (const t of [ACCESS_FLOOR, (ACCESS_FLOOR + poorMax) / 2, poorMax]) {
+      expect(accessLabel(t)).toBe('Poor');
+      const c = heatColor(t);
+      const dRed = Math.hypot(c.r - red.r, c.g - red.g, c.b - red.b);
+      const dAmber = Math.hypot(c.r - amber.r, c.g - amber.g, c.b - amber.b);
+      expect(dRed).toBeLessThan(dAmber);
+    }
+  });
+
+  it('the legend gradient names the same stops at the same bar positions as the paint', () => {
+    expect(ACCESS_GRADIENT_CSS).toBe('linear-gradient(90deg,#dc2626 0%,#ca8a04 61.5%,#16a34a 100%)');
+    for (const s of ACCESS_STOPS) {
+      expect(heatColor(s.at).getHexString()).toBe(s.hex.slice(1));
+    }
   });
 });

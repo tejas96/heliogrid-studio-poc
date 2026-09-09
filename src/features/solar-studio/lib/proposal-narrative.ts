@@ -57,10 +57,13 @@ export function proposalNarrative(project: Project, fmtArea: (m2: number) => str
       facts: [r.capacityKwp, project.components.inverterCount],
     },
   ];
-  if (r.avgSolarAccessPct > 0) {
+  // The floored access figure cannot read below 35, so "receives NN% of the
+  // available sunlight" was never true of it. The direct-sun figure is the one
+  // that means what the sentence says.
+  if (r.beamAccessPct > 0) {
     sys.push({
-      text: `Across the year the array receives ${r.avgSolarAccessPct}% of available sunlight — the shadow study on the previous pages shows how obstructions were worked around.`,
-      facts: [r.avgSolarAccessPct],
+      text: `Across the year the array receives ${r.beamAccessPct}% of the direct sunlight an unshaded array would — the shadow study on the previous pages shows how obstructions were worked around.`,
+      facts: [r.beamAccessPct],
     });
   }
   sections.push({ title: 'Your system', beats: sys });

@@ -212,8 +212,15 @@ export function EnergyReportSheet({
           <div style={{ fontSize: 22, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8 }}>
             <Sun size={20} color="var(--brand)" aria-hidden /> {r.avgSolarAccessPct}%
           </div>
+          {/* the big figure sits on the heatmap's 35–100 scale and cannot read
+              below 35 — so the direct-sun figure it was built from is printed
+              beside it, and the floor is named, or a reader takes it for
+              "% of the sunlight" */}
           <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
-            Beam access (3D raycast) + diffuse floor — same metric as the heatmap
+            Direct sun: the modules get <b>{r.beamAccessPct}%</b> of what an unshaded array would (3D raycast)
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>
+            Heatmap scale 35–100 · 35 = diffuse light only, no direct sun
           </div>
         </div>
         <TrendingUp size={20} color="var(--good)" aria-hidden />
