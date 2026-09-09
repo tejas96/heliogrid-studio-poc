@@ -282,12 +282,17 @@ export interface PanelMaterials {
   back: Record<ModuleOrientation, THREE.MeshStandardMaterial>;
   frame: THREE.MeshStandardMaterial;
   leg: THREE.MeshStandardMaterial;
+  /** the junction box on the module's back, and the DC tails leaving it */
+  jbox: THREE.MeshStandardMaterial;
+  cable: THREE.MeshStandardMaterial;
 }
 
 const matCache = new Map<string, PanelMaterials>();
 let sharedFrame: THREE.MeshStandardMaterial | null = null;
 let sharedLeg: THREE.MeshStandardMaterial | null = null;
 let sharedBacksheet: THREE.MeshStandardMaterial | null = null;
+let sharedJbox: THREE.MeshStandardMaterial | null = null;
+let sharedCable: THREE.MeshStandardMaterial | null = null;
 
 /** Shared glass (per orientation) / aluminium-frame / stand-leg materials for placed panels. */
 export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials {
@@ -296,6 +301,11 @@ export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials
   if (hit) return hit;
   sharedFrame ??= new THREE.MeshStandardMaterial({ color: '#cfd3d9', metalness: 0.85, roughness: 0.3, envMapIntensity: 1 });
   sharedLeg ??= new THREE.MeshStandardMaterial({ color: '#a3a9b1', metalness: 0.75, roughness: 0.38, envMapIntensity: 0.9 });
+  // moulded PPO/PA junction box: matte black plastic, a shade lighter than the
+  // cable so the two read as different parts at inspection zoom
+  sharedJbox ??= new THREE.MeshStandardMaterial({ color: '#2b2c2e', metalness: 0, roughness: 0.72 });
+  // XLPE DC lead: darker, and glossier because the sheath is smooth
+  sharedCable ??= new THREE.MeshStandardMaterial({ color: '#191a1c', metalness: 0, roughness: 0.5 });
   // A mono-facial module's back is an opaque white polymer sheet, not glass:
   // no metalness, and rough enough that it never picks up a highlight.
   sharedBacksheet ??= new THREE.MeshStandardMaterial({ color: '#e7e9ec', metalness: 0, roughness: 0.9 });
@@ -403,6 +413,8 @@ export function getPanelMaterials(spec: PanelSpec | null = null): PanelMaterials
       ? { portrait: backFor('portrait'), landscape: backFor('landscape') }
       : { portrait: sharedBacksheet, landscape: sharedBacksheet },
     frame: sharedFrame,
+    jbox: sharedJbox,
+    cable: sharedCable,
     leg: sharedLeg,
   };
   matCache.set(key, mats);

@@ -34,6 +34,30 @@ const HOVERED = new THREE.Color('#b8dcff');
 const SOIL_FLOOR = 0.9;
 
 /**
+ * Junction box and DC lead, in metres. Nominal hardware sizes — a typical
+ * moulded box is about 110 × 32 × 80 mm with two 4 mm² leads out of it.
+ * Representation only: no quantity is ever read back from these.
+ */
+const JBOX_W = 0.11;
+const JBOX_H = 0.032;
+const JBOX_D = 0.08;
+/** How far in from the module's top edge the box sits. */
+const JBOX_INSET_M = 0.25;
+/**
+ * How far the box may protrude past the frame slab's back face.
+ *
+ * A real junction box sits INSIDE the module frame's depth and stands only a
+ * few millimetres proud of it. Hanging a full 32 mm box below the frame buried
+ * it in the roof on a flush mount — measured at −14 mm clearance on the worst
+ * module of the seeded array, with the leads below that entirely underground.
+ * Hardware sunk into a roof is worse than no hardware at all.
+ */
+const JBOX_PROUD = 0.01;
+/** Lead stub. It lies ALONG the back, the way a real lead is routed to its neighbour. */
+const TAIL_LEN = 0.13;
+const TAIL_D = 0.012;
+
+/**
  * Deterministic per-module soiling tint.
  *
  * Keyed on the panel's own id, so a module keeps its own character across
@@ -150,6 +174,13 @@ export function PanelsInstanced({
     return g;
   }, []);
   const legGeom = useMemo(() => new THREE.CylinderGeometry(0.05, 0.05, 1, 10), []);
+  // a unit cylinder laid along Z, so a DC lead can run flat along the module's
+  // back. `panelInstanceMatrix` composes position/scale only — there is no
+  // per-instance rotation to spend, so the turn is baked into the geometry.
+  const tailGeom = useMemo(
+    () => new THREE.CylinderGeometry(0.5, 0.5, 1, 8).rotateX(Math.PI / 2),
+    [],
+  );
   // `vertexColors` is what lets `instanceColor` reach the fragment at all —
   // three declares the vColor varying for USE_INSTANCING_COLOR in the vertex
   // shader but only for USE_COLOR in the fragment. In THIS view the colour IS
@@ -177,10 +208,11 @@ export function PanelsInstanced({
     () => () => {
       boxGeom.dispose();
       legGeom.dispose();
+      tailGeom.dispose();
       accessMat.dispose();
       ghostMat.dispose();
     },
-    [boxGeom, legGeom, accessMat, ghostMat],
+    [boxGeom, legGeom, tailGeom, accessMat, ghostMat],
   );
 
   const legs = useMemo(
@@ -224,7 +256,7 @@ export function PanelsInstanced({
     [mats],
   );
 
-  const { glassMeshes, frameMesh, legMesh } = useMemo(() => {
+  const { glassMeshes, frameMesh, legMesh, jboxMesh, tailMesh } = useMemo(() => {
     const m = new THREE.Matrix4();
 
     // module surface: photoreal glass, or flat access tint per instance. The
@@ -273,6 +305,50 @@ export function PanelsInstanced({
       });
     }
 
+    /**
+     * The junction box and its two DC tails, on the module's BACK.
+     *
+     * The back of a module used to be nothing at all — first the cell texture
+     * on all six faces, then (once that was fixed) a bare white backsheet. Both
+     * are wrong in walkthrough and from any low angle under a tilted table,
+     * because the one thing actually ON the back of every module is the box the
+     * strings plug into. It is also what makes an array read as WIRED rather
+     * than as a set of tiles.
+     *
+     * Nominal hardware sizes, like lib/hardware.ts's clamps: representation,
+     * not engineering. Nothing is measured back out of them, and the string
+     * topology is owned by the electrical model, not by these stubs.
+     */
+    const jboxMesh =
+      accessView || ghost ? null : new THREE.InstancedMesh(boxGeom, mats.jbox, items.length);
+    const tailMesh =
+      accessView || ghost ? null : new THREE.InstancedMesh(tailGeom, mats.cable, items.length * 2);
+    if (jboxMesh && tailMesh) {
+      items.forEach((p, i) => {
+        // The frame slab's back face is at y −0.042. The box sits mostly WITHIN
+        // that depth and stands only JBOX_PROUD past it, so a flush module's
+        // hardware still clears the roof it is bolted to.
+        const boxBottom = -0.042 - JBOX_PROUD;
+        const boxY = boxBottom + JBOX_H / 2;
+        const boxZ = -(p.d / 2 - JBOX_INSET_M);
+        jboxMesh.setMatrixAt(i, composeInstance(m, p, true, [0, boxY, boxZ], [JBOX_W, JBOX_H, JBOX_D]));
+        // Two leads, one per polarity, lying ALONG the back toward the module's
+        // centre — which is how they are actually routed to reach the next
+        // module. Hanging them downward put them through the roof.
+        const tailY = boxBottom + TAIL_D / 2;
+        const tailZ = boxZ + JBOX_D / 2 + TAIL_LEN / 2;
+        for (const [n, dx] of [
+          [i * 2, -JBOX_W / 4],
+          [i * 2 + 1, JBOX_W / 4],
+        ] as const) {
+          tailMesh.setMatrixAt(
+            n,
+            composeInstance(m, p, true, [dx, tailY, tailZ], [TAIL_D, TAIL_D, TAIL_LEN]),
+          );
+        }
+      });
+    }
+
     // stand legs under the raised edge (elevated mounts only, 2 per panel)
     // heuristic legs are suppressed while ghosting: they belong to the modules
     // we are seeing past, and would clutter the real structure underneath
@@ -310,7 +386,7 @@ export function PanelsInstanced({
       });
     }
 
-    for (const mesh of [...glassMeshes, frameMesh, legMesh]) {
+    for (const mesh of [...glassMeshes, frameMesh, legMesh, jboxMesh, tailMesh]) {
       if (!mesh) continue;
       mesh.castShadow = true;
       mesh.receiveShadow = !accessView;
@@ -319,8 +395,11 @@ export function PanelsInstanced({
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
-    return { glassMeshes, frameMesh, legMesh };
-  }, [items, legs, accessView, ghost, boxGeom, legGeom, accessMat, ghostMat, mats, faceMats]);
+    // the box and its tails sit UNDER the module and are the size of a fist —
+    // they must not join the shadow set, which the analytical engine reads
+    for (const mesh of [jboxMesh, tailMesh]) if (mesh) mesh.castShadow = false;
+    return { glassMeshes, frameMesh, legMesh, jboxMesh, tailMesh };
+  }, [items, legs, accessView, ghost, boxGeom, legGeom, tailGeom, accessMat, ghostMat, mats, faceMats]);
 
   // InstancedMesh allocates per-instance GPU buffers — always dispose the
   // mesh objects when a rebuild (or unmount) replaces them
@@ -329,8 +408,10 @@ export function PanelsInstanced({
       for (const g of glassMeshes) g.dispose();
       frameMesh?.dispose();
       legMesh?.dispose();
+      jboxMesh?.dispose();
+      tailMesh?.dispose();
     },
-    [glassMeshes, frameMesh, legMesh],
+    [glassMeshes, frameMesh, legMesh, jboxMesh, tailMesh],
   );
 
   // Selection + hover tint: a per-instance colour write, never a rebuild. In
@@ -415,6 +496,10 @@ export function PanelsInstanced({
       ))}
       {frameMesh && <primitive object={frameMesh} onClick={click} onPointerMove={move} onPointerOut={out} />}
       {legMesh && <primitive object={legMesh} />}
+      {/* raycast off: the pick target is the MODULE, and a fist-sized box under
+          it must not steal a click meant for the panel above */}
+      {jboxMesh && <primitive object={jboxMesh} raycast={() => null} />}
+      {tailMesh && <primitive object={tailMesh} raycast={() => null} />}
       {haloMesh && <primitive object={haloMesh} raycast={() => null} />}
     </>
   );
