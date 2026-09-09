@@ -76,13 +76,46 @@ export function buildRoofSolidGeometry(roof: Roof, eaveProj?: number): THREE.Buf
    */
   const flatOnGround = top.every((v) => Math.abs(v.y) < 1e-3);
 
+  /**
+   * Emit a cap triangle wound so its normal points the way we asked for.
+   *
+   * THE BUG THIS REPLACES: the top cap was emitted as a fixed `(i, k, j)` and
+   * the bottom as `(i, j, k)`, with a comment claiming the first was
+   * "up-facing". It was not. `ShapeUtils.triangulateShape` PRESERVES the
+   * winding of the contour it is handed, a hand-traced roof polygon can be
+   * wound either way, and these vertices are additionally mirrored (EN y →
+   * three −z), which flips handedness once more. So the winding that makes a
+   * cap face the sky is not a constant — it depends on how the surveyor drew
+   * round the roof.
+   *
+   * Measured on the seeded project before this fix: all 69 vertices with
+   * `normal.y > 0.8` sat at y = 0 and all 69 with `normal.y < −0.8` sat at
+   * y = 5.7…6.47. The solid was inside-out — the TOP cap faced the ground.
+   *
+   * Lighting hid it, because the material is DoubleSide and three flips the
+   * FRAGMENT normal for back faces. What it did not hide is anything reading
+   * the raw attribute: `roofPhotoMaterial`'s `vUpness = normal.y` fed
+   * `smoothstep(0.4, 0.8, vUpness)`, which was therefore 0 across every deck,
+   * so the satellite photo it computes has never once reached a roof.
+   *
+   * Deriving the winding from the triangle's own normal cannot be got
+   * backwards the way a hard-coded vertex order can.
+   */
+  const cap = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, wantUp: boolean) => {
+    // y component of (b−a) × (c−a) — the sign is which way this face points
+    const ny = (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z);
+    const flip = wantUp ? ny < 0 : ny > 0;
+    const [p1, p2] = flip ? [c, b] : [b, c];
+    tri(a, p1, p2, planUv(a), planUv(p1), planUv(p2));
+  };
+
   // top + bottom caps share the plan triangulation
   const contour = poly.map((p) => new THREE.Vector2(p.x, p.y));
   const faces = THREE.ShapeUtils.triangulateShape(contour, []);
   for (const [i, j, k] of faces) {
-    tri(top[i], top[k], top[j], planUv(top[i]), planUv(top[k]), planUv(top[j])); // top: up-facing
+    cap(top[i], top[j], top[k], true); // the deck faces the sky
     if (flatOnGround) continue;
-    tri(ground[i], ground[j], ground[k], planUv(ground[i]), planUv(ground[j]), planUv(ground[k])); // bottom
+    cap(ground[i], ground[j], ground[k], false); // the underside faces the ground
   }
   // vertical walls, one quad per edge
   let along = 0;

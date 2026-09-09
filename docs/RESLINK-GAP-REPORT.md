@@ -61,15 +61,36 @@ the priority order the hyperrealism section sets out.*
 **Still open on this list:** the plain/realistic model toggle (the other half of 11 —
 ResLink's one tap is why their 3D works on a phone), the empty model folders
 (`building`, `elevated`, `ladder`, `other`, `windmill` ship no GLB, so a ladder draws
-as a grey box — item 15), and items 2, 12, 13, 16.
+as a grey box — item 15), and items 2, 13, 16.
 
-**Item 12 is BLOCKED, and its description may be wrong.** I attempted it and reverted:
-the deck's own gate, `smoothstep(0.4, 0.8, normal.y)` in `roofPhotoMaterial`, measured
-as ~0 on the roof deck in three separate probes, which would mean neither the covering
-NOR the satellite photo has ever reached the deck and the roof has been flat
-`vec3(0.66,0.64,0.60)` all along. A fourth probe measured `normal.y ≈ 0.77`, which
-contradicts the first three. Resolve that before touching the material — the evidence
-and the traps are in the spawned task.
+**Item 12 is DONE, and the row above was wrong about what shipped.** It said the roof
+carried "the satellite tile planar-projected by world XZ at 1280 px over ~93 m = 7.3
+cm/texel". It did not. The roof was flat `vec3(0.66, 0.64, 0.60)` — the WALL colour —
+and had been since the material was written.
+
+The cause was not in the material at all. `lib/scene-model.ts` emitted roof solids
+**inside-out**: the top cap was wound with a hard-coded `(i, k, j)` and a comment
+claiming it was up-facing, but `ShapeUtils.triangulateShape` preserves the contour's
+winding, a hand-traced polygon can be wound either way, and the vertices are mirrored
+(EN y → three −z) on the way in, flipping handedness again. Measured on the seeded
+project: all 69 vertices with `normal.y > 0.8` sat at y = 0 and all 69 with
+`normal.y < −0.8` sat at y = 5.7…6.47. DoubleSide lighting hid it, because three flips
+the FRAGMENT normal for back faces — but `vUpness = normal.y` reads the raw attribute,
+so `smoothstep(0.4, 0.8, vUpness)` was 0 on every deck and the branch never ran.
+
+Proven by recompiling the shader with `deck` forced to each constant: forcing `0.0` was
+**byte-identical** to production, forcing `1.0` moved 17 % of the frame. A threshold
+ladder then put `vUpness` at ≤ 0 everywhere. Cross-checked by patching the vertex
+shader — `vUpness = objectNormal.y` matched production exactly, `= 1.0` and
+`= sign(position.y)` both changed the frame, so the plumbing was fine and only the
+normal was wrong.
+
+Two commits: the winding is derived from each triangle's own normal so it cannot be got
+backwards again (6 tests, 5 of which fail on the old code), and the covering then
+becomes the deck ALBEDO with the photo demoted to a self-normalising stain — sharp
+sample over a blurred one, so the picture's exposure divides out and the old magic
+`vec4(0.46, 0.46, 0.46, 1.0)` is gone. After the fix, toggling the stain moves 18 % of
+the frame and swapping the covering for flat grey moves 65 %; both were 0 % before.
 
 **Still open in this cluster:** 34 (the on-object card — needs the three-way split,
 see the correction below), 35 (a table as a first-class 2D object — the hit-test half

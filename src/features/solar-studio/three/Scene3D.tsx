@@ -48,7 +48,7 @@ import { obstructionsAddFromMap, roofApplyMapFit } from '../lib/ops/roof-ops';
 import { raisedObjectsNotDrawn, roofMapFit, roofRaisedObjects } from '../lib/roof-map-fit';
 import { useSurroundGrid } from '../lib/use-surround-grid';
 import { clockLabel } from '../lib/sun-chart';
-import { getRoofSurface } from './roof-textures';
+import { getRoofSurface, type RoofSurface } from './roof-textures';
 import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
@@ -4178,21 +4178,85 @@ function SceneContent({
   );
 }
 
+/** Flat concrete for the WALLS of a roof solid — the deck is handled separately. */
+const ROOF_WALL_RGB = 'vec3( 0.66, 0.64, 0.60 )';
+/** How much of the photo's staining reaches the deck. 1.0 = the picture's full contrast. */
+const DECK_STAIN = 0.8;
 /**
- * The satellite photo on the deck, projected from above by WORLD position
- * (so any roof — flat, pitched, a mumty — shows what the aerial picture shows
- * there), with flat concrete on the walls. The photo is an exposed picture,
- * not an albedo, so it is scaled like the ground plane's.
+ * Mip level the stain is normalised against.
+ *
+ * The satellite tile is 1280 px, so level 5 is a ~40 px image — a couple of
+ * metres on the ground. Big enough to divide out the picture's exposure and its
+ * large-scale lighting gradient, small enough to leave the roof-scale features
+ * (stains, patches, a tank's shadow) behind as stain.
  */
-function roofPhotoMaterial(tex: THREE.Texture, spanM: number): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({
-    map: tex,
-    color: '#ffffff',
-    roughness: 0.95,
-    metalness: 0,
-    envMapIntensity: 0.3,
+const DECK_STAIN_LOD = 5.0;
+
+/**
+ * ONE definition of a covering, for the two places that draw it: the
+ * photo-stained deck in map view, and the plain material in mesh view where
+ * there is no photo to stain with.
+ */
+function coveringProps(s: RoofSurface) {
+  return {
+    color: s.color,
+    map: s.map,
+    normalMap: s.normalMap ?? undefined,
+    normalScale: new THREE.Vector2(s.normalScale, s.normalScale),
+    roughness: s.roughness,
+    metalness: s.metalness,
+    // a coated metal sheet reflects the sky; concrete and clay barely do
+    envMapIntensity: s.metalness > 0.3 ? 0.9 : 0.45,
     side: THREE.DoubleSide,
-  });
+  };
+}
+
+/**
+ * The roof deck's material.
+ *
+ * WITH a covering (`three/roof-textures.ts`: weathered RCC, colour-coated
+ * trapezoidal sheet at a real 250 mm rib pitch, Mangalore clay tile at
+ * 420 × 260 mm) that covering is the ALBEDO, drawn at true size on the
+ * geometry's plan-metre UVs, with its normal map. The satellite photo is
+ * demoted to what it legitimately knows: WHERE this particular roof is stained,
+ * patched and cluttered.
+ *
+ * THE STAIN IS SELF-NORMALISING. Dividing a sharp sample of the photo by a
+ * heavily blurred one gives a ratio centred on 1.0 by construction: above 1
+ * where this spot is lighter than its surroundings, below where it is darker.
+ * The picture's exposure and its gradient divide out. That is what replaces the
+ * old `vec4( 0.46, 0.46, 0.46, 1.0 )` — a magic constant that tried to turn an
+ * exposed photograph into an albedo by guessing.
+ *
+ * NOTE FOR ANYONE READING THE GAP REPORT: its item-12 row says what ships today
+ * is the satellite tile at 7.3 cm/texel. It was not. `vUpness = normal.y` read
+ * the raw vertex attribute, and `lib/scene-model.ts` was emitting roof solids
+ * INSIDE-OUT, so `smoothstep(0.4, 0.8, vUpness)` was 0 on every deck and this
+ * branch had never executed — the roof was flat `ROOF_WALL_RGB`. Proven by
+ * recompiling the shader with `deck` forced to 0 and to 1: forcing 0 was
+ * byte-identical to production, forcing 1 moved 17 % of the frame. The winding
+ * fix in scene-model.ts is what makes any of this reachable.
+ *
+ * WITHOUT a covering (`roofType` 'ground') the photo stays the albedo, dimmed
+ * by the old constant, because there is no material to stand in for it.
+ */
+function roofDeckMaterial(
+  photo: THREE.Texture,
+  spanM: number,
+  surface: RoofSurface | null,
+): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial(
+    surface
+      ? coveringProps(surface)
+      : {
+          map: photo,
+          color: '#ffffff',
+          roughness: 0.95,
+          metalness: 0,
+          envMapIntensity: 0.3,
+          side: THREE.DoubleSide,
+        },
+  );
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uPhotoSpan = { value: spanM };
     shader.vertexShader = shader.vertexShader
@@ -4201,17 +4265,46 @@ function roofPhotoMaterial(tex: THREE.Texture, spanM: number): THREE.MeshStandar
         '#include <begin_vertex>',
         '#include <begin_vertex>\nvec4 photoWp = modelMatrix * vec4( transformed, 1.0 );\nvPhotoUv = vec2( 0.5 + photoWp.x / uPhotoSpan, 0.5 - photoWp.z / uPhotoSpan );\nvUpness = normal.y;',
       );
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vPhotoUv;\nvarying float vUpness;')
-      .replace(
-        '#include <map_fragment>',
-        `#ifdef USE_MAP
+
+    if (!surface) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\nvarying vec2 vPhotoUv;\nvarying float vUpness;')
+        .replace(
+          '#include <map_fragment>',
+          `#ifdef USE_MAP
   vec4 photo = texture2D( map, vPhotoUv ) * vec4( 0.46, 0.46, 0.46, 1.0 );
   float deck = smoothstep( 0.4, 0.8, vUpness );
-  diffuseColor *= mix( vec4( 0.66, 0.64, 0.60, 1.0 ), photo, deck );
+  diffuseColor *= mix( vec4( ${ROOF_WALL_RGB}, 1.0 ), photo, deck );
 #endif`,
+        );
+      return;
+    }
+
+    shader.uniforms.uPhoto = { value: photo };
+    shader.uniforms.uStain = { value: DECK_STAIN };
+    shader.uniforms.uStainLod = { value: DECK_STAIN_LOD };
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        '#include <common>\nvarying vec2 vPhotoUv;\nvarying float vUpness;\nuniform sampler2D uPhoto;\nuniform float uStain;\nuniform float uStainLod;',
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+  // diffuseColor now carries the COVERING at true scale. Stain it with the site.
+  float deck = smoothstep( 0.4, 0.8, vUpness );
+  vec3 sharpPhoto = texture2D( uPhoto, vPhotoUv ).rgb;
+  vec3 localMean = textureLod( uPhoto, vPhotoUv, uStainLod ).rgb;
+  // the max() floors a black mip so a dark corner cannot divide by ~0 and blow
+  // the deck to white; the clamp keeps one bright car roof from doing the same
+  vec3 stain = clamp( sharpPhoto / max( localMean, vec3( 0.04 ) ), 0.6, 1.6 );
+  vec3 deckCol = diffuseColor.rgb * mix( vec3( 1.0 ), stain, uStain );
+  diffuseColor.rgb = mix( ${ROOF_WALL_RGB}, deckCol, deck );`,
       );
   };
+  // two different shader bodies come out of one material class, so they must
+  // not share a compiled program
+  mat.customProgramCacheKey = () => (surface ? 'roofDeck:covering' : 'roofDeck:photo');
   return mat;
 }
 
@@ -4277,10 +4370,12 @@ function RoofMesh({
   // the real covering — concrete, coated sheet or clay tile — drawn at true
   // size on the deck's plan-metre UVs (three/roof-textures)
   const surface = photoreal ? getRoofSurface(roof.roofType) : null;
-  // the real roof: the aerial photo on the deck, concrete on the walls
+  // the real roof: the covering on the deck, stained by the aerial photo, and
+  // concrete on the walls. Disposing this material never disposes `surface`'s
+  // textures — those are cached per roof TYPE and shared by every roof using it.
   const photoMat = useMemo(
-    () => (photoreal && photo ? roofPhotoMaterial(photo.tex, photo.spanM) : null),
-    [photoreal, photo],
+    () => (photoreal && photo ? roofDeckMaterial(photo.tex, photo.spanM, surface) : null),
+    [photoreal, photo, surface],
   );
   useEffect(() => () => photoMat?.dispose(), [photoMat]);
 
@@ -4288,16 +4383,8 @@ function RoofMesh({
     <group>
       <mesh geometry={geom} material={photoMat ?? undefined} castShadow receiveShadow userData={{ shadowCaster: true }}>
         {photoMat ? null : surface ? (
-          <meshStandardMaterial
-            color={surface.color}
-            map={surface.map}
-            normalMap={surface.normalMap ?? undefined}
-            normalScale={new THREE.Vector2(surface.normalScale, surface.normalScale)}
-            roughness={surface.roughness}
-            metalness={surface.metalness}
-            envMapIntensity={surface.metalness > 0.3 ? 0.9 : 0.45}
-            side={THREE.DoubleSide}
-          />
+          // mesh/studio view: the covering with no photo to stain it
+          <meshStandardMaterial {...coveringProps(surface)} />
         ) : (
           <meshStandardMaterial
             color={surfaceColor}
