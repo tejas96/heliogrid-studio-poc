@@ -31,7 +31,7 @@ export interface RoofFillPlan {
  * nearest cell (cells sit on a 0.5 m-ish grid, so "nearest" is the cell the
  * module stands on). Candidates off the map score 0 and go last.
  */
-export function heatmapScorer(heat: HeatmapResult): (candidates: PlacedPanel[]) => Map<string, number> {
+function heatmapScorer(heat: HeatmapResult): (candidates: PlacedPanel[]) => Map<string, number> {
   const cells = heat.cells.map((c) => ({
     x: c.world[0],
     y: -c.world[2],
