@@ -359,6 +359,7 @@ import {
   Ruler,
   Triangle,
   Shapes,
+  Boxes,
   MoveVertical,
   Eraser,
   Keyboard,
@@ -945,6 +946,16 @@ export function Scene3D({
   }, [pick]);
   const [copied, setCopied] = useState(false);
   const [heatmap, setHeatmap] = useState(false);
+  /**
+   * Draw obstructions as their primitives and never fetch the models.
+   *
+   * The realistic scene is already a MIXTURE — five of the eleven obstruction
+   * types ship no GLB at all, so a photogrammetry water tank stands next to a
+   * grey box for a ladder. This is the coherent half: every prop reads as the
+   * massing block it actually is, which is what you want when the question is
+   * what shades what rather than how the picture looks.
+   */
+  const [plainModels, setPlainModels] = useState(false);
   const [heatMonth, setHeatMonth] = useState(new Date().getMonth());
   const [heatResult, setHeatResult] = useState<HeatmapResult | null>(null);
   const [heatProgress, setHeatProgress] = useState<{ done: number; total: number } | null>(null);
@@ -1491,6 +1502,23 @@ export function Scene3D({
         active: meshMode,
         onClick: () => setViewMode((v) => (v === 'mesh' ? 'map' : 'mesh')),
       });
+      // Only offered when the project HAS something a model would be used for.
+      // On a bare roof the switch would sit there doing nothing, which is worse
+      // than not offering it.
+      if (project.obstructions.length > 0) {
+        scene.push({
+          id: 'plain-models',
+          // one icon, state shown by `active` and the label — `Shapes` is
+          // already the Area measure tool and must not mean two things
+          icon: <Boxes />,
+          label: plainModels ? 'Real' : 'Plain',
+          tip: plainModels
+            ? 'Realistic models\nPhotoreal props, downloaded on demand'
+            : 'Plain models\nMassing blocks only — nothing to download',
+          active: plainModels,
+          onClick: () => setPlainModels((v) => !v),
+        });
+      }
       if (!meshMode) {
         scene.push({
           id: 'surround',
@@ -1701,6 +1729,12 @@ export function Scene3D({
     showElectrical,
     showLabels,
     wiring,
+    plainModels,
+    // the plain/realistic item only EXISTS when the project has obstructions,
+    // so the list has to be rebuilt when that set changes — otherwise adding
+    // the first obstruction leaves the switch missing until something else
+    // happens to invalidate this memo
+    project.obstructions,
     project.panels,
     readOnly,
     structInteractive,
@@ -1809,6 +1843,7 @@ export function Scene3D({
           meshMode={meshMode}
           focusRoofId={focusRoofId}
           heatmap={heatmap}
+          plainModels={plainModels}
           heatResult={heatResult}
           heatMonth={heatMonth}
           bounds={bounds}
@@ -2571,6 +2606,7 @@ function SceneContent({
   meshMode,
   focusRoofId,
   heatmap,
+  plainModels,
   heatResult,
   heatMonth,
   bounds,
@@ -2637,6 +2673,8 @@ function SceneContent({
   meshMode: boolean;
   focusRoofId?: string;
   heatmap: boolean;
+  /** draw obstructions as primitives, and never fetch their models */
+  plainModels: boolean;
   heatResult: HeatmapResult | null;
   heatMonth: number;
   /** §H on-object structure editing (null = read-only surface) */
@@ -2759,7 +2797,10 @@ function SceneContent({
 
 
   // stream only the GLB models this project's obstruction types actually use
-  useWarmObstructionAssets(project.obstructions.map((o) => o.type));
+  useWarmObstructionAssets(
+    project.obstructions.map((o) => o.type),
+    plainModels,
+  );
 
   // mesh view = studio render; optionally isolate one building via focusRoofId,
   // otherwise show every roof. Either way it's re-centered at origin for framing.
@@ -3558,7 +3599,7 @@ function SceneContent({
             }}
             onPointerOut={() => onHoverPick(null)}
           >
-            <ObstructionMesh o={o} baseY={baseY} />
+            <ObstructionMesh o={o} baseY={baseY} plain={plainModels} />
             {(picked || hovered) && (
               <PickHalo
                 center={[o.center.x, baseY + o.heightM / 2, -o.center.y]}

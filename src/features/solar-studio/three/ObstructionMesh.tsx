@@ -32,9 +32,14 @@ import { castsAnalyticalShadow } from '../lib/capabilities';
  * alone can't do this — a rejected loader THROWS, which only an error boundary
  * catches. Wraps Suspense so both the loading and the error paths show the same
  * procedural fallback.
+ *
+ * `plain` is the third way in: the scene's plain-models switch. It returns the
+ * fallback WITHOUT EVER MOUNTING the child, so the GLB is not requested at all —
+ * not fetched, not parsed, not uploaded. A toggle that still downloaded the
+ * model and merely hid it would miss the entire point.
  */
-class AssetBoundary extends Component<
-  { fallback: ReactNode; children: ReactNode },
+export class AssetBoundary extends Component<
+  { fallback: ReactNode; children: ReactNode; plain?: boolean },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -42,7 +47,7 @@ class AssetBoundary extends Component<
     return { failed: true };
   }
   render() {
-    if (this.state.failed) return this.props.fallback;
+    if (this.props.plain || this.state.failed) return this.props.fallback;
     return <Suspense fallback={this.props.fallback}>{this.props.children}</Suspense>;
   }
 }
@@ -70,14 +75,18 @@ const MODEL_BY_TYPE: Partial<Record<ObstructionType, string>> = {
  * Prefetch ONLY the models the current project needs, once the 3D scene is
  * actually mounted. Everything else stays un-downloaded.
  */
-export function useWarmObstructionAssets(types: ObstructionType[]): void {
+export function useWarmObstructionAssets(types: ObstructionType[], plain = false): void {
   const key = [...new Set(types)].sort().join(',');
   useEffect(() => {
+    // In plain mode nothing will ever mount a GLB, so warming one would fetch
+    // and parse a model the scene has already decided not to draw — the exact
+    // cost the switch exists to avoid.
+    if (plain) return;
     for (const t of key.split(',')) {
       const url = MODEL_BY_TYPE[t as ObstructionType];
       if (url) useGLTF.preload(url);
     }
-  }, [key]);
+  }, [key, plain]);
 }
 
 /**
@@ -154,7 +163,25 @@ function glbScale(
   return [Math.max(0.05, targetX / refX), Math.max(0.05, heightM), Math.max(0.05, targetZ / refZ)];
 }
 
-export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number }) {
+export function ObstructionMesh({
+  o,
+  baseY,
+  plain,
+}: {
+  o: Obstruction;
+  baseY: number;
+  /**
+   * Draw the primitive instead of the photoreal model, and skip its download.
+   *
+   * Five of the eleven obstruction types ship no GLB at all (building,
+   * elevated, ladder, other, windmill), so the realistic scene is already a
+   * MIXTURE — a photogrammetry water tank next to a grey box for a ladder.
+   * Plain mode is the coherent half of that: every prop reads as the massing
+   * block it is, which is also what you want when you are judging what shades
+   * what rather than looking at the picture.
+   */
+  plain?: boolean;
+}) {
   // same predicate the shading engine uses — visual and analytic can't drift
   const castsShade = castsAnalyticalShadow(o);
   const caster = { shadowCaster: castsShade };
@@ -166,7 +193,7 @@ export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number })
     case 'tank':
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary fallback={<ProceduralTank r={r} heightM={o.heightM} caster={caster} />}>
+          <AssetBoundary plain={plain} fallback={<ProceduralTank r={r} heightM={o.heightM} caster={caster} />}>
             <TankAsset o={o} caster={caster} fallback={{ r, heightM: o.heightM }} />
           </AssetBoundary>
         </group>
@@ -177,7 +204,7 @@ export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number })
       const crownR = Math.max(0.5, Math.max(r, (o.heightM - trunkH) * 0.55));
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary fallback={<ProceduralTree trunkH={trunkH} crownR={crownR} caster={caster} />}>
+          <AssetBoundary plain={plain} fallback={<ProceduralTree trunkH={trunkH} crownR={crownR} caster={caster} />}>
             <TreeAsset o={o} caster={caster} fallback={{ trunkH, crownR }} />
           </AssetBoundary>
         </group>
@@ -207,7 +234,7 @@ export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number })
     case 'chimney':
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary fallback={<ProceduralChimney o={o} r={r} caster={caster} />}>
+          <AssetBoundary plain={plain} fallback={<ProceduralChimney o={o} r={r} caster={caster} />}>
             <ChimneyAsset o={o} caster={caster} fallback={{ r }} />
           </AssetBoundary>
         </group>
@@ -217,7 +244,7 @@ export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number })
       const dishR = Math.max(0.4, r);
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary fallback={<ProceduralDish heightM={o.heightM} dishR={dishR} caster={caster} />}>
+          <AssetBoundary plain={plain} fallback={<ProceduralDish heightM={o.heightM} dishR={dishR} caster={caster} />}>
             <DishAsset o={o} caster={caster} fallback={{ heightM: o.heightM, dishR }} />
           </AssetBoundary>
         </group>
@@ -227,7 +254,7 @@ export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number })
     case 'solar_wh':
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary fallback={<ProceduralSolarWH o={o} r={r} caster={caster} />}>
+          <AssetBoundary plain={plain} fallback={<ProceduralSolarWH o={o} r={r} caster={caster} />}>
             <SolarWhAsset o={o} caster={caster} fallback={{ r }} />
           </AssetBoundary>
         </group>
@@ -246,7 +273,7 @@ export function ObstructionMesh({ o, baseY }: { o: Obstruction; baseY: number })
     case 'turbine_vent':
       return (
         <group position={[o.center.x, baseY, -o.center.y]} rotation={[0, rotY, 0]}>
-          <AssetBoundary fallback={<ProceduralTurbineVent o={o} r={r} caster={caster} />}>
+          <AssetBoundary plain={plain} fallback={<ProceduralTurbineVent o={o} r={r} caster={caster} />}>
             <TurbineVentAsset o={o} caster={caster} fallback={{ r }} />
           </AssetBoundary>
         </group>
