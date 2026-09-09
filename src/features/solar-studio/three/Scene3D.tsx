@@ -550,6 +550,59 @@ const HERO_JPEG_QUALITY = 0.95;
 const NORMAL_BIAS = 0.007;
 
 /**
+ * Shadow kernel width, in shadow-map TEXELS.
+ *
+ * THIS IS THE SETTING THAT MAKES THE SHADOWS HARD, and it was never touched.
+ * The Canvas asked for `PCFSoftShadowMap`, but three 0.184.0 has REMOVED that
+ * type — `WebGLShadowMap.render()` warns "PCFSoftShadowMap has been deprecated,
+ * using PCFShadowMap instead" and rewrites the type on the first shadow render.
+ * (That also explains an older note in this repo about `shadowMap.type` reading
+ * 2 and then becoming 1: three does it, every load. It was never a stale
+ * bundle.)
+ *
+ * three did not drop soft shadows, it consolidated them. `SHADOWMAP_TYPE_PCF`
+ * is now a five-tap VOGEL DISK, rotated per pixel by interleaved gradient
+ * noise, on a hardware comparison sampler — about twenty effective taps. Its
+ * width is set entirely by:
+ *
+ *     float radius = shadowRadius * texelSize.x;      // shadowmap_pars_fragment
+ *
+ * and `light.shadow.radius` DEFAULTS TO 1. So the studio was sampling a
+ * one-texel disk: every tap landing in the same texel, which is a hard edge
+ * with stair-stepping, not a penumbra.
+ *
+ * WHY THIS IS IN METRES, NOT TEXELS. `shadowRadius` is a count of TEXELS, and a
+ * texel is `2 * shadowHalf / 4096` metres — so it is a different physical size
+ * on every site. Measured on the seeded project: `shadowHalf` is 34.1 m, which
+ * makes a texel 16.6 mm; on the smallest site `shadowHalf` floors at 20, giving
+ * 9.8 mm. Hard-coding a texel count would mean a big site rendered softer
+ * shadows than a small one for no physical reason at all. So the softness is
+ * specified as a distance and converted per site.
+ *
+ * WHY 30 mm. The sun is not a point, but it is small: 0.53° across, so a true
+ * penumbra widens by only about 9 mm per metre between occluder and receiver.
+ * A module 100 mm above its own roof casts an almost perfectly sharp edge; a
+ * parapet, a tank or a mumty two to four metres up casts 20-40 mm; a
+ * neighbouring block ten metres up casts about 90. 30 mm sits in the middle of
+ * the range that actually matters on a rooftop, and it stays under the ~20 mm
+ * gaps between modules only just — go much wider and those gaps smear, and they
+ * are exactly the detail a shading engineer is reading.
+ *
+ * This is a fixed kernel, so it cannot harden at contact and widen with
+ * distance the way a real penumbra does. That needs PCSS, and this build cannot
+ * do it on the PCF path: the depth texture is bound as a COMPARISON sampler
+ * (`sampler2DShadow`), so a shader cannot read a blocker DEPTH out of it to
+ * estimate the penumbra — it can only ask "nearer or farther". Documented at
+ * the Canvas.
+ */
+const SHADOW_PENUMBRA_M = 0.03;
+/** Texels of kernel for a given shadow-camera half-extent, clamped to sane bounds. */
+function shadowRadiusTexels(shadowHalfM: number, mapPx = 4096): number {
+  const texelM = (2 * shadowHalfM) / mapPx;
+  return Math.max(1, Math.min(8, SHADOW_PENUMBRA_M / texelM));
+}
+
+/**
  * Where the camera was last left, per project.
  *
  * `presetPose` recomputes every preset from the design's bounding sphere on each
@@ -1684,7 +1737,13 @@ export function Scene3D({
       }}
     >
       <Canvas
-        shadows={{ type: THREE.PCFSoftShadowMap }}
+        // PCF, not PCFSoft. three 0.184.0 REMOVED PCFSoftShadowMap: asking for
+        // it logs "PCFSoftShadowMap has been deprecated, using PCFShadowMap
+        // instead" on every load and silently rewrites the type. Naming what we
+        // actually get stops the warning and stops the next person believing
+        // this line is doing something. The softness knob is the shadow
+        // KERNEL: see SHADOW_PENUMBRA_M / shadowRadiusTexels.
+        shadows={{ type: THREE.PCFShadowMap }}
         frameloop={visible ? 'always' : 'never'}
         // retina at 3× rendered four times the pixels for no visible gain; 1.5 is
         // the sweet spot for a scene with SMAA on top
@@ -3204,6 +3263,7 @@ function SceneContent({
             shadow-camera-far={shadowHalf * 6}
             shadow-bias={-0.00015}
             shadow-normalBias={NORMAL_BIAS}
+            shadow-radius={shadowRadiusTexels(shadowHalf)}
           />
           {/* fill light from the opposite side to lift shadows */}
           <directionalLight position={[-28, 22, -18]} intensity={0.3} color="#b9c9e0" />
@@ -3255,6 +3315,7 @@ function SceneContent({
               shadow-camera-far={shadowHalf * 8}
               shadow-bias={-0.00015}
               shadow-normalBias={NORMAL_BIAS}
+              shadow-radius={shadowRadiusTexels(shadowHalf)}
             />
           )}
         </>
