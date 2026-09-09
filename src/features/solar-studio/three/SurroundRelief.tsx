@@ -53,8 +53,17 @@ export const WALL_UPNESS_NONE = 0.3;
  */
 export const WALL_SHADE = 0.55;
 
-function wallAwareMaterial(map: THREE.Texture): THREE.MeshStandardMaterial {
-  const mat = new THREE.MeshStandardMaterial({ map, color: PHOTO_TINT, roughness: 1, metalness: 0, envMapIntensity: 0.15 });
+/** the relief with the photo switched off — the same even grey as the ground planes wear then */
+const PLAIN_TINT = '#a09b91';
+
+function wallAwareMaterial(map: THREE.Texture | null): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({
+    map,
+    color: map ? PHOTO_TINT : PLAIN_TINT,
+    roughness: 1,
+    metalness: 0,
+    envMapIntensity: 0.15,
+  });
   mat.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying float vUpness;')
@@ -128,7 +137,7 @@ export function buildRelief(g: SurroundHeights, spanM: number, radiusM = RELIEF_
   return geom;
 }
 
-export function SurroundRelief({ project }: { project: Project }) {
+export function SurroundRelief({ project, photo = true }: { project: Project; photo?: boolean }) {
   const loc = project.location;
   const meta = project.surround;
   const invalidate = useThree((s) => s.invalidate);
@@ -160,7 +169,7 @@ export function SurroundRelief({ project }: { project: Project }) {
     return t;
   }, [texUrl, invalidate]);
   useEffect(() => () => tex.dispose(), [tex]);
-  const mat = useMemo(() => wallAwareMaterial(tex), [tex]);
+  const mat = useMemo(() => wallAwareMaterial(photo ? tex : null), [tex, photo]);
   useEffect(() => () => mat.dispose(), [mat]);
 
   // the site's own roofs are the model's: cut them out of the raster as they are now;

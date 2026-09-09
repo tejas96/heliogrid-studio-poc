@@ -461,6 +461,7 @@ import {
   MoveVertical,
   Eraser,
   Keyboard,
+  Image as PhotoIcon,
 } from 'lucide-react';
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { useUnits } from '../store/useUnits';
@@ -607,6 +608,13 @@ function presetPose(b: SceneBounds, v: ViewPreset, fovDeg: number) {
 
 const CAMERA_FOV = 40;
 const POST_ENABLED = true;
+/**
+ * The ground with the aerial photo switched off: an even, weathered-concrete
+ * grey. Light enough that a shadow reads against it, dull enough not to glow
+ * under a noon sun. Every ground surface wears the same one, so the only
+ * shadows left on it are the model's.
+ */
+const PLAIN_GROUND = '#a09b91';
 
 /**
  * Long edge of the captured proposal hero, in pixels.
@@ -1016,6 +1024,9 @@ export function Scene3D({
   // lives on the project, so the choice survives a reload.
   const showBuildings = !project.ignoreSurround;
   const [showSunPath, setShowSunPath] = useState(true);
+  // the aerial photo carries its own baked shadows; off, a plain ground shows
+  // which shadows are the model's — view state, never persisted
+  const [showPhoto, setShowPhoto] = useState(true);
   const [showSunChart, setShowSunChart] = useState(false);
   // ── inspect: isolate the picked entity, fly to it, walk the site ──────────
   // View state only: never persisted, never fingerprinted.
@@ -1710,6 +1721,21 @@ export function Scene3D({
           active: !showBuildings,
           onClick: () => runOp(surroundSetIgnored, { ignore: showBuildings }),
         });
+        // The photo is an already-lit picture with the shadows of the day it
+        // was taken baked in. With it on, a shadow across the deck could be the
+        // model's or the satellite's, and there was no way to tell short of
+        // switching to the studio view and losing the site. Off = a plain,
+        // even ground under the same sun, so every shadow left is the model's.
+        scene.push({
+          id: 'photo',
+          icon: <PhotoIcon />,
+          label: 'Photo',
+          tip: showPhoto
+            ? "Hide the aerial photo\nA plain ground shows which shadows are the model's own"
+            : 'Show the aerial photo',
+          active: !showPhoto,
+          onClick: () => setShowPhoto((v) => !v),
+        });
       }
       scene.push({
         id: 'sun-path',
@@ -1906,6 +1932,7 @@ export function Scene3D({
     meshMode,
     showBuildings,
     showSunPath,
+    showPhoto,
     showElectrical,
     showLabels,
     wiring,
@@ -2070,6 +2097,7 @@ export function Scene3D({
           onLabelsVisible={setLabelsVisible}
           showBuildings={showBuildings}
           showSunPath={showSunPath}
+          showPhoto={showPhoto}
           isolate={isolate && pick ? pick : null}
           onPickFocus={(f) => {
             pickFocusRef.current = f;
@@ -2830,6 +2858,7 @@ function SceneContent({
   onLabelsVisible,
   showBuildings,
   showSunPath,
+  showPhoto,
   isolate,
   onPickFocus,
   measure,
@@ -2895,6 +2924,8 @@ function SceneContent({
   onLabelsVisible: (any: boolean) => void;
   showBuildings: boolean;
   showSunPath: boolean;
+  /** the aerial photo on the ground, the deck and the relief; off = a plain ground that shows only the model's shadows */
+  showPhoto: boolean;
   /** show only this entity (and the roofs) — object isolation */
   isolate: ScenePick | null;
   /** where the F key should fly: a sphere around the picked entity */
@@ -3670,15 +3701,30 @@ function SceneContent({
           </mesh>
           {/* the far picture — the middle distance stays LAND, not a blank
               plate, all the way out to where the haze takes over */}
+          {/* Each photo material is KEYED on the toggle: swapping `map` between a
+              texture and nothing changes the shader, which three only picks up
+              on a fresh material, not on a prop write to the old one. */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.5 : -1.5, 0]} receiveShadow>
             <planeGeometry args={[farSpanM, farSpanM]} />
-            <meshStandardMaterial map={farGroundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
+            <meshStandardMaterial
+              key={showPhoto ? 'photo' : 'plain'}
+              map={showPhoto ? farGroundTex : undefined}
+              color={showPhoto ? '#767676' : PLAIN_GROUND}
+              roughness={1}
+              envMapIntensity={0.15}
+            />
           </mesh>
           {/* the wide, coarse picture: the neighbourhood is still a map when
               the streamed surroundings are off */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -1.0 : -GROUND_STACK_M, 0]} receiveShadow>
             <planeGeometry args={[wideSpanM, wideSpanM]} />
-            <meshStandardMaterial map={wideGroundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
+            <meshStandardMaterial
+              key={showPhoto ? 'photo' : 'plain'}
+              map={showPhoto ? wideGroundTex : undefined}
+              color={showPhoto ? '#767676' : PLAIN_GROUND}
+              roughness={1}
+              envMapIntensity={0.15}
+            />
           </mesh>
           {/* the aerial photo is an already-exposed picture, not an albedo: under
               a full sun plus sky it would render ~2.4× too bright, so it is
@@ -3687,7 +3733,13 @@ function SceneContent({
               terrain wins where it exists, the photo shows where it does not */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, showBuildings ? -0.6 : 0, 0]} receiveShadow>
             <planeGeometry args={[spanM, spanM]} />
-            <meshStandardMaterial map={groundTex} color="#767676" roughness={1} envMapIntensity={0.15} />
+            <meshStandardMaterial
+              key={showPhoto ? 'photo' : 'plain'}
+              map={showPhoto ? groundTex : undefined}
+              color={showPhoto ? '#767676' : PLAIN_GROUND}
+              roughness={1}
+              envMapIntensity={0.15}
+            />
           </mesh>
         </>
       )}
@@ -3750,7 +3802,7 @@ function SceneContent({
               allRoofs={project.roofs}
               eaveProj={eaveRefs.get(r.id)}
               photoreal={!meshMode}
-              photo={meshMode ? null : roofPhoto}
+              photo={meshMode || !showPhoto ? null : roofPhoto}
               outline={picked ? PICK_COLOR : hovered ? HOVER_COLOR : undefined}
             />
             {picked && (
@@ -4465,7 +4517,7 @@ function SceneContent({
           {/* the tiles are flat where Google has no 3D buildings (all of India):
               the neighbours' real heights come from the same height map the
               shade engine casts against */}
-          {project.surround && !project.ignoreSurround && <SurroundRelief project={project} />}
+          {project.surround && !project.ignoreSurround && <SurroundRelief project={project} photo={showPhoto} />}
         </>
       )}
 
