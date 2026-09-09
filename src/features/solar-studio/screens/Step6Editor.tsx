@@ -52,7 +52,7 @@ import {
 import { useActiveProject, useProjectPatch, useStore } from '../store/store';
 import { SatCanvas, type SatCanvasHandle, polyPath, useCanvasFrame } from '../components/SatCanvas';
 import { MeasureOverlay, useMeasure } from '../components/MeasureTool';
-import { Dialog, EmptyState, OptionCard, Sheet } from '../components/ui';
+import { Dialog, EmptyState, OptionCard, Sheet, SliderRow } from '../components/ui';
 import { RadialMenu, type RadialGroup } from '../components/RadialMenu';
 import { ObstructionLayer } from './Step3Obstructions';
 import type {
@@ -83,7 +83,9 @@ import {
 import { heatColor, type HeatmapResult } from '../lib/solar-heatmap';
 import { peekHeatmap, requestHeatmap } from '../lib/heatmap-cache';
 import { gcr, shadowFreePitchM } from '../lib/spacing';
-import { heatmapFp } from '../lib/fingerprints';
+import { heatmapFp, isShadingFresh } from '../lib/fingerprints';
+import { shadedBelow } from '../lib/shade-cut';
+import { panelEnergyShares } from '../lib/energy/report';
 import {
   classifySelection,
   growCandidates,
@@ -350,6 +352,14 @@ export function Step6Editor() {
   const [stringSheet, setStringSheet] = useState(false);
   const [stringInfo, setStringInfo] = useState(false);
   const [issuesSheet, setIssuesSheet] = useState(false);
+  /**
+   * The shaded-module sheet (lib/shade-cut): a cutoff the user chooses, a live
+   * count of what it would remove, and the removal itself. The DRC only ever
+   * warned at a fixed 70 %; "what if I drop everything under 85 %?" had no
+   * way to be asked.
+   */
+  const [shadeSheet, setShadeSheet] = useState(false);
+  const [shadeCutoffPct, setShadeCutoffPct] = useState(70);
   const [manualString, setManualString] = useState<string[] | null>(null);
   // The inverter tool places TWO different things. A 15th rail button is not an
   // option — the rail already overflows its own column (that is exactly how the
@@ -463,6 +473,13 @@ export function Step6Editor() {
   }, [heatmap, heatFp]);
 
   const issues = designIssues(project);
+  // the shaded-module sheet: what the cutoff would remove, and what it makes —
+  // computed only while the sheet is open (the split runs the energy engine)
+  const shadeCut = useMemo(
+    () => (shadeSheet ? shadedBelow(project, shadeCutoffPct) : null),
+    [shadeSheet, project, shadeCutoffPct],
+  );
+  const shadeShares = useMemo(() => (shadeSheet ? panelEnergyShares(project) : null), [shadeSheet, project]);
 
   const selectedPanels = useMemo(
     () => project.panels.filter((p) => selectedIds.includes(p.id)),
@@ -1240,7 +1257,7 @@ export function Step6Editor() {
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       // sheets & dialogs own the keyboard while open (Escape closes them)
-      if (confirmPlace || confirmClear || stringSheet || stringInfo || issuesSheet) return;
+      if (confirmPlace || confirmClear || stringSheet || stringInfo || issuesSheet || shadeSheet) return;
       if (e.key === 'Escape') {
         setManualString(null);
         setDragLine(null);
@@ -1344,6 +1361,14 @@ export function Step6Editor() {
             tip: 'Why this layout?\nDecision log + Copilot suggestions',
             active: whySheet,
             onClick: () => setWhySheet((v) => !v),
+          },
+          {
+            id: 'shaded',
+            icon: <Sun />,
+            label: 'Shaded',
+            tip: 'Shaded modules\nPick a cutoff, see what it would remove, remove it',
+            active: shadeSheet,
+            onClick: () => setShadeSheet((v) => !v),
           },
           {
             id: 'measure',
@@ -1519,6 +1544,7 @@ export function Step6Editor() {
       heatmap,
       showStrings,
       whySheet,
+      shadeSheet,
       measure.active,
       measure.toggle,
       tool,
@@ -3021,11 +3047,113 @@ export function Step6Editor() {
                       Auto-string now
                     </button>
                   )}
+                  {/* the shading warning names a fixed cutoff; the sheet lets
+                      the user pick their own and act on it */}
+                  {iss.code === 'shaded' && (
+                    <button
+                      className="btn btn-primary"
+                      style={{ minHeight: 28, padding: '4px 12px', fontSize: 12, marginTop: 8 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIssuesSheet(false);
+                        setShadeSheet(true);
+                      }}
+                    >
+                      Review with a cutoff…
+                    </button>
+                  )}
                 </div>
               </div>
               );
             })
           )}
+        </Sheet>
+      )}
+
+      {shadeSheet && shadeCut && (
+        <Sheet title="Shaded modules" icon={<Sun />} onClose={() => setShadeSheet(false)}>
+          {!isShadingFresh(project) && (
+            <div className="hint-bar" role="status" style={{ marginBottom: 12 }}>
+              <Info />
+              Shading is recalculating for the latest edits — the figures below are provisional, and the
+              cut waits until they are fresh
+            </div>
+          )}
+          <SliderRow
+            label="Remove modules below"
+            value={shadeCutoffPct}
+            min={10}
+            max={100}
+            step={5}
+            unit="% direct sun"
+            onChange={setShadeCutoffPct}
+            hint="Direct-sun access from the 3D raycast, per module: 100 = never shaded. Only the module goes — its table stays."
+          />
+          {(() => {
+            const kwh = shadeShares ? shadeCut.ids.reduce((s, id) => s + (shadeShares.get(id) ?? 0), 0) : 0;
+            const plantKwh = shadeShares ? [...shadeShares.values()].reduce((s, v) => s + v, 0) : 0;
+            const pct = plantKwh > 0 ? Math.round((kwh / plantKwh) * 1000) / 10 : 0;
+            return (
+              <div className="card" style={{ padding: 12, marginBottom: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>
+                  {shadeCut.ids.length} of {shadeCut.total} modules
+                  {shadeCut.ids.length > 0 && (
+                    <span style={{ fontWeight: 500, color: 'var(--ink-2)' }}>
+                      {' '}· {shadeCut.kwp} kWp · ≈ {Math.round(kwh).toLocaleString()} kWh/yr ({pct}% of the plant)
+                    </span>
+                  )}
+                </div>
+                {shadeCut.byRoof.length > 0 && (
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 4 }}>
+                    {shadeCut.byRoof.map((r) => `${r.name}: ${r.count}`).join(' · ')}
+                  </div>
+                )}
+                {shadeCut.ids.length === 0 && (
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 4 }}>
+                    Nothing is below {shadeCutoffPct}% — raise the cutoff to see what a stricter design would drop.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          <button
+            className="btn btn-secondary btn-block"
+            disabled={shadeCut.ids.length === 0}
+            onClick={() => {
+              // look before you cut: the modules land in the selection, centred
+              activate('select');
+              setSelectedIds(shadeCut.ids);
+              setShadeSheet(false);
+              const pts = project.panels.filter((p) => shadeCut.ids.includes(p.id));
+              if (pts.length) {
+                canvasRef.current?.centerOn({
+                  x: pts.reduce((s, p) => s + p.center.x, 0) / pts.length,
+                  y: pts.reduce((s, p) => s + p.center.y, 0) / pts.length,
+                });
+              }
+            }}
+          >
+            Select them on the plan
+          </button>
+          <button
+            className="btn btn-primary btn-block"
+            style={{ marginTop: 8 }}
+            disabled={shadeCut.ids.length === 0 || !isShadingFresh(project)}
+            onClick={() => {
+              if (locked) {
+                flashLock();
+                return;
+              }
+              // one op, one undo step; report() prints the impact line
+              if (report(ops.run(panelsDelete, { ids: shadeCut.ids }))) {
+                setSelectedIds([]);
+                setShadeSheet(false);
+              }
+            }}
+          >
+            Remove {shadeCut.ids.length} module{shadeCut.ids.length === 1 ? '' : 's'} · −{shadeCut.kwp} kWp
+          </button>
+          <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 8 }}>You can undo this.</div>
         </Sheet>
       )}
 
