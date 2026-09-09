@@ -56,6 +56,10 @@ import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 import { RailsInstanced, railFrameOf, type RailFrame } from './RailsInstanced';
 import { useSceneActivity } from './useSceneActivity';
+import { attachContextGuard, describeGpu, webglAvailable } from './gpu-guard';
+import { SceneErrorBoundary } from './SceneErrorBoundary';
+import { readDiagnostics, recordDiagnostic } from '../lib/diagnostics';
+import type { CanvasProps } from '@react-three/fiber';
 
 /** the first selected module of a table, so "Edit table" opens on the module the user picked */
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
@@ -287,6 +291,90 @@ function DevSceneHandle({ sceneRef }: { sceneRef?: React.RefObject<THREE.Scene |
   }, [three]);
   return null;
 }
+
+/**
+ * A panel over the scene for when the scene itself cannot speak: the GPU is
+ * away, or the view crashed. It says first that the design is safe — it lives
+ * in the store, outside anything that can happen in here — then what is being
+ * done about it, then the way out.
+ */
+function ScenePanel({
+  title,
+  body,
+  status,
+  children,
+}: {
+  title: string;
+  body: string;
+  status?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      role="alert"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 40,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(10,13,18,0.86)',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 440,
+          padding: '20px 24px',
+          borderRadius: 14,
+          background: 'rgba(20,24,30,0.94)',
+          border: '1px solid var(--editor-line)',
+          color: 'var(--editor-ink)',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{title}</div>
+        <div style={{ fontSize: 13, marginTop: 8, opacity: 0.85, lineHeight: 1.45 }}>{body}</div>
+        {status && <div style={{ fontSize: 13, marginTop: 8 }}>{status}</div>}
+        {children && (
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 14 }}>
+            {children}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * <Canvas> behind the scene's own error boundary. A crash while drawing
+ * becomes a panel with a way out instead of a blank route — r3f re-throws
+ * errors from its own React root into this tree, which is what lets the
+ * boundary see them. A browser that will not give a WebGL context at all is
+ * asked BEFORE the canvas mounts (see webglAvailable for why a boundary
+ * cannot catch that one), and gets the same panel.
+ */
+function GuardedCanvas({
+  crashFallback,
+  ...props
+}: CanvasProps & { crashFallback: (error: Error, retry: () => void) => React.ReactNode }) {
+  // probed once per mount — a restart remounts, and so asks again
+  const [available] = useState(() => webglAvailable());
+  useEffect(() => {
+    if (!available) recordDiagnostic('webgl-unavailable', { ua: navigator.userAgent });
+  }, [available]);
+  if (!available) {
+    return crashFallback(new Error('This browser is not giving out WebGL (3D) contexts.'), () => {});
+  }
+  return (
+    <SceneErrorBoundary fallback={crashFallback}>
+      <Canvas {...props} />
+    </SceneErrorBoundary>
+  );
+}
+
+/** how long the browser gets to bring a lost context back before the user is offered a restart */
+const RESTORE_WAIT_MS = 8000;
 
 // defined in ./scene-pick so the overlays can read it without importing Scene3D
 import { exportSceneGlb, glbFilename } from './glb-export';
@@ -973,6 +1061,41 @@ export function Scene3D({
   // awake = rendering flat out, asleep = a frame only when something changes
   // (three/useSceneActivity). Every pointer, wheel and key on the wrapper wakes it.
   const { awake, wake } = useSceneActivity(visible);
+  /**
+   * The GPU. 'lost' = the browser dropped the WebGL context and may bring it
+   * back; 'gone' = it did not within RESTORE_WAIT_MS, so the user is offered a
+   * restart. `canvasKey` remounts the canvas for that restart; `glEpoch`
+   * re-bakes the environment after a restore, because the baked map lived
+   * only on the GPU and did not survive (three/gpu-guard).
+   */
+  const [gpu, setGpu] = useState<'ok' | 'lost' | 'gone'>('ok');
+  const [canvasKey, setCanvasKey] = useState(0);
+  const [glEpoch, setGlEpoch] = useState(0);
+  const gpuFacts = useRef<Record<string, unknown>>({});
+  const detachGuard = useRef<(() => void) | null>(null);
+  const restoreWait = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      detachGuard.current?.();
+      if (restoreWait.current) clearTimeout(restoreWait.current);
+    },
+    [],
+  );
+  const restartScene = () => {
+    if (restoreWait.current) clearTimeout(restoreWait.current);
+    restoreWait.current = null;
+    setGpu('ok');
+    setGlEpoch((e) => e + 1);
+    setCanvasKey((k) => k + 1);
+  };
+  // the same failure, again: the panel says so, because the fix is then a
+  // browser restart and not another "try again"
+  const lossesToday =
+    gpu === 'ok'
+      ? 0
+      : readDiagnostics().filter(
+          (d) => d.kind === 'webgl-context-lost' && Date.now() - Date.parse(d.at) < 24 * 3600 * 1000,
+        ).length;
   /** a capture holds the canvas at print size for two frames — don't start a second */
   const capturing = useRef(false);
   const controlsRef = useRef<CameraControlsImpl | null>(null);
@@ -1790,7 +1913,33 @@ export function Scene3D({
         zIndex: 50,
       }}
     >
-      <Canvas
+      <GuardedCanvas
+        key={canvasKey}
+        crashFallback={(err, retry) => (
+          <ScenePanel
+            title="The 3D view could not start"
+            body="Your design is safe — nothing here has changed it. This browser refused to draw the scene, or the scene hit a fault while drawing."
+            status={err.message}
+          >
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                retry();
+                restartScene();
+              }}
+            >
+              Try again
+            </button>
+            <button className="btn btn-ghost" onClick={() => window.location.reload()}>
+              Reload the page
+            </button>
+            {onClose && (
+              <button className="btn btn-ghost" onClick={onClose}>
+                Back to 2D
+              </button>
+            )}
+          </ScenePanel>
+        )}
         // PCF, not PCFSoft. three 0.184.0 REMOVED PCFSoftShadowMap: asking for
         // it logs "PCFSoftShadowMap has been deprecated, using PCFShadowMap
         // instead" on every load and silently rewrites the type. Naming what we
@@ -1815,6 +1964,29 @@ export function Scene3D({
           gl.localClippingEnabled = true; // the real surround is cut out under the site
           glRef.current = gl;
           invalidateRef.current = state.invalidate;
+          gpuFacts.current = describeGpu(gl);
+          detachGuard.current?.();
+          detachGuard.current = attachContextGuard(
+            gl.domElement,
+            () => ({ ...gpuFacts.current, canvasKey, frameloop: state.get().frameloop }),
+            {
+              onLost: () => {
+                setGpu('lost');
+                if (restoreWait.current) clearTimeout(restoreWait.current);
+                restoreWait.current = setTimeout(() => setGpu('gone'), RESTORE_WAIT_MS);
+              },
+              onRestored: () => {
+                if (restoreWait.current) clearTimeout(restoreWait.current);
+                restoreWait.current = null;
+                setGpu('ok');
+                // three rebuilt its GL state; the baked environment did not
+                // come back with it, and an asleep loop must be asked to draw
+                setGlEpoch((e) => e + 1);
+                state.invalidate();
+                showNotice('3D view recovered');
+              },
+            },
+          );
         }}
       >
         {/* DO NOT add drei's <SoftShadows/> here. It is the obvious next move
@@ -1886,6 +2058,7 @@ export function Scene3D({
           onHoverPick={structInteractive ? setHoverPick : () => {}}
           runOp={runOp}
           onSurroundAttribution={setSurroundAttribution}
+          glEpoch={glEpoch}
         />
         {/* Camera director: smooth, damped, touch-native (one finger pans, two
             fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
@@ -1917,7 +2090,7 @@ export function Scene3D({
           }}
         />
         {!heatmap && POST_ENABLED && <ScenePost />}
-      </Canvas>
+      </GuardedCanvas>
 
       {/* the per-module figures live in ONE plain DOM node over the canvas —
           see three/PanelLabels for why it is not an <Html> each */}
@@ -1926,6 +2099,33 @@ export function Scene3D({
         aria-hidden
         style={{ position: 'absolute', inset: 0, zIndex: 20, pointerEvents: 'none' }}
       />
+
+      {/* ── the GPU is away: say so, wait for it, then offer the way out ── */}
+      {gpu !== 'ok' && (
+        <ScenePanel
+          title="The 3D view stopped"
+          body={
+            'The graphics driver reset, or the browser ran out of graphics memory. Your design is safe — nothing here has changed it.' +
+            (lossesToday > 1
+              ? ` This has happened ${lossesToday} times today; restarting the browser usually clears it.`
+              : '')
+          }
+          status={
+            gpu === 'lost'
+              ? 'Waiting for the browser to bring it back…'
+              : 'The browser did not bring it back.'
+          }
+        >
+          {gpu === 'gone' && (
+            <button className="btn btn-primary" onClick={restartScene}>
+              Restart the 3D view
+            </button>
+          )}
+          <button className="btn btn-ghost" onClick={() => window.location.reload()}>
+            Reload the page
+          </button>
+        </ScenePanel>
+      )}
 
       {/* ── leaving the scene is not a tool, so it keeps its own button ── */}
       {onClose && (
@@ -2616,9 +2816,12 @@ function SceneContent({
   wiring,
   wireTarget,
   onWiringChange,
+  glEpoch,
 }: {
   project: Project;
   bounds: SceneBounds;
+  /** bumps after a restored GPU context — the baked environment map must be redone */
+  glEpoch: number;
   /** the same box grown to hold the obstructions that shade the design */
   shadowFit: SceneBounds;
   /** Select mode is on: a tap ADDS to the selection, as Shift-click does */
@@ -3120,8 +3323,9 @@ function SceneContent({
    */
   const envKey = useMemo(() => {
     const b = (rad: number) => Math.round((rad * 180) / Math.PI / 5);
-    return sunVisible ? `d${b(sunAltitude)}:${b(sunAzimuth)}` : 'night';
-  }, [sunVisible, sunAltitude, sunAzimuth]);
+    // `glEpoch` re-keys after a restored GPU context: the bake was GPU-only
+    return `${sunVisible ? `d${b(sunAltitude)}:${b(sunAzimuth)}` : 'night'}|g${glEpoch}`;
+  }, [sunVisible, sunAltitude, sunAzimuth, glEpoch]);
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
   /**
