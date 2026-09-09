@@ -13,11 +13,52 @@ import { panelInstanceMatrix } from '../lib/scene-frame';
 import { accessHex } from '../lib/shade-ramp';
 import type { PanelSpec } from '../types';
 
-const WHITE = new THREE.Color('#ffffff');
 /** selected: warm brass — the design system's accent, multiplied over the glass */
 const SELECTED = new THREE.Color('#ffc766');
 /** hovered: a cool lift, clearly not the accent */
 const HOVERED = new THREE.Color('#b8dcff');
+
+/**
+ * The dimmest a module's glass gets from soiling, as a fraction of clean.
+ *
+ * Soiling losses on an uncleaned Indian rooftop run a few per cent to well over
+ * ten between washes, and no two modules in a row are ever equally dirty — the
+ * one under the parapet's dust shadow, the one below the water tank's overflow
+ * and the one in the open are visibly different surfaces. 0.90 is a restrained
+ * spread: enough that a row stops reading as a printed pattern, not so much
+ * that the array looks neglected.
+ *
+ * This is a LOOK, not a number anyone may act on. The energy model's soiling
+ * assumption lives in the loss stack and is not read from here.
+ */
+const SOIL_FLOOR = 0.9;
+
+/**
+ * Deterministic per-module soiling tint.
+ *
+ * Keyed on the panel's own id, so a module keeps its own character across
+ * reloads, camera moves and re-renders. A random() here would shimmer: the
+ * instance colours are rewritten on every selection change.
+ *
+ * Dust is warm and it scatters blue first, so the tint leans red — a neutral
+ * grey multiplier would read as underexposure rather than dirt.
+ */
+const soilCache = new Map<string, THREE.Color>();
+function soilTint(id: string): THREE.Color {
+  const hit = soilCache.get(id);
+  if (hit) return hit;
+  // FNV-1a over the id — stable, well spread, and no dependency
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  const t = ((h >>> 0) % 10000) / 10000; // 0..1
+  const v = SOIL_FLOOR + (1 - SOIL_FLOOR) * t;
+  const c = new THREE.Color(v, v * 0.994, v * 0.982);
+  soilCache.set(id, c);
+  return c;
+}
 
 export interface PanelInstance {
   id: string;
@@ -180,8 +221,10 @@ export function PanelsInstanced({
             i,
             composeInstance(m, p, true, [0, accessView ? 0.02 : 0, 0], [p.w, 0.045, p.d]),
           );
-          // always allocate instanceColor: selection/hover tint it later without a rebuild
-          mesh.setColorAt(i, accessView ? accessColor(p.access) : WHITE);
+          // always allocate instanceColor: selection/hover tint it later without a
+          // rebuild. Outside access view the resting colour is this module's own
+          // soiling, which is what stops a row reading as one repeated sprite.
+          mesh.setColorAt(i, accessView ? accessColor(p.access) : soilTint(p.id));
         });
         // the pick handlers map instanceId back through THIS list
         mesh.userData.items = list;
@@ -270,7 +313,10 @@ export function PanelsInstanced({
       if (!mesh.instanceColor) continue;
       const list = mesh.userData.items as PanelInstance[];
       list.forEach((p, i) => {
-        const c = selectedIds?.has(p.id) ? SELECTED : p.id === hoverId ? HOVERED : WHITE;
+        // back to its OWN soiling when deselected, not to a flat white — this
+        // path runs on every selection change and would otherwise scrub the
+        // variation off the moment anything was clicked
+        const c = selectedIds?.has(p.id) ? SELECTED : p.id === hoverId ? HOVERED : soilTint(p.id);
         mesh.setColorAt(i, c);
       });
       mesh.instanceColor.needsUpdate = true;
