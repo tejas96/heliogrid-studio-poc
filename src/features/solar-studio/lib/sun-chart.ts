@@ -4,12 +4,16 @@
 // under them: every neighbour, tree and roof obstruction as the elevation
 // angle it subtends from the array. Where a sun curve dips below that line
 // the array is in shade. All pure maths; the panel only draws it.
-import type { Project, XY } from '../types';
+import * as THREE from 'three';
+import type { PlacedPanel, Project, XY } from '../types';
 import tzLookup from 'tz-lookup';
 import { sunPosition } from './sun';
 import { simTimeDate } from './sim-time';
-import { peekSurroundHeights, type SurroundHeights } from './surround';
-import { pointInPolygon } from './geo';
+import { peekSurroundHeights } from './surround';
+import { buildShadowCasters, disposeGroup } from './scene-model';
+import { panelSampleHeightM } from './panel-pose';
+import { computeEaveRefs, surfaceHeightAt } from './roof-plane';
+import { castsAnalyticalShadow } from './capabilities';
 
 const zoneCache = new Map<string, string>();
 
@@ -110,56 +114,100 @@ export interface HorizonProfile {
   stepDeg: number;
   /** length = 360 / stepDeg */
   elevDeg: number[];
-  /** what was in the picture */
-  sources: { surround: boolean; obstructions: number; otherRoofs: number };
+  /** what was in the picture — the shading engine's own caster set */
+  sources: {
+    surround: boolean;
+    obstructions: number;
+    otherRoofs: number;
+    parapets: number;
+    masts: number;
+    /** other modules (row in front) — 0 when nothing is placed */
+    modules: number;
+  };
 }
 
-function heightAt(g: SurroundHeights, p: XY): number | null {
-  // grid cell (c, r) from the EN origin and the step vectors (an orthogonal grid)
-  const dx = p.x - g.originEN.x;
-  const dy = p.y - g.originEN.y;
-  const cl = g.stepCol.x * g.stepCol.x + g.stepCol.y * g.stepCol.y;
-  const rl = g.stepRow.x * g.stepRow.x + g.stepRow.y * g.stepRow.y;
-  if (!cl || !rl) return null;
-  const c = Math.round((dx * g.stepCol.x + dy * g.stepCol.y) / cl);
-  const r = Math.round((dx * g.stepRow.x + dy * g.stepRow.y) / rl);
-  if (c < 0 || r < 0 || c >= g.cols || r >= g.rows) return null;
-  const h = g.heights[r * g.cols + c];
-  return Number.isFinite(h) ? h : null;
+/** Where one eye of the profile sits, and which module it is (its own plate is not a blocker). */
+interface Eye {
+  origin: THREE.Vector3;
+  ownPanelId: string | null;
+  roofId: string | null;
 }
+
+/** The coarse elevation step of the skyline search, degrees; refined below it. */
+const SKY_SCAN_STEP_DEG = 2;
+/** Bisection passes under the coarse step: 2° → 0.25°. */
+const SKY_SCAN_REFINE = 3;
 
 /**
  * The horizon as the array sees it, in every compass direction. A long array
  * has a different skyline at each end, so the profile is the WORST case over
- * five eyes — the array's centre and its four extreme modules — each a
- * little above the module plane: what shades any part of the array shows.
+ * its eyes — the module nearest the array's centre, or its four extreme
+ * modules — each at the exact point the shading engine's rays leave from.
  * Plan geometry is in the image frame; compass azimuths are turned by the
  * calibration's north offset.
+ *
+ * WHY A RAYCAST, NOT A LIST OF SHAPES. This used to build its skyline from
+ * three sources of its own — a march across the height map, the other roofs
+ * as blocks, and obstructions as boxes — while the beam engine raycasts the
+ * group lib/scene-model assembles, which also holds every PARAPET ring and
+ * every lightning MAST. A 1.2 m RCC parapet is the commonest shading object
+ * on an Indian roof, and the chart said "clear sky all day" over an edge the
+ * module figures beside it were deducting for. The eye also sat 1.2 m above
+ * the deck, looking over parapets the module plane looks into. Now the chart
+ * and the engine read the SAME group from the SAME height, so they cannot
+ * disagree about what exists; the only thing left out is the guardrail, and
+ * deliberately (see `rail` below).
  */
 export function horizonProfile(
   project: Project,
   stepDeg = 3,
   /** 'centre': the array as a whole (matches the engine's average); 'corners': the worst of its four extreme modules */
   eyeMode: 'centre' | 'corners' = 'centre',
+  opts: {
+    /**
+     * Count the array's OTHER modules as skyline. Off for the chart: a row is
+     * not the site's horizon, and its shade is already in every module figure
+     * (Tier-2). On for a sky-view factor, where the row in front really does
+     * hide part of the diffuse sky from the module behind it.
+     */
+    includeModules?: boolean;
+  } = {},
 ): HorizonProfile {
   const n = Math.round(360 / stepDeg);
   const elev = new Array<number>(n).fill(0);
   const panels = project.panels.filter((p) => p.enabled);
   const roofOf = (id: string) => project.roofs.find((r) => r.id === id);
-  // eyes: the array centre, or its four corners, or the first roof's centroid
-  // when nothing is placed yet. A corner module can see a neighbour at 50°
-  // that the array's middle sees at 15° — both are true, for different
-  // modules, so the chart shows both and says which is which.
-  const eyes: { p: XY; h: number; roofId: string | null }[] = [];
+  const eaveRefs = computeEaveRefs(project.roofs);
+  const spec = project.components?.panel ?? null;
+  const sources = {
+    surround: false,
+    obstructions: project.obstructions.filter(castsAnalyticalShadow).length,
+    otherRoofs: 0,
+    parapets: project.roofs.filter((r) => r.parapet?.enabled && r.polygon.length >= 3).length,
+    masts: (project.arresters ?? []).length,
+    modules: opts.includeModules ? Math.max(0, panels.length - 1) : 0,
+  };
+
+  // the engine's ray origin for a module: on its glass, at its real mounting
+  // height — NOT a fixed 1.2 m above the deck, which looked over every parapet
+  const eyeOf = (p: PlacedPanel): Eye => {
+    const roof = roofOf(p.roofId);
+    const surfaceY = roof ? surfaceHeightAt(roof, p.center, eaveRefs.get(roof.id)) : 3;
+    const y = surfaceY + panelSampleHeightM(project, p, spec, roof, surfaceY);
+    return { origin: new THREE.Vector3(p.center.x, y, -p.center.y), ownPanelId: p.id, roofId: roof?.id ?? null };
+  };
+
+  // eyes: the module nearest the array's centre, or its four corners, or the
+  // first roof's centroid when nothing is placed yet. A corner module can see
+  // a neighbour at 50° that the array's middle sees at 15° — both are true,
+  // for different modules, so the chart shows both and says which is which.
+  const eyes: Eye[] = [];
   if (panels.length) {
-    const roof = roofOf(panels[0].roofId);
-    const h = (roof?.heightM ?? 0) + 1.2;
     if (eyeMode === 'centre') {
-      const c = {
-        x: panels.reduce((a, p) => a + p.center.x, 0) / panels.length,
-        y: panels.reduce((a, p) => a + p.center.y, 0) / panels.length,
-      };
-      eyes.push({ p: c, h, roofId: roof?.id ?? null });
+      const cx = panels.reduce((a, p) => a + p.center.x, 0) / panels.length;
+      const cy = panels.reduce((a, p) => a + p.center.y, 0) / panels.length;
+      const d2 = (p: PlacedPanel) => (p.center.x - cx) ** 2 + (p.center.y - cy) ** 2;
+      eyes.push(eyeOf(panels.reduce((best, p) => (d2(p) < d2(best) ? p : best), panels[0])));
     } else {
       const far = (score: (p: XY) => number) =>
         panels.reduce((best, p) => (score(p.center) > score(best.center) ? p : best), panels[0]);
@@ -169,83 +217,80 @@ export function horizonProfile(
         far((p) => -p.x + p.y),
         far((p) => -p.x - p.y),
       ]) {
-        const r = roofOf(corner.roofId);
-        eyes.push({ p: corner.center, h: (r?.heightM ?? 0) + 1.2, roofId: r?.id ?? null });
+        eyes.push(eyeOf(corner));
       }
     }
   } else {
     const roof = project.roofs[0];
-    if (!roof) return { stepDeg, elevDeg: elev, sources: { surround: false, obstructions: 0, otherRoofs: 0 } };
+    if (!roof || roof.polygon.length < 3) return { stepDeg, elevDeg: elev, sources };
+    const c = {
+      x: roof.polygon.reduce((a, p) => a + p.x, 0) / roof.polygon.length,
+      y: roof.polygon.reduce((a, p) => a + p.y, 0) / roof.polygon.length,
+    };
     eyes.push({
-      p: {
-        x: roof.polygon.reduce((a, p) => a + p.x, 0) / roof.polygon.length,
-        y: roof.polygon.reduce((a, p) => a + p.y, 0) / roof.polygon.length,
-      },
-      h: roof.heightM + 1.2,
+      origin: new THREE.Vector3(c.x, surfaceHeightAt(roof, c, eaveRefs.get(roof.id)) + 1.2, -c.y),
+      ownPanelId: null,
       roofId: roof.id,
     });
   }
-  const offset = ((project.calibration?.northOffsetDeg ?? 0) * Math.PI) / 180;
-  const grid = project.ignoreSurround ? null : peekSurroundHeights(project.surround);
-  const radius = project.surround?.radiusM ?? 100;
-  const eyeRoofId = eyes[0].roofId;
-  const own = eyeRoofId ? roofOf(eyeRoofId) : null;
-  const others = project.roofs.filter((r) => r.id !== eyeRoofId);
-  const obstructions = project.obstructions.filter((o) => o.roofId === eyeRoofId || !o.roofId);
+  sources.otherRoofs = project.roofs.filter((r) => r.id !== eyes[0].roofId && r.polygon.length >= 3).length;
 
-  for (let i = 0; i < n; i++) {
-    const azDeg = i * stepDeg;
-    const az = (azDeg * Math.PI) / 180 + offset; // compass → image frame
-    const dir = { x: Math.sin(az), y: Math.cos(az) };
-    let best = 0;
-    for (const eye of eyes) {
-      // the real surround: march out along the ray, keep the steepest sight line
-      if (grid) {
-        for (let d = 3; d <= radius; d += 0.5) {
-          const p = { x: eye.p.x + dir.x * d, y: eye.p.y + dir.y * d };
-          // inside the array's own roof the DSM is cut out; nothing there blocks
-          if (own && pointInPolygon(p, own.polygon)) continue;
-          const h = heightAt(grid, p); // metres above the site's grade, the model's ground
-          if (h === null) continue;
-          const ang = (Math.atan2(h - eye.h, d) * 180) / Math.PI;
-          if (ang > best) best = ang;
+  const surround = project.ignoreSurround ? null : peekSurroundHeights(project.surround);
+  sources.surround = !!surround;
+  // THE engine's caster group — roofs, parapets, obstructions, masts, the
+  // modules, the real neighbourhood — nothing assembled here by hand
+  const { group, meshes: all } = buildShadowCasters(project, { includePanels: !!opts.includeModules, surround });
+  // A guardrail is two thin bars in the air. The engine's rays clear or hit a
+  // bar and the blocked FRACTION comes out right; a skyline, by definition,
+  // is solid below its line, so a bar at 74° would draw a wall to 74° and
+  // shade every morning for that corner. Leave rails to the engine.
+  const meshes = all.filter((m) => m.userData.casterKind !== 'rail');
+  const raycaster = new THREE.Raycaster();
+  raycaster.far = 250; // as lib/shading
+  const offset = ((project.calibration?.northOffsetDeg ?? 0) * Math.PI) / 180;
+  const dir = new THREE.Vector3();
+
+  try {
+    for (let i = 0; i < n; i++) {
+      const az = ((i * stepDeg) * Math.PI) / 180 + offset; // compass → image frame
+      const sinAz = Math.sin(az);
+      const cosAz = Math.cos(az);
+      let best = 0;
+      for (const eye of eyes) {
+        // scene frame: x = east, y = up, z = −north (plan y)
+        const blocked = (elevDeg: number): boolean => {
+          const e = (elevDeg * Math.PI) / 180;
+          dir.set(sinAz * Math.cos(e), Math.sin(e), -cosAz * Math.cos(e));
+          raycaster.set(eye.origin, dir);
+          // the eye's own plate lies across low rays uphill of it: incidence,
+          // not shade — the same self-exclusion the engine applies, by id
+          return raycaster.intersectObjects(meshes, false).some((h) => h.object.userData.panelId !== eye.ownPanelId);
+        };
+        // the skyline is the highest blocked elevation: scan down from the
+        // zenith to the first hit, then bisect the last clear step
+        let hi = -1;
+        for (let e = 90 - SKY_SCAN_STEP_DEG; e >= 0; e -= SKY_SCAN_STEP_DEG) {
+          if (blocked(e)) {
+            hi = e;
+            break;
+          }
         }
-      }
-      // the project's other roofs, as solid blocks
-      for (const r of others) {
-        for (let d = 3; d <= 150; d += 0.5) {
-          const p = { x: eye.p.x + dir.x * d, y: eye.p.y + dir.y * d };
-          if (!pointInPolygon(p, r.polygon)) continue;
-          const ang = (Math.atan2(r.heightM - eye.h, d) * 180) / Math.PI;
-          if (ang > best) best = ang;
-          break;
+        if (hi < 0) continue;
+        let lo = hi;
+        let clear = hi + SKY_SCAN_STEP_DEG;
+        for (let k = 0; k < SKY_SCAN_REFINE; k++) {
+          const mid = (lo + clear) / 2;
+          if (blocked(mid)) lo = mid;
+          else clear = mid;
         }
+        if (lo > best) best = lo;
       }
-      // obstructions on the array's roof: a box seen from the eye
-      for (const o of obstructions) {
-        const roof = o.roofId ? roofOf(o.roofId) : undefined;
-        const base = roof?.heightM ?? 0;
-        const half = o.shape === 'circle' ? o.diameterM / 2 : Math.max(o.lengthM, o.widthM) / 2;
-        const dx = o.center.x - eye.p.x;
-        const dy = o.center.y - eye.p.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist < 0.5) continue;
-        const toward = Math.atan2(dx, dy); // image-frame bearing of the obstruction
-        const dAng = Math.abs(((toward - az + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
-        const halfSpan = Math.atan2(half, dist);
-        if (dAng > halfSpan) continue;
-        const near = Math.max(0.5, dist - half);
-        const ang = (Math.atan2(base + o.heightM - eye.h, near) * 180) / Math.PI;
-        if (ang > best) best = ang;
-      }
+      elev[i] = Math.max(0, Math.min(89, best));
     }
-    elev[i] = Math.max(0, Math.min(89, best));
+  } finally {
+    disposeGroup(group);
   }
-  return {
-    stepDeg,
-    elevDeg: elev,
-    sources: { surround: !!grid, obstructions: obstructions.length, otherRoofs: others.length },
-  };
+  return { stepDeg, elevDeg: elev, sources };
 }
 
 function horizonAt(profile: HorizonProfile, azDeg: number): number {

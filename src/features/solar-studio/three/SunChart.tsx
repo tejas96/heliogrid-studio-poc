@@ -251,14 +251,18 @@ export function SunChart({
           </div>
         )}
         <div style={{ marginTop: 4, fontSize: 10, opacity: 0.8 }}>
-          Skyline as the array’s middle sees it, from{' '}
+          {/* the same caster set the module figures are raycast against — say so */}
+          Skyline as the array’s middle sees it, from the shading engine’s own casters:{' '}
           {[
             profile.sources.surround ? 'Google’s height map' : null,
+            profile.sources.parapets ? `${profile.sources.parapets} parapet${profile.sources.parapets === 1 ? '' : 's'}` : null,
             profile.sources.obstructions ? `${profile.sources.obstructions} obstruction${profile.sources.obstructions === 1 ? '' : 's'}` : null,
+            profile.sources.masts ? `${profile.sources.masts} lightning mast${profile.sources.masts === 1 ? '' : 's'}` : null,
             profile.sources.otherRoofs ? `${profile.sources.otherRoofs} other roof${profile.sources.otherRoofs === 1 ? '' : 's'}` : null,
           ]
             .filter(Boolean)
             .join(' · ') || 'nothing yet — an open site'}
+          {project.panels.length > 1 ? ' · row-on-row shade is in the module figures, not drawn here' : ''}
           {maxSky > 0 ? ` · highest ${Math.round(maxSky)}° at ${skyline.reduce((a, s) => (s.e > a.e ? s : a), skyline[0]).az}°` : ''}
           {far
             ? farMax > 0.5
