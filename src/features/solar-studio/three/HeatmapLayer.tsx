@@ -3,6 +3,7 @@
 // the satellite plane. Colours update instantly when the month scrubs (a single
 // instance-colour buffer write) — no geometry rebuild, no React churn.
 import { useEffect, useMemo, useRef } from 'react';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { heatColor, type HeatmapResult } from '../lib/solar-heatmap';
 
@@ -14,6 +15,8 @@ export function HeatmapLayer({
   month: number;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  // the buffer writes below are invisible to r3f — ask for the frame that shows them
+  const invalidate = useThree((s) => s.invalidate);
 
   const geom = useMemo(() => {
     const g = new THREE.PlaneGeometry(result.stepM * 0.98, result.stepM * 0.98);
@@ -35,7 +38,8 @@ export function HeatmapLayer({
       mesh.setMatrixAt(i, dummy.matrix);
     });
     mesh.instanceMatrix.needsUpdate = true;
-  }, [result]);
+    invalidate();
+  }, [result, invalidate]);
 
   // recolour on month scrub — instant
   useEffect(() => {
@@ -45,7 +49,8 @@ export function HeatmapLayer({
       mesh.setColorAt(i, heatColor(c.monthly[month])); // already an access fraction 0..1
     });
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  }, [result, month]);
+    invalidate();
+  }, [result, month, invalidate]);
 
   if (result.cells.length === 0) return null;
   return (

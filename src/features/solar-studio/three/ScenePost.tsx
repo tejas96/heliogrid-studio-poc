@@ -79,9 +79,17 @@ function useMeasuredTier(): 'full' | 'lite' {
   const samples = useRef<number[]>([]);
   const seen = useRef(0);
   const decided = useRef(false);
+  const wasContinuous = useRef(false);
 
-  useFrame((_, delta) => {
-    if (decided.current) return;
+  useFrame((state, delta) => {
+    // Only a frame that follows another continuous frame is a measurement.
+    // Once the loop is asleep (three/useSceneActivity) the gap between two
+    // frames is how long the user paused, not how long the GPU took — and a
+    // 400 ms pause would read as a 2 fps device and throw the occlusion away.
+    const continuous = state.frameloop === 'always';
+    const usable = continuous && wasContinuous.current;
+    wasContinuous.current = continuous;
+    if (decided.current || !usable) return;
     seen.current += 1;
     if (seen.current <= WARMUP_FRAMES) return;
     const ms = delta * 1000;

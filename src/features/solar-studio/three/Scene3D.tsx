@@ -55,6 +55,7 @@ import { ElectricalOverlay } from './Electrical';
 import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 import { RailsInstanced, railFrameOf, type RailFrame } from './RailsInstanced';
+import { useSceneActivity } from './useSceneActivity';
 
 /** the first selected module of a table, so "Edit table" opens on the module the user picked */
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
@@ -238,6 +239,7 @@ function PickOrder({ wiring }: { wiring: boolean }) {
 function PmremEnvironment() {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
+  const invalidate = useThree((s) => s.invalidate);
   const rt = useRef<THREE.WebGLRenderTarget | null>(null);
   useFrame(() => {
     const env = scene.environment;
@@ -251,6 +253,9 @@ function PmremEnvironment() {
     } finally {
       gen.dispose();
     }
+    // the frame that swapped the map in must be followed by one that draws
+    // with it — when the loop is asleep nothing else would ask for it
+    invalidate();
   });
   useEffect(
     () => () => {
@@ -963,6 +968,11 @@ export function Scene3D({
   const [heatResult, setHeatResult] = useState<HeatmapResult | null>(null);
   const [heatProgress, setHeatProgress] = useState<{ done: number; total: number } | null>(null);
   const glRef = useRef<THREE.WebGLRenderer | null>(null);
+  /** r3f's invalidate, for the frames the loop no longer draws unasked (the hero capture) */
+  const invalidateRef = useRef<(() => void) | null>(null);
+  // awake = rendering flat out, asleep = a frame only when something changes
+  // (three/useSceneActivity). Every pointer, wheel and key on the wrapper wakes it.
+  const { awake, wake } = useSceneActivity(visible);
   /** a capture holds the canvas at print size for two frames — don't start a second */
   const capturing = useRef(false);
   const controlsRef = useRef<CameraControlsImpl | null>(null);
@@ -1255,6 +1265,7 @@ export function Scene3D({
    * reasonable thing to want from anywhere inside it.
    */
   function onSceneKeyDown(e: React.KeyboardEvent) {
+    wake();
     const t = e.target as HTMLElement;
     const inControl =
       t !== e.currentTarget &&
@@ -1428,6 +1439,9 @@ export function Scene3D({
 
     capturing.current = true;
     gl.setSize(size.width * scale, size.height * scale, false);
+    // A resize is not a scene-graph change, so an asleep loop would not draw
+    // at the new size on its own: ask for the frame explicitly.
+    invalidateRef.current?.();
     // Two frames, not one. The composer resizes itself inside its own useFrame,
     // and this callback and r3f's loop are both rAF callbacks whose order is
     // registration-dependent — two guarantees at least one COMPLETE frame was
@@ -1762,6 +1776,9 @@ export function Scene3D({
       role="application"
       aria-label="3D scene. Arrow keys orbit, Shift for finer steps, plus and minus zoom, 1 top view, 2 isometric, 3 front, Shift-drag box-selects modules — or turn on Select mode in the menu and drag, for a touch screen. Escape closes."
       onKeyDown={onSceneKeyDown}
+      onPointerMove={wake}
+      onPointerDown={wake}
+      onWheel={wake}
       onPointerDownCapture={structInteractive ? onWrapPointerDownCapture : undefined}
       style={{
         position: 'absolute',
@@ -1781,18 +1798,23 @@ export function Scene3D({
         // this line is doing something. The softness knob is the shadow
         // KERNEL: see SHADOW_PENUMBRA_M / shadowRadiusTexels.
         shadows={{ type: THREE.PCFShadowMap }}
-        frameloop={visible ? 'always' : 'never'}
+        // hidden: parked. awake: flat out, so the decoration moves. asleep: a
+        // frame only when something asks — r3f on a scene-graph change, the
+        // controls while a move settles, the imperative writers for themselves.
+        frameloop={!visible ? 'never' : awake ? 'always' : 'demand'}
         // retina at 3× rendered four times the pixels for no visible gain; 1.5 is
         // the sweet spot for a scene with SMAA on top
         dpr={[1, 1.5]}
         gl={{ preserveDrawingBuffer: true, antialias: false, alpha: meshMode }}
         camera={{ position: [30, 42, 42], fov: CAMERA_FOV, near: 0.3, far: 3000 }}
-        onCreated={({ gl }) => {
+        onCreated={(state) => {
+          const { gl } = state;
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 1.0;
           gl.outputColorSpace = THREE.SRGBColorSpace;
           gl.localClippingEnabled = true; // the real surround is cut out under the site
           glRef.current = gl;
+          invalidateRef.current = state.invalidate;
         }}
       >
         {/* DO NOT add drei's <SoftShadows/> here. It is the obvious next move
@@ -2664,6 +2686,14 @@ function SceneContent({
 }) {
   const loc = project.location!;
   const spec = project.components.panel;
+  // Every prop and store change lands here as a re-render. The instanced
+  // writers below (modules, structures, the heatmap) update GPU buffers in
+  // effects, which r3f cannot see — so after each commit ask for one frame.
+  // Free while the loop is awake; the whole point while it is asleep.
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    invalidate();
+  });
   // sun-path arc and sun disc radius: beyond the design, scaled to the site
   const R = Math.max(70, bounds.r * 2.6);
   /**
@@ -3009,11 +3039,12 @@ function SceneContent({
     metersPerStaticMap(loc.latLng.lat, SAT_ZOOM, 640) * project.calibration.scaleFactor;
   const texUrl = staticSatelliteUrl(loc.latLng.lat, loc.latLng.lng, SAT_ZOOM, 640, 2);
   const groundTex = useMemo(() => {
-    const t = new THREE.TextureLoader().load(texUrl);
+    // the image lands whenever the network says so — draw it when it does
+    const t = new THREE.TextureLoader().load(texUrl, () => invalidate());
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 8;
     return t;
-  }, [texUrl]);
+  }, [texUrl, invalidate]);
 
   // A zoom-20 tile spans only ~70 m — barely wider than the building — so with
   // the streamed surroundings hidden the map used to collapse to one small

@@ -55,6 +55,8 @@ export function PanelLabels({
   onAnyVisible?: (any: boolean) => void;
 }) {
   const { camera, size } = useThree();
+  const frameloop = useThree((s) => s.frameloop);
+  const invalidate = useThree((s) => s.invalidate);
   const nodes = useRef<HTMLSpanElement[]>([]);
   const tick = useRef(0);
 
@@ -75,11 +77,16 @@ export function PanelLabels({
       host.appendChild(s);
       nodes.current.push(s);
     }
+    // fresh spans are hidden until the next projection — make that the next
+    // frame, and ask for one, or an asleep loop leaves them hidden until the
+    // user happens to move
+    tick.current = EVERY_N_FRAMES - 1;
+    invalidate();
     return () => {
       host.textContent = '';
       nodes.current = [];
     };
-  }, [layer, items, enabled]);
+  }, [layer, items, enabled, invalidate]);
 
   const v = useRef(new THREE.Vector3()).current;
   const anyShown = useRef<boolean | null>(null);
@@ -94,8 +101,12 @@ export function PanelLabels({
 
   useFrame(() => {
     if (!enabled || nodes.current.length === 0) return;
-    tick.current = (tick.current + 1) % EVERY_N_FRAMES;
-    if (tick.current !== 0) return;
+    // the throttle is for a loop running flat out; an on-demand frame exists
+    // because something changed, so every one of those projects
+    if (frameloop === 'always') {
+      tick.current = (tick.current + 1) % EVERY_N_FRAMES;
+      if (tick.current !== 0) return;
+    }
     const half = { w: size.width / 2, h: size.height / 2 };
     // pixels per metre at one metre, for this camera — the apparent-size cull
     // divides by the distance to get it at the module
