@@ -88,6 +88,13 @@ export function geometryFp(p: Project): string {
     // feature would look shipped and do nothing.
     (p.rails?.length
       ? `|rl:${JSON.stringify(p.rails.map((x) => [x.id, x.a, x.b, x.heightMm, x.roofId]))}`
+      : '') +
+    // Lightning masts have cast in the engine since v7 and on the roof heatmap
+    // always — and never joined this key, so adding or moving one re-ran
+    // nothing and the stored access stayed stamped fresh. Same CONDITIONAL
+    // shape as the rails: a project without masts is byte-identical.
+    (p.arresters?.length
+      ? `|la:${JSON.stringify(p.arresters.map((x) => [x.id, x.pos, x.heightMm, x.roofId]))}`
       : '')
   );
 }

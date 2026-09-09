@@ -14,8 +14,8 @@ import type { Project } from '../../types';
 import { sunPosition } from '../sun';
 import { DAYS_IN_MONTH } from '../pvgis';
 import { peekShadeProfile } from '../shade-profile-cache';
-import { horizonProfile } from '../sun-chart';
 import { resolveRacking } from '../structure';
+import { moduleSkyViews } from './sky-view';
 import { acCableLossAtFullLoad, dcCableLossAtStc } from './cable-loss';
 import {
   projectRearGeometry,
@@ -38,6 +38,14 @@ interface EnginePanel {
   u1: number;
   /** beam-clear fraction (0..1) for a calendar month (0..11) and mean solar hour */
   beamAccess: (month: number, solarHour: number) => number;
+  /**
+   * The isotropic sky THIS module sees, 0..1, from its own skyline
+   * (lib/energy/sky-view). A module against a parapet and one in the open
+   * middle of the deck no longer share one number. Absent ⇒ `input.skyView`.
+   */
+  skyView?: number;
+  /** the share of the Perez horizon band still open to this module, 0..1; absent ⇒ its skyView */
+  horizonView?: number;
   /** datasheet rear/front efficiency ratio, 0..1; 0 = mono-facial */
   bifaciality?: number;
   /** the mounting geometry the module's back looks out on; null = no rear yield */
@@ -297,10 +305,21 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
       const ground = input.albedo * ghi * ((1 - n.cosTilt) / 2);
       const poaUnshaded = beam + iso + circ + hor + ground;
       const access = p.beamAccess(month, solarHour);
-      const poaShaded = beam * access + iso * input.skyView + circ * access + hor + ground;
+      // the sky THIS module sees: its own skyline, or the array's when the
+      // adapter gave none (tests, and the old one-number path)
+      const sv = p.skyView ?? input.skyView;
+      const hv = p.horizonView ?? sv;
+      // Every diffuse part is occluded by the same skyline. The horizon band
+      // is precisely the strip a neighbouring building blocks first, and the
+      // ground in front of the module is lit by the same beam and the same sky
+      // that light the module — a shadow lying on it reflects less. Both used
+      // to pass through unshaded.
+      const groundLit = ghi > 0 ? Math.min(1, (dni * cosZ * access + dhi * sv) / ghi) : 0;
+      const groundShaded = ground * groundLit;
+      const poaShaded = beam * access + iso * sv + circ * access + hor * hv + groundShaded;
       const iamB = cosTheta > 0 ? Math.max(0, 1 - IAM_B0 * (1 / cosTheta - 1)) : 0;
       const poaEff =
-        beam * access * iamB + (iso * input.skyView + circ * access + hor) * IAM_DIFFUSE + ground * IAM_GROUND;
+        beam * access * iamB + (iso * sv + circ * access + hor * hv) * IAM_DIFFUSE + groundShaded * IAM_GROUND;
       // ── the back ──────────────────────────────────────────────────────────
       // Solved from the mounting geometry, not added as a flat percentage: a
       // module lying flush on a roof gets almost nothing here, and the same
@@ -328,7 +347,7 @@ export function hourlyEnergyCore(input: EngineInput, tmy: TmyYear): HourlyResult
           rearThisHour.set(cacheKey, rearWm2);
         }
         // the sky the back sees is the same sky the front's skyline blocks
-        rearWm2 *= input.skyView;
+        rearWm2 *= sv;
         rearEff = rearEffective(rearWm2, bif);
       }
       const poaSoiled = (poaEff + rearEff) * soil;
@@ -429,17 +448,6 @@ export interface HourlyProjectResult extends HourlyResult {
   assumed: string[];
 }
 
-/** The isotropic sky the array sees, from its own skyline (neighbours, obstructions). */
-function skyViewFactor(project: Project): number {
-  if (project.roofs.length === 0) return 1;
-  const prof = horizonProfile(project, 5, 'centre');
-  const n = prof.elevDeg.length;
-  if (n === 0) return 1;
-  let blocked = 0;
-  for (const e of prof.elevDeg) blocked += Math.sin((Math.max(0, e) * Math.PI) / 180);
-  return Math.max(0.3, 1 - blocked / n);
-}
-
 /** The 3D engine's per-module beam access for each sampled (month, solar hour), or the annual mean. */
 function beamAccessFor(project: Project): (panelId: string, fallback: number) => (m: number, h: number) => number {
   const profile = peekShadeProfile(project.derived.solarAccessFp);
@@ -482,6 +490,10 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
   if (spec.tempCoeffPmaxPct === undefined) assumed.push(`Pmax temperature coefficient ${GAMMA_DEFAULT_PCT}%/°C (datasheet value missing)`);
   const access = beamAccessFor(project);
   if (!peekShadeProfile(project.derived.solarAccessFp)) assumed.push('shade by hour not yet run — each module uses its annual mean beam access');
+  // each module's own diffuse sky, from its own skyline (parapets, masts,
+  // neighbours, the row in front) — not one number for the whole array
+  const sky = moduleSkyViews(project);
+  const skyMean = sky.size > 0 ? [...sky.values()].reduce((s, v) => s + v.skyView, 0) / sky.size : 1;
 
   // The back of a bifacial module is worth whatever its mounting lets it see —
   // the same derivation the design check reads, so the two can never disagree.
@@ -505,6 +517,8 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
       u0: u.u0,
       u1: u.u1,
       beamAccess: access(p.id, p.solarAccess ?? 1),
+      skyView: sky.get(p.id)?.skyView,
+      horizonView: sky.get(p.id)?.horizonView,
       bifaciality,
       rear: rearByPanel.get(p.id) ?? null,
       tracker: trackerByPanel.get(p.id) ?? null,
@@ -545,7 +559,8 @@ export function hourlyEnergyForProject(project: Project, tmy: TmyYear): HourlyPr
       dcOhmicStcFrac: dc.fraction,
       acOhmicFrac: ac.fraction,
       albedo,
-      skyView: skyViewFactor(project),
+      // the array's mean, for anything that still reads one number
+      skyView: skyMean,
     },
     tmy,
   );

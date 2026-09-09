@@ -5,7 +5,7 @@
 // angle it subtends from the array. Where a sun curve dips below that line
 // the array is in shade. All pure maths; the panel only draws it.
 import * as THREE from 'three';
-import type { PlacedPanel, Project, XY } from '../types';
+import type { PanelSpec, PlacedPanel, Project, XY } from '../types';
 import tzLookup from 'tz-lookup';
 import { sunPosition } from './sun';
 import { simTimeDate } from './sim-time';
@@ -126,17 +126,90 @@ export interface HorizonProfile {
   };
 }
 
-/** Where one eye of the profile sits, and which module it is (its own plate is not a blocker). */
-interface Eye {
+/** Where a skyline is measured from, and which module it is — its own plate is not a blocker. */
+export interface SkyEye {
   origin: THREE.Vector3;
   ownPanelId: string | null;
+}
+
+/** One eye of the chart's profile: a SkyEye that also knows its roof. */
+interface Eye extends SkyEye {
   roofId: string | null;
 }
 
-/** The coarse elevation step of the skyline search, degrees; refined below it. */
-const SKY_SCAN_STEP_DEG = 2;
-/** Bisection passes under the coarse step: 2° → 0.25°. */
-const SKY_SCAN_REFINE = 3;
+/** The chart's skyline search: 2° steps down from the zenith, bisected three times to 0.25°. */
+const CHART_SCAN = { scanDeg: 2, refine: 3 };
+
+/**
+ * The shading engine's ray origin for a module: on its glass, at its real
+ * mounting height (the centre point of lib/shading's panelRayOrigins) — NOT
+ * a fixed 1.2 m above the deck, which looked over every parapet.
+ */
+export function moduleRayEye(
+  project: Project,
+  panel: PlacedPanel,
+  spec: PanelSpec | null,
+  eaveRefs: Map<string, number>,
+): SkyEye {
+  const roof = project.roofs.find((r) => r.id === panel.roofId);
+  const surfaceY = roof ? surfaceHeightAt(roof, panel.center, eaveRefs.get(roof.id)) : 3;
+  const y = surfaceY + panelSampleHeightM(project, panel, spec, roof, surfaceY);
+  return { origin: new THREE.Vector3(panel.center.x, y, -panel.center.y), ownPanelId: panel.id };
+}
+
+/**
+ * One eye's skyline against a caster set: per compass azimuth (`stepDeg`
+ * apart, from north clockwise), the highest elevation at which a ray from the
+ * eye still hits a caster — a scan down from the zenith in `scanDeg` steps to
+ * the first hit, then `refine` bisections of the last clear step. Shared by
+ * the chart and the diffuse sky-view factors (lib/energy/sky-view), so the
+ * picture and the number are the same rays.
+ */
+export function skylineOf(
+  meshes: THREE.Object3D[],
+  eye: SkyEye,
+  stepDeg: number,
+  /** compass → image frame (the calibration's north offset), radians */
+  northOffsetRad: number,
+  scan: { scanDeg: number; refine: number } = CHART_SCAN,
+): number[] {
+  const n = Math.round(360 / stepDeg);
+  const elev = new Array<number>(n).fill(0);
+  const raycaster = new THREE.Raycaster();
+  raycaster.far = 250; // as lib/shading
+  const dir = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    const az = ((i * stepDeg) * Math.PI) / 180 + northOffsetRad;
+    const sinAz = Math.sin(az);
+    const cosAz = Math.cos(az);
+    // scene frame: x = east, y = up, z = −north (plan y)
+    const blocked = (elevDeg: number): boolean => {
+      const e = (elevDeg * Math.PI) / 180;
+      dir.set(sinAz * Math.cos(e), Math.sin(e), -cosAz * Math.cos(e));
+      raycaster.set(eye.origin, dir);
+      // the eye's own plate lies across low rays uphill of it: incidence, not
+      // shade — the same self-exclusion the engine applies, by id
+      return raycaster.intersectObjects(meshes, false).some((h) => h.object.userData.panelId !== eye.ownPanelId);
+    };
+    let hi = -1;
+    for (let e = 90 - scan.scanDeg; e >= 0; e -= scan.scanDeg) {
+      if (blocked(e)) {
+        hi = e;
+        break;
+      }
+    }
+    if (hi < 0) continue;
+    let lo = hi;
+    let clear = hi + scan.scanDeg;
+    for (let k = 0; k < scan.refine; k++) {
+      const mid = (lo + clear) / 2;
+      if (blocked(mid)) lo = mid;
+      else clear = mid;
+    }
+    elev[i] = Math.max(0, Math.min(89, lo));
+  }
+  return elev;
+}
 
 /**
  * The horizon as the array sees it, in every compass direction. A long array
@@ -188,14 +261,7 @@ export function horizonProfile(
     modules: opts.includeModules ? Math.max(0, panels.length - 1) : 0,
   };
 
-  // the engine's ray origin for a module: on its glass, at its real mounting
-  // height — NOT a fixed 1.2 m above the deck, which looked over every parapet
-  const eyeOf = (p: PlacedPanel): Eye => {
-    const roof = roofOf(p.roofId);
-    const surfaceY = roof ? surfaceHeightAt(roof, p.center, eaveRefs.get(roof.id)) : 3;
-    const y = surfaceY + panelSampleHeightM(project, p, spec, roof, surfaceY);
-    return { origin: new THREE.Vector3(p.center.x, y, -p.center.y), ownPanelId: p.id, roofId: roof?.id ?? null };
-  };
+  const eyeOf = (p: PlacedPanel): Eye => ({ ...moduleRayEye(project, p, spec, eaveRefs), roofId: roofOf(p.roofId)?.id ?? null });
 
   // eyes: the module nearest the array's centre, or its four corners, or the
   // first roof's centroid when nothing is placed yet. A corner module can see
@@ -245,47 +311,13 @@ export function horizonProfile(
   // is solid below its line, so a bar at 74° would draw a wall to 74° and
   // shade every morning for that corner. Leave rails to the engine.
   const meshes = all.filter((m) => m.userData.casterKind !== 'rail');
-  const raycaster = new THREE.Raycaster();
-  raycaster.far = 250; // as lib/shading
   const offset = ((project.calibration?.northOffsetDeg ?? 0) * Math.PI) / 180;
-  const dir = new THREE.Vector3();
 
   try {
-    for (let i = 0; i < n; i++) {
-      const az = ((i * stepDeg) * Math.PI) / 180 + offset; // compass → image frame
-      const sinAz = Math.sin(az);
-      const cosAz = Math.cos(az);
-      let best = 0;
-      for (const eye of eyes) {
-        // scene frame: x = east, y = up, z = −north (plan y)
-        const blocked = (elevDeg: number): boolean => {
-          const e = (elevDeg * Math.PI) / 180;
-          dir.set(sinAz * Math.cos(e), Math.sin(e), -cosAz * Math.cos(e));
-          raycaster.set(eye.origin, dir);
-          // the eye's own plate lies across low rays uphill of it: incidence,
-          // not shade — the same self-exclusion the engine applies, by id
-          return raycaster.intersectObjects(meshes, false).some((h) => h.object.userData.panelId !== eye.ownPanelId);
-        };
-        // the skyline is the highest blocked elevation: scan down from the
-        // zenith to the first hit, then bisect the last clear step
-        let hi = -1;
-        for (let e = 90 - SKY_SCAN_STEP_DEG; e >= 0; e -= SKY_SCAN_STEP_DEG) {
-          if (blocked(e)) {
-            hi = e;
-            break;
-          }
-        }
-        if (hi < 0) continue;
-        let lo = hi;
-        let clear = hi + SKY_SCAN_STEP_DEG;
-        for (let k = 0; k < SKY_SCAN_REFINE; k++) {
-          const mid = (lo + clear) / 2;
-          if (blocked(mid)) lo = mid;
-          else clear = mid;
-        }
-        if (lo > best) best = lo;
-      }
-      elev[i] = Math.max(0, Math.min(89, best));
+    // the worst case over the eyes, azimuth by azimuth
+    for (const eye of eyes) {
+      const sky = skylineOf(meshes, eye, stepDeg, offset, CHART_SCAN);
+      for (let i = 0; i < n; i++) if (sky[i] > elev[i]) elev[i] = sky[i];
     }
   } finally {
     disposeGroup(group);
