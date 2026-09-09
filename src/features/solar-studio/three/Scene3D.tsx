@@ -56,6 +56,7 @@ import { wallOutward } from '../lib/battery';
 import type { PanelInstance } from './PanelsInstanced';
 import { RailsInstanced, railFrameOf, type RailFrame } from './RailsInstanced';
 import { WalkwaysInstanced, walkwayFrameOf, type WalkwayFrame } from './WalkwaysInstanced';
+import { ShadowFit, shadowRadiusTexels } from './ShadowFit';
 import { useSceneActivity } from './useSceneActivity';
 import { attachContextGuard, describeGpu, webglAvailable } from './gpu-guard';
 import { SceneErrorBoundary } from './SceneErrorBoundary';
@@ -698,12 +699,9 @@ const NORMAL_BIAS = 0.007;
  * estimate the penumbra — it can only ask "nearer or farther". Documented at
  * the Canvas.
  */
-const SHADOW_PENUMBRA_M = 0.03;
-/** Texels of kernel for a given shadow-camera half-extent, clamped to sane bounds. */
-function shadowRadiusTexels(shadowHalfM: number, mapPx = 4096): number {
-  const texelM = (2 * shadowHalfM) / mapPx;
-  return Math.max(1, Math.min(8, SHADOW_PENUMBRA_M / texelM));
-}
+// SHADOW_PENUMBRA_M and shadowRadiusTexels live in three/ShadowFit now: the
+// fit re-derives the kernel every frame the map's extent changes, and a
+// module cannot import its own importer.
 
 /**
  * Where the camera was last left, per project.
@@ -3506,6 +3504,19 @@ function SceneContent({
     () => sunDir.clone().multiplyScalar(Math.max(80, shadowFit.r * 3 + shadowFit.yMax)).add(lightAnchor),
     [sunDir, shadowFit, lightAnchor],
   );
+  // The box above, in world space, for the per-frame fit (three/ShadowFit):
+  // the map covers only the part of it the camera can see, so a close-up on a
+  // row gets millimetre texels where the whole box gave it centimetres.
+  const shadowBox = useMemo(
+    () =>
+      new THREE.Box3(
+        new THREE.Vector3(lightAnchor.x - shadowHalf, shadowFit.yMin - 1, lightAnchor.z - shadowHalf),
+        new THREE.Vector3(lightAnchor.x + shadowHalf, shadowFit.yMax + 1, lightAnchor.z + shadowHalf),
+      ),
+    [lightAnchor, shadowHalf, shadowFit.yMin, shadowFit.yMax],
+  );
+  const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
+  const studioLightRef = useRef<THREE.DirectionalLight | null>(null);
 
   // heatmap mode: flat satellite ground + colored roof-surface cells only —
   // no 3D model, no lighting drama (unlit cells read the true ramp colors)
@@ -3608,7 +3619,9 @@ function SceneContent({
           <fogExp2 attach="fog" args={['#0c0f15', 0.0022]} />
           <ambientLight intensity={0.35} />
           <hemisphereLight intensity={0.45} groundColor="#12161d" color="#dfe8f5" />
+          <ShadowFit light={studioLightRef} box={shadowBox} halfM={shadowHalf} />
           <directionalLight
+            ref={studioLightRef}
             position={[bounds.cx + 24, 40, bounds.cz + 20]}
             target={lightTarget}
             intensity={1.15}
@@ -3659,8 +3672,10 @@ function SceneContent({
               so the flat ambient/hemisphere terms are small */}
           <ambientLight intensity={0.05 + 0.12 * duskFactor} />
           <hemisphereLight intensity={0.06 + 0.16 * duskFactor} groundColor="#2a2f38" color="#cfe0f4" />
+          {sunVisible && <ShadowFit light={sunLightRef} box={shadowBox} halfM={shadowHalf} />}
           {sunVisible && (
             <directionalLight
+              ref={sunLightRef}
               position={sunPos}
               target={lightTarget}
               intensity={0.15 + 1.6 * sunLook.strength}
