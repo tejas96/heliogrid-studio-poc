@@ -61,7 +61,8 @@ import { useSceneActivity } from './useSceneActivity';
 import { attachContextGuard, describeGpu, webglAvailable } from './gpu-guard';
 import { SceneErrorBoundary } from './SceneErrorBoundary';
 import { readDiagnostics, recordDiagnostic } from '../lib/diagnostics';
-import type { CanvasProps } from '@react-three/fiber';
+import type { CanvasProps, RootState } from '@react-three/fiber';
+import { ScaleBarSync } from './ScaleBar';
 
 /** the first selected module of a table, so "Edit table" opens on the module the user picked */
 function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
@@ -273,17 +274,25 @@ function PmremEnvironment() {
   return null;
 }
 
-function DevSceneHandle({ sceneRef }: { sceneRef?: React.RefObject<THREE.Scene | null> }) {
+function DevSceneHandle({
+  sceneRef,
+  stateRef,
+}: {
+  sceneRef?: React.RefObject<THREE.Scene | null>;
+  /** the whole root state — the lens swap for the elevations needs `set` and `size` */
+  stateRef?: React.RefObject<RootState | null>;
+}) {
   const three = useThree();
   // The scene ref is NOT dev-only: the .glb export needs the live scene in
   // production too, and r3f keeps it behind its own store.
   useEffect(() => {
-    if (!sceneRef) return;
-    sceneRef.current = three.scene;
+    if (sceneRef) sceneRef.current = three.scene;
+    if (stateRef) stateRef.current = three;
     return () => {
-      sceneRef.current = null;
+      if (sceneRef) sceneRef.current = null;
+      if (stateRef) stateRef.current = null;
     };
-  }, [three, sceneRef]);
+  }, [three, sceneRef, stateRef]);
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
     (window as unknown as { __three?: unknown }).__three = three;
@@ -597,10 +606,17 @@ const ACTION = CameraControlsImpl.ACTION;
  * Where the camera should stand to see the whole design from a preset
  * direction: far enough that the bounding sphere fits the vertical field of view.
  */
-function presetPose(b: SceneBounds, v: ViewPreset, fovDeg: number) {
-  const d = VIEW_DIRS[v];
+function presetPose(b: SceneBounds, v: ViewPreset, fovDeg: number, flat = false) {
+  const raw = VIEW_DIRS[v];
+  // an elevation looks HORIZONTALLY at the design's centre — the lift in the
+  // direction table is the perspective preset's, not a drawing's
+  const d = flat && v !== 'top' ? ([raw[0], 0, raw[2]] as const) : raw;
   const n = Math.hypot(d[0], d[1], d[2]);
-  const dist = Math.max(10, (b.r * 1.15) / Math.tan((fovDeg * Math.PI) / 360));
+  // a parallel projection has no framing distance (the zoom frames); it only
+  // has to stand clear of everything, so the near plane never cuts the design
+  const dist = flat
+    ? Math.max(10, b.r * 3 + 30)
+    : Math.max(10, (b.r * 1.15) / Math.tan((fovDeg * Math.PI) / 360));
   return {
     pos: [b.cx + (d[0] / n) * dist, b.cy + (d[1] / n) * dist, b.cz + (d[2] / n) * dist] as const,
     target: [b.cx, b.cy, b.cz] as const,
@@ -894,7 +910,7 @@ export function Scene3D({
   // react-three-fiber reconciler, which is a separate React root: store
   // context does not cross into it and `useStore()` throws there. Hooks stay
   // out here; values go in as props.
-  const { fmtLen } = useUnits();
+  const { fmtLen, units } = useUnits();
 
   // §H on-object structure editing: click a table → contextual panel at the
   // object; clicking an option applies it INSTANTLY as one undoable patch.
@@ -1197,8 +1213,15 @@ export function Scene3D({
   function goView(v: ViewPreset, animate = true) {
     const c = controlsRef.current;
     if (!c) return;
-    const { pos, target } = presetPose(bounds, v, CAMERA_FOV);
+    // the plan and the four elevations are parallel projections; Iso keeps the lens
+    const flat = v !== 'iso';
+    setProjection(flat);
+    const { pos, target } = presetPose(bounds, v, CAMERA_FOV, flat);
     void c.setLookAt(pos[0], pos[1], pos[2], target[0], target[1], target[2], animate);
+    // the orthographic zoom that frames the design — distance means nothing to that lens
+    if (flat) {
+      void c.fitToSphere(new THREE.Sphere(new THREE.Vector3(bounds.cx, bounds.cy, bounds.cz), bounds.r * 1.15), animate);
+    }
   }
 
   // open framed on the design (a 300 m site no longer opens off-screen), and
@@ -1210,6 +1233,56 @@ export function Scene3D({
   // controls now announce themselves through state instead.
   /** The live scene, for the .glb export — r3f keeps it inside its own store. */
   const sceneRef = useRef<THREE.Scene | null>(null);
+  /** r3f's root state, for swapping the lens it renders with */
+  const stateRef = useRef<RootState | null>(null);
+  /** the scale bar over the canvas, written from the frame (three/ScaleBar) */
+  const scaleBarRef = useRef<HTMLDivElement | null>(null);
+  const scaleLabelRef = useRef<HTMLDivElement | null>(null);
+  /**
+   * Two lenses. The perspective one is what r3f renders with by default and
+   * what every orbit uses. The orthographic one takes over for the plan and
+   * the four elevations: "Front / Back / Left / Right" used to fly the 40°
+   * lens to a point 17° above the site and call that an elevation — print
+   * one and nothing on it could be measured, because nothing on it was to
+   * one scale. A parallel projection at 0° pitch is an elevation; with the
+   * scale bar it is a drawing.
+   */
+  const perspCam = useMemo(() => {
+    const c = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 0.3, 3000);
+    c.position.set(30, 42, 42);
+    return c;
+  }, []);
+  const orthoCam = useMemo(() => new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 6000), []);
+  const [ortho, setOrtho] = useState(false);
+  const orthoRef = useRef(false);
+  const setProjection = useCallback(
+    (flat: boolean) => {
+      const st = stateRef.current;
+      const c = controlsRef.current;
+      if (!st || !c || flat === orthoRef.current) return;
+      orthoRef.current = flat;
+      const cam = flat ? orthoCam : perspCam;
+      if (flat) {
+        // r3f re-sizes whichever camera is current on a resize; the first
+        // frustum is ours to set, in CSS pixels, so zoom reads px per metre
+        const { width, height } = st.size;
+        orthoCam.left = -width / 2;
+        orthoCam.right = width / 2;
+        orthoCam.top = height / 2;
+        orthoCam.bottom = -height / 2;
+        orthoCam.updateProjectionMatrix();
+      }
+      // ONE spherical state in the controls, whichever lens sits on it — the
+      // orbit pose survives the swap in both directions
+      c.camera = cam;
+      // a perspective lens is never zoomed; the controls' zoom belongs to the other
+      if (!flat) void c.zoomTo(1, false);
+      st.set({ camera: cam });
+      st.invalidate();
+      setOrtho(flat);
+    },
+    [orthoCam, perspCam],
+  );
   const [glbBusy, setGlbBusy] = useState(false);
   const [controlsReady, setControlsReady] = useState(false);
   const attachControls = useCallback((c: CameraControlsImpl | null) => {
@@ -1281,6 +1354,9 @@ export function Scene3D({
     const c = controlsRef.current;
     if (!controlsReady || !c || captureMode || readOnly) return;
     const save = () => {
+      // an elevation's pose belongs to the other lens: restored into the
+      // perspective one it would open the design as a speck 300 m away
+      if (c.camera instanceof THREE.OrthographicCamera) return;
       const p = c.getPosition(new THREE.Vector3());
       const t = c.getTarget(new THREE.Vector3());
       lastPose[project.id] = { pos: [p.x, p.y, p.z], target: [t.x, t.y, t.z], key: boundsKey };
@@ -1312,7 +1388,12 @@ export function Scene3D({
     // the controls own the clamps (min/max polar and distance), so keyboard
     // and pointer can never disagree about where the camera may go
     if (dAzimuth !== 0 || dElevation !== 0) void c.rotate(dAzimuth, dElevation, true);
-    if (zoomFactor !== 1) void c.dolly(zoomFactor < 1 ? c.distance * 0.12 : -c.distance * 0.12, true);
+    if (zoomFactor !== 1) {
+      // a parallel projection cannot dolly — moving along the view changes
+      // nothing — so the keys change its zoom by the same 12 % instead
+      if (c.camera instanceof THREE.OrthographicCamera) void c.zoomTo(c.camera.zoom * (zoomFactor < 1 ? 1.12 : 1 / 1.12), true);
+      else void c.dolly(zoomFactor < 1 ? c.distance * 0.12 : -c.distance * 0.12, true);
+    }
   }
 
   /** Object focus: fly to the picked entity, keeping the current viewing angle. */
@@ -1333,6 +1414,8 @@ export function Scene3D({
   function enterWalk() {
     const c = controlsRef.current;
     if (!c || walkSaved.current) return;
+    // a person on the deck sees in perspective, whatever lens the last preset left on
+    setProjection(false);
     walkSaved.current = {
       pos: c.getPosition(new THREE.Vector3()),
       target: c.getTarget(new THREE.Vector3()),
@@ -1803,12 +1886,12 @@ export function Scene3D({
       ? []
       : (
           [
-            { id: 'top', icon: <ArrowDown />, label: 'Top', tip: 'Top view' },
+            { id: 'top', icon: <ArrowDown />, label: 'Top', tip: 'Plan\nParallel projection, to scale' },
             { id: 'iso', icon: <Axis3d />, label: 'Iso', tip: 'Isometric view' },
-            { id: 'front', icon: <Orbit />, label: 'Front', tip: 'Front view' },
-            { id: 'back', icon: <ChevronsUp />, label: 'Back', tip: 'Back view' },
-            { id: 'left', icon: <ChevronsLeft />, label: 'Left', tip: 'Left view' },
-            { id: 'right', icon: <ChevronsRight />, label: 'Right', tip: 'Right view' },
+            { id: 'front', icon: <Orbit />, label: 'Front', tip: 'Front elevation\nParallel projection, to scale' },
+            { id: 'back', icon: <ChevronsUp />, label: 'Back', tip: 'Back elevation\nParallel projection, to scale' },
+            { id: 'left', icon: <ChevronsLeft />, label: 'Left', tip: 'Left elevation\nParallel projection, to scale' },
+            { id: 'right', icon: <ChevronsRight />, label: 'Right', tip: 'Right elevation\nParallel projection, to scale' },
           ] as const
         ).map((v) => ({ ...v, oneShot: true, onClick: () => goView(v.id as ViewPreset) }));
 
@@ -2025,7 +2108,8 @@ export function Scene3D({
         // number-heavy customer picture was the jaggiest. With the chain up the
         // canvas only ever receives one full-screen quad, where MSAA is free.
         gl={{ preserveDrawingBuffer: true, antialias: true, alpha: meshMode }}
-        camera={{ position: [30, 42, 42], fov: CAMERA_FOV, near: 0.3, far: 3000 }}
+        // our own instance, so the elevations can swap the lens and swap it back
+        camera={perspCam}
         onCreated={(state) => {
           const { gl } = state;
           gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -2074,7 +2158,8 @@ export function Scene3D({
             accumulation pass — not this component. */}
         <PickOrder wiring={wiring !== null} />
         <PmremEnvironment />
-        <DevSceneHandle sceneRef={sceneRef} />
+        <DevSceneHandle sceneRef={sceneRef} stateRef={stateRef} />
+        <ScaleBarSync bar={scaleBarRef} label={scaleLabelRef} imperial={units === 'imperial'} fmtLen={fmtLen} />
         <SceneContent
           project={project}
           structEdit={structInteractive ? structEdit : null}
@@ -2137,8 +2222,16 @@ export function Scene3D({
         <CameraControls
           ref={attachControls}
           makeDefault
+          // pinned to the perspective instance so drei never rebuilds the
+          // controls when the elevations swap r3f's camera; the swap hands
+          // the other lens to this same instance (setProjection)
+          camera={perspCam}
           minDistance={MIN_ORBIT_M}
           maxDistance={600}
+          // the orthographic lens: zoom is CSS px per metre, so 0.3 shows a
+          // 4 km site on a laptop and 600 fills the screen with two metres
+          minZoom={0.3}
+          maxZoom={600}
           maxPolarAngle={Math.PI / 2.05}
           dollyToCursor
           // one wheel notch used to swallow a third of the distance; a 100 m
@@ -2148,15 +2241,16 @@ export function Scene3D({
           draggingSmoothTime={0.06}
           azimuthRotateSpeed={heatmap ? 0 : 1}
           polarRotateSpeed={heatmap ? 0 : 1}
+          // a parallel projection cannot dolly, so the wheel zooms it instead
           mouseButtons={{
             left: ACTION.ROTATE,
-            middle: ACTION.DOLLY,
+            middle: ortho ? ACTION.ZOOM : ACTION.DOLLY,
             right: ACTION.TRUCK,
-            wheel: ACTION.DOLLY,
+            wheel: ortho ? ACTION.ZOOM : ACTION.DOLLY,
           }}
           touches={{
             one: ACTION.TOUCH_TRUCK,
-            two: ACTION.TOUCH_DOLLY_ROTATE,
+            two: ortho ? ACTION.TOUCH_ZOOM_ROTATE : ACTION.TOUCH_DOLLY_ROTATE,
             three: ACTION.TOUCH_TRUCK,
           }}
         />
@@ -2170,6 +2264,36 @@ export function Scene3D({
         aria-hidden
         style={{ position: 'absolute', inset: 0, zIndex: 20, pointerEvents: 'none' }}
       />
+
+      {/* the scale on a parallel projection — what makes a printed elevation
+          measurable. The frame writes its width and label (three/ScaleBar). */}
+      <div
+        role="img"
+        aria-label="Scale bar"
+        style={{
+          position: 'absolute',
+          left: 16,
+          bottom: 140,
+          zIndex: 31,
+          pointerEvents: 'none',
+          display: ortho ? 'block' : 'none',
+          color: 'var(--editor-ink)',
+          fontSize: 11,
+          textShadow: '0 1px 2px rgba(0,0,0,0.7)',
+        }}
+      >
+        <div
+          ref={scaleBarRef}
+          style={{
+            height: 7,
+            width: 100,
+            borderLeft: '2px solid currentColor',
+            borderRight: '2px solid currentColor',
+            borderBottom: '2px solid currentColor',
+          }}
+        />
+        <div ref={scaleLabelRef} style={{ marginTop: 3, textAlign: 'center', whiteSpace: 'nowrap' }} />
+      </div>
 
       {/* ── the GPU is away: say so, wait for it, then offer the way out ── */}
       {gpu !== 'ok' && (

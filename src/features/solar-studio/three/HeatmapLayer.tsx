@@ -58,6 +58,12 @@ export function HeatmapLayer({
       key={result.cells.length}
       ref={meshRef}
       args={[geom, undefined, result.cells.length]}
+      // three culls an instanced mesh by the bounds it computes at FIRST
+      // render — before the effect above has placed a single cell, so that
+      // is one cell-sized sphere at the world origin. It happened to sit
+      // inside every perspective frustum; the orthographic plan culled the
+      // whole map by it. The cells spread across the roof: never cull by them.
+      frustumCulled={false}
     >
       {/* white base × per-instance color (instanceColor) = the ramp color;
           NOT vertexColors — PlaneGeometry has no per-vertex color attribute */}

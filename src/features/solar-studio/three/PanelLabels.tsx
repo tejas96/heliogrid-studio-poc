@@ -109,7 +109,9 @@ export function PanelLabels({
     }
     const half = { w: size.width / 2, h: size.height / 2 };
     // pixels per metre at one metre, for this camera — the apparent-size cull
-    // divides by the distance to get it at the module
+    // divides by the distance to get it at the module. A parallel projection
+    // (the plan and the elevations) has one scale everywhere: its zoom.
+    const ortho = camera instanceof THREE.OrthographicCamera ? camera : null;
     const fovRad = ((camera as THREE.PerspectiveCamera).fov ?? 40) * (Math.PI / 360);
     const pxPerMetreAt1m = half.h / Math.tan(fovRad);
     let shown = 0;
@@ -119,7 +121,7 @@ export function PanelLabels({
       const it = items[i];
       v.set(it.position[0], it.position[1] + it.lift + 0.25, it.position[2]);
       const dist = camera.position.distanceTo(v);
-      const modulePx = (it.w * pxPerMetreAt1m) / Math.max(0.01, dist);
+      const modulePx = ortho ? it.w * ortho.zoom : (it.w * pxPerMetreAt1m) / Math.max(0.01, dist);
       v.project(camera);
       // z outside [-1,1] means behind the camera or past the far plane
       if (modulePx < MIN_MODULE_PX || v.z < -1 || v.z > 1) {
