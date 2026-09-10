@@ -49,9 +49,9 @@ A) THE PRODUCT SPECIFICATION — treat `docs/` as the source of truth.
    1440px.
 
 B) A PROOF-OF-CONCEPT 3D SOLAR DESIGN STUDIO — `src/features/solar-studio/`.
-   A working 10-step wizard: site setup → roof tracing (with AI roof detection from satellite
-   imagery) → obstructions → components → panel layout → 3D shadow simulation → proposal
-   captures → single-line diagram → bill of materials → done.
+   A working 10-step wizard: site setup → roof tracing (by hand; the AI roof detector that used
+   to sit here was removed on 2026-09-10) → obstructions → components → panel layout → 3D shadow
+   simulation → proposal captures → single-line diagram → bill of materials → done.
 
    ★ THIS IS THE ASSET TO CARRY OVER. The geometry, the engineering logic and the compute are
    real and validated, and must be REUSED — not rewritten. Specifically:
@@ -65,8 +65,12 @@ B) A PROOF-OF-CONCEPT 3D SOLAR DESIGN STUDIO — `src/features/solar-studio/`.
        combiner boxes, single-line diagram parameters, and a hard validity gate.
      · `lib/bom/*` (+ `emitters/`) — the bill of materials across six categories, with
        provenance tiers (measured / derived / estimated / assumed).
-     · `lib/roof-ai/*` — roof detection from Google Solar dataLayers + DSM rasters, with a
-       Gemini photo-analysis fallback, confidence scoring and a review step.
+     · `lib/plane-fit.ts`, `lib/geotiff-decode.ts`, `lib/roof-map-fit.ts`, `lib/surround.ts` —
+       Google Solar DSM rasters decoded and plane-fitted: a hand-traced roof's height, pitch
+       and facing measured off the aerial height map, and the neighbourhood relief the shading
+       engine casts against. *(These were `lib/roof-ai/*` until 2026-09-10. The roof DETECTOR
+       above them — dataLayers outline + Gemini photo fallback + review step — was removed that
+       day for detecting incorrectly. The maths was never AI and is the part worth carrying.)*
      · `lib/structure.ts`, `lib/foundation.ts`, `lib/drc.ts` — the parametric mounting
        structure, foundations, and design-rule checks (material estimation only).
      · `lib/health.ts`, `lib/finance.ts`, `lib/insights/*`, `lib/roof-topology.ts`,
@@ -79,8 +83,9 @@ C) WHAT THE POC IS NOT — be clear-eyed about the starting point:
      no tenant, organisation or user concept at all.
    · Persistence is browser-local: project JSON in localStorage (schema v2) plus images in
      IndexedDB. Nothing is shared, synced or durable.
-   · The only server code is five thin third-party proxies under `src/app/api/`: PVGIS,
-     Gemini, and Google Solar (building-insights, data-layers, geotiff).
+   · The only server code is four thin third-party proxies under `src/app/api/`: PVGIS and
+     Google Solar (building-insights, data-layers, geotiff). *(A fifth, `/api/gemini`, went
+     with the roof detector on 2026-09-10.)*
    · It is desktop-first: many interactions are hover, right-click, keyboard shortcuts and
      tiny drag handles, with no touch equivalents.
    · It carries leftover freemium gates (a 10 kW capacity cap, "PRO" locks). These must NOT

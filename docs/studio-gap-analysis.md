@@ -86,10 +86,20 @@ industrial profiles"*, *"parapets, curves, and pitch variations"* — and gates 
 drawings to its 5 MW tier. Half our declared v1 scope is C&I, and Indian factories are
 overwhelmingly north-light and curved sheds. We currently model them as a flat "metal shed".
 
-### G6 · Obstructions are 100% manual — no AI detection
-We have AI **roof** detection (Google `dataLayers` DSM + Gemini fallback, 9 files under
-`lib/roof-ai/`). We have **no AI obstruction detection**. All 11 obstruction types are
-hand-placed, hand-sized, hand-rotated, and each has a four-level-deep bridging settings chain.
+### G6 · Every shape is placed by hand — no detection of any kind
+**Updated 2026-09-10.** This section used to open "we have AI **roof** detection (Google
+`dataLayers` DSM + Gemini fallback, 9 files under `lib/roof-ai/`)". We do not. The owner
+removed the whole feature on 2026-09-10 — the route, the pipeline, the Gemini client, the
+Detect button and the ghost review — because it was not detecting correctly. `lib/roof-ai/`
+is gone. The DSM maths it was built on survives as `lib/plane-fit.ts` and
+`lib/geotiff-decode.ts`, which is what the aerial height map and the surround still use.
+
+So roofs are traced by hand, and **all 11 obstruction types** are hand-placed, hand-sized,
+hand-rotated, each behind a four-level-deep bridging settings chain.
+
+The nearest thing to detection that still ships is `obstructionsAddFromMap`
+(`lib/ops/roof-ops.ts`) — it reads raised objects off Google's aerial height map with real
+measured height. That is a height-map read, not a detector, and it is per-roof and opt-in.
 
 Aurora gates **AI-assisted obstruction detection** to Premium. ARKA sells "AI-optimized
 designs within 5 mins". This is the slowest step in our wizard and the one AI most obviously

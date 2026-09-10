@@ -242,13 +242,22 @@ carrying an honest provenance tier.
 > Address in → complete, accurate 3D site out. No drawing.
 
 **Today** — `Step2Roof.tsx` (3260 lines) + `Step3Obstructions.tsx` (1103 lines).
-`lib/roof-ai/` (9 files) does real work: Google `dataLayers` DSM plane fitting with a Gemini
-vision fallback. But: **hard-capped at 8 roof surfaces, a 40 m request radius and a 150 m site
-extent**; the AI never produces a multi-plane pitched roof (a gable returns one tilted plane
-with a "review by hand" warning); imported roofs are always stamped `rcc_flat`; DSM obstructions
-are always type `other`; the Gemini prompt **explicitly excludes neighbouring buildings**;
-Step 3 has no AI path at all. The oblique site-photo detector exists on the server with no
-client caller — a dead capability.
+**UPDATED 2026-09-10 — there is no roof detector any more.** This section used to describe
+`lib/roof-ai/` (9 files: Google `dataLayers` DSM plane fitting with a Gemini vision fallback).
+The owner removed the whole feature on 2026-09-10 because it was not detecting correctly, and
+the faults recorded here are why the S1 rows below existed: **hard-capped at 8 roof surfaces, a
+40 m request radius and a 150 m site extent** (a factory could not be detected at all); a gable
+came back as one tilted plane with a "review by hand" warning; imported roofs were always
+stamped `rcc_flat`; DSM obstructions were always type `other`; the Gemini prompt **explicitly
+excluded neighbouring buildings**; Step 3 never had an AI path; and the oblique site-photo
+detector sat on the server with no client caller.
+
+So **every roof is traced by hand today.** Read the S1 rows below as a spec for a detector to be
+BUILT, not as fixes to one that exists. What survives, and is not AI, is the DSM maths the
+detector was built on: `lib/plane-fit.ts` and `lib/geotiff-decode.ts` still measure a
+hand-traced roof's height, pitch and facing (`lib/roof-map-fit.ts`) and still build the
+shading surround (`lib/surround.ts`). `obstructionsAddFromMap` (`lib/ops/roof-ops.ts`) still
+reads raised objects off the height map with real measured size.
 
 | ID | Work | Sev | Eff |
 |---|---|---|---|
@@ -257,9 +266,9 @@ client caller — a dead capability.
 | **S1-03** | **Terrain.** DEM/DTM import (SRTM 30 m, Google Elevation, or surveyed spot levels), contours, ground slope. Today every building and every ground array sits on a perfectly flat `y=0`. This blocks accurate ground mount, accurate shading and accurate site drawings. | 🔴 | XL |
 | **S1-04** | **Neighbour buildings as real geometry.** Detect surrounding building footprints and heights from the DSM and import them as **shade-casting** objects. Today the 3D neighbours are *fabricated random boxes seeded from the latitude* and the engine ignores them entirely. On an Indian street this is *the* shading question. | 🔴 | L |
 | **S1-05** | **Far-shading horizon profile.** Build a 360° horizon from the DEM; allow a fisheye/panorama photo capture on site; allow manual entry. Nothing beyond the 250 m raycast cut is visible to the model today. | 🔴 | M |
-| **S1-06** | **Roof covering detection.** RCC vs metal sheet vs tile drives the **entire** mechanical BOM, and every AI-imported roof is stamped `rcc_flat`. Detect it from imagery colour/texture + Gemini. | 🟠 | M |
+| **S1-06** | **Roof covering detection.** RCC vs metal sheet vs tile drives the **entire** mechanical BOM. Detect it from imagery colour/texture. *(The old note "every AI-imported roof is stamped `rcc_flat`" is moot since 2026-09-10 — there is no import. `makeRoof` still defaults every hand-traced roof to `rcc_flat`, so the gap is the same one.)* | 🟠 | M |
 | **S1-07** | **Sheet profile + purlin direction detection** for metal sheds: trapezoidal / standing-seam / corrugated / curved, rib pitch, purlin spacing and **direction**. Standoff counts today assume rails always cross the purlins. | 🟠 | M |
-| **S1-08** | **AI obstruction detection in Step 3.** All 11 types, polygon footprints, real heights. Today Step 3 has no AI button at all, DSM obstructions are always `other`, and Gemini recognises 8 of 11 kinds. This is the slowest step in the wizard. | 🔴 | L |
+| **S1-08** | **AI obstruction detection in Step 3.** All 11 types, polygon footprints, real heights. Today Step 3 has no AI button at all and the height-map path (`obstructionsAddFromMap`) classifies only `elevated / tank / other`. This is the slowest step in the wizard. *(The old note about Gemini recognising 8 of 11 kinds is moot since 2026-09-10.)* | 🔴 | L |
 | **S1-09** | **Import paths — the whole set.** DXF/DWG underlay, KML/KMZ, GeoJSON, shapefile, total-station points, drone photogrammetry mesh, LiDAR point cloud. Today: **zero imports of any kind.** | 🔴 | XL |
 | **S1-10** | **Parapet detail** — per-edge height, coping, railing, and automatic detection. One height for the whole roof today. | 🟠 | M |
 | **S1-11** | **Polygon obstructions.** Rectangle or circle only today. | 🟠 | M |
