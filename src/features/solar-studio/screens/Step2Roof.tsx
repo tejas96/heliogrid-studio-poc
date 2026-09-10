@@ -165,7 +165,20 @@ export function Step2Roof() {
   const [pendingGeometryChange, setPendingGeometryChange] =
     useState<PendingGeometryChange | null>(null);
   const [showVertexInspector, setShowVertexInspector] = useState(false);
-  const [showMeasurements, setShowMeasurements] = useState(false);
+  /*
+   * Edge lengths are ON by default.
+   *
+   * They used to appear only on the SELECTED roof, so the dimensions a user had
+   * just traced vanished the moment they clicked away — the one moment they
+   * want to read them back and check the trace against a tape measure. A roof
+   * outline without its lengths is a drawing of a shape; with them it is a
+   * measured drawing, which is what the rest of this app treats it as.
+   *
+   * The Dims toggle stays, for turning them off on a crowded site. It does not
+   * need to be there to turn them ON: `EdgeLabels` already drops any edge
+   * shorter than 30 screen px, so a zoomed-out site sheds its own clutter.
+   */
+  const [showMeasurements, setShowMeasurements] = useState(true);
   // two-click measure + known-distance site calibration
   const measure = useMeasure();
   const [calibrateOpen, setCalibrateOpen] = useState(false);

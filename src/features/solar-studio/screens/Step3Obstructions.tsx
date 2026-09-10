@@ -110,7 +110,9 @@ export function Step3Obstructions() {
   const [placing, setPlacing] = useState<(typeof OBSTRUCTION_TYPES)[number] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
-  const [showMeasurements, setShowMeasurements] = useState(false);
+  // on by default, matching Step 2 — the same roofs must not lose their
+  // dimensions just because the user walked forward one screen
+  const [showMeasurements, setShowMeasurements] = useState(true);
   const measure = useMeasure();
   const [show3D, setShow3D] = useState(false);
   const { units, setUnits, fmtLen, lenValue, lenUnit } = useUnits();
