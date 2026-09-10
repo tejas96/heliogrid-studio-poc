@@ -34,9 +34,6 @@ const MIN_TILE_ZOOM = 16;
 const MIN_VIEW_ZOOM = 0.55;
 const FIT_VIEW_ZOOM = 1.5;
 const MAX_VIEW_ZOOM = 5;
-/** device px per image px above which hard pixel edges read better than the
- *  browser's blur — the old `zoom > 2.2` for a 640 px tile in the 1000 px box */
-const PIXELATE_ABOVE = 3.44;
 /** travel before a finger is treated as a drag rather than a tap. Under it the
  *  gesture is still allowed to become a pinch, which is the whole point. */
 const TOUCH_SLOP_PX = 8;
@@ -92,8 +89,15 @@ export const SatCanvas = forwardRef<
      * tile spans at least this much, because imagery the site does not fit
      * inside cannot be traced at all: a zoom-20 tile is ~90 m across, narrower
      * than a C&I shed and a rounding error next to a ground-mount field.
-     * Omitted ⇒ one step wider than SAT_ZOOM, which at scale 2 is free — half
-     * the zoom, twice the pixels, the same metres per pixel as before.
+     *
+     * Omitted ⇒ SAT_ZOOM itself, the sharpest imagery Google serves. It used to
+     * omit to SAT_ZOOM − 1, on the reasoning that scale=2 paid for the step
+     * back. It does not: scale=2 is on at BOTH zooms (TILE_SCALE), so the step
+     * simply threw away half the ground resolution — 0.143 m/px instead of
+     * 0.071 m/px — and the 2D editors then magnified that loss ~5×. It also
+     * left the canvas as the ONE consumer of SAT_ZOOM that did not actually
+     * request SAT_ZOOM, which is the sort of quiet disagreement that makes a
+     * pixels-to-metres bug impossible to find.
      */
     coverM?: number;
   }
@@ -132,7 +136,7 @@ export const SatCanvas = forwardRef<
   // factor divides out before asking the imagery for raw ground.
   const tileZoom = coverM
     ? zoomCovering(lat, coverM / scaleFactor, TILE_PX, SAT_ZOOM, MIN_TILE_ZOOM)
-    : SAT_ZOOM - 1;
+    : SAT_ZOOM;
   // calibrated span: the same tile covers spanM × scaleFactor world meters
   // after a known-distance calibration, keeping geometry and imagery aligned
   const spanM = metersPerStaticMap(lat, tileZoom, TILE_PX) * scaleFactor;
@@ -472,8 +476,11 @@ export const SatCanvas = forwardRef<
               height: '100%',
               filter: dim ? 'brightness(0.6) saturate(0.9)' : 'brightness(0.94)',
               userSelect: 'none',
-              imageRendering:
-                (zoom * sizePx) / (TILE_PX * TILE_SCALE) > PIXELATE_ABOVE ? 'pixelated' : 'auto',
+              // Always smooth. `pixelated` is nearest-neighbour: past ~3.4×
+              // upscale it drew hard square blocks, which read as a broken
+              // photo rather than a magnified one. Every mature design tool
+              // (ResLink included) draws its imagery with linear filtering.
+              imageRendering: 'auto',
             }}
           />
           <svg

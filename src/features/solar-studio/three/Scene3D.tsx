@@ -5,6 +5,7 @@ import {
   CameraControls,
   CameraControlsImpl,
   Environment,
+  Grid,
   Html,
   Lightformer,
   Line,
@@ -58,6 +59,7 @@ import { RailsInstanced, railFrameOf, type RailFrame } from './RailsInstanced';
 import { WalkwaysInstanced, walkwayFrameOf, type WalkwayFrame } from './WalkwaysInstanced';
 import { ShadowFit, shadowRadiusTexels } from './ShadowFit';
 import { useSceneActivity } from './useSceneActivity';
+import { useReducedMotion } from './useReducedMotion';
 import { attachContextGuard, describeGpu, webglAvailable } from './gpu-guard';
 import { SceneErrorBoundary } from './SceneErrorBoundary';
 import { readDiagnostics, recordDiagnostic } from '../lib/diagnostics';
@@ -495,7 +497,7 @@ import {
 } from '../lib/scene-model';
 import { computeEaveRefs, surfaceHeightAt } from '../lib/roof-plane';
 import { obstructionBaseY } from '../lib/ground';
-import { lightenHex, roofColor } from '../lib/roof-colors';
+import { roofColor } from '../lib/roof-colors';
 import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
 import { StructureNodesInstanced } from './StructureNodesInstanced';
@@ -601,6 +603,270 @@ const FAR_GROUND_M = 3000;
 const GROUND_STACK_M = 0.75;
 
 const ACTION = CameraControlsImpl.ACTION;
+
+/** the pivot never sits further away than this — past it, orbit degenerates to pan (m) */
+const MAX_PIVOT_M = 400;
+/** screen centre in normalised device coords — the ray the pivot rides on */
+const SCREEN_CENTRE = new THREE.Vector2(0, 0);
+/** marks the group holding the design, wherever the current view has put it */
+const DESIGN_ROOT = { designRoot: true } as const;
+
+/**
+ * Keep the orbit pivot ON the thing the camera is looking at.
+ *
+ * THE DEFECT, measured on Step 6 with the user's own project: the orbit target
+ * had drifted 32.2 m from a model 27.6 m across — more than a building-width
+ * off to one side. Everything downstream of that felt broken and none of it
+ * was fixable at the knob it appeared to be broken at:
+ *
+ *   · rotating swung the model around a pivot floating in empty air, so the
+ *     building flew across the screen instead of turning on the spot;
+ *   · zoom ran toward that same empty point, so the user zoomed PAST the
+ *     building into nothing.
+ *
+ * Nothing put the target there deliberately. Pan (right-drag) moves the target
+ * by design, and it is the ONLY thing that ever moved it back — so every pan
+ * left the pivot a little further out, permanently, for the rest of the
+ * session. `dollyToCursor` had been adding its own drift on top, which is why
+ * turning that off helped and did not cure it: the leak had two taps and one
+ * bucket that never emptied.
+ *
+ * THE FIX rests on one fact: a target placed anywhere along the camera's own
+ * forward ray is VIEW-NEUTRAL. The camera already looks down that ray, so
+ * moving the target along it changes the pivot distance and nothing else — not
+ * one pixel moves. So before every interaction, the target is re-seated on
+ * whatever surface sits at the centre of the view. The picture does not flinch,
+ * and the camera is once again orbiting and dollying about the model.
+ *
+ * With the pivot re-seated on every wheel notch, `dollyToCursor` becomes safe
+ * to keep: its drift is corrected before it can accumulate, so the user gets
+ * the zoom-toward-the-pointer they expect without the model walking away.
+ */
+function CameraPivot({
+  controls,
+  enabled,
+}: {
+  controls: { current: CameraControlsImpl | null };
+  enabled: boolean;
+}) {
+  const gl = useThree((s) => s.gl);
+  const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const el = gl.domElement;
+    // our own caster: r3f's is the one pointer events pick with, and `far`
+    // must not be mutated under it
+    const ray = new THREE.Raycaster();
+    ray.far = MAX_PIVOT_M;
+    const dir = new THREE.Vector3();
+
+    const box = new THREE.Box3();
+    const centre = new THREE.Vector3();
+    const toCentre = new THREE.Vector3();
+
+    const anchor = () => {
+      const c = controls.current;
+      if (!c) return;
+      camera.getWorldDirection(dir);
+
+      /*
+       * Depth of the MODEL along the view axis. This, not the crosshair, is the
+       * default pivot — a turntable, which is what "orbit the model" means in
+       * every tool an engineer already uses.
+       *
+       * Pivoting on whatever pixel happens to sit at the centre was the earlier
+       * version, and it read very differently between the two views for one
+       * reason: the mesh view is mostly empty studio floor. Point the crosshair
+       * a little off the building at a shallow angle and the nearest surface is
+       * floor eighty metres away — so the pivot went eighty metres away, and
+       * the building swung like a conker on a string. The map view hid the same
+       * flaw because its ground is photographed and busy, so a pivot on it
+       * still looked deliberate. Same code, same defect, two appearances. The
+       * model's own depth is the answer in both.
+       */
+      const root = scene.getObjectByProperty('userData', DESIGN_ROOT);
+      let modelDepth = NaN;
+      let modelRadius = 0;
+      if (root) {
+        box.setFromObject(root);
+        if (!box.isEmpty()) {
+          box.getCenter(centre);
+          modelRadius = box.getSize(toCentre).length() / 2;
+          modelDepth = toCentre.subVectors(centre, camera.position).dot(dir);
+        }
+      }
+
+      // A hit only wins when it is ON the model — you are close in on a face,
+      // and that face is the better pivot. A hit on the floor beyond the
+      // building is not; that is the case above.
+      ray.setFromCamera(SCREEN_CENTRE, camera);
+      const hit = ray
+        .intersectObjects(scene.children, true)
+        .find(
+          (h) =>
+            h.object.visible &&
+            !(h.object as THREE.Object3D & { isLine?: boolean }).isLine &&
+            !(h.object as THREE.Object3D & { isPoints?: boolean }).isPoints &&
+            h.distance > MIN_ORBIT_M &&
+            modelRadius > 0 &&
+            h.point.distanceTo(centre) <= modelRadius,
+        );
+
+      let dist = hit?.distance ?? NaN;
+      if (!Number.isFinite(dist) && modelDepth > MIN_ORBIT_M) dist = modelDepth;
+      if (!Number.isFinite(dist) && Math.abs(dir.y) > 1e-4) {
+        // model behind the camera and nothing under the crosshair: fall back to
+        // where the view meets grade, which is at least a surface in front
+        const toGround = -camera.position.y / dir.y;
+        if (toGround > MIN_ORBIT_M) dist = toGround;
+      }
+      if (!Number.isFinite(dist)) return;
+      // stay inside the controls' own clamps, or `setTarget` moves the CAMERA
+      // to satisfy them and the whole point of a view-neutral pivot is lost
+      dist = Math.min(Math.max(dist, MIN_ORBIT_M + 0.01), MAX_PIVOT_M);
+      c.setTarget(
+        camera.position.x + dir.x * dist,
+        camera.position.y + dir.y * dist,
+        camera.position.z + dir.z * dist,
+        false,
+      );
+    };
+
+    // capture, so the pivot is already right when the controls read it
+    el.addEventListener('pointerdown', anchor, { capture: true });
+    el.addEventListener('wheel', anchor, { capture: true, passive: true });
+    return () => {
+      el.removeEventListener('pointerdown', anchor, { capture: true });
+      el.removeEventListener('wheel', anchor, { capture: true });
+    };
+  }, [gl, camera, scene, controls, enabled]);
+
+  return null;
+}
+
+/** e-folding time of a released flick: it is ~95% dead after 3× this (seconds) */
+const ORBIT_COAST_TAU = 0.17;
+/** slower than this on release and the user was placing the view, not throwing it (rad/s) */
+const ORBIT_COAST_MIN = 0.4;
+/**
+ * A flick is a nudge, not a spin — cap what the fastest throw can carry (rad/s).
+ * Total coast is `v × tau`, so this ceiling times ORBIT_COAST_TAU is the most
+ * rotation any single throw can add: about 34°, roughly one face of a building.
+ * At 5 it was 49°, which overshot the corner the user was flicking toward.
+ */
+const ORBIT_COAST_MAX = 3.5;
+/** below this the coast is invisible, so stop and let the loop sleep (rad/s) */
+const ORBIT_COAST_STOP = 0.02;
+/** weight of the newest sample in the velocity average (0..1) */
+const ORBIT_VELOCITY_SMOOTHING = 0.35;
+
+/**
+ * Flick-to-coast on the orbit.
+ *
+ * Two different things get called "smooth rotation", and camera-controls only
+ * offers one knob for both. `draggingSmoothTime` makes the camera CHASE the
+ * pointer: it lags while you drag (measured: 308 ms of travel and 4.1° of
+ * overshoot after the mouse had already stopped) and, as a side effect, drifts
+ * on after release. Turning it off bought back a 1:1 grip and lost the drift —
+ * and the drift is the part that felt alive.
+ *
+ * So they are separated here. The drag stays exactly 1:1. This watches the
+ * camera's OWN angular velocity while the button is down, and when the button
+ * comes up with real speed still on it, keeps rotating along a decaying curve.
+ * Release with the pointer already still — the ordinary case, positioning a
+ * view — and the average has decayed to nothing, so nothing coasts. You only
+ * get the throw when you actually threw it.
+ *
+ * Velocity is read from `azimuthAngle`/`polarAngle` rather than from pointer
+ * pixels, so it needs no knowledge of rotate speed, of which button is bound to
+ * which action, or of the clamps: a drag that spent its last 100 ms pinned
+ * against `maxPolarAngle` has a measured velocity of zero there, and correctly
+ * refuses to coast into a wall it is already touching.
+ */
+function OrbitInertia({
+  controls,
+  enabled,
+}: {
+  controls: { current: CameraControlsImpl | null };
+  enabled: boolean;
+}) {
+  const gl = useThree((s) => s.gl);
+  const invalidate = useThree((s) => s.invalidate);
+  const st = useRef({ down: false, t: 0, az: 0, pol: 0, vAz: 0, vPol: 0, coast: false });
+
+  useEffect(() => {
+    const el = gl.domElement;
+    const s = st.current;
+    const onDown = () => {
+      const c = controls.current;
+      if (!c) return;
+      s.down = true;
+      s.coast = false;
+      s.vAz = 0;
+      s.vPol = 0;
+      s.t = performance.now();
+      s.az = c.azimuthAngle;
+      s.pol = c.polarAngle;
+    };
+    const onUp = () => {
+      if (!s.down) return;
+      s.down = false;
+      const speed = Math.hypot(s.vAz, s.vPol);
+      if (!enabled || speed <= ORBIT_COAST_MIN) return;
+      const clamp = Math.min(1, ORBIT_COAST_MAX / speed);
+      s.vAz *= clamp;
+      s.vPol *= clamp;
+      s.coast = true;
+      invalidate();
+    };
+    // any new input owns the camera: a coast must never fight the hand
+    const stop = () => {
+      s.coast = false;
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('wheel', stop, { passive: true });
+    // on window, not the canvas: a drag that ends off-canvas still ends
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('wheel', stop);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+      s.coast = false;
+    };
+  }, [gl, controls, enabled, invalidate]);
+
+  useFrame((_, dt) => {
+    const c = controls.current;
+    if (!c) return;
+    const s = st.current;
+    if (s.down) {
+      const now = performance.now();
+      const h = (now - s.t) / 1000;
+      if (h < 0.004) return; // too short to divide by without amplifying noise
+      const az = (c.azimuthAngle - s.az) / h;
+      const pol = (c.polarAngle - s.pol) / h;
+      s.vAz = s.vAz * (1 - ORBIT_VELOCITY_SMOOTHING) + az * ORBIT_VELOCITY_SMOOTHING;
+      s.vPol = s.vPol * (1 - ORBIT_VELOCITY_SMOOTHING) + pol * ORBIT_VELOCITY_SMOOTHING;
+      s.t = now;
+      s.az = c.azimuthAngle;
+      s.pol = c.polarAngle;
+      return;
+    }
+    if (!s.coast) return;
+    c.rotate(s.vAz * dt, s.vPol * dt, false);
+    const decay = Math.exp(-dt / ORBIT_COAST_TAU);
+    s.vAz *= decay;
+    s.vPol *= decay;
+    if (Math.hypot(s.vAz, s.vPol) < ORBIT_COAST_STOP) s.coast = false;
+    invalidate();
+  });
+
+  return null;
+}
 
 /**
  * Where the camera should stand to see the whole design from a preset
@@ -1087,6 +1353,9 @@ export function Scene3D({
   // awake = rendering flat out, asleep = a frame only when something changes
   // (three/useSceneActivity). Every pointer, wheel and key on the wrapper wakes it.
   const { awake, wake } = useSceneActivity(visible);
+  // motion the user did not ask for is exactly what this setting is about, so
+  // the flick coast is the first thing to go (DESIGN-SYSTEM §9)
+  const reducedMotion = useReducedMotion();
   /**
    * The GPU. 'lost' = the browser dropped the WebGL context and may bring it
    * back; 'gone' = it did not within RESTORE_WAIT_MS, so the user is offered a
@@ -1132,6 +1401,47 @@ export function Scene3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [project.roofs, project.panels, focusRoofId],
   );
+  /**
+   * Where the design SITS, as opposed to how big it is.
+   *
+   * `designBounds` answers in the design's own coordinates. The map view draws
+   * the design there, so the two agreed and nobody noticed that they are not
+   * the same thing. The mesh view re-centres the design on the world origin —
+   * a measured 32.2 m on the owner's site — and from that moment every
+   * world-space consumer of `bounds` was aiming at where the design USED to be:
+   * the view presets, the pan boundary, the walk entry point, the saved pose.
+   * "Iso" in the studio view framed empty floor thirty metres from the
+   * building, which is exactly what the user reported and could not be fixed at
+   * the camera, because the camera was doing as it was told.
+   *
+   * So the shift is stated once, here, and added to the bounds every world-space
+   * consumer uses. It is the same formula `SceneContent` puts on the group, and
+   * it is handed down rather than recomputed so the two can never disagree.
+   */
+  const viewShift = useMemo<[number, number, number]>(() => {
+    if (viewMode !== 'mesh') return [0, 0, 0];
+    const focused = focusRoofId ? project.roofs.filter((r) => r.id === focusRoofId) : [];
+    const shown = focused.length ? focused : project.roofs;
+    if (shown.length === 0) return [0, 0, 0];
+    const cs = shown.map((r) => polygonCentroid(r.polygon));
+    return [
+      -cs.reduce((s, c) => s + c.x, 0) / cs.length,
+      0,
+      cs.reduce((s, c) => s + c.y, 0) / cs.length,
+    ];
+  }, [viewMode, focusRoofId, project.roofs]);
+
+  /** `bounds`, moved to where the design is actually drawn. Camera code uses THIS. */
+  const worldBounds = useMemo<SceneBounds>(
+    () => ({
+      ...bounds,
+      cx: bounds.cx + viewShift[0],
+      cy: bounds.cy + viewShift[1],
+      cz: bounds.cz + viewShift[2],
+    }),
+    [bounds, viewShift],
+  );
+
   // the SHADOW box is wider than the camera's: it has to hold the neighbours
   // that shade the design, which the camera has no business framing
   const shadowFit = useMemo(
@@ -1216,11 +1526,17 @@ export function Scene3D({
     // the plan and the four elevations are parallel projections; Iso keeps the lens
     const flat = v !== 'iso';
     setProjection(flat);
-    const { pos, target } = presetPose(bounds, v, CAMERA_FOV, flat);
+    const { pos, target } = presetPose(worldBounds, v, CAMERA_FOV, flat);
     void c.setLookAt(pos[0], pos[1], pos[2], target[0], target[1], target[2], animate);
     // the orthographic zoom that frames the design — distance means nothing to that lens
     if (flat) {
-      void c.fitToSphere(new THREE.Sphere(new THREE.Vector3(bounds.cx, bounds.cy, bounds.cz), bounds.r * 1.15), animate);
+      void c.fitToSphere(
+        new THREE.Sphere(
+          new THREE.Vector3(worldBounds.cx, worldBounds.cy, worldBounds.cz),
+          worldBounds.r * 1.15,
+        ),
+        animate,
+      );
     }
   }
 
@@ -1307,17 +1623,34 @@ export function Scene3D({
       return;
     }
     // wide enough in plan that the boundary never limits a pan across the site
-    const reach = Math.max(1000, bounds.r * 20);
+    const reach = Math.max(1000, worldBounds.r * 20);
     c.setBoundary(
       new THREE.Box3(
-        new THREE.Vector3(bounds.cx - reach, bounds.yMin + CAMERA_FLOOR_M, bounds.cz - reach),
-        new THREE.Vector3(bounds.cx + reach, bounds.yMin + CAMERA_FLOOR_M + 4000, bounds.cz + reach),
+        new THREE.Vector3(
+          worldBounds.cx - reach,
+          worldBounds.yMin + CAMERA_FLOOR_M,
+          worldBounds.cz - reach,
+        ),
+        new THREE.Vector3(
+          worldBounds.cx + reach,
+          worldBounds.yMin + CAMERA_FLOOR_M + 4000,
+          worldBounds.cz + reach,
+        ),
       ),
     );
     c.boundaryEnclosesCamera = true;
-  }, [controlsReady, walk, bounds]);
+  }, [controlsReady, walk, worldBounds]);
 
-  const boundsKey = `${bounds.cx.toFixed(1)}|${bounds.cz.toFixed(1)}|${bounds.r.toFixed(1)}`;
+  /*
+   * The key that decides "is the camera still framing the same thing?".
+   *
+   * It carries the SHIFT as well as the footprint, so switching between the map
+   * and mesh views counts as a new framing and re-frames. It also stops a pose
+   * saved in one view being restored into the other — that pose is in world
+   * coordinates, and the two views put the same design 32 m apart, so restoring
+   * across them is how a session opened on empty ground in the first place.
+   */
+  const boundsKey = `${worldBounds.cx.toFixed(1)}|${worldBounds.cz.toFixed(1)}|${worldBounds.r.toFixed(1)}`;
   const framedFor = useRef<string>('');
   useEffect(() => {
     const c = controlsRef.current;
@@ -1433,12 +1766,12 @@ export function Scene3D({
     c.polarRotateSpeed = -0.3;
     // stand at the near edge of the design, eye height above its deck, looking in
     const from = walkSaved.current.pos;
-    const dx = from.x - bounds.cx;
-    const dz = from.z - bounds.cz;
+    const dx = from.x - worldBounds.cx;
+    const dz = from.z - worldBounds.cz;
     const n = Math.hypot(dx, dz) || 1;
-    const ex = bounds.cx + (dx / n) * bounds.r * 0.9;
-    const ez = bounds.cz + (dz / n) * bounds.r * 0.9;
-    const ey = bounds.cy + WALK_EYE_M;
+    const ex = worldBounds.cx + (dx / n) * worldBounds.r * 0.9;
+    const ez = worldBounds.cz + (dz / n) * worldBounds.r * 0.9;
+    const ey = worldBounds.cy + WALK_EYE_M;
     void c.setLookAt(ex, ey, ez, ex - (dx / n), ey, ez - (dz / n), true);
     setWalk(true);
   }
@@ -2200,6 +2533,7 @@ export function Scene3D({
           heatResult={heatResult}
           heatMonth={heatMonth}
           bounds={bounds}
+          originShift={viewShift}
           shadowFit={shadowFit}
           boxSelect={structInteractive && boxSelect}
           selectedIds={wiringSet ?? selectedSet}
@@ -2217,8 +2551,8 @@ export function Scene3D({
           glEpoch={glEpoch}
         />
         {/* Camera director: smooth, damped, touch-native (one finger pans, two
-            fingers pinch + rotate — DESIGN-SYSTEM §7.2), dolly to the cursor,
-            and every preset/focus is a tween rather than a jump. */}
+            fingers pinch + rotate — DESIGN-SYSTEM §7.2), and every preset/focus
+            is a tween rather than a jump. */}
         <CameraControls
           ref={attachControls}
           makeDefault
@@ -2233,12 +2567,56 @@ export function Scene3D({
           minZoom={0.3}
           maxZoom={600}
           maxPolarAngle={Math.PI / 2.05}
-          dollyToCursor
+          /*
+           * Zoom toward the CENTRE OF THE VIEW, never the cursor.
+           *
+           * `dollyToCursor` drags the orbit target along the cursor ray on
+           * every notch, so the model walks out from under the pointer: five
+           * notches over an off-centre pixel moved the target 5.6 m and left
+           * the building in the bottom-left corner, half off screen. The user
+           * then has to pan it back before every rotate — the scroll wheel was
+           * quietly destroying the framing it was meant to refine.
+           *
+           * Zoom-to-cursor is right for a MAP, where the ground plane under
+           * the pointer is the thing you are aiming at. It is wrong for an
+           * object inspector, which is what this scene is: the roof is the
+           * subject, the target belongs on it, and pan (right-drag) is the
+           * control that moves the subject — deliberately, when asked.
+           * The ortho elevations inherit the same rule, so the 3D map view and
+           * the mesh view now behave identically.
+           *
+           * MEASURED, after `CameraPivot` landed and this was briefly switched
+           * back on: five notches with the pointer over empty ground carried
+           * the model from mid-screen (492, 527) clean off the canvas
+           * (−68, 987), and pushed the pivot from 6 m to 12 m off the model.
+           * Re-seating the pivot each notch bounds the drift; it cannot undo
+           * the sideways travel, because travelling sideways is precisely what
+           * this flag asks for. Zoom-to-cursor is right for a map, where the
+           * ground under the pointer IS the subject. Here the building is the
+           * subject and the pointer is usually beside it.
+           */
+          dollyToCursor={false}
           // one wheel notch used to swallow a third of the distance; a 100 m
           // site went from overview to inside-the-wall in four notches
           dollySpeed={0.35}
+          // `smoothTime` is for moves the APP starts — a view preset, a focus,
+          // a tween. A glide there reads as the camera travelling, and is right.
           smoothTime={0.2}
-          draggingSmoothTime={0.06}
+          /*
+           * `draggingSmoothTime` is for moves the HAND starts, and there the
+           * same glide is a lie: the camera is no longer showing where the
+           * pointer is, it is showing where the pointer WAS. Measured on the
+           * live scene at the old 0.06, the model kept turning for 308 ms after
+           * the mouse stopped and overshot by 4.14° — four degrees of rotation
+           * nobody asked for, on every single orbit. At 0 it stops in 17 ms
+           * with no drift.
+           *
+           * Every 3D tool a solar engineer already uses — SketchUp, Revit,
+           * Fusion, Blender — orbits 1:1 with the pointer. Inertia is a phone
+           * idiom; on a mouse it feels like the model is on ice. So: direct
+           * while dragging, damped only when the app is driving.
+           */
+          draggingSmoothTime={0}
           azimuthRotateSpeed={heatmap ? 0 : 1}
           polarRotateSpeed={heatmap ? 0 : 1}
           // a parallel projection cannot dolly, so the wheel zooms it instead
@@ -2254,6 +2632,12 @@ export function Scene3D({
             three: ACTION.TOUCH_TRUCK,
           }}
         />
+        {/* the throw after the drag — see OrbitInertia. Off with the heatmap,
+            where rotation is deliberately disabled, and off under reduced
+            motion, where movement nobody asked for is the whole complaint. */}
+        {/* the pivot lives on the model, not wherever the last pan left it */}
+        <CameraPivot controls={controlsRef} enabled={!heatmap} />
+        <OrbitInertia controls={controlsRef} enabled={!heatmap && !reducedMotion} />
         {!heatmap && POST_ENABLED && <ScenePost />}
       </GuardedCanvas>
 
@@ -2998,6 +3382,7 @@ function SceneContent({
   heatResult,
   heatMonth,
   bounds,
+  originShift,
   shadowFit,
   boxSelect,
   selectedIds,
@@ -3016,6 +3401,13 @@ function SceneContent({
 }: {
   project: Project;
   bounds: SceneBounds;
+  /**
+   * Where this view puts the design, in world metres. Handed down rather than
+   * recomputed here: the camera director outside the Canvas has to add the same
+   * shift to `bounds`, and two copies of one formula is how the studio view
+   * ended up framing floor thirty metres from the building.
+   */
+  originShift: [number, number, number];
   /** bumps after a restored GPU context — the baked environment map must be redone */
   glEpoch: number;
   /** the same box grown to hold the obstructions that shade the design */
@@ -3116,9 +3508,16 @@ function SceneContent({
    * instead — which is exactly right, and is the whole point of a sun path: a
    * low sun really is blocked by what stands in front of it.
    */
+  // + originShift: the dome is drawn in world space around the design, and the
+  // mesh view moves the design (see the prop's note)
   const sunDomeCentre = useMemo(
-    () => new THREE.Vector3(bounds.cx, bounds.yMin, bounds.cz),
-    [bounds],
+    () =>
+      new THREE.Vector3(
+        bounds.cx + originShift[0],
+        bounds.yMin + originShift[1],
+        bounds.cz + originShift[2],
+      ),
+    [bounds, originShift],
   );
   const SUN_DOME_R = Math.max(
     R * 0.75,
@@ -3420,20 +3819,17 @@ function SceneContent({
     }
     return m;
   }, [panelParts]);
-  // shift so the shown building(s)' collective center sits at the world origin
-  const meshCenter =
-    meshMode && shownRoofs.length > 0
-      ? (() => {
-          const cs = shownRoofs.map((r) => polygonCentroid(r.polygon));
-          return {
-            x: cs.reduce((s, c) => s + c.x, 0) / cs.length,
-            y: cs.reduce((s, c) => s + c.y, 0) / cs.length,
-          };
-        })()
-      : { x: 0, y: 0 };
-  const originShift: [number, number, number] = meshMode
-    ? [-meshCenter.x, 0, meshCenter.y]
-    : [0, 0, 0];
+
+  /*
+   * NOTHING HERE MOVES THE CAMERA when `originShift` changes, and that is
+   * deliberate. An earlier version carried the camera by the shift delta, which
+   * is view-neutral and looked right on its own — but the camera director
+   * outside the Canvas now frames in WORLD coordinates and re-frames whenever
+   * the shift changes (see `worldBounds` / `boundsKey`). Doing both applied the
+   * 32.2 m twice: the design landed at the origin and the camera looked at
+   * −32, so the studio view opened on empty floor. One owner of the camera, and
+   * it is the director.
+   */
 
   const sunDir = useMemo(() => {
     const x = Math.cos(sunAltitude) * Math.sin(sunAzimuth);
@@ -3534,8 +3930,10 @@ function SceneContent({
     const b = (rad: number) => Math.round((rad * 180) / Math.PI / 5);
     // `glEpoch` re-keys after a restored GPU context: the bake was GPU-only.
     // The photo toggle re-keys too: the ground half of the bake wears it.
+    // So does the view mode — mesh bakes a softbox studio, map bakes the sky.
+    if (meshMode) return `studio|g${glEpoch}`;
     return `${sunVisible ? `d${b(sunAltitude)}:${b(sunAzimuth)}` : 'night'}|g${glEpoch}|p${showPhoto ? 1 : 0}`;
-  }, [sunVisible, sunAltitude, sunAzimuth, glEpoch, showPhoto]);
+  }, [meshMode, sunVisible, sunAltitude, sunAzimuth, glEpoch, showPhoto]);
   const duskFactor = Math.min(1, Math.max(0, sunAltitude / 0.25));
 
   /**
@@ -3598,9 +3996,16 @@ function SceneContent({
    * `sunPosition()` (lib/shading) and never reads this light. The energy
    * numbers were right; the picture was not.
    */
+  // + originShift: the light and its target live in world space, outside the
+  // group the mesh view moves, so they must be told where the design went
   const lightAnchor = useMemo(
-    () => new THREE.Vector3(bounds.cx, bounds.cy, bounds.cz),
-    [bounds],
+    () =>
+      new THREE.Vector3(
+        bounds.cx + originShift[0],
+        bounds.cy + originShift[1],
+        bounds.cz + originShift[2],
+      ),
+    [bounds, originShift],
   );
   lightTarget.position.copy(lightAnchor);
   /**
@@ -3690,7 +4095,58 @@ function SceneContent({
           modules read too bright, the right lever is the glass roughness and
           clearcoat, not the sky. */}
       <Environment key={envKey} resolution={256} frames={1} background={false}>
-        {sunVisible ? (
+        {meshMode ? (
+          /*
+           * The studio view gets a STUDIO, not a sky.
+           *
+           * `scene.environment` was the Preetham daylight sky in both views.
+           * In the map view that is exactly right — the modules should mirror
+           * the sky they are actually under. In the mesh view it was the whole
+           * reason the render looked cheap: every surface picked up the same
+           * broad blue, so a white parapet, a grey wall and the floor all drifted
+           * toward one pale blue, and the model lost its own colour.
+           *
+           * This is the softbox rig a product shot uses: a big white key over
+           * the front, a cool wrap on one side, a warm kicker on the other so
+           * the two sides of a corner never read the same, and a dim floor
+           * bounce. Dark everywhere else, which is what lets an edge be an edge.
+           */
+          <>
+            <color attach="background" args={['#0a0d12']} />
+            <Lightformer
+              form="rect"
+              intensity={1.5}
+              color="#ffffff"
+              position={[0, 9, 7]}
+              rotation={[-Math.PI / 3, 0, 0]}
+              scale={[16, 9, 1]}
+            />
+            <Lightformer
+              form="rect"
+              intensity={0.9}
+              color="#e6edf7"
+              position={[-10, 4, 1]}
+              rotation={[0, Math.PI / 2.4, 0]}
+              scale={[11, 8, 1]}
+            />
+            <Lightformer
+              form="rect"
+              intensity={0.75}
+              color="#ffd9b3"
+              position={[10, 3.5, -4]}
+              rotation={[0, -Math.PI / 2.4, 0]}
+              scale={[9, 6, 1]}
+            />
+            <Lightformer
+              form="rect"
+              intensity={0.3}
+              color="#39445a"
+              position={[0, -7, 0]}
+              rotation={[Math.PI / 2, 0, 0]}
+              scale={[24, 24, 1]}
+            />
+          </>
+        ) : sunVisible ? (
           <>
             <Sky
               distance={4500}
@@ -3741,12 +4197,12 @@ function SceneContent({
           {/* studio background + soft product-render lighting (sun-independent) */}
           <color attach="background" args={['#0c0f15']} />
           <fogExp2 attach="fog" args={['#0c0f15', 0.0022]} />
-          <ambientLight intensity={0.35} />
-          <hemisphereLight intensity={0.45} groundColor="#12161d" color="#dfe8f5" />
+          <ambientLight intensity={0.28} />
+          <hemisphereLight intensity={0.3} groundColor="#141922" color="#eef2f8" />
           <ShadowFit light={studioLightRef} box={shadowBox} halfM={shadowHalf} />
           <directionalLight
             ref={studioLightRef}
-            position={[bounds.cx + 24, 40, bounds.cz + 20]}
+            position={[bounds.cx + originShift[0] + 24, 40, bounds.cz + originShift[2] + 20]}
             target={lightTarget}
             intensity={1.15}
             color="#ffffff"
@@ -3765,6 +4221,18 @@ function SceneContent({
           />
           {/* fill light from the opposite side to lift shadows */}
           <directionalLight position={[-28, 22, -18]} intensity={0.3} color="#b9c9e0" />
+          {/* Rim, from behind and low. A pale model on a dark floor loses its
+              own outline: the far edge of a wall and the floor behind it sit at
+              nearly the same value, so the silhouette dissolves exactly where
+              the eye reads height. A cool back light puts a bright lip on every
+              far edge and hands the shape back. It casts nothing — this is
+              drawing, not daylight, and the sun the numbers use lives in the
+              MAP view where it belongs. */}
+          <directionalLight
+            position={[bounds.cx + originShift[0] - 12, 13, bounds.cz + originShift[2] - 36]}
+            intensity={0.38}
+            color="#9fc0e8"
+          />
         </>
       ) : (
         <>
@@ -3823,12 +4291,52 @@ function SceneContent({
 
       {/* ground: studio grid (mesh) vs base + satellite plane (map) */}
       {meshMode ? (
+        /*
+         * The studio floor.
+         *
+         * It used to be a 300 m slab plus a bare `gridHelper`: 60 hard lines at
+         * one brightness, running to a visible square edge. Two things that
+         * makes worse. The lines never fade, so at any oblique angle the far
+         * half of the screen is a moiré of grid rather than a floor — the eye
+         * reads clutter where it should read depth. And a grid that simply
+         * STOPS tells the viewer the world stops there, which is why the model
+         * never looked like it was standing anywhere.
+         *
+         * Now: a large sheened slab, an INFINITE grid that fades out around
+         * 90 m, and a coarser section line every 5 m so scale stays readable
+         * without the metre lines shouting. The horizon becomes gradient, the
+         * model gets somewhere to stand, and there is no edge to find.
+         */
         <group position={originShift}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-            <planeGeometry args={[300, 300]} />
-            <meshStandardMaterial color="#0f141b" roughness={1} />
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]} receiveShadow>
+            <planeGeometry args={[600, 600]} />
+            {/* Not near-black. A cast shadow can only be SEEN as the
+                difference between lit floor and shadowed floor, and on a
+                #0f141c slab there is no difference left to show — the model
+                floated, with a 4096² shadow map being rendered every frame
+                into a surface too dark to record it. A mid-dark floor gives
+                the shadow somewhere to land; the vignette keeps the mood. */}
+            <meshStandardMaterial
+              color="#1e2531"
+              roughness={0.62}
+              metalness={0.02}
+              envMapIntensity={0.7}
+            />
           </mesh>
-          <gridHelper args={[120, 60, '#2b3650', '#1a2130']} position={[0, 0, 0]} />
+          <Grid
+            position={[0, -0.012, 0]}
+            args={[10, 10]}
+            cellSize={1}
+            cellThickness={0.55}
+            cellColor="#1e2836"
+            sectionSize={5}
+            sectionThickness={1}
+            sectionColor="#38495f"
+            infiniteGrid
+            fadeDistance={95}
+            fadeStrength={1.6}
+            side={THREE.DoubleSide}
+          />
         </group>
       ) : (
         <>
@@ -3897,7 +4405,16 @@ function SceneContent({
         </>
       )}
 
-      <group position={originShift}>
+      {/* DESIGN_ROOT: the group that holds the thing the user came to look at —
+          roofs, modules, obstructions, structure. `CameraPivot` finds it by this
+          tag to decide what the camera orbits about. It has to be a tag and not
+          a computed guess, because this group is the one thing that MOVES
+          between the two views: the mesh view shifts it so the building sits at
+          the world origin (`originShift`), the map view leaves it on the site
+          frame. Anything that inferred the model's position from world
+          coordinates would therefore be right in one view and wrong in the
+          other — which is exactly the bug this tag exists to stop. */}
+      <group position={originShift} userData={DESIGN_ROOT}>
       {/* roofs — pickable: the deck's outline lights up, a click names it */}
       {shownRoofs.map((r) => {
         const picked = pick?.kind === 'roof' && pick.id === r.id;
@@ -4782,6 +5299,52 @@ function coveringProps(s: RoofSurface) {
  * WITHOUT a covering (`roofType` 'ground') the photo stays the albedo, dimmed
  * by the old constant, because there is no material to stand in for it.
  */
+/** how much darker a WALL is than the DECK it carries, in the studio view */
+const STUDIO_WALL_MIX = 0.55;
+
+/**
+ * The studio (mesh) view's building material: one solid, two readings.
+ *
+ * A roof solid is deck and walls in a single mesh, and it used to be a single
+ * flat colour — so a building rendered as one pale blob with no silhouette. In
+ * real life a horizontal deck under the sky is far brighter than a vertical
+ * wall, and that difference is most of what tells the eye "this is a building
+ * with height" rather than "this is a shape". Lighting alone does not deliver
+ * it here: the studio key is deliberately soft, so it flatters the model and
+ * flattens it at the same time.
+ *
+ * So the albedo carries it. Faces pointing up keep the roof's tint; faces
+ * pointing sideways are mixed toward shadow. It is the same `vUpness` split
+ * the photoreal deck shader already uses, which keeps the two views agreeing
+ * about where a deck ends and a wall begins.
+ */
+function studioSolidMaterial(color: string): THREE.MeshStandardMaterial {
+  const mat = new THREE.MeshStandardMaterial({
+    color,
+    roughness: 0.78,
+    metalness: 0.04,
+    envMapIntensity: 0.7,
+    side: THREE.DoubleSide,
+  });
+  mat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vUpness;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvUpness = normal.y;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vUpness;')
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+  float deck = smoothstep( 0.35, 0.75, vUpness );
+  diffuseColor.rgb *= mix( vec3( ${STUDIO_WALL_MIX} ), vec3( 1.0 ), deck );`,
+      );
+  };
+  // a patched shader needs its own cache key, or three hands back the stock
+  // MeshStandard program it compiled for some other material
+  mat.customProgramCacheKey = () => 'studio-solid';
+  return mat;
+}
+
 function roofDeckMaterial(
   photo: THREE.Texture,
   spanM: number,
@@ -4908,7 +5471,19 @@ function RoofMesh({
   // realistic concrete so the final look isn't rainbow-coloured
   const colorIndex = allRoofs.findIndex((r) => r.id === roof.id);
   // weathered RCC reads at ~40% albedo; a near-white deck blows out under sun + sky
-  const surfaceColor = photoreal ? '#a8a39a' : lightenHex(roofColor(colorIndex), 0.5);
+  /*
+   * Studio massing colour: concrete first, identity second.
+   *
+   * The per-roof palette exists so two adjoining roofs can be told apart, and
+   * `lightenHex` kept it at full chroma — which rendered a building as a solid
+   * sky-blue block. An architectural massing model is grey; the colour coding
+   * is a hint inside it, not the subject. Lerping the roof's hue 78 % of the
+   * way to concrete keeps neighbouring roofs distinguishable side by side
+   * while the model as a whole reads as a building rather than a toy.
+   */
+  const surfaceColor = photoreal
+    ? '#a8a39a'
+    : `#${new THREE.Color(roofColor(colorIndex)).lerp(new THREE.Color('#ccd0d5'), 0.78).getHexString()}`;
   // the real covering — concrete, coated sheet or clay tile — drawn at true
   // size on the deck's plan-metre UVs (three/roof-textures)
   const surface = photoreal ? getRoofSurface(roof.roofType) : null;
@@ -4920,12 +5495,24 @@ function RoofMesh({
     [photoreal, photo, surface],
   );
   useEffect(() => () => photoMat?.dispose(), [photoMat]);
+  // studio view: one solid, deck brighter than walls (see studioSolidMaterial)
+  const studioMat = useMemo(
+    () => (photoreal ? null : studioSolidMaterial(surfaceColor)),
+    [photoreal, surfaceColor],
+  );
+  useEffect(() => () => studioMat?.dispose(), [studioMat]);
 
   return (
     <group>
-      <mesh geometry={geom} material={photoMat ?? undefined} castShadow receiveShadow userData={{ shadowCaster: true }}>
-        {photoMat ? null : surface ? (
-          // mesh/studio view: the covering with no photo to stain it
+      <mesh
+        geometry={geom}
+        material={photoMat ?? studioMat ?? undefined}
+        castShadow
+        receiveShadow
+        userData={{ shadowCaster: true }}
+      >
+        {photoMat || studioMat ? null : surface ? (
+          // photoreal with no photo yet: the covering with nothing to stain it
           <meshStandardMaterial {...coveringProps(surface)} />
         ) : (
           <meshStandardMaterial

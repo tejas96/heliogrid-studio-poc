@@ -180,6 +180,7 @@ import { boxPlace, boxRemove } from '../lib/ops/box-ops';
 import { unitPlanPos } from '../lib/unit-pos';
 import type { Roof } from '../types';
 import { rotate as rotateXY } from '../lib/geo';
+import { typedInto } from '../lib/keyboard';
 import { COL_STRIDE, roofGridAngle as gridAngleOfRoof } from '../lib/layout';
 import { segmentGrid } from '../lib/segment-ops';
 import { layoutShrink } from '../lib/ops/layout-ops';
@@ -1261,8 +1262,7 @@ export function Step6Editor() {
   const keyHandler = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => {
     keyHandler.current = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]'))
-        return;
+      if (typedInto(e.target)) return;
       if (show3D) return; // the scene owns the keyboard while it is up
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();

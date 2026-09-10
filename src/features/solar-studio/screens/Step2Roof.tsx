@@ -62,6 +62,7 @@ import {
   polygonCentroid,
   validateRoofPolygon,
 } from '../lib/geo';
+import { typedInto } from '../lib/keyboard';
 import { frameFor, toEN } from '../lib/site/frame';
 import { defaultPanelPose, panelCornersOnRoof } from '../lib/layout';
 import { cascadeDeleteRoof } from '../lib/cascade';
@@ -79,9 +80,6 @@ import {
 import { useSurroundGrid } from '../lib/use-surround-grid';
 import { roofMapFit, roofsWithMapFit, TRUSTED_RMSE_M } from '../lib/roof-map-fit';
 import { ROOF_HEIGHT_TOLERANCE_M } from '../lib/surround-check';
-import { detectRoofs } from '../lib/roof-ai/detect-client';
-import { detectRoofsViaGemini } from '../lib/roof-ai/gemini-client';
-import { applyArtifact, validateArtifact, type RoofArtifact } from '../lib/roof-ai/artifact';
 import { lightenHex, roofColor, roofRgba } from '../lib/roof-colors';
 import { effectiveParapetEdges, pickRoofAt } from '../lib/roof-topology';
 import { useUnits } from '../store/useUnits';
@@ -91,8 +89,17 @@ type SheetKind = null | 'roofType' | 'height';
 type VertexRef = { roofId: string; i: number };
 type EdgeEdit = { roofId: string; i: number; text: string };
 type HintMsg = { text: string; lock?: boolean };
-/** alignment guide ray shown while draft-snapping (meters-space anchor + angle) */
-type SnapGuide = { anchor: XY; deg: number };
+/**
+ * Alignment guide ray shown while drafting (meters-space anchor + angle).
+ *
+ * `locked` separates SEEING square from BEING square. A guide is drawn
+ * whenever the cursor is near an alignment — that is pure information, and it
+ * costs the user nothing. Only a `locked` guide has actually moved the point
+ * onto the ray, and that happens solely when the user asked for it (ortho
+ * mode, or Shift held). Drawing them identically would be a lie: the user
+ * could not tell a hint from a hard constraint.
+ */
+type SnapGuide = { anchor: XY; deg: number; locked: boolean };
 type DependencyIssues = {
   panels: string[];
   obstructions: string[];
@@ -162,131 +169,7 @@ export function Step2Roof() {
   // two-click measure + known-distance site calibration
   const measure = useMeasure();
   const [calibrateOpen, setCalibrateOpen] = useState(false);
-  // AI roof detection (Phase 5): ghost review state — NOTHING enters the
-  // project until the user accepts; acceptance is one undoable patch
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiReview, setAiReview] = useState<null | {
-    artifact: RoofArtifact;
-    dropped: { id: string; reason: string }[];
-    imageryDate?: string;
-    imageryQuality?: string;
-    acceptedRoofs: Set<string>;
-    acceptedObs: Set<string>;
-    /** manual alignment nudge (m) for dataLayers↔tile georegistration offset */
-    offset: XY;
-  }>(null);
 
-  /**
-   * Which of the detected roofs the project is FOR. The detector returns every
-   * building within 100 m — the neighbours too, and those already shade the
-   * design from the height map. Ticked by default: the roofs under the pin, or
-   * under the building Google's own insight put at the pin; the largest roof
-   * when neither says. The rest stay as ghosts the user can tick.
-   */
-  function ticksForThePin(artifact: RoofArtifact): { roofs: Set<string>; obs: Set<string> } {
-    const anchors: XY[] = [{ x: 0, y: 0 }]; // the site frame's origin is the pin
-    const frame = frameFor(project);
-    if (frame) for (const s of loc.solarInsights?.roofSegments ?? []) if (s.center) anchors.push(toEN(frame, s.center));
-    let mine = artifact.roofs.filter((r) => anchors.some((a) => pointInPolygon(a, r.polygon)));
-    if (mine.length === 0 && artifact.roofs.length > 0) {
-      mine = [[...artifact.roofs].sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon))[0]];
-    }
-    const roofs = new Set(mine.map((r) => r.id));
-    // an object counts only when it stands on one of those roofs
-    const obs = new Set(
-      artifact.obstructions.filter((o) => mine.some((r) => pointInPolygon(o.center, r.polygon))).map((o) => o.id),
-    );
-    return { roofs, obs };
-  }
-
-  async function runAiDetect(auto = false) {
-    setAiBusy(true);
-    if (auto) showHint('Tracing the roof from the aerial data…');
-    try {
-      // fallback ladder (plan §E): aerial DSM/mask → Gemini photo analysis
-      // on the SAME tile → manual drawing. Both AI paths land in the same
-      // validated ghost review — nothing enters the project unreviewed.
-      const res = await detectRoofs(loc.latLng);
-      if (res.status === 'ok' && (res.artifact.roofs.length > 0 || res.artifact.obstructions.length > 0)) {
-        const ticks = ticksForThePin(res.artifact);
-        setAiReview({
-          artifact: res.artifact,
-          dropped: res.dropped,
-          imageryDate: res.imageryDate,
-          imageryQuality: res.imageryQuality,
-          acceptedRoofs: ticks.roofs,
-          acceptedObs: ticks.obs,
-          offset: { x: 0, y: 0 },
-        });
-        if (auto) showHint('Roof traced from the aerial data — check the outline, then Add. Or Cancel and draw it yourself.', false, 6000);
-        return;
-      }
-      const aerialNote =
-        res.status === 'ok'
-          ? res.artifact.warnings[0] ?? 'No roofs in the aerial building mask here.'
-          : res.message;
-
-      // rung 2: photo analysis of the same satellite tile
-      showHint('Aerial mask empty — trying photo analysis…');
-      const gem = await detectRoofsViaGemini(loc.latLng, project.calibration.scaleFactor);
-      if (gem.status === 'ok') {
-        const validated = validateArtifact(gem.artifact, loc.latLng);
-        if (validated.ok && validated.artifact.roofs.length > 0) {
-          const ticks = ticksForThePin(validated.artifact);
-          setAiReview({
-            artifact: validated.artifact,
-            dropped: validated.dropped,
-            imageryQuality: validated.artifact.imageryQuality,
-            acceptedRoofs: ticks.roofs,
-            acceptedObs: ticks.obs,
-            offset: { x: 0, y: 0 },
-          });
-          if (auto) showHint('Roof traced from the photo — check the outline, then Add. Or Cancel and draw it yourself.', false, 6000);
-          return;
-        }
-      }
-      const gemNote =
-        gem.status === 'unconfigured'
-          ? 'photo analysis is not configured'
-          : gem.status === 'error'
-            ? `photo analysis: ${gem.message}`
-            : 'photo analysis found nothing definite';
-      // an outcome the user must read, not a flash: it stays long enough
-      showHint(`${aerialNote.replace(/\.?\s*$/, '.')} Also, ${gemNote} — draw the roof with the pen tool.`, false, 9000);
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
-  function acceptAiReview() {
-    if (!aiReview) return;
-    const { offset } = aiReview;
-    // bake the alignment nudge into the accepted geometry
-    const shifted: RoofArtifact = {
-      ...aiReview.artifact,
-      roofs: aiReview.artifact.roofs.map((r) => ({
-        ...r,
-        polygon: r.polygon.map((p) => ({ x: p.x + offset.x, y: p.y + offset.y })),
-      })),
-      obstructions: aiReview.artifact.obstructions.map((o) => ({
-        ...o,
-        center: { x: o.center.x + offset.x, y: o.center.y + offset.y },
-      })),
-    };
-    const patchData = applyArtifact(project, shifted, {
-      roofIds: aiReview.acceptedRoofs,
-      obstructionIds: aiReview.acceptedObs,
-    });
-    if (patchData.roofs || patchData.obstructions) {
-      patch(patchData, true); // the whole import = ONE undo step
-      const nR = aiReview.acceptedRoofs.size;
-      const nO = aiReview.acceptedObs.size;
-      showHint(
-        `Imported ${nR} roof${nR === 1 ? '' : 's'}${nO > 0 ? ` + ${nO} obstruction${nO === 1 ? '' : 's'}` : ''} — review heights and edit like any drawn roof`,
-      );
-    }
-    setAiReview(null);
-  }
   const dragStartPolygonRef = useRef<XY[] | null>(null);
   const dragOffsetRef = useRef<XY>({ x: 0, y: 0 });
 
@@ -325,20 +208,6 @@ export function Step2Roof() {
   const redoDisabled = draft ? true : !canRedo;
 
   useEffect(() => () => window.clearTimeout(hintTimer.current), []);
-
-  // A new project starts with its roof already traced: the detector runs by
-  // itself the first time Step 2 opens with a confirmed pin and no roofs, and
-  // its ghosts wait for the user's Add or Cancel — nothing enters the project
-  // otherwise. Once per pin, so a Cancel is not asked again on every visit;
-  // a moved pin starts afresh. The rail button re-runs it on demand.
-  const autoPinKey = `${loc.latLng.lat.toFixed(5)},${loc.latLng.lng.toFixed(5)}`;
-  useEffect(() => {
-    if (project.roofs.length > 0 || aiBusy || aiReview) return;
-    if (project.roofAutoDetect?.pinKey === autoPinKey) return;
-    patch({ roofAutoDetect: { pinKey: autoPinKey, at: Date.now() } }, false);
-    void runAiDetect(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPinKey, project.roofs.length]);
 
   /** A short notice; `ms` for one the user must have time to read (an outcome, an instruction). */
   function showHint(text: string, lock = false, ms = 2400) {
@@ -706,7 +575,15 @@ export function Step2Roof() {
    * (collinear / perpendicular), so guides follow the roof's own orientation
    * instead of the screen axes; the first segment falls back to world axes.
    * Also aligns with the first vertex's axes to help close clean rectangles.
-   * Returns the snapped point plus guide rays for visual feedback.
+   *
+   * Two tolerances, deliberately. The WIDE one only DRAWS the ray; the NARROW
+   * one is the only thing allowed to move the point, and only when the user
+   * asked (ortho mode, or Shift held). Free drawing used to show nothing at
+   * all, which left the user guessing where square was and made every hand
+   * trace a few degrees off; a guide you can ignore costs nothing and is how
+   * every mature tool does it. Keeping the hint band wider than the lock band
+   * also means the ray appears BEFORE the cursor would jump, so a lock is
+   * never a surprise.
    */
   function snapDraft(
     raw: XY,
@@ -716,7 +593,11 @@ export function Step2Roof() {
     // roof object-snap first: an exact shared point beats angle guides
     const objSnapped = snapToRoofs(raw, null);
     if (objSnapped !== raw) return { p: objSnapped, guides: [] };
-    if ((!ortho && !temporarySnap) || pts.length === 0) return { p: raw, guides: [] };
+    if (pts.length === 0) return { p: raw, guides: [] };
+    /** may this call MOVE the point, or only draw rays? */
+    const mayLock = ortho || temporarySnap;
+    const HINT_DEG = 14;
+    const LOCK_DEG = 7.5;
     const prev = pts[pts.length - 1];
     const guides: SnapGuide[] = [];
     let p = raw;
@@ -735,22 +616,30 @@ export function Step2Roof() {
     for (const rel of [0, 90, -90, 180]) {
       const target = baseDeg + rel;
       const delta = ((candDeg - target + 540) % 360) - 180;
-      if (Math.abs(delta) < 7.5) {
-        const rad = (target * Math.PI) / 180;
-        p = { x: prev.x + Math.cos(rad) * len, y: prev.y + Math.sin(rad) * len };
-        guides.push({ anchor: prev, deg: target });
+      if (Math.abs(delta) < HINT_DEG) {
+        const locked = mayLock && Math.abs(delta) < LOCK_DEG;
+        if (locked) {
+          const rad = (target * Math.PI) / 180;
+          p = { x: prev.x + Math.cos(rad) * len, y: prev.y + Math.sin(rad) * len };
+        }
+        guides.push({ anchor: prev, deg: target, locked });
         break;
       }
     }
     if (pts.length >= 2) {
       const first = pts[0];
-      const axisToleranceM = 8 / canvasPxPerM;
-      if (Math.abs(p.x - first.x) < axisToleranceM) {
-        p = { ...p, x: first.x };
-        guides.push({ anchor: first, deg: 90 });
-      } else if (Math.abs(p.y - first.y) < axisToleranceM) {
-        p = { ...p, y: first.y };
-        guides.push({ anchor: first, deg: 0 });
+      const hintToleranceM = 14 / canvasPxPerM;
+      const lockToleranceM = 8 / canvasPxPerM;
+      const dx = Math.abs(p.x - first.x);
+      const dy = Math.abs(p.y - first.y);
+      if (dx < hintToleranceM) {
+        const locked = mayLock && dx < lockToleranceM;
+        if (locked) p = { ...p, x: first.x };
+        guides.push({ anchor: first, deg: 90, locked });
+      } else if (dy < hintToleranceM) {
+        const locked = mayLock && dy < lockToleranceM;
+        if (locked) p = { ...p, y: first.y };
+        guides.push({ anchor: first, deg: 0, locked });
       }
     }
     return { p, guides };
@@ -1075,7 +964,10 @@ export function Step2Roof() {
   // keyboard shortcuts — re-registered each render so the handler sees fresh state
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]')) return;
+      // `target` is only an Element for key presses that reach a focused node.
+      // A listener on `window` also receives events dispatched at `window` or
+      // `document` — neither has `closest`, and the bare cast threw there.
+      if (typedInto(e.target)) return;
       if (sheet || askClose) return; // Sheet/Dialog own the keyboard
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === 'z') {
@@ -1132,6 +1024,24 @@ export function Step2Roof() {
     selectedVertex.i < vertexRoof.polygon.length &&
     !lockedIds.has(vertexRoof.id) &&
     !dragVertex;
+  /**
+   * The corner currently under the finger: the dragged vertex and its two
+   * neighbours, wrapped around the ring. A roof is squared as often by pulling
+   * a corner into place afterwards as by placing it right the first time, so
+   * the drag gets the same angle readout the draw does — otherwise the number
+   * disappears exactly when the user is doing the fine work.
+   */
+  const dragCorner = (() => {
+    if (!dragVertex) return null;
+    const roof = project.roofs.find((r) => r.id === dragVertex.roofId);
+    const n = roof?.polygon.length ?? 0;
+    if (!roof || n < 3 || dragVertex.i >= n) return null;
+    return {
+      a: roof.polygon[(dragVertex.i - 1 + n) % n],
+      b: roof.polygon[dragVertex.i],
+      c: roof.polygon[(dragVertex.i + 1) % n],
+    };
+  })();
   const edgeRoof = edgeEdit
     ? project.roofs.find((r) => r.id === edgeEdit.roofId)
     : null;
@@ -1170,15 +1080,6 @@ export function Step2Roof() {
           tip: 'Draw roof\nD',
           active: !!draft,
           onClick: () => (draft ? cancelDraw() : startDraw()),
-        },
-        {
-          id: 'detect',
-          icon: <Sparkles />,
-          label: 'Detect',
-          tip: 'Detect roofs (AI)\nAerial DSM + building mask —\nreview before anything is added',
-          active: !!aiReview,
-          disabled: aiBusy,
-          onClick: () => (aiReview ? setAiReview(null) : void runAiDetect()),
         },
       ],
     },
@@ -1399,6 +1300,7 @@ export function Step2Roof() {
         {draft && (
           <DrawingLayer points={draft} hover={hover} fmt={fmt} guides={snapGuides} />
         )}
+        {dragCorner && <CornerAngle {...dragCorner} />}
         {showVertexBar && vertexRoof && selectedVertex && (
           <VertexContextBar
             at={vertexRoof.polygon[selectedVertex.i]}
@@ -1417,120 +1319,7 @@ export function Step2Roof() {
           />
         )}
         <MeasureOverlay measure={measure} fmt={(m) => fmtLen(m, 2)} />
-        {aiReview && (
-          <AiGhostLayer
-            review={aiReview}
-            onToggleRoof={(id) =>
-              setAiReview((r) => {
-                if (!r) return r;
-                const next = new Set(r.acceptedRoofs);
-                if (next.has(id)) next.delete(id);
-                else next.add(id);
-                return { ...r, acceptedRoofs: next };
-              })
-            }
-            onToggleObs={(id) =>
-              setAiReview((r) => {
-                if (!r) return r;
-                const next = new Set(r.acceptedObs);
-                if (next.has(id)) next.delete(id);
-                else next.add(id);
-                return { ...r, acceptedObs: next };
-              })
-            }
-          />
-        )}
       </SatCanvas>
-
-      {/* AI review pill: counts, provenance, alignment nudge, accept/cancel */}
-      {aiReview && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 18,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 45,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            background: 'rgba(10,14,20,0.94)',
-            border: '1px solid var(--editor-line)',
-            borderRadius: 12,
-            padding: '9px 14px',
-            color: '#fff',
-            fontSize: 12.5,
-            maxWidth: 720,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Sparkles size={15} aria-hidden style={{ color: '#22d3ee' }} />
-          <span>
-            <b>{aiReview.acceptedRoofs.size}</b>/{aiReview.artifact.roofs.length} roofs ·{' '}
-            <b>{aiReview.acceptedObs.size}</b>/{aiReview.artifact.obstructions.length} objects
-            {aiReview.imageryQuality ? ` · imagery ${aiReview.imageryQuality}` : ''}
-            {aiReview.imageryDate ? ` (${aiReview.imageryDate})` : ''}
-          </span>
-          {/* where the shapes came from and how sure the detector is — the user
-              decides with that in view, never on trust */}
-          <span style={{ flexBasis: '100%', color: 'var(--editor-ink-2)', fontSize: 11.5 }}>
-            {aiReview.artifact.source === 'dataLayers'
-              ? "Traced from Google's building outline and height map"
-              : 'Traced from the photo by AI'}
-            {aiReview.artifact.roofs.length > 0 &&
-              ` · sure ${Math.round(
-                (aiReview.artifact.roofs.reduce((s, r) => s + r.confidence, 0) / aiReview.artifact.roofs.length) * 100,
-              )}%`}
-            {' · heights, pitch and facing are measured; edit any of them after Add'}
-            {aiReview.artifact.roofs.length > aiReview.acceptedRoofs.size &&
-              ' · ticked: the building at your pin — tap a ghost to add or drop it'}
-          </span>
-          <span style={{ display: 'inline-flex', gap: 3, alignItems: 'center' }}>
-            <span style={{ color: 'var(--editor-ink-2)', fontSize: 11 }}>Align</span>
-            {(
-              [
-                ['←', { x: -0.5, y: 0 }],
-                ['→', { x: 0.5, y: 0 }],
-                ['↑', { x: 0, y: 0.5 }],
-                ['↓', { x: 0, y: -0.5 }],
-              ] as [string, XY][]
-            ).map(([sym, d]) => (
-              <button
-                key={sym}
-                className="chip"
-                aria-label={`Nudge ghosts ${sym}`}
-                style={{ padding: '1px 7px' }}
-                onClick={() =>
-                  setAiReview((r) =>
-                    r ? { ...r, offset: { x: r.offset.x + d.x, y: r.offset.y + d.y } } : r,
-                  )
-                }
-              >
-                {sym}
-              </button>
-            ))}
-          </span>
-          <button
-            className="btn btn-primary"
-            style={{ padding: '5px 12px', fontSize: 12.5 }}
-            disabled={aiReview.acceptedRoofs.size + aiReview.acceptedObs.size === 0}
-            onClick={acceptAiReview}
-          >
-            Add selected
-          </button>
-          <button className="chip" onClick={() => setAiReview(null)}>
-            Cancel
-          </button>
-          {(aiReview.artifact.warnings.length > 0 || aiReview.dropped.length > 0) && (
-            <span style={{ flexBasis: '100%', color: '#fbbf24', fontSize: 11.5 }}>
-              {[
-                ...aiReview.artifact.warnings,
-                ...aiReview.dropped.map((d) => `Skipped one shape: ${d.reason}`),
-              ].join(' · ')}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* measure result + calibration entry */}
       {measure.active && measure.done && measure.lengthM !== null && (
@@ -1839,7 +1628,7 @@ export function Step2Roof() {
             <kbd className="dark">Esc</kbd> to cancel
           </div>
         )}
-        {!draft && project.roofs.length === 0 && !hint && !aiReview && !aiBusy && (
+        {!draft && project.roofs.length === 0 && !hint && (
           <div className="hint-bar">
             <PenLine />
             Press <kbd className="dark">D</kbd> or pick the pen tool to trace your first roof
@@ -3083,6 +2872,81 @@ function RoofLayer({
   );
 }
 
+/** a corner is called square when it is this close to 90° (degrees) */
+const SQUARE_TOLERANCE_DEG = 0.5;
+
+/**
+ * Live angle readout at the corner `b`, between the edges b→a and b→c.
+ *
+ * The alignment rays show you WHERE square is; they cannot tell you how far
+ * off you are, and by eye a 4° error looks square at trace zoom — on a 12 m
+ * edge that is 84 cm of phantom roof, which then propagates into area, module
+ * count and the quote. A number closes that gap: you nudge until it reads
+ * 90.0°, with no snapping and nothing forced. It also makes an ortho lock
+ * self-evident, because a locked corner reads exactly 90.0°.
+ *
+ * Stated as three loose points rather than "the end of a polyline" so the SAME
+ * readout serves both moments a corner is decided: the one being drawn (a =
+ * the last placed vertex's predecessor, c = the cursor) and the one being
+ * dragged on a finished roof (a and c = the dragged vertex's two neighbours).
+ * A corner adjusted afterwards is no less load-bearing than one first placed.
+ *
+ * The chip sits inside the wedge, on the angle bisector, at a constant screen
+ * distance — the one placement that stays legible at every zoom and can never
+ * be mistaken for a label belonging to an edge.
+ */
+function CornerAngle({ a, b, c }: { a: XY; b: XY; c: XY }) {
+  const frame = useCanvasFrame();
+  const pp = frame.toPx(b);
+  const pa = frame.toPx(a);
+  const ph = frame.toPx(c);
+  const ua = { x: pa.x - pp.x, y: pa.y - pp.y };
+  const uh = { x: ph.x - pp.x, y: ph.y - pp.y };
+  const la = Math.hypot(ua.x, ua.y);
+  const lh = Math.hypot(uh.x, uh.y);
+  // both legs must be long enough ON SCREEN for an angle to mean anything —
+  // below that the chip is noise sitting on top of the vertex it describes
+  const MIN_LEG_PX = 26;
+  if (la * frame.zoom < MIN_LEG_PX || lh * frame.zoom < MIN_LEG_PX) return null;
+  const u = { x: ua.x / la, y: ua.y / la };
+  const v = { x: uh.x / lh, y: uh.y / lh };
+  const deg = (Math.acos(Math.max(-1, Math.min(1, u.x * v.x + u.y * v.y))) * 180) / Math.PI;
+  // bisector points into the wedge; at a straight 180° corner it collapses, so
+  // fall back to the perpendicular rather than dividing by ~0
+  let bx = u.x + v.x;
+  let by = u.y + v.y;
+  const lb = Math.hypot(bx, by);
+  if (lb < 1e-3) {
+    bx = -u.y;
+    by = u.x;
+  } else {
+    bx /= lb;
+    by /= lb;
+  }
+  const square = Math.abs(deg - 90) <= SQUARE_TOLERANCE_DEG;
+  const inv = 1 / frame.zoom;
+  const OFFSET = 32; // screen px from the vertex, along the bisector
+  return (
+    <g
+      transform={`translate(${pp.x}, ${pp.y}) scale(${inv}) translate(${bx * OFFSET}, ${by * OFFSET})`}
+      aria-hidden
+    >
+      <rect
+        x={-21}
+        y={-8}
+        width={42}
+        height={16}
+        rx={4}
+        fill={square ? 'rgba(22,163,74,0.94)' : 'rgba(15,23,42,0.88)'}
+        stroke={square ? 'rgba(255,255,255,0.45)' : 'none'}
+      />
+      <text x={0} y={3.5} textAnchor="middle" fill="#fff" fontSize={9} fontWeight={650}>
+        {deg.toFixed(1)}°
+      </text>
+    </g>
+  );
+}
+
 function DrawingLayer({
   points,
   hover,
@@ -3101,7 +2965,11 @@ function DrawingLayer({
   const hoverPx = hover ? frame.toPx(hover) : null;
   return (
     <g>
-      {/* snap alignment guides — long dashed rays through the snap anchor */}
+      {/* Alignment guides — long dashed rays through the snap anchor. A LOCKED
+          guide is holding the point on the ray, so it is drawn solid-bright; an
+          unlocked one is only telling you where square is, so it is faint and
+          finely dashed. The user must be able to tell those apart at a glance,
+          or a hint reads as a constraint that has silently moved their vertex. */}
       {guides.map((g, i) => {
         const rad = (g.deg * Math.PI) / 180;
         const a = frame.toPx({
@@ -3120,9 +2988,11 @@ function DrawingLayer({
             x2={b.x}
             y2={b.y}
             stroke="#22d3ee"
-            strokeWidth={1.2 * inv}
-            strokeDasharray={`${6 * inv} ${5 * inv}`}
-            opacity={0.8}
+            strokeWidth={(g.locked ? 1.2 : 1) * inv}
+            strokeDasharray={
+              g.locked ? `${6 * inv} ${5 * inv}` : `${3 * inv} ${5 * inv}`
+            }
+            opacity={g.locked ? 0.85 : 0.55}
             aria-hidden
           />
         );
@@ -3160,6 +3030,9 @@ function DrawingLayer({
         </g>
       )}
       {all.length >= 2 && <EdgeLabels poly={all} fmt={fmt} close={false} />}
+      {hover && points.length >= 2 && (
+        <CornerAngle a={points[points.length - 2]} b={points[points.length - 1]} c={hover} />
+      )}
     </g>
   );
 }
@@ -3371,98 +3244,5 @@ function CalibrateDialog({
         and the heatmap; leave 0 unless a site compass reading says otherwise.
       </p>
     </Dialog>
-  );
-}
-
-// ─── AI ghost-review layer ───────────────────────────────────────────────────
-// Detected entities as cyan ghosts in the approved counter-scaled overlay
-// style. Click a ghost (or its badge) to include/exclude it; nothing touches
-// the project until "Add selected".
-
-function AiGhostLayer({
-  review,
-  onToggleRoof,
-  onToggleObs,
-}: {
-  review: {
-    artifact: RoofArtifact;
-    acceptedRoofs: Set<string>;
-    acceptedObs: Set<string>;
-    offset: XY;
-  };
-  onToggleRoof: (id: string) => void;
-  onToggleObs: (id: string) => void;
-}) {
-  const frame = useCanvasFrame();
-  const z = frame.zoom;
-  const { offset } = review;
-  const shift = (p: XY): XY => ({ x: p.x + offset.x, y: p.y + offset.y });
-
-  return (
-    <g>
-      {review.artifact.roofs.map((r) => {
-        const on = review.acceptedRoofs.has(r.id);
-        const poly = r.polygon.map(shift);
-        const c = frame.toPx(polygonCentroid(poly));
-        return (
-          <g key={r.id} onClick={() => onToggleRoof(r.id)} style={{ cursor: 'pointer' }}>
-            <path
-              d={polyPath(frame, poly)}
-              fill={on ? 'rgba(34,211,238,0.16)' : 'rgba(148,163,184,0.08)'}
-              stroke={on ? '#22d3ee' : '#64748b'}
-              strokeWidth={2 / z}
-              strokeDasharray={`${7 / z} ${4 / z}`}
-            />
-            <g transform={`translate(${c.x}, ${c.y}) scale(${1 / z})`} pointerEvents="none">
-              <rect x={-46} y={-11} width={92} height={22} rx={6} fill="rgba(8,12,18,0.88)" />
-              <text
-                textAnchor="middle"
-                y={4}
-                fill={on ? '#22d3ee' : '#94a3b8'}
-                fontSize={11}
-                fontWeight={700}
-                fontFamily="var(--mono)"
-              >
-                {on ? '✓' : '✗'} roof · {Math.round(r.confidence * 100)}%
-              </text>
-            </g>
-          </g>
-        );
-      })}
-      {review.artifact.obstructions.map((o) => {
-        const on = review.acceptedObs.has(o.id);
-        const c = shift(o.center);
-        const px = frame.toPx(c);
-        const w = o.lengthM * frame.pxPerM / z;
-        const h = o.widthM * frame.pxPerM / z;
-        return (
-          <g key={o.id} onClick={() => onToggleObs(o.id)} style={{ cursor: 'pointer' }}>
-            <rect
-              x={frame.toPx(c).x - (o.lengthM / 2) * (frame.pxPerM / z)}
-              y={frame.toPx(c).y - (o.widthM / 2) * (frame.pxPerM / z)}
-              width={w}
-              height={h}
-              fill={on ? 'rgba(251,191,36,0.14)' : 'rgba(148,163,184,0.07)'}
-              stroke={on ? '#fbbf24' : '#64748b'}
-              strokeWidth={1.6 / z}
-              strokeDasharray={`${5 / z} ${3.5 / z}`}
-            />
-            <g transform={`translate(${px.x}, ${px.y - h / 2 - 8 / z}) scale(${1 / z})`} pointerEvents="none">
-              <rect x={-42} y={-10} width={84} height={19} rx={5} fill="rgba(8,12,18,0.88)" />
-              <text
-                textAnchor="middle"
-                y={4}
-                fill={on ? '#fbbf24' : '#94a3b8'}
-                fontSize={10.5}
-                fontWeight={700}
-                fontFamily="var(--mono)"
-              >
-                {on ? '✓' : '✗'} {o.heightM.toFixed(1)}m obj
-              </text>
-            </g>
-          </g>
-        );
-      })}
-    </g>
   );
 }

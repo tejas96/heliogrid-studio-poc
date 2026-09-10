@@ -9,8 +9,8 @@
 // irradiance source — this changes WHAT shades the modules, never how much
 // sun the sky delivers.
 import type { LatLng, Project, SiteSurround } from '../types';
-import { decodeGeoTiff } from './roof-ai/geotiff-decode';
-import { groundLevelM } from './roof-ai/plane-fit';
+import { decodeGeoTiff } from './geotiff-decode';
+import { groundLevelM } from './plane-fit';
 import { frameFor, toEN } from './site/frame';
 import { getImage, putImage } from './persistence/blobs';
 import type { SurroundHeights } from './surround-geometry';

@@ -2,11 +2,10 @@
 
 /**
  * The app's REFERENCE satellite zoom — the sharpest tile Static Maps serves,
- * and the one the roof-AI path is pinned to (the server fetches this zoom, and
- * gemini-client converts its pixels back to metres with it, so the pair must
- * never drift). It lives here, with the functions it is always passed to,
- * rather than in the canvas component: reaching into React for a constant put
- * lib/ underneath the UI.
+ * and the one every consumer that converts tile pixels back to metres is
+ * pinned to, so the pair can never drift. It lives here, with the functions it
+ * is always passed to, rather than in the canvas component: reaching into
+ * React for a constant put lib/ underneath the UI.
  *
  * It is NOT the only zoom fetched. A tile at this zoom spans ~90 m, which is
  * narrower than a C&I shed, so anything that must cover a whole site — the 2D
@@ -36,16 +35,24 @@ export function loadGoogleMaps(): Promise<typeof google> {
   return loadPromise;
 }
 
-/** Static satellite tile URL for a lat/lng (used as canvas bg / 3D texture). */
+/**
+ * Static satellite tile URL for a lat/lng (used as canvas bg / 3D texture).
+ *
+ * `format=png32` is NOT optional. Static Maps defaults to png8 — a 256-colour
+ * palette — and satellite imagery is continuous-tone, so the default posterises
+ * a roof into flat blotches and dithered noise that reads as "broken pixels"
+ * long before any upscaling is involved. png32 is 24-bit + alpha, the same
+ * format every mature design tool asks for. It costs nothing extra in quota.
+ */
 export function staticSatelliteUrl(
   lat: number,
   lng: number,
-  zoom = 19,
+  zoom = SAT_ZOOM,
   sizePx = 640,
   scale: 1 | 2 = 1,
 ): string {
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string | undefined;
-  return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${sizePx}x${sizePx}&scale=${scale}&maptype=satellite&key=${key ?? ''}`;
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${sizePx}x${sizePx}&scale=${scale}&maptype=satellite&format=png32&key=${key ?? ''}`;
 }
 
 /** Ground meters covered by a static map of size px at zoom/lat. */

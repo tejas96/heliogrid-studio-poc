@@ -168,7 +168,16 @@ export interface ParapetWall {
   suppressSharedEdges: boolean;
 }
 
-/** Where an entity's geometry came from — honest labeling (§3.5/§3.6). */
+/**
+ * Where an entity's geometry came from — honest labeling (§3.5/§3.6).
+ *
+ * `dataLayers` is still WRITTEN, by the aerial height map ("add raised objects
+ * from the map", lib/ops/roof-ops). `gemini` is READ-ONLY history: the roof
+ * detector that produced it was removed, but projects saved before that still
+ * carry the label, and a stored roof must keep saying how it was made. Do not
+ * drop the member to tidy the union — that would silently relabel an
+ * AI-traced outline as hand-drawn.
+ */
 export interface EntityProvenance {
   source: 'manual' | 'dataLayers' | 'gemini';
   /** detector confidence 0..1 (absent for manual entities) */
@@ -1264,12 +1273,6 @@ export interface Project {
    * number that depends on it says so.
    */
   ignoreSurround?: boolean;
-  /**
-   * The roof auto-trace (Step 2) already ran for this pin — whatever the user
-   * did with it. It runs once per pin, never again on every visit; moving the
-   * pin starts afresh.
-   */
-  roofAutoDetect?: { pinKey: string; at: number };
   /** decision log of the last auto-design run (renders the "why?" sheet) */
   designLog?: DesignDecision[];
   /**

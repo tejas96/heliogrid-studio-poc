@@ -5,7 +5,7 @@
 // things standing on it (tanks, stair rooms, AC units) as clusters rising
 // above the fitted plane. Pure maths on the grid; worker-safe.
 import type { Obstruction, ObstructionType, Roof, XY } from '../types';
-import { fitPlane, type PlaneFit } from './roof-ai/plane-fit';
+import { fitPlane, type PlaneFit } from './plane-fit';
 import { ROOF_READ_MIN_CELLS, type SurroundHeights } from './surround-geometry';
 import { pointInPolygon } from './geo';
 

@@ -1,7 +1,7 @@
 // ─── KNOWN-GAP PIN — a tripwire, NOT a correctness assertion ────────────────
-// Three consumers scale imagery with `metersPerStaticMap` (lib/maps.ts): the
-// 2D canvas (SatCanvas.tsx:99), the 3D ground texture (Scene3D.tsx:1161) and
-// the Gemini image-space path (gemini-client.ts:54). Its constant
+// Two consumers scale imagery with `metersPerStaticMap` (lib/maps.ts): the
+// 2D canvas (SatCanvas.tsx) and the 3D ground texture (Scene3D.tsx). A third,
+// the removed roof detector's image-space path, is gone. Its constant
 // 156543.03392 = 2π·6378137/256 is the SPHERICAL Web Mercator ground
 // resolution. Web Mercator is conformal on the sphere, so it is isotropic in
 // MAP units — which is anisotropic in GROUND metres on the WGS84 ellipsoid.

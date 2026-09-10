@@ -2,15 +2,16 @@
 // Adding a member to the union gives you three compiler errors, from the three
 // exhaustive `Record<ObstructionType, …>` tables. That is the easy half.
 //
-// The dangerous half is silent. Four other places are hand-written arrays or a
+// The dangerous half is silent. Other places are hand-written arrays or a
 // switch with a default, so a new member compiles, ships, and is:
 //   · absent from the Step-3 palette      → the user cannot place one
 //   · absent from the mesh switch          → it draws as an anonymous grey box
-//   · absent from the AI whitelist         → a correct detection is thrown away
-//                                            and rewritten to 'other'
 // None of that raises an error anywhere. This file is the gate that turns each
-// of those four into a failing test instead, and it is written to fail LOUDLY
+// of those into a failing test instead, and it is written to fail LOUDLY
 // with the name of the type that was forgotten.
+//
+// A fourth check lived here — the AI artifact whitelist, which rewrote any
+// unlisted type to 'other' on import. It went with the roof detector.
 //
 // The union cannot be enumerated at runtime, so ALL_TYPES below is the one
 // hand-written list — and the first test proves it matches the three tables
@@ -65,16 +66,6 @@ describe('ObstructionType coverage', () => {
     expect(
       missing,
       `falls through to the grey default box in ObstructionMesh: ${missing.join(', ')}`,
-    ).toEqual([]);
-  });
-
-  it('every type SURVIVES the AI artifact whitelist', () => {
-    // artifact.ts rewrites anything not in its array to 'other' with no warning
-    const src = read('lib/roof-ai/artifact.ts');
-    const missing = ALL_TYPES.filter((t) => !src.includes(`'${t}'`));
-    expect(
-      missing,
-      `silently downgraded to 'other' on AI import: ${missing.join(', ')}`,
     ).toEqual([]);
   });
 

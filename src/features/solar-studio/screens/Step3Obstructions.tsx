@@ -55,6 +55,7 @@ import {
   rotate,
   sub,
 } from '../lib/geo';
+import { typedInto } from '../lib/keyboard';
 
 // palette = UI concerns (icon/label/beta); the physical presets (code + L/W/H)
 // live in lib/roof-factory.OBSTRUCTION_PRESETS, shared with the AI importer
@@ -216,7 +217,7 @@ export function Step3Obstructions() {
   // keyboard: Esc cancel/deselect, Delete removes, arrows nudge 0.1 m (Shift = 1 m)
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.target as HTMLElement).closest('input,textarea,select,[contenteditable]')) return;
+      if (typedInto(e.target)) return;
       if (e.key === 'Escape') {
         if (placing) {
           setPlacing(null);

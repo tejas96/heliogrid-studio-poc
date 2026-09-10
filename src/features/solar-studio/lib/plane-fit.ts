@@ -1,9 +1,13 @@
-// ─── DSM analysis: roof plane fit, ground level, obstruction residuals ──────
+// ─── DSM analysis: roof plane fit and ground level ──────────────────────────
 // Centroid-centered least-squares plane z = a·x + b·y + c over a component's
 // DSM samples (study reference: the Sunroof-style per-segment pitch/azimuth
 // model). RMSE of the fit is the honest confidence signal — a clean planar
 // facet sits < 0.1–0.2 m; > 0.3 m means "complex roof, review by hand".
-import { labelComponents } from './vectorize';
+//
+// This is the AERIAL HEIGHT MAP maths — what `roof-map-fit` uses to measure a
+// hand-drawn roof's height/pitch/facing, and what `surround` uses to place the
+// neighbours. It lived under `lib/roof-ai/` only because the removed roof
+// detector happened to be its first caller.
 
 export interface PlaneFit {
   /** gradient in the sample frame (x east, y north, meters) */
@@ -80,69 +84,4 @@ export function groundLevelM(
   if (vals.length < 50) return null;
   vals.sort((p, q) => p - q);
   return vals[(vals.length / 2) | 0];
-}
-
-export interface ResidualCluster {
-  /** pixel bbox (inclusive) */
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  /** max height above the fitted plane, meters */
-  heightM: number;
-  areaPx: number;
-}
-
-/**
- * Obstruction candidates on one roof component: clusters of pixels rising
- * ≥ `thresholdM` ABOVE the fitted plane (chimneys, tanks, HVAC). Negative
- * residuals are ignored — they signal a bad plane fit, not obstructions.
- */
-export function residualClusters(
-  dsm: Float32Array | Uint8Array,
-  labels: Int32Array,
-  roofLabel: number,
-  width: number,
-  height: number,
-  plane: PlaneFit,
-  pixelToXY: (col: number, row: number) => [number, number],
-  thresholdM = 0.35,
-  minAreaPx = 25,
-): ResidualCluster[] {
-  const above = new Uint8Array(width * height);
-  const residual = new Float32Array(width * height);
-  for (let i = 0; i < dsm.length; i++) {
-    if (labels[i] !== roofLabel) continue;
-    const z = dsm[i];
-    if (!Number.isFinite(z) || z <= 1) continue;
-    const [x, y] = pixelToXY(i % width, (i / width) | 0);
-    const r =
-      z - plane.zAtCentroid - plane.a * (x - plane.centroidX) - plane.b * (y - plane.centroidY);
-    if (r >= thresholdM) {
-      above[i] = 1;
-      residual[i] = r;
-    }
-  }
-  const comps = labelComponents(above, width, height);
-  const out: ResidualCluster[] = [];
-  for (let label = 1; label <= comps.count; label++) {
-    if (comps.areas[label] < minAreaPx) continue;
-    let minX = width;
-    let minY = height;
-    let maxX = 0;
-    let maxY = 0;
-    let peak = 0;
-    for (let i = 0; i < comps.labels.length; i++) {
-      if (comps.labels[i] !== label) continue;
-      const x = i % width;
-      const y = (i / width) | 0;
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-      if (residual[i] > peak) peak = residual[i];
-    }
-    out.push({ minX, minY, maxX, maxY, heightM: peak, areaPx: comps.areas[label] });
-  }
-  return out;
 }

@@ -1,14 +1,12 @@
 // ─── Roof/Obstruction factory: ONE construction path for every source ───────
-// Hand-drawn (Step 2/3), duplicated, and AI-imported entities must all pass
-// the same sanitization and carry the same defaults, or downstream engines
+// Hand-drawn (Step 2/3), duplicated, and height-map-imported entities must all
+// pass the same sanitization and carry the same defaults, or downstream engines
 // (setback insets, layout fill, 3D, BOM) meet shapes they were never tested
 // on. Extracted from Step2Roof.normalisedPolygon / finishRoof and
-// Step3Obstructions.place so the AI importer (Phase 5) can never drift from
-// the manual pipeline.
+// Step3Obstructions.place so no importer can drift from the manual pipeline.
 import { CAPABILITY_PRESETS } from './capabilities';
 import type {
   EntityProvenance,
-  LatLng,
   Obstruction,
   ObstructionType,
   Project,
@@ -288,11 +286,6 @@ export function makeObstruction(opts: {
     blocksPlacement: true,
     ...(opts.provenance ? { provenance: opts.provenance } : {}),
   };
-}
-
-/** Pin guard shared with the artifact validator. */
-export function latLngClose(a: LatLng, b: LatLng, tolDeg: number): boolean {
-  return Math.abs(a.lat - b.lat) <= tolDeg && Math.abs(a.lng - b.lng) <= tolDeg;
 }
 
 /**
