@@ -1943,6 +1943,10 @@ export function Step2Roof() {
                   patchRoofAndPose(selected.id, {
                     pitchDeg: roofHint.pitchDeg,
                     slopeAzimuthDeg: roofHint.azimuthDeg,
+                    // choosing Google's value is still the user's choice — and it
+                    // is a DIFFERENT source from the height map, so without the
+                    // mark the map sync would overwrite what they just applied
+                    heightSource: 'user',
                   });
                   setHintDoneRoofs((m) => ({ ...m, [selected.id]: true }));
                 }}
@@ -1988,7 +1992,22 @@ export function Step2Roof() {
               max={45}
               step={1}
               unit="°"
-              onChange={(v) => patchRoofAndPose(selected.id, { pitchDeg: v })}
+              /*
+               * `heightSource: 'user'` is what makes the edit STICK.
+               *
+               * `useRoofMapSync` rewrites any roof not marked 'user' with what
+               * the aerial height map reads, on every change to the roofs. Only
+               * the height slider ever set the mark — so a user dragging pitch
+               * to 0° on a roof the map had read at 13° watched it snap back to
+               * 13° before the thumb was released: their edit changed `roofs`,
+               * which re-ran the sync, which put the map's pitch back. The
+               * type already says the source covers "heightM (and the pitch/
+               * facing set with it)", and the sync's own header says "a roof
+               * the user edits becomes 'user'". The pitch control just never
+               * said it. The facing picker and Google's Apply below have the
+               * same fix for the same reason.
+               */
+              onChange={(v) => patchRoofAndPose(selected.id, { pitchDeg: v, heightSource: 'user' })}
               hint={
                 selected.faceGroupId
                   ? 'Slope angle from horizontal — shared by every face of this roof, so it applies to all of them and keeps the ridge level.'
@@ -2007,7 +2026,8 @@ export function Step2Roof() {
               </div>
               <SlopeDirectionPicker
                 roof={selected}
-                onPick={(az) => patchRoofAndPose(selected.id, { slopeAzimuthDeg: az })}
+                // 'user', or the map sync puts its facing back (see Roof Pitch)
+                onPick={(az) => patchRoofAndPose(selected.id, { slopeAzimuthDeg: az, heightSource: 'user' })}
               />
             </div>
           )}

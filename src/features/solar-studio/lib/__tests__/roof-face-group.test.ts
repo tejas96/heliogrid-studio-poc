@@ -185,3 +185,16 @@ describe('shared-key contract', () => {
     expect(out.changedIds).toEqual([]);
   });
 });
+
+describe('provenance travels with the plane', () => {
+  it('a hand edit marks EVERY face as set by the user — even a face already at that pitch', () => {
+    // The height-map sync rewrites any roof not marked 'user'. A gable whose
+    // siblings stayed 'aerial_map' would get the map's pitch put back on them
+    // while the edited face kept the user's — a stepped ridge.
+    const faces = gable(20).map((f) => ({ ...f, heightSource: 'aerial_map' as const }));
+    // pitch deliberately UNCHANGED: only the mark moves, which is exactly the
+    // case the sibling-skip used to wave through
+    const out = applyFaceGroupPatch(faces, faces[0].id, { pitchDeg: 20, heightSource: 'user' });
+    expect(out.roofs.map((f) => f.heightSource)).toEqual(faces.map(() => 'user'));
+  });
+});

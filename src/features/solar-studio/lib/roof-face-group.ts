@@ -49,8 +49,9 @@ export function sharedPart(patch: Partial<Roof>): Partial<Roof> {
 
 /**
  * Apply `patch` to roof `id`, and the plane-defining part of it (pitch, eave
- * height) to that roof's siblings. Pure — returns a new array, and returns the
- * SAME roof objects for anything untouched so referential checks stay cheap.
+ * height) to that roof's siblings — together with where that plane came from
+ * (`heightSource`), when the patch says. Pure — returns a new array, and returns
+ * the SAME roof objects for anything untouched so referential checks stay cheap.
  *
  * `changedIds` lists every roof whose values actually moved, target first —
  * callers use it to remap the panels sitting on those faces in the same patch.
@@ -64,6 +65,19 @@ export function applyFaceGroupPatch(
   if (!target) return { roofs, changedIds: [] };
 
   const shared = sharedPart(patch);
+  /*
+   * Provenance travels with the plane.
+   *
+   * `heightSource` is not a plane-defining key — `FACE_GROUP_SHARED_KEYS` stays
+   * exactly pitch and eave height, and a test pins it — but it is the answer to
+   * "who set this plane", and a gable has one plane-setter, not one per face.
+   * Marking only the clicked face 'user' left its siblings 'aerial_map', and the
+   * height-map sync (store/useRoofMapSync) rewrites every roof not marked 'user':
+   * it would put the map's pitch back on the siblings while the clicked face kept
+   * the user's, and the ridge would step. An absent key (`undefined`, as the
+   * gable conversion passes to CLEAR the source) is not carried.
+   */
+  if (patch.heightSource !== undefined) shared.heightSource = patch.heightSource;
   const gid = target.faceGroupId;
   const propagates = !!gid && Object.keys(shared).length > 0;
 
@@ -71,8 +85,11 @@ export function applyFaceGroupPatch(
   const next = roofs.map((r) => {
     if (r.id === id) return { ...r, ...patch };
     if (!propagates || r.faceGroupId !== gid) return r;
-    // skip siblings that already hold these values — no needless object churn
-    if (FACE_GROUP_SHARED_KEYS.every((k) => shared[k] === undefined || r[k] === shared[k])) {
+    // Skip siblings that already hold these values — no needless object churn.
+    // EVERY carried key, not only the plane keys: a sibling already at the new
+    // pitch but still 'aerial_map' is exactly the one the sync would rewrite, so
+    // it must not be skipped.
+    if ((Object.keys(shared) as (keyof Roof)[]).every((k) => r[k] === shared[k])) {
       return r;
     }
     changedIds.push(r.id);
