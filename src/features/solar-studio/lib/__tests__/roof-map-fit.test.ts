@@ -129,4 +129,37 @@ describe('roofsAdoptingMap — roofs not set by hand follow the map', () => {
       out = again ?? out;
     }
   });
+
+  it('never re-pitches one face of a gable or hip — the plane is shared, not per face', () => {
+    // The flatten bug. Each face used to be fitted on its own; half a gable over
+    // a flat deck reads flat, so both faces were written to 0° and the deck's
+    // height — two coplanar planes where the ridge was, saved with no undo step.
+    // Both halves of `rect`, built at 25° and 3 m, source unset as the factory
+    // leaves them: exactly what a fresh conversion hands the sync.
+    const faceA = fixtureRoof({
+      id: 'face_a',
+      faceGroupId: 'fg1',
+      pitchDeg: 25,
+      slopeAzimuthDeg: 270,
+      heightM: 3,
+      polygon: [
+        { x: -10, y: -8 },
+        { x: 0, y: -8 },
+        { x: 0, y: 8 },
+        { x: -10, y: 8 },
+      ],
+    });
+    const faceB = fixtureRoof({
+      ...faceA,
+      id: 'face_b',
+      slopeAzimuthDeg: 90,
+      polygon: [
+        { x: 0, y: -8 },
+        { x: 10, y: -8 },
+        { x: 10, y: 8 },
+        { x: 0, y: 8 },
+      ],
+    });
+    expect(roofsAdoptingMap([faceA, faceB], g)).toBeNull();
+  });
 });

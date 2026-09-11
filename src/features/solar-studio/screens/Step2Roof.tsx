@@ -1907,9 +1907,12 @@ export function Step2Roof() {
                 <span>
                   Aerial height map: ≈ {lenValue(fit.heightM, 1)} {units === 'imperial' ? 'ft' : 'm'}
                   {fit.pitchDeg ? ` · ${fit.pitchDeg}° facing ${fit.slopeAzimuthDeg}°` : ' · flat'}
-                  {selected.heightSource === 'aerial_map' && !differs ? ' · in use' : ''}
+                  {selected.heightSource === 'aerial_map' && !differs && !selected.faceGroupId ? ' · in use' : ''}
+                  {/* one tap here used to plane-fit ONE face of a gable and flatten it
+                      against its siblings — the reading is shown, never applied */}
+                  {selected.faceGroupId ? ' · reads one face only, so a gable or hip keeps its built pitch' : ''}
                 </span>
-                {differs && (
+                {differs && !selected.faceGroupId && (
                   <button type="button" className="btn btn-secondary" onClick={take}>
                     Use
                   </button>

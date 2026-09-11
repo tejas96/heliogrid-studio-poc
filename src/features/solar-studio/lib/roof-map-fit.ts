@@ -132,6 +132,13 @@ export function roofsWithMapFit(roofs: Roof[], g: SurroundHeights, roofId: strin
   const parentFit = roofMapFit(g, target, northOffsetDeg);
   return roofs.map((r) => {
     if (!family.has(r.id)) return r;
+    /*
+     * A gable/hip face is never plane-fitted on its own — the reason is at
+     * `roofsAdoptingMap`. Here it closes the other two doors to the same
+     * flatten: the roof sheet's "Use" and the `roof.applyMapFit` op.
+     */
+    const face = !!r.faceGroupId;
+    if (face && r.id === target.id) return r;
     const fit = roofMapFit(g, r, northOffsetDeg);
     if (r.id !== target.id && parentFit) {
       // A roof standing ON the parent must stand above it. The map reads a
@@ -140,10 +147,14 @@ export function roofsWithMapFit(roofs: Roof[], g: SurroundHeights, roofId: strin
       // 60 m down inside the building — is no mumty. It keeps the rise it had.
       const own = r.heightM - target.heightM;
       const rise = own > CHILD_MIN_RISE_M ? own : CHILD_DEFAULT_RISE_M;
-      const readAbove = fit !== null && fit.heightM > parentFit.heightM + CHILD_MIN_RISE_M;
+      // A gable stair room still rises with its deck — but by the PARENT rule
+      // only. Every face of it shares one eave height and stands on the same
+      // parent, so `parent + rise` lands them all at one height; a per-face
+      // reading would land each face somewhere different and step the eave.
+      const readAbove = !face && fit !== null && fit.heightM > parentFit.heightM + CHILD_MIN_RISE_M;
       const heightM = readAbove ? fit.heightM : parentFit.heightM + rise;
       const next: Roof = { ...r, heightM, heightSource: 'aerial_map' };
-      if (fit && fit.rmseM <= TRUSTED_RMSE_M) {
+      if (!face && fit && fit.rmseM <= TRUSTED_RMSE_M) {
         next.pitchDeg = fit.pitchDeg;
         if (fit.slopeAzimuthDeg !== null) next.slopeAzimuthDeg = fit.slopeAzimuthDeg;
       }
@@ -182,6 +193,25 @@ export function roofsAdoptingMap(roofs: Roof[], g: SurroundHeights, northOffsetD
   for (const id of roofs.map((r) => r.id)) {
     const r = out.find((x) => x.id === id)!;
     if (r.heightSource === 'user' || r.roofType === 'ground') continue;
+    /*
+     * A face of a gable or hip is NEVER fitted on its own.
+     *
+     * THE FLATTEN BUG. Converting a roof to a gable builds two faces, and the
+     * factory leaves their `heightSource` unset — so this loop took them as two
+     * separate roofs and plane-fitted each one. Half a gable over a flat RCC deck
+     * reads as flat, trusted, because the map is looking at the deck: both faces
+     * were written to 0° and the deck's height, leaving two coplanar planes where
+     * the ridge was — the exact state `lib/roof-gable.ts` refuses to build. And
+     * the sync saves with `patch(…, false)`, so Undo could not bring it back.
+     *
+     * A face's plane is shared with its siblings by construction (roof-face-group
+     * keeps one pitch and one eave height across the group), so a per-face
+     * reading can never be right: it either reads the deck under the roof, or
+     * one slope of a real pitched roof and then disagrees with the other face.
+     * The faces were built by the user; the map has nothing to add to them. Its
+     * reading is still shown in the roof sheet, as information.
+     */
+    if (r.faceGroupId) continue;
     // A roof standing on another NEVER takes its own reading. The map reads a
     // small stair room at the deck's height (its cells are the deck's), so
     // adopting it would sink the mumty into the roof — and the rule below

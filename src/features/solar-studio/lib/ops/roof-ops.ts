@@ -19,6 +19,9 @@ export const roofApplyMapFit = defineOp<{ roofId: string }>({
   validate: (p, a) => {
     const roof = p.roofs.find((r) => r.id === a.roofId);
     if (!roof) return { reason: 'Roof not found' };
+    // a per-face plane fit of a gable/hip flattens it — see roofsAdoptingMap
+    if (roof.faceGroupId)
+      return { reason: 'A gable or hip roof keeps the pitch it was built with — the height map reads one face, not the whole roof' };
     const g = gridOf(p);
     if (!g) return { reason: 'No aerial height map loaded for this site' };
     if (!roofMapFit(g, roof, p.calibration.northOffsetDeg)) return { reason: 'The height map has too few samples over this roof' };
