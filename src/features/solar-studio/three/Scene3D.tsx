@@ -4509,7 +4509,11 @@ function SceneContent({
                           const fit = g ? roofMapFit(g, r, project.calibration.northOffsetDeg) : null;
                           if (!g || !fit) return [];
                           const acts: { label: string; onClick: () => void }[] = [];
-                          if (Math.abs(fit.heightM - r.heightM) > ROOF_HEIGHT_TOLERANCE_M) {
+                          // Not on a face of a gable or hip. `roof.applyMapFit` refuses one —
+                          // a per-face plane fit is what used to flatten them (see
+                          // roofsAdoptingMap) — so here the action could only ever
+                          // fail. Step 2's sheet hides its "Use" the same way.
+                          if (!r.faceGroupId && Math.abs(fit.heightM - r.heightM) > ROOF_HEIGHT_TOLERANCE_M) {
                             acts.push({
                               label: `Use map height (${fmtLen(fit.heightM, 1)}${fit.pitchDeg ? `, ${fit.pitchDeg}°` : ''})`,
                               onClick: () => runOp(roofApplyMapFit, { roofId: r.id }),
