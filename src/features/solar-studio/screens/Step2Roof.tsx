@@ -1038,21 +1038,28 @@ export function Step2Roof() {
     !lockedIds.has(vertexRoof.id) &&
     !dragVertex;
   /**
-   * The corner currently under the finger: the dragged vertex and its two
-   * neighbours, wrapped around the ring. A roof is squared as often by pulling
-   * a corner into place afterwards as by placing it right the first time, so
-   * the drag gets the same angle readout the draw does — otherwise the number
-   * disappears exactly when the user is doing the fine work.
+   * The corner the user is working on: the dragged vertex, or — once the drag
+   * is released — the selected one, with its two neighbours wrapped around the
+   * ring. A roof is squared as often by pulling a corner into place afterwards
+   * as by placing it right the first time, so the corner gets the same angle
+   * readout the draw does.
+   *
+   * It used to follow the DRAG only. Releasing hands the corner from
+   * `dragVertex` to `selectedVertex`, so the number vanished at the exact moment
+   * the user let go to read it — "is that 90.0 or 89.6?" is asked with the
+   * mouse up, not down. It now stays for as long as the corner is selected:
+   * until Escape, a click elsewhere, Close or Delete.
    */
-  const dragCorner = (() => {
-    if (!dragVertex) return null;
-    const roof = project.roofs.find((r) => r.id === dragVertex.roofId);
+  const activeCorner = (() => {
+    const ref = dragVertex ?? selectedVertex;
+    if (!ref) return null;
+    const roof = project.roofs.find((r) => r.id === ref.roofId);
     const n = roof?.polygon.length ?? 0;
-    if (!roof || n < 3 || dragVertex.i >= n) return null;
+    if (!roof || n < 3 || ref.i >= n) return null;
     return {
-      a: roof.polygon[(dragVertex.i - 1 + n) % n],
-      b: roof.polygon[dragVertex.i],
-      c: roof.polygon[(dragVertex.i + 1) % n],
+      a: roof.polygon[(ref.i - 1 + n) % n],
+      b: roof.polygon[ref.i],
+      c: roof.polygon[(ref.i + 1) % n],
     };
   })();
   const edgeRoof = edgeEdit
@@ -1313,7 +1320,8 @@ export function Step2Roof() {
         {draft && (
           <DrawingLayer points={draft} hover={hover} fmt={fmt} guides={snapGuides} />
         )}
-        {dragCorner && <CornerAngle {...dragCorner} />}
+        {/* the point toolbar sits just above a selected corner — keep clear of it */}
+        {activeCorner && <CornerAngle {...activeCorner} avoidAbove={showVertexBar} />}
         {showVertexBar && vertexRoof && selectedVertex && (
           <VertexContextBar
             at={vertexRoof.polygon[selectedVertex.i]}
@@ -2931,7 +2939,18 @@ const SQUARE_TOLERANCE_DEG = 0.5;
  * distance — the one placement that stays legible at every zoom and can never
  * be mistaken for a label belonging to an edge.
  */
-function CornerAngle({ a, b, c }: { a: XY; b: XY; c: XY }) {
+function CornerAngle({
+  a,
+  b,
+  c,
+  avoidAbove = false,
+}: {
+  a: XY;
+  b: XY;
+  c: XY;
+  /** a toolbar sits directly above the vertex — never put the chip under it */
+  avoidAbove?: boolean;
+}) {
   const frame = useCanvasFrame();
   const pp = frame.toPx(b);
   const pa = frame.toPx(a);
@@ -2958,6 +2977,18 @@ function CornerAngle({ a, b, c }: { a: XY; b: XY; c: XY }) {
   } else {
     bx /= lb;
     by /= lb;
+  }
+  /*
+   * Once released, a corner is SELECTED and its Delete/Close toolbar opens
+   * centred just above it (VertexContextBar). The chip rides the bisector 32 px
+   * out, so on any corner whose wedge opens upward it would land under that
+   * toolbar — the number the user let go to read, hidden by the buttons. So when
+   * the toolbar is up and the bisector points up (screen y < 0), the chip goes
+   * to the OUTSIDE of the corner instead: same vertex, same distance, clear air.
+   */
+  if (avoidAbove && by < -0.3) {
+    bx = -bx;
+    by = -by;
   }
   const square = Math.abs(deg - 90) <= SQUARE_TOLERANCE_DEG;
   const inv = 1 / frame.zoom;
