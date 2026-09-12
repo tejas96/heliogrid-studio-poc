@@ -9,7 +9,6 @@ import {
   Home,
   Info,
   Layers,
-  List,
   Lock,
   LockOpen,
   MousePointer2,
@@ -164,7 +163,6 @@ export function Step2Roof() {
   const [canvasPxPerM, setCanvasPxPerM] = useState(20);
   const [pendingGeometryChange, setPendingGeometryChange] =
     useState<PendingGeometryChange | null>(null);
-  const [showVertexInspector, setShowVertexInspector] = useState(false);
   /*
    * Edge lengths are ON by default.
    *
@@ -233,7 +231,6 @@ export function Step2Roof() {
     setSelectedIdRaw(id);
     setSelectedVertex(null);
     setEdgeEdit(null);
-    setShowVertexInspector(false);
   }
 
   function startDraw() {
@@ -1582,17 +1579,6 @@ export function Step2Roof() {
             aria-hidden
           />
           <button
-            className={`tool-btn ${showVertexInspector ? 'on' : ''}`}
-            aria-label="Exact vertex coordinates"
-            aria-pressed={showVertexInspector}
-            aria-controls="roof-vertex-inspector"
-            data-tip="Exact vertex coordinates"
-            data-tip-bottom=""
-            onClick={() => setShowVertexInspector((open) => !open)}
-          >
-            <List />
-          </button>
-          <button
             className="tool-btn"
             aria-label="Duplicate roof"
             data-tip="Duplicate roof"
@@ -1613,18 +1599,6 @@ export function Step2Roof() {
         </div>
       )}
       </div>{/* /top band */}
-
-      {selected && !draft && showVertexInspector && (
-        <RoofVertexInspector
-          roof={selected}
-          onCommit={(i, point) => {
-            const polygon = selected.polygon.map((p, index) => (index === i ? point : p));
-            if (requestGeometryChange(selected.id, polygon)) {
-              setSelectedVertex({ roofId: selected.id, i });
-            }
-          }}
-        />
-      )}
 
       {/* top-center guidance */}
       <div
@@ -2488,96 +2462,6 @@ function CanvasMetrics({
     );
   }, [frame.pxPerM, onChange]);
   return null;
-}
-
-function RoofVertexInspector({
-  roof,
-  onCommit,
-}: {
-  roof: Roof;
-  onCommit: (index: number, point: XY) => void;
-}) {
-  const [values, setValues] = useState(() =>
-    roof.polygon.map((point) => ({ x: point.x.toFixed(2), y: point.y.toFixed(2) })),
-  );
-  useEffect(() => {
-    setValues(roof.polygon.map((point) => ({ x: point.x.toFixed(2), y: point.y.toFixed(2) })));
-  }, [roof.polygon]);
-
-  function commit(index: number) {
-    const value = values[index];
-    const point = { x: Number(value.x), y: Number(value.y) };
-    if (Number.isFinite(point.x) && Number.isFinite(point.y)) onCommit(index, point);
-  }
-
-  return (
-    <section
-      id="roof-vertex-inspector"
-      aria-label={`${roof.name} vertex coordinates`}
-      style={{
-        position: 'absolute',
-        top: 62,
-        right: 14,
-        zIndex: 30,
-        width: 196,
-        maxHeight: 'calc(100% - 156px)',
-        overflow: 'auto',
-        background: 'rgba(20,24,30,0.92)',
-        border: '1px solid var(--editor-line)',
-        borderRadius: 10,
-        padding: 9,
-        color: 'var(--editor-ink)',
-        boxShadow: 'var(--shadow-2)',
-      }}
-    >
-      <div style={{ fontSize: 11, fontWeight: 750, marginBottom: 7 }}>Exact vertex coordinates</div>
-      <div style={{ fontSize: 9.5, color: 'var(--editor-ink-2)', marginBottom: 8 }}>
-        East / North metres
-      </div>
-      {roof.polygon.map((point, index) => (
-        <div
-          key={index}
-          style={{ display: 'grid', gridTemplateColumns: '20px 1fr 1fr', gap: 5, marginTop: 5 }}
-        >
-          <label htmlFor={`roof-${roof.id}-vertex-${index}-x`} style={{ fontSize: 10, alignSelf: 'center' }}>
-            {index + 1}
-          </label>
-          <input
-            id={`roof-${roof.id}-vertex-${index}-x`}
-            aria-label={`Vertex ${index + 1} east coordinate in metres`}
-            inputMode="decimal"
-            value={values[index]?.x ?? point.x.toFixed(2)}
-            onChange={(e) =>
-              setValues((current) =>
-                current.map((value, i) => (i === index ? { ...value, x: e.target.value } : value)),
-              )
-            }
-            onBlur={() => commit(index)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commit(index);
-            }}
-            style={{ minWidth: 0, padding: '4px 5px', fontSize: 10 }}
-          />
-          <input
-            id={`roof-${roof.id}-vertex-${index}-y`}
-            aria-label={`Vertex ${index + 1} north coordinate in metres`}
-            inputMode="decimal"
-            value={values[index]?.y ?? point.y.toFixed(2)}
-            onChange={(e) =>
-              setValues((current) =>
-                current.map((value, i) => (i === index ? { ...value, y: e.target.value } : value)),
-              )
-            }
-            onBlur={() => commit(index)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') commit(index);
-            }}
-            style={{ minWidth: 0, padding: '4px 5px', fontSize: 10 }}
-          />
-        </div>
-      ))}
-    </section>
-  );
 }
 
 /**
