@@ -1786,7 +1786,13 @@ export function Step6Editor() {
                 project,
                 roof,
                 spec,
-                { orientation: 'portrait', gapM: 0.05, grouped: true, avoidPanels: project.panels },
+                // The parapet-shadow setback belongs to the AUTOMATIC fills
+                // (Fill sheet, auto-design), which choose where modules go. A
+                // dragged table is the user saying "here" — refusing it would
+                // be the tool overruling a deliberate gesture, and the roof
+                // setback still applies. The shading engine prices whatever
+                // lands in the shadow, as it always did.
+                { orientation: 'portrait', gapM: 0.05, grouped: true, avoidPanels: project.panels, parapetShadow: false },
                 area,
               );
               if (filled) {
@@ -3948,7 +3954,9 @@ function EditorLayers({
       project,
       roof,
       spec,
-      { orientation: 'portrait', gapM: 0.05, grouped: true, avoidPanels: project.panels },
+      // parapetShadow false to MATCH the commit below — a ghost that showed
+      // fewer modules than the release actually places is a lying preview
+      { orientation: 'portrait', gapM: 0.05, grouped: true, avoidPanels: project.panels, parapetShadow: false },
       area,
     );
     return { panels, area, roof };
