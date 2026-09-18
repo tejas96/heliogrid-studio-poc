@@ -39,6 +39,29 @@ export function configureMms(project: Project, segmentId: string, strategy?: Mou
   return { ...patch, panels: reconciled ?? panels };
 }
 
+/**
+ * Hand the table back to the generic structure model.
+ *
+ * `Generate MMS` was one-way: once a table carried an `mms` block the panel
+ * offered only its tabs, so a user who tried it on the wrong table had Undo and
+ * nothing else — and Undo is gone after a reload. This drops the block and
+ * leaves everything the user actually chose (tilt, height, azimuth, spacing)
+ * exactly where it is: those live on the segment's racking and were theirs
+ * before MMS existed. The structure is re-derived without the MMS enrichment,
+ * and the BOM goes back to the generic mechanical lines.
+ */
+export function clearMms(project: Project, segmentId: string): Partial<Project> {
+  const seg = project.segments.find((s) => s.id === segmentId);
+  if (!seg?.mms) return {};
+  return {
+    segments: project.segments.map((s) => {
+      if (s.id !== segmentId) return s;
+      const { mms: _dropped, ...rest } = s;
+      return rest;
+    }),
+  };
+}
+
 /** Alternating row facing is derived, not a second persisted module orientation. */
 export function mmsFacing(azimuthDeg: number, kind: string, cellIndex?: number): number {
   return kind === 'dual_tilt' && Math.floor((cellIndex ?? 0) / COL_STRIDE) % 2 === 1

@@ -3,7 +3,7 @@ import { Layers3, Settings2, ClipboardCheck } from 'lucide-react';
 import type { Project } from '../../types';
 import type { MmsConfig, MountStrategy } from '../../lib/mms/types';
 import { defaultMms, MATERIALS, MOUNT_CATALOGUE } from '../../lib/mms/catalogue';
-import { configureMms } from '../../lib/mms/configure';
+import { clearMms, configureMms } from '../../lib/mms/configure';
 import { applyStructChoice } from '../../lib/structure-edit';
 import { setSegmentStructureFields } from '../../lib/segment-ops';
 import { deriveStructures } from '../../lib/derive/structures';
@@ -29,6 +29,9 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
   return <section className="mms-config" data-testid={`${prefix}-configuration`}>
     <div className="mms-heading"><Layers3 size={17} /><strong>Mounting system</strong><span data-testid={`${prefix}-state`}>{seg.mms ? 'Live model' : 'Existing structure'}</span></div>
     {!seg.mms ? <button className="btn primary" data-testid={`${prefix}-generate`} onClick={() => onPatch(configureMms(project, seg.id, roof.pitchDeg > 0 ? (roof.roofType === 'tile' ? 'roof_hook' : 'flush') : cfg.strategy))}>Generate MMS</button> : <>
+      {/* the way back out. Generating was one-way, so a table tried by mistake
+          could only be undone in the same session — and never after a reload */}
+      <button className="btn" data-testid={`${prefix}-remove`} onClick={() => onPatch(clearMms(project, seg.id))} title="Drop the modelled mounting system. Tilt, height and spacing stay as you set them.">Remove MMS</button>
       <div className="mms-tabs" role="tablist" aria-label="MMS configuration">
         {([['basic', 'Basic', Layers3], ['advanced', 'Advanced', Settings2], ['engineering', 'Engineering', ClipboardCheck]] as const).map(([id, label, Icon]) => <button key={id} role="tab" aria-selected={tab === id} data-testid={`${prefix}-tab-${id}`} onClick={() => setTab(id)}><Icon size={14} />{label}</button>)}
       </div>

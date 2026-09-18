@@ -1967,13 +1967,10 @@ export function Step6Editor() {
         role="toolbar"
         aria-label="History and layout actions"
       >
-        {project.segments.length > 0 && <select
-          data-testid="mms-table-picker"
-          aria-label="Select table for MMS settings"
-          value={selectedSegment?.id ?? ''}
-          style={{ width: 'min(130px, 32vw)', minHeight: 32, background: 'var(--editor-bg)', color: 'var(--editor-ink)', border: '1px solid var(--editor-line)', borderRadius: 4, fontSize: 12 }}
-          onChange={e => { if (!e.target.value) return; setSelectedIds(project.panels.filter(p => p.segmentId === e.target.value && p.enabled).map(p => p.id)); setTableSheet(true); }}
-        ><option value="">MMS · Select table</option>{project.segments.map(s => <option key={s.id} value={s.id}>{s.label} · MMS</option>)}</select>}
+        {/* The mounting system is reached the way every other table setting is:
+            pick the table, then Settings. A dropdown here listing the tables by
+            name was a second, parallel way in — hand-styled, sitting among icon
+            buttons, and duplicating the selection the canvas already owns. */}
         <RailBtn
           icon={<Undo2 />}
           label="Undo"
@@ -3649,7 +3646,7 @@ function SelectionContextBar({
                 title={
                   tableCount > 1
                     ? `Settings for all ${tableCount} selected tables — racking, tilt, azimuth, structure`
-                    : 'Table settings — racking, tilt, azimuth, structure'
+                    : 'Table settings — racking, tilt, azimuth, structure, mounting system'
                 }
                 aria-label={tableCount > 1 ? `Settings for ${tableCount} tables` : 'Table settings'}
                 data-testid="selected-table-settings"
