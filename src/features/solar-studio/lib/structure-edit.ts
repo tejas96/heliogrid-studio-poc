@@ -29,7 +29,10 @@ import { resolveRules } from '../data/rules/india';
 
 /** Lowest module edge above grade: keeps vegetation, splash and soiling off
  *  the array. ASSUMED — site drainage and flood history govern the real value. */
-const GROUND_CLEARANCE_M = 0.5;
+/** Lowest module edge above grade on a ground table — vegetation, flooding and
+ *  soiling all reach higher than a rooftop table's 0.3 m. Shared with the MMS
+ *  configurator so the two ground paths cannot drift apart. */
+export const GROUND_CLEARANCE_M = 0.5;
 const GROUND_TILT_DEG = () => resolveRules().defaults.groundTiltDeg;
 
 export type StructChoice =

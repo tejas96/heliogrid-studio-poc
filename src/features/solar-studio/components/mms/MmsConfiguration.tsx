@@ -25,10 +25,21 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
   const findings = validateMms(project, structures).filter(f => f.segmentId === seg.id);
   const errors = findings.filter(f => f.status === 'error');
   const moduleSlantM = project.components.panel ? panelFootprintM(project.components.panel, seg.orientation).h : 0;
+  // On open ground the table may ALREADY be a tracker, or founded on ballast or a
+  // cast pedestal, chosen in the older racking control in Step 6. Generating an
+  // MMS must not overrule that, so the seed is read back from the RESOLVED
+  // structure (which is where the lazy foundation field is settled) instead of
+  // taking the catalogue's first ground entry.
+  const ground = roof.roofType === 'ground';
+  const groundSeed: MountStrategy | undefined = !ground ? undefined
+    : seg.racking.kind === 'tracker_hsat' ? 'ground_tracker'
+      : mine?.foundation === 'ballast' ? 'ground_ballast'
+        : mine?.foundation === 'concrete' ? 'ground_pedestal'
+          : 'ground_pile';
   const number = (field: 'attachmentSpacingM' | 'railStockLengthM' | 'railInsetRatio' | 'edgeClearanceM' | 'obstacleClearanceM', label: string, min: number, max: number, step = .01) => <MmsField id={`${prefix}-${field}`} label={label} value={cfg[field]} min={min} max={max} step={step} onChange={v => v !== undefined && update({ [field]: v })} />;
   return <section className="mms-config" data-testid={`${prefix}-configuration`}>
     <div className="mms-heading"><Layers3 size={17} /><strong>Mounting system</strong><span data-testid={`${prefix}-state`}>{seg.mms ? 'Live model' : 'Existing structure'}</span></div>
-    {!seg.mms ? <button className="btn primary" data-testid={`${prefix}-generate`} onClick={() => onPatch(configureMms(project, seg.id, roof.pitchDeg > 0 ? (roof.roofType === 'tile' ? 'roof_hook' : 'flush') : cfg.strategy))}>Generate MMS</button> : <>
+    {!seg.mms ? <button className="btn primary" data-testid={`${prefix}-generate`} onClick={() => onPatch(configureMms(project, seg.id, groundSeed ?? (roof.pitchDeg > 0 ? (roof.roofType === 'tile' ? 'roof_hook' : 'flush') : cfg.strategy)))}>Generate MMS</button> : <>
       {/* the way back out. Generating was one-way, so a table tried by mistake
           could only be undone in the same session — and never after a reload */}
       <button className="btn" data-testid={`${prefix}-remove`} onClick={() => onPatch(clearMms(project, seg.id))} title="Drop the modelled mounting system. Tilt, height and spacing stay as you set them.">Remove MMS</button>
@@ -38,8 +49,10 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
       {tab === 'basic' && <div className="mms-fields">
         <label className="mms-field">MMS type<select aria-label="MMS type" data-testid={`${prefix}-strategy`} value={cfg.strategy} onChange={e => onPatch(configureMms(project, seg.id, e.target.value as MountStrategy))}>{MOUNT_CATALOGUE.filter(p => p.roofs.includes(roof.roofType)).map(p => <option key={p.id} value={p.id}>{p.label}</option>)}</select></label>
         {seg.racking.kind !== 'flush' && <>
-          <MmsField id={`${prefix}-tilt`} label="Tilt (°)" value={seg.racking.tiltDeg} min={5} max={35} step={1} onChange={v => v !== undefined && choice({ kind: 'tilt', tiltDeg: v })} />
-          <MmsField id={`${prefix}-height`} label="Low-edge height above roof (m)" value={Math.max(seg.racking.frontLegM, seg.racking.clearanceM ?? 0)} min={.2} max={10} step={.05} onChange={v => v !== undefined && choice({ kind: 'clearance', clearanceM: v })} />
+          {/* A tracker's tilt is the time of day, not a setting — setSegmentTilt
+              refuses it — so this slider would have moved nothing at all. */}
+          {seg.racking.kind !== 'tracker_hsat' && <MmsField id={`${prefix}-tilt`} label="Tilt (°)" value={seg.racking.tiltDeg} min={5} max={35} step={1} onChange={v => v !== undefined && choice({ kind: 'tilt', tiltDeg: v })} />}
+          <MmsField id={`${prefix}-height`} label={ground ? 'Module clearance above grade (m)' : 'Low-edge height above roof (m)'} value={Math.max(seg.racking.frontLegM, seg.racking.clearanceM ?? 0)} min={.2} max={10} step={.05} onChange={v => v !== undefined && choice({ kind: 'clearance', clearanceM: v })} />
           <div className="mms-height-presets">{[3, 5, 6, 8].map(ft => <button className="btn" key={ft} data-testid={`${prefix}-height-${ft}ft`} onClick={() => choice({ kind: 'clearance', clearanceM: ft * .3048 })}>{ft} ft</button>)}</div>
           <MmsField id={`${prefix}-support-spacing`} label="Support / beam station spacing (m)" value={seg.racking.legSpacingM ?? 2} min={.3} max={6} onChange={v => v !== undefined && onPatch({ segments: project.segments.map(s => s.id === seg.id ? setSegmentStructureFields(s, { legSpacingM: v }) : s) })} />
         </>}
@@ -51,10 +64,13 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
       {tab === 'advanced' && <>
         <label className="mms-field">Material<select aria-label="MMS material" data-testid={`${prefix}-material`} value={cfg.material} onChange={e => update({ material: e.target.value as MmsConfig['material'] })}>{Object.entries(MATERIALS).map(([key, v]) => <option key={key} value={key}>{v.label}</option>)}</select></label>
         <MmsSection id={`${prefix}-clearance`} title="Clearances & structural layout">
-          {number('edgeClearanceM', 'Roof-edge clearance (m)', 0, 3)}{number('obstacleClearanceM', 'Obstacle clearance (m)', 0, 2)}
+          {number('edgeClearanceM', ground ? 'Boundary setback clearance (m)' : 'Roof-edge clearance (m)', 0, 3)}{number('obstacleClearanceM', 'Obstacle clearance (m)', 0, 2)}
           {number('railStockLengthM', 'Rail stock / splice interval (m)', .3, 12, .1)}
           {seg.racking.kind !== 'flush' && <><MmsField id={`${prefix}-rails`} label="Rails per module row" min={2} max={6} step={1} value={seg.racking.purlinCount ?? 2} onChange={v => v !== undefined && choice({ kind: 'mms', field: 'purlinCount', value: Math.round(v) })} /><label className="mms-field">Diagonal bracing<input data-testid={`${prefix}-bracing`} type="checkbox" checked={seg.racking.bracing !== false} onChange={e => choice({ kind: 'mms', field: 'bracing', value: e.target.checked })} /></label></>}
-          <label className="mms-field">Roof attachment survey confirmed<input type="checkbox" data-testid={`${prefix}-attachment-verified`} checked={cfg.attachmentVerified ?? false} onChange={e => update({ attachmentVerified: e.target.checked })} /></label>
+          {/* Only a FLUSH table is fixed to a roof surface, and the flag's single
+              consumer is the flush `attachment_unverified` finding. On an
+              elevated or ground table it cleared nothing. */}
+          {seg.racking.kind === 'flush' && <label className="mms-field">Roof attachment survey confirmed<input type="checkbox" data-testid={`${prefix}-attachment-verified`} checked={cfg.attachmentVerified ?? false} onChange={e => update({ attachmentVerified: e.target.checked })} /></label>}
         </MmsSection>
         <MmsSection id={`${prefix}-anchors`} title="Anchors & base plate">
           <label className="mms-field">Anchor type<select data-testid={`${prefix}-anchor-type`} aria-label="Anchor type" value={cfg.anchor.type} onChange={e => update({ anchor: { ...cfg.anchor, type: e.target.value as MmsConfig['anchor']['type'] } })}><option value="chemical">Chemical</option><option value="mechanical">Mechanical</option><option value="cast_in">Cast-in</option></select></label>

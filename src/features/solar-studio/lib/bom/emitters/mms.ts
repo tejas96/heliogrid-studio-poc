@@ -3,6 +3,7 @@ import type { BomContext } from '../context';
 import { line } from '../line';
 import { MATERIALS } from '../../mms/catalogue';
 import { validateMms } from '../../mms/validate';
+import { foundationVolumeM3, ruleFor } from '../../foundation';
 
 /** Detailed lines join the existing BOM registry/export/override pipeline. */
 export function emitMms(ctx: BomContext): BomLine[] {
@@ -32,6 +33,15 @@ export function emitMms(ctx: BomContext): BomLine[] {
     // A precast block has a rate in the pricebook; a custom one is whatever the
     // site casts, so only the catalogue type may carry a price.
     add('ballast', `Ballast blocks · ${seg.label}`, `${c.ballast.type} · ${c.ballast.lengthM} × ${c.ballast.widthM} × ${c.ballast.heightM} m · ${c.ballast.massKg} kg/block`, total('ballast'), 'nos', c.ballast.type === 'precast_concrete' ? ctx.pricebook.ballastBlock : 0, `${c.ballast.blocksPerSupport} per support · ${total('ballast') * c.ballast.massKg} kg declared mass`);
+    // A GROUND table is founded in earth, and `emitMechanical` skips any segment
+    // that carries an MMS (`if (st.mms) continue`) so the detailed graph is not
+    // counted twice. Without the two lines below that skip took the foundations
+    // out of the quote ENTIRELY — not at ₹0, but absent, which nothing flags. At
+    // ₹1650 a pile that is about ₹5 lakh missing on a 300-pile farm.
+    const pile = ruleFor('pile');
+    add('pile', `Ground foundation — driven pile · ${seg.label}`, `HDG post · Ø${pile.d} mm · ${pile.embedMm} mm embedment ASSUMED`, total('piles'), 'nos', ctx.pricebook.pileFoundation, `1 pile per leg base, counted from the connection graph. Embedment and pull-out are SOIL-dependent — geotechnical survey and engineer sign-off required`);
+    const pedestal = ruleFor('concrete', s.foundationShape);
+    add('pedestal', `Concrete pedestal · ${seg.label}`, `${pedestal.shape} · ${foundationVolumeM3(pedestal).toFixed(3)} m³ each · size ASSUMED`, total('pedestals'), 'nos', ctx.pricebook.concretePedestal, `1 pedestal per leg base, counted from the connection graph. Plan size is NOT calculated from uplift or overturning`);
     const attachment = ['standing_seam', 'clamp_mounted'].includes(c.strategy) ? 'Standing-seam clamps' : ['roof_hook', 'adjustable_hook'].includes(c.strategy) ? 'Roof hooks' : c.strategy === 'direct_sheet' ? 'Direct sheet fixings' : c.strategy === 'rafter_mounted' ? 'Rafter attachments' : c.strategy === 'purlin_mounted' ? 'Purlin clamps / L-brackets' : 'Sheet fixing / L-bracket';
     // The L-foot through a sheet crown is the one attachment the pricebook
     // rates per piece (`sheetStandoff`). A standing-seam clamp and a tile hook

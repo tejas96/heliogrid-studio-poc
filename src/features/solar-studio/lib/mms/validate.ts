@@ -15,6 +15,10 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
     const roof = project.roofs.find(x => x.id === seg?.roofId);
     if (!seg || !roof || !s.mms) continue;
     const cfg = s.mms;
+    // Open ground is a boundary, not a roof. The geometry checks are the same;
+    // what they are checking against is not, and saying "roof" there reads as a
+    // bug on a free-field array.
+    const ground = roof.roofType === 'ground';
     const add = (code: string, status: MmsFinding['status'], message: string, ids: string[] = []) => out.push({ id: `${seg.id}/${code}/${ids.join(',')}`, segmentId: seg.id, code, status, message, componentIds: ids });
     if (![cfg.railInsetRatio, cfg.attachmentSpacingM, cfg.edgeClearanceM, cfg.obstacleClearanceM].every(Number.isFinite) || cfg.railInsetRatio < 0 || cfg.railInsetRatio >= .45 || cfg.attachmentSpacingM < .15 || cfg.edgeClearanceM < 0) add('configuration', 'error', 'Invalid spacing or clamp inset configuration.');
     const zones: { id: string; label: string; poly: XY[]; bottom: number; top: number }[] = [];
@@ -33,8 +37,8 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
     const checkFootprint = (id: string, poly: XY[], bottom: number, top: number, member?: Member) => {
       const area = Math.abs(polygonArea(poly));
       const inside = intersectPolygons(poly, roof.polygon).reduce((sum, p) => sum + Math.abs(polygonArea(p)), 0);
-      if (area - inside > 1e-7) add('roof_boundary', 'error', 'MMS component extends outside the roof boundary.', [id]);
-      else if (cfg.edgeClearanceM > 0 && poly.some(p => roof.polygon.some((a, i) => pointSegDist(p, a, roof.polygon[(i + 1) % roof.polygon.length]).d < cfg.edgeClearanceM))) add('edge_clearance', 'warning', 'MMS is inside the requested roof-edge clearance.', [id]);
+      if (area - inside > 1e-7) add('roof_boundary', 'error', `MMS component extends outside the ${ground ? 'array area' : 'roof'} boundary.`, [id]);
+      else if (cfg.edgeClearanceM > 0 && poly.some(p => roof.polygon.some((a, i) => pointSegDist(p, a, roof.polygon[(i + 1) % roof.polygon.length]).d < cfg.edgeClearanceM))) add('edge_clearance', 'warning', `MMS is inside the requested ${ground ? 'boundary setback' : 'roof-edge'} clearance.`, [id]);
       for (const z of zones) {
         if (bottom >= z.top || top <= z.bottom) continue;
         const overlap = intersectPolygons(poly, z.poly).flat();
@@ -74,7 +78,14 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
     if (cfg.strategy === 'adjustable') add('adjustment_lock', 'warning', 'Selected tilt is modelled; slotted adjustment and locking hardware require manufacturer detail.');
     if (roof.pitchDeg > 0 && ['industrial_custom', 'custom', 'elevated', 'high_height'].includes(cfg.strategy)) add('pitched_elevation', 'warning', 'Pitched-roof elevated load path is not defined; roof-following rails are shown, not an engineered elevated frame.');
     add('clamp_zone', 'warning', 'Rail inset is configured; confirm against the module manufacturer’s permitted clamp zones.');
-    if (!project.mmsEngineering?.roofCapacityKpa) add('roof_capacity', 'not_calculated', 'Roof structural capacity unavailable — engineering verification required.');
+    if (ground) {
+      // There is no slab to overload on open ground — lib/drc.ts makes the same
+      // exclusion. What is unknown instead is the SOIL, and a driven pile's whole
+      // capacity lives there.
+      add('soil_capacity', 'not_calculated', 'Soil bearing, embedment depth and pile pull-out require a geotechnical survey and engineer sign-off.');
+      if (seg.racking.kind === 'tracker_hsat') add('tracker_hardware', 'warning', 'Torque tube, bearings, drive and controller are manufacturer hardware. The model shows posts, tubes and modules — not a certified tracker assembly.');
+      if (cfg.strategy === 'ground_seasonal') add('seasonal_position', 'warning', 'One seasonal tilt position is modelled. Summer and winter angles, slotted travel and locking hardware require manufacturer detail.');
+    } else if (!project.mmsEngineering?.roofCapacityKpa) add('roof_capacity', 'not_calculated', 'Roof structural capacity unavailable — engineering verification required.');
     if (!project.mmsEngineering?.basicWindSpeedMs || !project.mmsEngineering?.terrainCategory) add('wind_incomplete', 'warning', 'Wind configuration incomplete (IS 875 Part 3).');
     if (!out.some(f => f.segmentId === seg.id && f.status === 'error')) add('geometry_clear', 'pass', 'No geometric conflicts detected in the modelled members and attachments.');
   }

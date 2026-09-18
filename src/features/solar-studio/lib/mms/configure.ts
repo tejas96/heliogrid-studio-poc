@@ -3,7 +3,8 @@ import type { MmsConfig, MountStrategy } from './types';
 import { defaultMms, MOUNT_CATALOGUE } from './catalogue';
 import { setSegmentAzimuth, setSegmentRacking, setSegmentStructureFields, setSegmentTilt } from '../segment-ops';
 import { COL_STRIDE } from '../layout';
-import { reconcileBridgedPanels } from '../structure-edit';
+import { GROUND_CLEARANCE_M, reconcileBridgedPanels } from '../structure-edit';
+import { resolveRules } from '../../data/rules/india';
 
 /** One undoable patch, reusing the existing placement/bridging operations. */
 export function configureMms(project: Project, segmentId: string, strategy?: MountStrategy, edit?: Partial<MmsConfig>): Partial<Project> {
@@ -18,14 +19,27 @@ export function configureMms(project: Project, segmentId: string, strategy?: Mou
     const preset = MOUNT_CATALOGUE.find(p => p.id === strategy && p.roofs.includes(roof.roofType));
     if (!preset) return {};
     mms.strategy = strategy;
-    const kind = preset.flush || roof.pitchDeg > 0 ? 'flush' : strategy === 'east_west' ? 'dual_tilt' : 'fixed_tilt';
+    const kind = preset.racking ?? (preset.flush || roof.pitchDeg > 0 ? 'flush' : strategy === 'east_west' ? 'dual_tilt' : 'fixed_tilt');
     ({ segment: seg, panels } = setSegmentRacking(roof, spec, seg, panels, kind));
     if (kind === 'flush' && roof.pitchDeg > 0) ({ segment: seg, panels } = setSegmentAzimuth(seg, panels, roof.slopeAzimuthDeg));
-    if (preset.tilt && kind !== 'flush') ({ segment: seg, panels } = setSegmentTilt(spec, seg, panels, preset.tilt));
+    // Open ground is not constrained by a roof, so its tilt and its
+    // vegetation/flood clearance come from the live rules rather than from a
+    // number frozen into the catalogue — the same source the ground structure
+    // presets read (lib/structure-edit.ts), so a rule override cannot be
+    // honoured by one path and ignored by the other.
+    const ground = roof.roofType === 'ground';
+    const tilt = preset.tilt ?? (ground ? resolveRules().defaults.groundTiltDeg : undefined);
+    // setSegmentTilt is a deliberate no-op on a tracker: its tilt is the time of
+    // day, not a setting (lib/energy/tracker.ts).
+    if (tilt && kind !== 'flush') ({ segment: seg, panels } = setSegmentTilt(spec, seg, panels, tilt));
     if (kind !== 'flush') {
       seg = setSegmentStructureFields(seg, {
-        clearanceM: preset.heightM ?? .45,
-        foundation: strategy === 'rcc_ballast' ? 'ballast' : 'anchor',
+        clearanceM: preset.heightM ?? (ground ? GROUND_CLEARANCE_M : .45),
+        // The preset's own foundation wins. Falling through to `anchor` on open
+        // ground wrote a value `allowedFoundations` rejects, so the choice was
+        // silently corrected at the next read — the picker offering one thing
+        // and the model building another.
+        foundation: preset.foundation ?? (strategy === 'rcc_ballast' ? 'ballast' : 'anchor'),
       });
     }
     if (strategy === 'east_west' || strategy === 'south_facing') {
