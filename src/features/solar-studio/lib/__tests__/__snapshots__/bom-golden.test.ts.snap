@@ -14,7 +14,7 @@ Mechanical BOS | Mounting Structure (elevated RCC) | HDG steel, 10° tilt legs +
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 18 | m | 320 | derived | true | false | 8 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
 Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 16 | nos | 38 | derived | true | false | 8 panels × 2
 Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 8 | nos | 42 | derived | true | false | row ends
-Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Mechanical BOS | Fasteners Kit (wiring / misc) | SS304 kit — site miscellany; roof anchors are NOT in this line | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors and roof fixings are counted separately, from the node graph)
 Safety | Earthing Pits | Chemical earthing, 3m electrode | 2 | nos | 2650 | assumed | true | false | 2 system (DC + AC) (no arrester ⇒ no LPS pit) — ASSUMED convention; electrode count depends on measured soil resistivity (IS 3043), engineer to confirm
 Safety | Earthing Strip / Wire | GI 25×3 + 6 sq.mm Cu | 36 | m | 92 | assumed | true | false | 2 runs × 3 m roof height + 30 m ASSUMED interconnect allowance
 Safety | Danger Boards & Signage | CEIG-compliant set | 1 | kit | 950 | derived | true | false | Per site kit
@@ -47,7 +47,7 @@ Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, 
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
 Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
 Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
-Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Mechanical BOS | Fasteners Kit (wiring / misc) | SS304 kit — site miscellany; roof anchors are NOT in this line | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors and roof fixings are counted separately, from the node graph)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
 Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
@@ -87,7 +87,7 @@ Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, 
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
 Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
 Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
-Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Mechanical BOS | Fasteners Kit (wiring / misc) | SS304 kit — site miscellany; roof anchors are NOT in this line | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors and roof fixings are counted separately, from the node graph)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
 Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
@@ -129,7 +129,7 @@ Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, 
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
 Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
 Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
-Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Mechanical BOS | Fasteners Kit (wiring / misc) | SS304 kit — site miscellany; roof anchors are NOT in this line | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors and roof fixings are counted separately, from the node graph)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
 Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification
@@ -170,7 +170,7 @@ Mechanical BOS | Mounting Structure (metal shed) | Al mini-rails + roof clamps, 
 Mechanical BOS | Mounting Rail | Al 6005-T5 40×40 | 23 | m | 320 | derived | true | false | 10 unsegmented flat-RCC/ground/pitched-roof panels × panel length. Cutting waste is the line's waste %, not baked into this figure.
 Mechanical BOS | Mid Clamps | Al with SS hardware — between adjacent modules | 40 | nos | 38 | derived | true | false | 8 from the structure node graph + 32 for 16 loose panels
 Mechanical BOS | End Clamps | Al with SS hardware — at each row end | 16 | nos | 42 | derived | true | false | 8 from the structure node graph + 8 for the loose-panel rows
-Mechanical BOS | Fasteners & Chemical Anchors | SS304 kit | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors counted separately)
+Mechanical BOS | Fasteners Kit (wiring / misc) | SS304 kit — site miscellany; roof anchors are NOT in this line | 1 | kit | 1800 | derived | true | false | Per site kit (wiring/misc — structure anchors and roof fixings are counted separately, from the node graph)
 Safety | Walkway | GRP anti-slip 800mm | 12 | m² | 1450 | derived | true | false | 1 walkway(s), drawn length × width
 Safety | Safety Rail | GI 1100mm guard rail | 14 | m | 1150 | derived | true | false | Drawn rail length
 Safety | Lightning Arrester (ESE) | 2m mast, 60m radius | 1 | nos | 4800 | derived | true | false | 1 placed on canvas — ASSUMED coverage; LPS class/placement per IS/IEC 62305 needs engineer verification

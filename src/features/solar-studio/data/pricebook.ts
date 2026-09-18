@@ -79,6 +79,27 @@ export const PRICE_BOOK = {
   // roof and ESTIMATED — the real figure follows roof area, span and how many
   // crews work at once, none of which this tool models.
   acFragileAccessLumpsum: 28000, // crawling boards, roof ladders, edge protection
+  // ── Waterproofing membrane (torch-on / APP bitumen, or single-ply). The
+  // covering where NOTHING may be fixed through, so every rate here buys either
+  // mass or protection — never a fixing.
+  //
+  // PROTECTION LAYER. A precast block set straight onto bitumen abrades it, and
+  // in Indian rooftop heat the bitumen softens and the block creeps and sinks
+  // into it. So every bearing point sits on a slip sheet / protection mat —
+  // ordinarily a geotextile or recycled-rubber pad, sized larger than the block.
+  membraneProtectionMatPc: 180, // slip sheet / rubber pad per bearing point
+  // BALLASTED FRAME, per module: the table plus its blocks and pads, for panels
+  // that are not in a member model. ESTIMATED — see the wind note below.
+  membraneBallastSetPerPanel: 1180,
+  // AERODYNAMIC TRAY, per module. A closed east–west tub whose back panel turns
+  // uplift into downforce, so it needs far less concrete than an open ballasted
+  // frame. Dearer per module in steel, cheaper in ballast and in roof load.
+  // ASSUMED market rate — a real tender prices a named vendor's system.
+  aeroTrayPerPanel: 1750,
+  // MEMBRANE WARRANTY SIGN-OFF. Loading someone's waterproofing voids the
+  // warranty unless the membrane manufacturer inspects and accepts the design.
+  // LUMP SUM per membrane roof, ESTIMATED — the fee is the manufacturer's.
+  membraneWarrantyLumpsum: 22000, // manufacturer inspection + written acceptance
   // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
   // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
   // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is

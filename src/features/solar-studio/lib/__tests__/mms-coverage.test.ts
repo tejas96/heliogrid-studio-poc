@@ -29,6 +29,7 @@ const ALL_ROOF_TYPES: Record<RoofType, true> = {
   rcc_flat: true,
   metal_shed: true,
   ac_sheet: true,
+  membrane: true,
   tile: true,
   ground: true,
 };
@@ -121,6 +122,86 @@ describe('a ground array can be configured, and what it builds is what it keeps'
     const pile = deriveBom(after).filter((l) => l.id.includes(':pile'));
     expect(pile).not.toHaveLength(0);
     expect(pile.every((l) => l.qty > 0 && l.unitPriceInr > 0)).toBe(true);
+  });
+});
+
+// ─── Waterproofing membrane ─────────────────────────────────────────────────
+// One rule, and it admits no exception: NOTHING penetrates. Filed under
+// 'rcc_flat' the app offered chemical anchors — the single fixing that must
+// never be used here — and the flat-RCC remainder bought a table founded on a
+// cast pedestal. These pin the refusal, not just the new lines.
+describe('a membrane roof cannot be given a fixing that goes through it', () => {
+  it('offers ONLY mass: no foundation but ballast, on any segment', () => {
+    const { project, seg } = scene('membrane');
+    expect(allowedFoundations(project.roofs[0], seg)).toEqual(['ballast']);
+    const resolved = resolveRacking(project, project.roofs[0], seg, project.components.panel!)!;
+    expect(resolved.foundation).toBe('ballast');
+  });
+
+  it.each(MOUNT_CATALOGUE.filter((p) => p.roofs.includes('membrane')).map((p) => p.id))(
+    '%s founds on ballast, never an anchor',
+    (id) => {
+      const { project, seg } = scene('membrane');
+      const after: Project = { ...project, ...configureMms(project, seg.id, id) };
+      const resolved = resolveRacking(after, after.roofs[0], after.segments[0], after.components.panel!)!;
+      expect(resolved.foundation).toBe('ballast');
+    },
+  );
+
+  it('a penetrating fixing is an ERROR', () => {
+    const { project, seg } = scene('membrane');
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'membrane_ballast') };
+    const wrong: Project = {
+      ...after,
+      segments: after.segments.map((s) => ({ ...s, mms: { ...s.mms!, strategy: 'rcc_anchor' as const } })),
+    };
+    const findings = validateMms(wrong, deriveStructures(wrong));
+    expect(findings.some((f) => f.code === 'membrane_penetration' && f.status === 'error')).toBe(true);
+  });
+
+  it('buys protection pads and the manufacturer sign-off, never a pedestal', () => {
+    const base = fixtureProject(6);
+    const project: Project = { ...base, roofs: [{ ...fixtureRoof(), roofType: 'membrane' }] };
+    const bom = deriveBom(project);
+    for (const key of ['mech.mms_membrane', 'mech.membrane_protection', 'mech.membrane_warranty']) {
+      const l = bom.find((x) => x.id.startsWith(key));
+      expect(l, key).toBeDefined();
+      expect(l!.unitPriceInr, key).toBeGreaterThan(0);
+    }
+    // the remainder bucket must not also claim these panels
+    expect(bom.some((l) => l.id.startsWith('mech.mms_rcc'))).toBe(false);
+    expect(bom.some((l) => l.id.startsWith('mech.pedestal'))).toBe(false);
+  });
+
+  // The case the browser caught: a real membrane roof's panels are in a TABLE,
+  // so the per-panel lines never fire and the blocks come from the node graph —
+  // which bought concrete and NO protection at all. And the site fastener kit
+  // called itself "Chemical Anchors" on the one roof where that fixing must
+  // never be used.
+  it('a TABLE on a membrane still buys a pad for every block', () => {
+    const { project, seg } = scene('membrane');
+    const bom = deriveBom(project);
+    const blocks = bom.find((l) => l.id.startsWith('mech.ballast'));
+    const pads = bom.find((l) => l.id.startsWith('mech.membrane_pad'));
+    expect(blocks).toBeDefined();
+    expect(pads).toBeDefined();
+    expect(pads!.qty).toBe(blocks!.qty); // one pad per block, from one graph
+    expect(pads!.unitPriceInr).toBeGreaterThan(0);
+    expect(seg.id).toBeTruthy();
+  });
+
+  it('nothing in the quote offers a chemical anchor', () => {
+    const { project } = scene('membrane');
+    for (const l of deriveBom(project)) {
+      expect(`${l.item} ${l.spec}`.toLowerCase(), l.id).not.toMatch(/chemical anchor(?!s are not)/);
+    }
+  });
+
+  it('the aerodynamic tray really lays out east–west, not south', () => {
+    const { project, seg } = scene('membrane');
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'aero_tray') };
+    expect(after.segments[0].racking.kind).toBe('dual_tilt');
+    expect(after.segments[0].azimuthDeg).toBe(90);
   });
 });
 

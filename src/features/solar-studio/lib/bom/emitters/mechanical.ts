@@ -10,6 +10,7 @@ import { panelFootprintM } from '../../layout';
 import { resolveRacking } from '../../structure';
 import { fastenerTotals } from '../../structure';
 import { emitMms } from './mms';
+import { isNoPenetrationRoof } from '../../roof-plane';
 
 /** Plural-safe member phrase, e.g. "12 legs 4.2m". Omits absent kinds. */
 function memberBreakdown(st: SegmentStructure): string {
@@ -125,12 +126,15 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     nSloped,
     nMetal,
     nAc,
+    nMembrane,
     slopedByCovering,
     slopedRoofIdsByCovering,
     flatRccRoofIds,
     metalRoofIdList,
     acRoofIdList,
     acRoofCount,
+    membraneRoofIdList,
+    membraneRoofCount,
     groundRoofIdList,
     pricebook: PRICE_BOOK,
   } = ctx;
@@ -513,6 +517,61 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         sourceRoofId: soleSource(acRoofIdList),
       }),
     );
+  // ── Waterproofing membrane. The covering with no fixings at all, so what a
+  // flat-RCC deck would have bought — a cast pedestal or a chemical anchor —
+  // is replaced by MASS and by the layer that keeps that mass off the bitumen.
+  if (nMembrane > 0)
+    out.push(
+      line({
+        key: 'mech.mms_membrane',
+        category: 'Mechanical BOS',
+        item: 'Mounting Structure (membrane) — ballasted, non-penetrating',
+        spec: 'HDG ballasted frame + precast blocks, NO roof penetration',
+        qty: nMembrane,
+        unit: 'panel-set',
+        unitPriceInr: PRICE_BOOK.membraneBallastSetPerPanel,
+        confidence: 'estimated',
+        formula:
+          `${nMembrane} panels on membrane × ballasted frame share. Nothing is drilled: a hole in the waterproofing is a leak and a voided warranty, ` +
+          `so the array is held by MASS. The mass itself is a WIND calculation (IS 875 Part 3) with higher ballast at edges and corners — this tool does ` +
+          `NOT compute it, so the block count here is a placeholder for an engineer's uplift check, not a result. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(membraneRoofIdList),
+      }),
+      line({
+        key: 'mech.membrane_protection',
+        category: 'Mechanical BOS',
+        item: 'Membrane Protection Layer (slip sheets)',
+        spec: 'Geotextile / recycled-rubber pad under every bearing point, oversized to the block',
+        qty: nMembrane,
+        unit: 'panel-set',
+        unitPriceInr: PRICE_BOOK.membraneProtectionMatPc,
+        confidence: 'estimated',
+        formula:
+          `${nMembrane} panels — a precast block set straight onto bitumen abrades it, and in Indian rooftop heat the bitumen softens and the block ` +
+          `creeps and sinks into it. Every bearing point sits on a pad. ESTIMATE: pads per module follow the block layout, which the wind check sets.`,
+        sourceRoofId: soleSource(membraneRoofIdList),
+      }),
+    );
+  // Per ROOF: you get the manufacturer's acceptance once for the roof, not once
+  // per module. Without it, loading the membrane voids its warranty — which is
+  // the client's problem and therefore the EPC's.
+  if (membraneRoofCount > 0)
+    out.push(
+      line({
+        key: 'mech.membrane_warranty',
+        category: 'Mechanical BOS',
+        item: 'Membrane Warranty Inspection & Acceptance',
+        spec: "Membrane manufacturer's inspection and written acceptance of the loaded design",
+        qty: membraneRoofCount,
+        unit: 'lot',
+        unitPriceInr: PRICE_BOOK.membraneWarrantyLumpsum,
+        confidence: 'assumed',
+        formula:
+          `${membraneRoofCount} membrane roof(s). Placing an array on someone else's waterproofing voids its warranty unless the manufacturer inspects ` +
+          `and accepts the design in writing. ASSUMED LUMP SUM — the fee and the conditions are the manufacturer's, not this tool's.`,
+        sourceRoofId: soleSource(membraneRoofIdList),
+      }),
+    );
   // rail applies ONLY to loose/flush RCC panels: structured segments carry
   // purlins in the member model; metal-shed bundles mini-rails (the old
   // all-panels rail line double-billed both)
@@ -578,6 +637,38 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     if (roofId) bucket.roofIds.push(roofId);
     sheetFixings.set(covering, bucket);
   }
+  // Every ballast block on a MEMBRANE needs the pad that keeps concrete off the
+  // bitumen — and `ft.ballast` is a project-wide sum, so the pads have to be
+  // counted from the membrane structures alone. Without this a TABLE on a
+  // membrane bought its blocks and no protection at all: the per-panel line
+  // above only fires for LOOSE panels, and a real roof's panels are in tables.
+  let membraneBallast = 0;
+  const membranePadRoofIds: string[] = [];
+  for (const st of structures) {
+    if (st.mms) continue; // the MMS emitter counts its own pads
+    const roofId = roofOfSegment(st.segmentId);
+    const r = project.roofs.find((x) => x.id === roofId);
+    if (!r || !isNoPenetrationRoof(r)) continue;
+    for (const nd of st.nodes) membraneBallast += nd.fastenerSpec.ballast ?? 0;
+    if (roofId) membranePadRoofIds.push(roofId);
+  }
+  if (membraneBallast > 0)
+    out.push(
+      line({
+        key: 'mech.membrane_pad',
+        category: 'Mechanical BOS',
+        item: 'Membrane Protection Pads',
+        spec: 'Geotextile / recycled-rubber pad under every ballast block, oversized to the block',
+        qty: membraneBallast,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.membraneProtectionMatPc,
+        confidence: 'derived',
+        formula:
+          `One per ballast block — ${membraneBallast} blocks ⇒ ${membraneBallast} pads, counted from the same node graph as the blocks so the two ` +
+          `cannot disagree. A block set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps into it.`,
+        sourceRoofId: soleSource(membranePadRoofIds),
+      }),
+    );
   const metalFix = sheetFixings.get('metal_shed');
   if (metalFix && metalFix.standoffs > 0) {
     out.push(
@@ -680,12 +771,17 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     line({
       key: 'mech.fasteners',
       category: 'Mechanical BOS',
-      item: 'Fasteners & Chemical Anchors',
-      spec: 'SS304 kit',
+      // NOT "Fasteners & Chemical Anchors". Its own formula has always said the
+      // structure anchors are counted separately, so the name promised a part
+      // this line does not contain — and on a MEMBRANE roof it named the one
+      // fixing that must never be drilled, in a quote whose whole point is that
+      // nothing penetrates. The key is unchanged, so existing overrides hold.
+      item: 'Fasteners Kit (wiring / misc)',
+      spec: 'SS304 kit — site miscellany; roof anchors are NOT in this line',
       qty: 1,
       unit: 'kit',
       unitPriceInr: PRICE_BOOK.fastenersKit,
-      formula: 'Per site kit (wiring/misc — structure anchors counted separately)',
+      formula: 'Per site kit (wiring/misc — structure anchors and roof fixings are counted separately, from the node graph)',
     }),
   );
 

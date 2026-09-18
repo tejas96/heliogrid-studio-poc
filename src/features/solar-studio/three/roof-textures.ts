@@ -270,6 +270,67 @@ function acSheet(): RoofSurface {
   };
 }
 
+/**
+ * Torch-on / APP bitumen membrane.
+ *
+ * Flat, near-black, and the one thing that must READ from the air is the LAP
+ * SEAM: a membrane is laid in ~1 m rolls whose overlaps are torched together,
+ * and those seam lines are how a surveyor recognises the covering — and where a
+ * ballast block must not sit. Mineral granules give it its slight sparkle and
+ * keep it from looking like a flat black card. No corrugation, no metalness.
+ */
+function bitumenMembrane(): RoofSurface {
+  const N = 512; // 1 m
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d')!;
+  const rnd = seeded(53);
+  ctx.fillStyle = '#3a3a38';
+  ctx.fillRect(0, 0, N, N);
+  const h = new Float32Array(N * N);
+  // mineral granules: fine speckle across the whole sheet
+  for (let i = 0; i < 26000; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const g = 40 + rnd() * 45;
+    ctx.fillStyle = `rgba(${g},${g - 2},${g - 6},${0.35 + rnd() * 0.4})`;
+    ctx.fillRect(x, y, 1, 1);
+  }
+  // the LAP SEAM — one roll edge per metre, slightly proud and slightly glossier
+  // where the bitumen was torched and ran
+  const seamY = N * 0.5;
+  for (let x = 0; x < N; x++) {
+    const wobble = Math.sin(x / 41) * 2.4;
+    for (let d = -4; d <= 4; d++) {
+      const y = Math.round(seamY + wobble + d);
+      if (y < 0 || y >= N) continue;
+      h[y * N + x] = 1 - Math.abs(d) / 5;
+      const s = d < 0 ? 16 : 8;
+      ctx.fillStyle = `rgba(${58 + s},${58 + s},${56 + s},0.85)`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  // ponding stains — a flat membrane always holds a little water somewhere
+  for (let i = 0; i < 26; i++) {
+    const x = rnd() * N;
+    const y = rnd() * N;
+    const r = 14 + rnd() * 46;
+    ctx.fillStyle = `rgba(28,30,28,${0.1 + rnd() * 0.14})`;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * (0.5 + rnd() * 0.5), rnd() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  return {
+    map: makeTex(c, 1, true),
+    normalMap: makeTex(normalFromHeight(h, N, N, 0.7), 1, false),
+    normalScale: 0.5,
+    roughness: 0.88,
+    metalness: 0,
+    color: '#ffffff',
+  };
+}
+
 const cache = new Map<RoofType, RoofSurface | null>();
 
 /** The covering for a roof type — null for 'ground' (no roof surface). */
@@ -279,6 +340,7 @@ export function getRoofSurface(type: RoofType): RoofSurface | null {
   if (type === 'rcc_flat') s = concrete();
   else if (type === 'metal_shed') s = metalSheet();
   else if (type === 'ac_sheet') s = acSheet();
+  else if (type === 'membrane') s = bitumenMembrane();
   else if (type === 'tile') s = clayTile();
   cache.set(type, s);
   return s;

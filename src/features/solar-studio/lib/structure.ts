@@ -27,7 +27,7 @@ import { resolveRules } from '../data/rules/india';
 import { ruleFor } from './foundation';
 import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
-import { isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
+import { isNoPenetrationRoof, isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
 import { STRUCTURE_PROFILES } from '../data/profiles';
 import { enrichMmsStructure } from './mms/generate';
 import type { Member, MemberKind, NodeKind, SegmentStructure, StructureNode, XYZ } from './structure-model';
@@ -132,6 +132,16 @@ const DEFAULT_GROUND_FOUNDATION = 'pile' as const;
  * dead-load warning to match. E1.
  */
 const DEFAULT_SHEET_FOUNDATION = 'anchor' as const;
+/**
+ * A table on a waterproofing MEMBRANE is held down by MASS and nothing else.
+ *
+ * The rooftop default is a cast pedestal and the rooftop alternative is a
+ * chemical anchor; on a membrane the first is not built and the second must
+ * never be drilled. `allowedFoundations` refuses both, so this is the only
+ * value resolution could settle on anyway — naming it here means the design
+ * arrives correct rather than arriving wrong and being corrected.
+ */
+const DEFAULT_MEMBRANE_FOUNDATION = 'ballast' as const;
 
 export interface ResolvedRacking {
   kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat';
@@ -191,7 +201,11 @@ export function resolveRacking(
       ? DEFAULT_GROUND_FOUNDATION
       : isSheetRoof(roof)
         ? DEFAULT_SHEET_FOUNDATION
-        : DEFAULT_FOUNDATION);
+        : // a membrane is held by MASS: the rooftop default is a cast pedestal,
+          // and casting on waterproofing is not a thing anyone does
+          isNoPenetrationRoof(roof)
+          ? DEFAULT_MEMBRANE_FOUNDATION
+          : DEFAULT_FOUNDATION);
   // CLAMP to what this surface can carry. A persisted value the surface cannot
   // take is not honoured — it is corrected, at read time, so an existing
   // project stops drawing and pricing a foundation that cannot be built there.
@@ -780,6 +794,11 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       // deck. On asbestos-cement that is doubly true — the sheet itself carries
       // nothing, and nobody may stand on it to place a block.
       if (isSheetRoof(roof)) return ['anchor'];
+      // A MEMBRANE takes mass and nothing else. An anchor drills through the
+      // waterproofing — the one fixing that must never be used here — and a
+      // pedestal cast in place puts wet concrete straight onto bitumen. This
+      // list is the refusal: offer either and the app would be proposing a leak.
+      if (isNoPenetrationRoof(roof)) return ['ballast'];
       // a rooftop takes anything but a PILE — you do not drive a post into a slab
       return ['concrete', 'anchor', 'ballast'];
     default:

@@ -42,9 +42,10 @@ export function configureMms(project: Project, segmentId: string, strategy?: Mou
         foundation: preset.foundation ?? (strategy === 'rcc_ballast' ? 'ballast' : 'anchor'),
       });
     }
-    if (strategy === 'east_west' || strategy === 'south_facing') {
-      ({ segment: seg, panels } = setSegmentAzimuth(seg, panels, strategy === 'east_west' ? 90 : 180));
-    }
+    // Facing comes from the preset, not from a list of strategy names the next
+    // east–west system would have had to be added to.
+    const facing = preset.azimuth ?? (strategy === 'east_west' ? 90 : strategy === 'south_facing' ? 180 : undefined);
+    if (facing !== undefined) ({ segment: seg, panels } = setSegmentAzimuth(seg, panels, facing));
   }
   seg = { ...seg, mms };
   panels = panels.map(p => p.segmentId === seg!.id ? { ...p, azimuthDeg: mmsFacing(seg!.azimuthDeg, seg!.racking.kind, p.cellIndex) } : p);

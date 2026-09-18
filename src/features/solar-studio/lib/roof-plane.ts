@@ -30,6 +30,23 @@ export function isSheetRoof(roof: Pick<Roof, 'roofType'>): boolean {
   return roof.roofType === 'metal_shed' || roof.roofType === 'ac_sheet';
 }
 
+/**
+ * A covering NOTHING may be fixed through.
+ *
+ * On a waterproofing membrane this is not a preference to be weighed against
+ * cost — a penetration is a leak and a voided warranty, and the remedy is not
+ * "seal it better", it is "do not make the hole". So the array is held by MASS,
+ * and every path that could offer an anchor, a bolt or a cast footing has to
+ * ask this question rather than infer the answer from the roof being flat.
+ *
+ * Kept as a predicate, not a `roofType === 'membrane'` test at each call site,
+ * because the next covering with the same rule (a green roof, a pool deck) must
+ * inherit every one of those refusals by being added here once.
+ */
+export function isNoPenetrationRoof(roof: Pick<Roof, 'roofType'>): boolean {
+  return roof.roofType === 'membrane';
+}
+
 /** Downslope horizontal unit vector in plan (x=east, y=north) + gradient. */
 export function slopeVector(roof: Roof): { dx: number; dy: number; grad: number } {
   const a = deg(roof.slopeAzimuthDeg ?? 180);

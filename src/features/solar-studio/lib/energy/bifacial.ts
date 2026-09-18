@@ -69,6 +69,13 @@ export function surfaceAlbedo(roofType: RoofType): number {
     // every bifacial yield quoted on an AC roof.
     case 'ac_sheet':
       return 0.2; // weathered asbestos-cement, matt grey
+    // Torch-on / APP bitumen is BLACK — the darkest roof in the list, and the
+    // one that gives a bifacial module the least to work with. A white single-ply
+    // membrane would be 0.6 or better, but that is a survey fact about which
+    // membrane is on the roof, not something the covering alone can say, so the
+    // conservative figure stands until someone measures it.
+    case 'membrane':
+      return 0.1; // torch-on bitumen, black
     case 'tile':
       return 0.15; // clay / Mangalore tile, dark
     case 'ground':

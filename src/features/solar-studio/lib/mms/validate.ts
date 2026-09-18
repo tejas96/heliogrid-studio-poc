@@ -1,6 +1,6 @@
 import type { Project, XY } from '../../types';
 import { intersectPolygons, polygonArea, rectCorners, stripFootprint, pointSegDist } from '../geo';
-import { surfaceHeightAt } from '../roof-plane';
+import { isNoPenetrationRoof, surfaceHeightAt } from '../roof-plane';
 import { validateStructure, type SegmentStructure, type Member } from '../structure';
 import { foundationFootprints } from './parts';
 import type { MmsFinding } from './types';
@@ -81,6 +81,14 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('ballast_resistance', 'not_calculated', 'Sliding, overturning and uplift: engineering verification required.');
     }
     if (seg.racking.kind === 'flush' && !cfg.attachmentVerified) add('attachment_unverified', 'warning', 'Confirm roof profile, seam/purlin/rafter locations and manufacturer attachment capacity at survey.');
+    // Waterproofing membrane. One rule, and it admits no exception.
+    if (isNoPenetrationRoof(roof)) {
+      if (!['membrane_ballast', 'aero_tray', 'custom'].includes(cfg.strategy))
+        add('membrane_penetration', 'error', 'This mounting system fixes THROUGH the covering. Nothing penetrates a waterproofing membrane — a hole is a leak and a voided warranty. Use a ballasted system.');
+      add('membrane_uplift', 'not_calculated', 'Ballast mass is set by WIND UPLIFT and limited by what the deck can carry, with more ballast at edges and corners (IS 875 Part 3). Neither the uplift nor the deck capacity is calculated here — the block count shown is a placeholder for an engineer’s check.');
+      add('membrane_protection', 'warning', 'Every bearing point needs a protection layer. Concrete set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps and sinks into it.');
+      add('membrane_warranty', 'warning', 'Loading the membrane voids its warranty unless the membrane manufacturer inspects and accepts the design in writing. Confirm before any material reaches the roof.');
+    }
     // Asbestos-cement. These three are the reason this covering is not a metal
     // shed with a different texture, and they are about people before money.
     if (roof.roofType === 'ac_sheet') {

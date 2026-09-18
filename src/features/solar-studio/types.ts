@@ -164,8 +164,17 @@ export interface SiteTmy {
  * legal sense — nobody stands on it — and drilling it releases asbestos fibre.
  * Filing it under 'metal_shed' priced the wrong fixing and silently dropped the
  * fragile-roof access and the method statement from the job.
+ *
+ * 'membrane' is a waterproofing MEMBRANE — torch-on/APP bitumen felt, or a
+ * single-ply sheet — over a deck. Geometrically it is a flat roof and behaves
+ * like one; what makes it its own covering is a single rule that admits no
+ * exception: NOTHING PENETRATES IT. A hole in a membrane is a leak and a voided
+ * warranty, so the array is held down by MASS alone, on protection layers that
+ * keep concrete off the bitumen. Filed under 'rcc_flat' the app offered chemical
+ * anchors — a fixing that must never be used here — and left out both the slip
+ * sheets and the membrane manufacturer's sign-off.
  */
-export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'tile' | 'ground';
+export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'tile' | 'ground';
 
 export interface ParapetWall {
   enabled: boolean;

@@ -4,6 +4,7 @@ import { line } from '../line';
 import { MATERIALS } from '../../mms/catalogue';
 import { validateMms } from '../../mms/validate';
 import { foundationVolumeM3, ruleFor } from '../../foundation';
+import { isNoPenetrationRoof } from '../../roof-plane';
 
 /** Detailed lines join the existing BOM registry/export/override pipeline. */
 export function emitMms(ctx: BomContext): BomLine[] {
@@ -12,7 +13,8 @@ export function emitMms(ctx: BomContext): BomLine[] {
   for (const s of ctx.structures.filter(s => s.mms)) {
     const c = s.mms!;
     const seg = ctx.project.segments.find(seg => seg.id === s.segmentId)!;
-    const notice = findings.some(f => f.segmentId === s.segmentId && f.status === 'error') ? 'GEOMETRIC CONFLICT — resolve before procurement. ' : '';
+    const roof = ctx.project.roofs.find(r => r.id === seg.roofId);
+    const notice =findings.some(f => f.segmentId === s.segmentId && f.status === 'error') ? 'GEOMETRIC CONFLICT — resolve before procurement. ' : '';
     const add = (key: string, item: string, spec: string, qty: number, unit: string, unitPriceInr: number, formula: string) => {
       if (!qty) return;
       out.push(line({ key: 'mech.mms_component', instance: `${s.segmentId}:${key}`, category: 'Mechanical BOS', item, spec: `${unitPriceInr === 0 ? 'UNPRICED · ' : ''}${spec}`, qty, unit, unitPriceInr, formula: `${notice}${formula}. PRELIMINARY — engineer verification required.${unitPriceInr === 0 ? ' UNPRICED: supplier quotation required; zero is not a free component.' : ' Catalogue rate is an estimate; confirm supplier pricing.'}`, sourceSegmentId: seg.id, sourceRoofId: seg.roofId, confidence: 'derived' }));
@@ -38,6 +40,13 @@ export function emitMms(ctx: BomContext): BomLine[] {
     add('anchor', `${c.anchor.type} anchors · ${seg.label}`, `M${c.anchor.diameterMm} · embedment ${c.anchor.embedmentMm == null ? 'NOT SUPPLIED' : c.anchor.embedmentMm + ' mm'} · spacing ${c.anchor.spacingMm} mm`, total('anchors'), 'nos', ctx.pricebook.anchorBoltPc, `${c.anchor.count} per support, counted from connections; capacity NOT calculated`);
     // A precast block has a rate in the pricebook; a custom one is whatever the
     // site casts, so only the catalogue type may carry a price.
+    // On a membrane every block bears on the covering, so every block needs the
+    // pad that keeps concrete off bitumen. Counted from the same node graph as
+    // the blocks themselves, so the two can never disagree.
+    if (roof && isNoPenetrationRoof(roof)) {
+      add('membrane_pad', `Membrane protection pads · ${seg.label}`, 'Geotextile / recycled-rubber pad under every bearing point, oversized to the block', total('ballast'), 'nos', ctx.pricebook.membraneProtectionMatPc, 'One per ballast block. A block set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps into it');
+      if (c.strategy === 'aero_tray') add('aero_tray', `Aerodynamic ballast tray · ${seg.label}`, 'Closed east–west tub; the back panel turns uplift into downforce', ctx.project.panels.filter(p => p.enabled && p.segmentId === seg.id).length, 'nos', ctx.pricebook.aeroTrayPerPanel, 'One tub per module. ASSUMED market rate — a real tender prices a named vendor. The downforce claim is the VENDOR’s and is not modelled here');
+    }
     add('ballast', `Ballast blocks · ${seg.label}`, `${c.ballast.type} · ${c.ballast.lengthM} × ${c.ballast.widthM} × ${c.ballast.heightM} m · ${c.ballast.massKg} kg/block`, total('ballast'), 'nos', c.ballast.type === 'precast_concrete' ? ctx.pricebook.ballastBlock : 0, `${c.ballast.blocksPerSupport} per support · ${total('ballast') * c.ballast.massKg} kg declared mass`);
     // A GROUND table is founded in earth, and `emitMechanical` skips any segment
     // that carries an MMS (`if (st.mms) continue`) so the detailed graph is not

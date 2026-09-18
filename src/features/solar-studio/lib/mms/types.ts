@@ -1,5 +1,5 @@
 /** Additive MMS intent. Roof, modules, tilt, height and spacing remain in their existing owners. */
-export type MountStrategy = 'rcc_fixed' | 'rcc_ballast' | 'rcc_anchor' | 'low_height' | 'elevated' | 'high_height' | 'east_west' | 'south_facing' | 'adjustable' | 'obstacle_clearance' | 'trapezoidal' | 'corrugated' | 'standing_seam' | 'clamp_mounted' | 'rail_mounted' | 'purlin_mounted' | 'rafter_mounted' | 'direct_sheet' | 'industrial_custom' | 'hook_bolt' | 'ac_spreader' | 'roof_hook' | 'adjustable_hook' | 'ground_pile' | 'ground_pedestal' | 'ground_ballast' | 'ground_seasonal' | 'ground_tracker' | 'flush' | 'custom';
+export type MountStrategy = 'rcc_fixed' | 'rcc_ballast' | 'rcc_anchor' | 'low_height' | 'elevated' | 'high_height' | 'east_west' | 'south_facing' | 'adjustable' | 'obstacle_clearance' | 'trapezoidal' | 'corrugated' | 'standing_seam' | 'clamp_mounted' | 'rail_mounted' | 'purlin_mounted' | 'rafter_mounted' | 'direct_sheet' | 'industrial_custom' | 'hook_bolt' | 'ac_spreader' | 'membrane_ballast' | 'aero_tray' | 'roof_hook' | 'adjustable_hook' | 'ground_pile' | 'ground_pedestal' | 'ground_ballast' | 'ground_seasonal' | 'ground_tracker' | 'flush' | 'custom';
 export type StructuralMaterial = 'galvanized_steel' | 'aluminium' | 'stainless_steel' | 'painted_steel';
 export interface BallastConfig {
   type: 'precast_concrete' | 'custom';

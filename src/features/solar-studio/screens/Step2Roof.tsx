@@ -1769,6 +1769,16 @@ export function Step2Roof() {
                 onClick={() => setRoofType(selected.id, 'ac_sheet')}
               />
               <OptionCard
+                title="Membrane / Torch-on Bitumen"
+                // The one covering whose defining fact is a REFUSAL, so the card
+                // leads with it. Under RCC Flat this roof was offered chemical
+                // anchors — a fixing that must never be used on it.
+                sub="Waterproofing membrane over a deck – BALLAST ONLY. Nothing penetrates: a hole is a leak and a voided warranty. Adds protection pads and the membrane maker's sign-off."
+                icon={<Layers size={20} />}
+                selected={selected.roofType === 'membrane'}
+                onClick={() => setRoofType(selected.id, 'membrane')}
+              />
+              <OptionCard
                 title="Tile (Mangalore / Clay)"
                 // A tile roof is always pitched. Setting the covering FIRST and
                 // converting after is the intended order — the covering now

@@ -64,6 +64,12 @@ export type LineKey =
    *  every existing metal-shed project keeps its line ids and its overrides. */
   | 'mech.ac_hook_bolt'
   | 'mech.ac_hook_seal'
+  /** waterproofing membrane: mass and protection, never a fixing */
+  | 'mech.mms_membrane'
+  | 'mech.membrane_protection'
+  /** the same pads counted per NODE, for panels that are in a table */
+  | 'mech.membrane_pad'
+  | 'mech.membrane_warranty'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an
