@@ -9,6 +9,8 @@ import { isCaptureFresh, layoutFp } from '../lib/fingerprints';
 import { putImage } from '../lib/persistence/blobs';
 import { BlobImg } from '../components/BlobImg';
 import { preProposalReview } from '../lib/review';
+import { fmtHour } from '../lib/solar';
+import { clockHour, clockLabel } from '../lib/sun-chart';
 
 interface CapturePreset {
   id: string;
@@ -18,10 +20,24 @@ interface CapturePreset {
   mode: 'shadow' | 'solar_access';
 }
 
+/**
+ * The four frames the proposal's SHADOW ANALYSIS page is built from.
+ *
+ * Both shadow frames used to be 21 June — at sun heights of 47° and 84°, where
+ * a 1 m parapet throws 0.9 m and 0.1 m. The only December frame was a
+ * solar-access view at noon, the least shaded hour of that day. So a page the
+ * customer keeps, titled SHADOW ANALYSIS, showed the sunniest day of the year
+ * and never 21 December — the day an Indian client asks about, and the day the
+ * parapet setback (lib/layout: fillSetbacksM) is solved for.
+ *
+ * `sum_noon` gave way to it: a near-overhead sun is the one frame in the set
+ * with nothing to show. What is left is a pair — best case and worst case —
+ * plus the two solar-access views.
+ */
 function presets(): CapturePreset[] {
   return [
     { id: 'sum_am', label: 'Summer Morning', date: seasonDate('summer'), hour: 9, mode: 'shadow' },
-    { id: 'sum_noon', label: 'Summer Noon', date: seasonDate('summer'), hour: 12, mode: 'shadow' },
+    { id: 'win_pm', label: 'Winter Afternoon', date: seasonDate('winter'), hour: 15, mode: 'shadow' },
     { id: 'sa_summer', label: 'Solar Access (Summer)', date: seasonDate('summer'), hour: 12, mode: 'solar_access' },
     { id: 'sa_winter', label: 'Solar Access (Winter)', date: seasonDate('winter'), hour: 12, mode: 'solar_access' },
   ];
@@ -36,6 +52,19 @@ export function Step7Proposal() {
   );
   const [saveError, setSaveError] = useState<string | null>(null);
   const report = deriveEnergy(project);
+
+  /**
+   * A preset's hour on the SITE's wall clock.
+   *
+   * `hour` is solar time — what the sun engine is posed at. Printing it raw
+   * said 9:00 while the scene beside it said 9:32 IST, and that raw figure
+   * went on to the customer's document. Solar noon is 12:35 in Pune and
+   * 11:23 in Guwahati; the gap is the site's longitude against its zone.
+   */
+  const presetClock = (p: { hour: number; date: Date }) =>
+    project.location
+      ? `${fmtHour(clockHour(p.hour, project.location.latLng.lng, project.location.latLng.lat, p.date))} ${clockLabel(project.location.latLng, p.date)}`
+      : `${fmtHour(p.hour)} solar`;
 
   const captured = (id: string) =>
     project.captures.find((c) => c.id === id)?.imageBlobId ?? null;
@@ -111,10 +140,13 @@ export function Step7Proposal() {
           <b style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
             <Camera size={14} aria-hidden />
             {preset.label} · {preset.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })} ·{' '}
-            {preset.hour}:00
+            {presetClock(preset)}
           </b>
+          {/* count THIS set only: a project captured before `sum_noon` was
+              retired still holds that image, and counting it read "5/4" */}
           <span style={{ color: '#9ca3af' }}>
-            Shadow captures: {project.captures.filter((c) => c.imageBlobId).length}/4
+            Shadow captures: {project.captures.filter((c) => c.imageBlobId && all.some((p) => p.id === c.id)).length}/
+            {all.length}
           </span>
           {all.map((p, i) => (
             <button
@@ -321,7 +353,7 @@ export function Step7Proposal() {
               </div>
               <div style={{ fontSize: 10.5, color: 'var(--ink-3)', textAlign: 'center' }}>
                 {p.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} ·{' '}
-                {p.hour}:00
+                {presetClock(p)}
               </div>
               {/* which capture leads the proposal is the user's choice, not just
                   "the first one saved". Only a captured image can be the cover. */}

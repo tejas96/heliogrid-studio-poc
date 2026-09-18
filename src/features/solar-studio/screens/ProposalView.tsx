@@ -18,6 +18,8 @@ import { BlobImg } from '../components/BlobImg';
 import { FreshnessBanner } from '../components/FreshnessBanner';
 import { capturesFresh } from '../lib/fingerprints';
 import { profileFor } from '../lib/string-shade';
+import { fmtHour } from '../lib/solar';
+import { clockHour, clockLabel } from '../lib/sun-chart';
 import { useShadeProfileVersion } from '../lib/use-shade-profile';
 import { useUnits } from '../store/useUnits';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
@@ -296,8 +298,24 @@ export function ProposalView() {
                   <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, marginTop: 4 }}>
                     {c.label}
                   </div>
+                  {/* `c.hour` is the SOLAR hour the scene was posed at, and this
+                      line printed it as if it were the wall clock. Solar noon is
+                      12:35 in Pune and 11:23 in Guwahati, so every caption on the
+                      document the customer keeps was up to ~40 minutes wrong —
+                      while the 3D it was captured from showed the right time on
+                      screen. Same converter the scene uses. */}
                   <div style={{ textAlign: 'center', fontSize: 10.5, color: 'var(--ink-3)' }}>
-                    {c.hour}:00 · {new Date(c.dateIso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {project.location
+                      ? `${fmtHour(
+                          clockHour(
+                            c.hour,
+                            project.location.latLng.lng,
+                            project.location.latLng.lat,
+                            new Date(c.dateIso),
+                          ),
+                        )} ${clockLabel(project.location.latLng, new Date(c.dateIso))}`
+                      : `${fmtHour(c.hour)} solar`}{' '}
+                    · {new Date(c.dateIso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
                 </div>
               ))}
