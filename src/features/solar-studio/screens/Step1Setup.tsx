@@ -22,6 +22,7 @@ import { latLngNear, mockIrradiance } from '../lib/solar';
 import { fetchBuildingInsights } from '../lib/solarApi';
 import { fetchWeather } from '../lib/weatherApi';
 import { useUnits } from '../store/useUnits';
+import { siteStateMismatch } from '../lib/site-state';
 
 const headingStyle: React.CSSProperties = {
   fontSize: 15,
@@ -151,6 +152,41 @@ export function Step1Setup() {
           </select>
         </div>
       </div>
+
+      {/* The State is typed; the site is pinned on a map. Nothing compared
+          them, and the SLD's DISCOM, the IS 875 wind speed and the tariff all
+          follow the typed one (lib/site-state). Offered, never applied — the
+          person standing on the site knows better than a substring match. */}
+      {(() => {
+        const mismatch = siteStateMismatch(project);
+        if (!mismatch) return null;
+        return (
+          <div
+            className="card"
+            role="status"
+            style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: 12 }}
+          >
+            <div style={{ flex: 1, fontSize: 12.5 }}>
+              <b>State does not match the site.</b> You picked {mismatch.typed}, but the pinned address is in{' '}
+              {mismatch.pinned}. The DISCOM on the drawings, the IS 875 wind speed and the tariff all follow
+              the State.
+            </div>
+            <button
+              className="btn"
+              data-testid="use-pinned-state"
+              onClick={() =>
+                setInfo({
+                  state: mismatch.pinned,
+                  discom: '',
+                  tariffInrPerKwh: tariffFor(mismatch.pinned, '', info.siteType),
+                })
+              }
+            >
+              Use {mismatch.pinned}
+            </button>
+          </div>
+        );
+      })()}
 
       <div
         className="card"

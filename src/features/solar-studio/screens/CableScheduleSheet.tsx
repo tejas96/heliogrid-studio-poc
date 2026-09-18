@@ -169,8 +169,16 @@ export function CableScheduleSheet() {
           DERIVED — each run is its routed path on the roof plus the wall drop, with {Math.round(rules.slackPct * 100)}%
           installation slack. DC sized for the string fuse and a ≤ {rules.maxDcDropPct}% drop at STC; (drop) = the drop governed. * = hand-routed in the 3D model.
         </text>
+        {/* Printed unconditionally, this was a promise the sheet could not
+            keep: with nothing routed it showed 0 m while the BOM opposite it
+            showed 35.64 m of DC cable — an ESTIMATE, which the BOM itself
+            flags as ASSUMED. A drawing that says two figures "cannot
+            disagree" while they do teaches the reader to trust a number that
+            was never derived. */}
         <text x={40} y={511}>
-          The BOM&apos;s DC cable line sums these same runs — the two cannot disagree.
+          {rows.length > 0
+            ? "The BOM's DC cable line sums these same runs — the two cannot disagree."
+            : "Nothing is routed yet, so the BOM's DC cable line is an ESTIMATE, not a sum of these runs. Route in Step 6 and the two become the same figure."}
         </text>
       </g>
       <TitleBlock

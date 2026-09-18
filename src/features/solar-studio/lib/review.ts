@@ -22,6 +22,7 @@ import { electricalGate } from './electrical/gate';
 import { memoizedInsights } from './insights/registry';
 import { bomConfidence, mergedBom } from './bom';
 import { isCaptureFresh } from './fingerprints';
+import { siteStateMismatch } from './site-state';
 
 type ReviewStatus = 'blocked' | 'attention' | 'ready';
 
@@ -156,6 +157,19 @@ export function preProposalReview(project: Project): ReviewResult {
             detail: 'All captures match the current layout.',
           },
   );
+
+  // The State drives the DISCOM printed on the SLD, the IS 875 wind speed and
+  // the tariff behind every savings figure — and nothing compared it with the
+  // site on the map. See lib/site-state for the case this was found on.
+  const siteState = siteStateMismatch(project);
+  if (siteState)
+    items.push({
+      key: 'site_state',
+      step: 1,
+      title: 'State does not match the site',
+      status: 'attention',
+      detail: `Set to ${siteState.typed}, but the pinned address is in ${siteState.pinned}. The DISCOM on the SLD, the IS 875 wind speed and the tariff all follow the State.`,
+    });
 
   const overall: ReviewStatus = items.some((i) => i.status === 'blocked')
     ? 'blocked'
