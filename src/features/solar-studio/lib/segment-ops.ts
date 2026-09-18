@@ -32,10 +32,11 @@ import {
   TRACKER_DEFAULT_MAX_ROTATION_DEG,
   TRACKER_DEFAULT_TUBE_HEIGHT_M,
 } from './energy/tracker';
+import { isSheetRoof } from './roof-plane';
 
-/** Racking a segment gets by default from its roof (flush on pitched/metal). */
+/** Racking a segment gets by default from its roof (flush on pitched/sheet). */
 function defaultRacking(roof: Roof, tiltDeg: number): ArraySegment['racking'] {
-  const flush = roof.pitchDeg > 0 || roof.roofType === 'metal_shed';
+  const flush = roof.pitchDeg > 0 || isSheetRoof(roof);
   return flush
     ? { kind: 'flush' }
     : { kind: 'fixed_tilt', tiltDeg, rowPitchM: 0, frontLegM: 0.3, backLegM: 0.3, profile: DEFAULT_PROFILE };

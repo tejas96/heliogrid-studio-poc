@@ -36,10 +36,19 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
       : mine?.foundation === 'ballast' ? 'ground_ballast'
         : mine?.foundation === 'concrete' ? 'ground_pedestal'
           : 'ground_pile';
+  // `Generate MMS` may only ever pass a strategy THIS covering lists. Pass one
+  // it does not and `configureMms` returns {} — the button looks alive and does
+  // nothing. That was the ground bug, and it would have repeated on asbestos
+  // sheet, where the pitched-roof seed 'flush' is deliberately withheld. So the
+  // preference is checked against the list, and the covering's own default is
+  // the floor. Every covering added after this one is covered by construction.
+  const listedHere = MOUNT_CATALOGUE.filter(p => p.roofs.includes(roof.roofType)).map(p => p.id);
+  const preferredSeed = groundSeed ?? (roof.pitchDeg > 0 ? (roof.roofType === 'tile' ? 'roof_hook' : 'flush') : cfg.strategy);
+  const generateSeed: MountStrategy = listedHere.includes(preferredSeed) ? preferredSeed : defaultMms(roof.roofType).strategy;
   const number = (field: 'attachmentSpacingM' | 'railStockLengthM' | 'railInsetRatio' | 'edgeClearanceM' | 'obstacleClearanceM', label: string, min: number, max: number, step = .01) => <MmsField id={`${prefix}-${field}`} label={label} value={cfg[field]} min={min} max={max} step={step} onChange={v => v !== undefined && update({ [field]: v })} />;
   return <section className="mms-config" data-testid={`${prefix}-configuration`}>
     <div className="mms-heading"><Layers3 size={17} /><strong>Mounting system</strong><span data-testid={`${prefix}-state`}>{seg.mms ? 'Live model' : 'Existing structure'}</span></div>
-    {!seg.mms ? <button className="btn primary" data-testid={`${prefix}-generate`} onClick={() => onPatch(configureMms(project, seg.id, groundSeed ?? (roof.pitchDeg > 0 ? (roof.roofType === 'tile' ? 'roof_hook' : 'flush') : cfg.strategy)))}>Generate MMS</button> : <>
+    {!seg.mms ? <button className="btn primary" data-testid={`${prefix}-generate`} onClick={() => onPatch(configureMms(project, seg.id, generateSeed))}>Generate MMS</button> : <>
       {/* the way back out. Generating was one-way, so a table tried by mistake
           could only be undone in the same session — and never after a reload */}
       <button className="btn" data-testid={`${prefix}-remove`} onClick={() => onPatch(clearMms(project, seg.id))} title="Drop the modelled mounting system. Tilt, height and spacing stay as you set them.">Remove MMS</button>

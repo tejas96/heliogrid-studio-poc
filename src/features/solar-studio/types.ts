@@ -148,15 +148,24 @@ export interface SiteTmy {
  * gable would move its faces from clamp pricing to hook pricing in the BOM.
  *
  * So the two facts are answered separately, each by one source of truth:
- *   covering →  this field                (rcc / metal sheet / tile / ground)
+ *   covering →  this field       (rcc / metal sheet / AC sheet / tile / ground)
  *   pitch    →  `isSloped(roof)`          (lib/roof-plane.ts)
  * A converted face keeps its covering and gains a pitch; nothing is lost.
  *
  * 'rcc_flat' is a legacy WIRE VALUE kept verbatim so stored projects and their
  * fingerprints stay valid. Read it as "RCC slab", flat or pitched — `isSloped`
  * is what says which.
+ *
+ * 'ac_sheet' is asbestos-cement corrugated sheeting — the ordinary older Indian
+ * industrial roof. It is NOT a metal shed with a different colour, and giving it
+ * its own member is the whole point: a shed takes a self-drilling screw or an
+ * L-foot, an AC sheet takes a HOOK BOLT around the purlin because you cannot
+ * rely on the sheet itself to hold anything. It is also a FRAGILE roof in the
+ * legal sense — nobody stands on it — and drilling it releases asbestos fibre.
+ * Filing it under 'metal_shed' priced the wrong fixing and silently dropped the
+ * fragile-roof access and the method statement from the job.
  */
-export type RoofType = 'rcc_flat' | 'metal_shed' | 'tile' | 'ground';
+export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'tile' | 'ground';
 
 export interface ParapetWall {
   enabled: boolean;

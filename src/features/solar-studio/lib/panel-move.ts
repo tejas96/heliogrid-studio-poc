@@ -19,7 +19,7 @@ import type {
   XY,
 } from '../types';
 import { panelFitsAt } from './layout';
-import { isSloped } from './roof-plane';
+import { isSheetRoof, isSloped } from './roof-plane';
 
 export type MoveResult =
   | { ok: true; panels: PlacedPanel[]; segments: ArraySegment[]; movedCount: number }
@@ -33,7 +33,7 @@ export type MoveResult =
 function bridgeClearanceFor(project: Project, roofId: string): number | undefined {
   const roof = project.roofs.find((r) => r.id === roofId);
   if (!roof) return undefined;
-  if (isSloped(roof) || roof.roofType === 'metal_shed') return undefined;
+  if (isSloped(roof) || isSheetRoof(roof)) return undefined;
   return Math.max(
     0.3,
     roof.structureOverride?.clearanceM ?? project.structureDefaults?.clearanceM ?? 0,

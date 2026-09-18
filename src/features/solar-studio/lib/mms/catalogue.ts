@@ -47,6 +47,14 @@ const METAL: RoofType[] = ['metal_shed'];
 // ground structure presets read — so a project rule override cannot be honoured
 // in one place and ignored in the other.
 const GROUND: RoofType[] = ['ground'];
+// Asbestos-cement sheet. Deliberately NOT sharing METAL's presets: every one of
+// those fixings — trapezoidal clamp, standing seam, self-drilling direct-sheet —
+// assumes the sheet itself carries load. An AC sheet does not. It is a brittle
+// mineral board, so the load path goes AROUND it into the purlin, and the only
+// two fixings that do that are below. Generic `flush` is withheld here for the
+// same reason: on this covering "flush-mounted rails" does not say what is
+// holding them, and the answer is the whole cost and the whole risk.
+const AC: RoofType[] = ['ac_sheet'];
 export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'rcc_fixed', label: 'RCC · Standard fixed tilt', roofs: RCC, heightM: .45, tilt: 10 },
   { id: 'rcc_ballast', label: 'RCC · Ballasted', roofs: RCC, heightM: .45 },
@@ -60,6 +68,10 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'obstacle_clearance', label: 'Custom obstacle clearance', roofs: RCC, heightM: 2.4384 },
   ...(['trapezoidal', 'corrugated', 'standing_seam', 'clamp_mounted', 'rail_mounted', 'purlin_mounted', 'rafter_mounted', 'direct_sheet'] as const).map(id => ({ id, label: id.replaceAll('_', ' '), roofs: METAL, flush: true })),
   { id: 'industrial_custom', label: 'Custom industrial structure', roofs: METAL, heightM: .6 },
+  { id: 'hook_bolt', label: 'AC sheet · Hook bolt through crown', roofs: AC, flush: true },
+  // For an old or thin sheet: the same J-bolt, but the load is spread over
+  // several corrugations by a bracket instead of bearing on one crown.
+  { id: 'ac_spreader', label: 'AC sheet · Hook bolt + load-spreading bracket', roofs: AC, flush: true },
   { id: 'roof_hook', label: 'Rail + roof hook', roofs: ['tile'], flush: true },
   { id: 'adjustable_hook', label: 'Adjustable roof hook', roofs: ['tile'], flush: true },
   { id: 'ground_pile', label: 'Ground · Driven pile', roofs: GROUND, foundation: 'pile' },
@@ -71,7 +83,7 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'ground_seasonal', label: 'Ground · Seasonal manual tilt', roofs: GROUND, foundation: 'pile' },
   { id: 'ground_tracker', label: 'Ground · Single-axis tracker (HSAT)', roofs: GROUND, foundation: 'pile', racking: 'tracker_hsat' },
   { id: 'flush', label: 'Flush-mounted rails', roofs: ['rcc_flat', 'metal_shed', 'tile'], flush: true },
-  { id: 'custom', label: 'Custom structure', roofs: ['rcc_flat', 'metal_shed', 'tile'] },
+  { id: 'custom', label: 'Custom structure', roofs: ['rcc_flat', 'metal_shed', 'ac_sheet', 'tile'] },
 ];
 /** Nominal catalogue sizes, explicitly assumed until replaced by project data. */
 export function defaultMms(roof: RoofType): MmsConfig {
@@ -79,7 +91,7 @@ export function defaultMms(roof: RoofType): MmsConfig {
     // Every branch must name a strategy the roof's own list contains, or the
     // panel opens on a value it cannot apply — which is what left `Generate MMS`
     // inert on a ground array. The mms-coverage gate asserts this.
-    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
+    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
     material: 'galvanized_steel', railInsetRatio: .18, attachmentSpacingM: 1.2, railStockLengthM: 6,
     edgeClearanceM: .1, obstacleClearanceM: .05,
     ballast: { type: 'precast_concrete', lengthM: .6, widthM: .4, heightM: .15, massKg: 86.4, blocksPerSupport: 1 },

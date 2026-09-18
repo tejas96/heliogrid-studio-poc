@@ -12,12 +12,27 @@ import { describe, expect, it } from 'vitest';
 import { defaultMms, MOUNT_CATALOGUE } from '../mms/catalogue';
 import { configureMms } from '../mms/configure';
 import type { MountStrategy } from '../mms/types';
+import { validateMms } from '../mms/validate';
+import { deriveStructures } from '../derive/structures';
 import { allowedFoundations, resolveRacking } from '../structure';
 import { deriveBom } from '../bom';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
 import type { ArraySegment, PlacedPanel, Project, Roof, RoofType } from '../../types';
 
-const ROOF_TYPES: RoofType[] = ['rcc_flat', 'metal_shed', 'tile', 'ground'];
+// EXHAUSTIVE by construction. A `Record<RoofType, true>` literal cannot omit a
+// member without a compile error, so adding a covering to the union forces it
+// into this list — and then into the checks below, which demand it have at
+// least one mounting system and a default it can actually apply. A plain array
+// would have let a new covering ship with an empty MMS dropdown, which is the
+// exact defect this file exists to stop.
+const ALL_ROOF_TYPES: Record<RoofType, true> = {
+  rcc_flat: true,
+  metal_shed: true,
+  ac_sheet: true,
+  tile: true,
+  ground: true,
+};
+const ROOF_TYPES = Object.keys(ALL_ROOF_TYPES) as RoofType[];
 const W = 1.134;
 
 /** One table of three modules on one surface — enough to derive a structure. */
@@ -108,3 +123,82 @@ describe('a ground array can be configured, and what it builds is what it keeps'
     expect(pile.every((l) => l.qty > 0 && l.unitPriceInr > 0)).toBe(true);
   });
 });
+
+// ─── Asbestos-cement sheet ──────────────────────────────────────────────────
+// An AC roof filed under any other covering costs money and costs safety. Under
+// 'metal_shed' it buys a screw into a sheet that carries nothing; in the
+// flat-RCC REMAINDER it buys ballasted tilt legs for a pitched fragile roof. And
+// under either, the two things the law requires before anyone climbs onto
+// asbestos — boarded access and a method statement — silently leave the job.
+describe('an asbestos-cement roof is quoted as itself', () => {
+  /** Loose panels on one AC roof: no segment, so they land in the nAc bucket. */
+  function acProject(): Project {
+    const base = fixtureProject(6);
+    return { ...base, roofs: [{ ...fixtureRoof(), roofType: 'ac_sheet', heightM: 6.5 }] };
+  }
+
+  it('buys hook bolts and their seal, both priced', () => {
+    const bom = deriveBom(acProject());
+    for (const key of ['mech.mms_ac_sheet', 'mech.ac_sheet_seal']) {
+      const l = bom.find((x) => x.id.startsWith(key));
+      expect(l, key).toBeDefined();
+      expect(l!.qty, key).toBe(6);
+      expect(l!.unitPriceInr, key).toBeGreaterThan(0);
+    }
+  });
+
+  it('carries the fragile-roof access and the asbestos method statement', () => {
+    const bom = deriveBom(acProject());
+    for (const key of ['mech.ac_fragile_access', 'mech.ac_asbestos_method']) {
+      const l = bom.find((x) => x.id.startsWith(key));
+      expect(l, key).toBeDefined();
+      // per ROOF, not per panel — you board a roof once
+      expect(l!.qty, key).toBe(1);
+      expect(l!.unitPriceInr, key).toBeGreaterThan(0);
+    }
+  });
+
+  it('is never billed as elevated RCC or as a metal shed', () => {
+    const bom = deriveBom(acProject());
+    expect(bom.some((l) => l.id.startsWith('mech.mms_rcc'))).toBe(false);
+    expect(bom.some((l) => l.id.startsWith('mech.mms_metal_shed'))).toBe(false);
+  });
+
+  // The case the first version of this file MISSED, and the browser caught: a
+  // real AC shed's panels are in a TABLE, so they are `structuredPanelIds` and
+  // never reach the per-panel bucket above. They are priced from the node graph
+  // instead — which was summing every sheet roof into one blended pair of lines
+  // named after the metal shed, buying a ₹210 L-foot and a ₹12 washer where a
+  // ₹240 hook bolt and a ₹65 seal set go.
+  it('a TABLE on AC sheet buys hook bolts from the node graph, not shed L-feet', () => {
+    const { project, seg } = scene('ac_sheet');
+    // a sheet roof carries a flush monorail: rails on fixings, no legs
+    const flush: Project = {
+      ...project,
+      segments: project.segments.map((s) =>
+        s.id === seg.id ? { ...s, racking: { kind: 'flush' as const } } : s,
+      ),
+    };
+    const bom = deriveBom(flush);
+    const hook = bom.find((l) => l.id.startsWith('mech.ac_hook_bolt'));
+    const seal = bom.find((l) => l.id.startsWith('mech.ac_hook_seal'));
+    expect(hook).toBeDefined();
+    expect(hook!.qty).toBeGreaterThan(0);
+    expect(seal?.qty).toBe(hook!.qty); // one seal per hole, by definition
+    // and the metal-shed lines must NOT appear for an AC roof
+    expect(bom.some((l) => l.id.startsWith('mech.sheet_standoff'))).toBe(false);
+    expect(bom.some((l) => l.id.startsWith('mech.sealing_washer'))).toBe(false);
+  });
+
+  it('a fixing that bears on the sheet is an ERROR, not a warning', () => {
+    const { project, seg } = scene('ac_sheet');
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'hook_bolt') };
+    const wrong: Project = {
+      ...after,
+      segments: after.segments.map((s) => ({ ...s, mms: { ...s.mms!, strategy: 'direct_sheet' as const } })),
+    };
+    const findings = validateMms(wrong, deriveStructures(wrong));
+    expect(findings.some((f) => f.code === 'ac_wrong_fixing' && f.status === 'error')).toBe(true);
+  });
+});
+

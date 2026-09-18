@@ -53,6 +53,17 @@ export type LineKey =
   | 'mech.mms_sloped'
   | 'mech.sloped_flashing'
   | 'mech.mms_metal_shed'
+  /** asbestos-cement sheet: hook bolts, their seal, and the two things a
+   *  fragile asbestos roof legally requires before anyone goes up */
+  | 'mech.mms_ac_sheet'
+  | 'mech.ac_sheet_seal'
+  | 'mech.ac_fragile_access'
+  | 'mech.ac_asbestos_method'
+  /** the member-model equivalents of the two above, counted per NODE. AC takes
+   *  its own keys rather than an instance suffix on `mech.sheet_standoff`, so
+   *  every existing metal-shed project keeps its line ids and its overrides. */
+  | 'mech.ac_hook_bolt'
+  | 'mech.ac_hook_seal'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an

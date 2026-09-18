@@ -38,6 +38,20 @@ function nominalNodeHardware(kind: NodeKind, mms?: MmsConfig): FoundationPart[] 
       { ...base, size: { x: .026, y: .05, z: .065 }, offset: { x: .021, y: .035, z: 0 } },
       { bucket: 'bolt', geometry: 'cylinder', size: { x: .012, y: .03, z: .012 }, offset: { x: 0, y: .08, z: 0 } },
     ];
+    // AC hook bolt: the J-bolt reaches PAST the sheet and hooks the purlin, so
+    // what you see from above is a bracket on the crown, the threaded shank
+    // standing proud of it, and the dished cap and nut that seal the hole. An
+    // L-foot standing on the sheet would draw the wrong load path, which is the
+    // one thing an installer must not read off this picture.
+    if (['hook_bolt', 'ac_spreader'].includes(mms.strategy)) return [
+      // the bracket on the crown — wider on the spreader variant, which is the
+      // whole difference between the two
+      { ...base, size: { x: mms.strategy === 'ac_spreader' ? .28 : .09, y: .008, z: .05 }, offset: { x: 0, y: .004, z: 0 } },
+      // shank standing proud, then cap + nut
+      { bucket: 'bolt', geometry: 'cylinder', size: { x: .012, y: .07, z: .012 }, offset: { x: 0, y: .043, z: 0 } },
+      { ...base, size: { x: .034, y: .01, z: .034 }, offset: { x: 0, y: .013, z: 0 } },
+      { bucket: 'clamp', geometry: 'box', size: { x: .019, y: .012, z: .019 }, offset: { x: 0, y: .078, z: 0 } },
+    ];
     if (['roof_hook', 'adjustable_hook'].includes(mms.strategy)) return [
       { ...base, size: { x: .12, y: .006, z: .035 }, offset: { x: -.035, y: .006, z: 0 } },
       { ...base, size: { x: .006, y: .085, z: .035 }, offset: { x: .025, y: .05, z: 0 } },

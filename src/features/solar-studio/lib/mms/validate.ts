@@ -63,7 +63,14 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       }
     }
     for (const message of validateStructure(s)) add('assembly', 'error', message);
-    if (s.foundation === 'anchor' || s.foundation === 'concrete') {
+    // A flush SHEET monorail has no footing at all: it carries rails on fixings
+    // through the covering, and `foundation: 'anchor'` is only "the nearest
+    // truth" the field can hold (structure.ts). Running the anchor checks on it
+    // put "anchor embedment, substrate and certified capacities are incomplete"
+    // on a roof with no anchors in it — a true-sounding sentence about a part
+    // that is not in the design, in the panel an engineer reads for real ones.
+    const hasFooting = s.nodes.some((n) => n.kind === 'roof_anchor');
+    if (hasFooting && (s.foundation === 'anchor' || s.foundation === 'concrete')) {
       const a = cfg.anchor;
       if (!a.embedmentMm || !a.substrate || !a.tensileCapacityKn || !a.shearCapacityKn) add('anchor_incomplete', 'warning', 'Anchor embedment, substrate and certified tensile/shear capacities are incomplete.');
       if (!Number.isInteger(a.count) || a.count < 2 || a.count > 16 || a.diameterMm <= 0 || a.spacingMm + a.diameterMm >= a.plateSizeMm || a.spacingMm <= 0 || a.plateThicknessMm <= 0) add('anchor_position', 'error', 'Invalid anchor count, spacing, diameter or base-plate edge distance.', s.nodes.filter(n => n.kind === 'roof_anchor').map(n => n.id));
@@ -74,6 +81,14 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('ballast_resistance', 'not_calculated', 'Sliding, overturning and uplift: engineering verification required.');
     }
     if (seg.racking.kind === 'flush' && !cfg.attachmentVerified) add('attachment_unverified', 'warning', 'Confirm roof profile, seam/purlin/rafter locations and manufacturer attachment capacity at survey.');
+    // Asbestos-cement. These three are the reason this covering is not a metal
+    // shed with a different texture, and they are about people before money.
+    if (roof.roofType === 'ac_sheet') {
+      add('fragile_roof', 'warning', 'FRAGILE ROOF. Nobody stands on asbestos-cement sheet. Crawling boards bearing on the purlins, a roof ladder and edge protection are required before anyone goes up.');
+      add('asbestos_method', 'warning', 'Drilling asbestos-cement releases fibre. Wet-drill or reuse existing fixing holes, never cut or grind, bag the debris, and work to a written method statement with an authorised disposal route.');
+      add('ac_sheet_condition', 'not_calculated', 'Sheet age, thickness, and purlin size, spacing and corrosion are not modelled. Whether this roof can carry a fixing at all is a fragile-roof survey and an engineer’s decision.');
+      if (!['hook_bolt', 'ac_spreader', 'custom'].includes(cfg.strategy)) add('ac_wrong_fixing', 'error', 'This fixing bears on the sheet. Asbestos-cement carries nothing — the load path must reach the purlin, which means a hook bolt.');
+    }
     if (cfg.strategy === 'direct_sheet') add('direct_sheet_capacity', 'warning', 'Direct-sheet mounting requires explicit sheet thickness, pull-out and manufacturer approval.');
     if (cfg.strategy === 'adjustable') add('adjustment_lock', 'warning', 'Selected tilt is modelled; slotted adjustment and locking hardware require manufacturer detail.');
     if (roof.pitchDeg > 0 && ['industrial_custom', 'custom', 'elevated', 'high_height'].includes(cfg.strategy)) add('pitched_elevation', 'warning', 'Pitched-roof elevated load path is not defined; roof-following rails are shown, not an engineered elevated frame.');

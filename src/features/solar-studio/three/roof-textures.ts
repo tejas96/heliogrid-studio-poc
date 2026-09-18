@@ -212,6 +212,64 @@ function clayTile(): RoofSurface {
   return { map: tex, normalMap: nm, normalScale: 0.8, roughness: 0.85, metalness: 0, color: '#ffffff' };
 }
 
+/**
+ * Asbestos-cement corrugated sheet.
+ *
+ * Not a recoloured metal shed. A metal sheet is TRAPEZOIDAL — flat pans with
+ * square-shouldered ribs — and AC sheet is a continuous SINE corrugation at a
+ * much tighter pitch (146 mm is the common Indian size, so ~7 per metre against
+ * the shed's 4). It reads as a different roof from the air, which is how a
+ * surveyor tells them apart, and telling them apart is the point: one takes a
+ * screw, the other takes a hook bolt. Matt mineral grey, no metalness, with the
+ * moss and stain an in-service sheet always carries.
+ */
+function acSheet(): RoofSurface {
+  const N = 512; // 1 m
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d')!;
+  const rnd = seeded(97);
+  ctx.fillStyle = '#b3b2ad'; // weathered cement grey
+  ctx.fillRect(0, 0, N, N);
+  const pitch = N / 7; // ~146 mm corrugation
+  const h = new Float32Array(N * N);
+  for (let x = 0; x < N; x++) {
+    // a true sine corrugation, not a trapezoid
+    const z = 0.5 - 0.5 * Math.cos((2 * Math.PI * (x % pitch)) / pitch);
+    for (let y = 0; y < N; y++) h[y * N + x] = z;
+    const shade = Math.round(z * 26 - 13);
+    ctx.fillStyle = `rgb(${179 + shade},${178 + shade},${173 + shade})`;
+    ctx.fillRect(x, 0, 1, N);
+  }
+  // hook-bolt heads sit on the CROWNS, in rows on the purlin lines
+  for (let row = 0; row < 2; row++) {
+    for (let i = 0; i < 7; i++) {
+      ctx.fillStyle = '#6f6c66';
+      ctx.beginPath();
+      ctx.arc(i * pitch + pitch / 2, N * (0.25 + row * 0.5), 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // moss in the valleys and rain staining down the slope — an AC roof is old
+  for (let i = 0; i < 900; i++) {
+    const x = rnd() * N;
+    const inValley = Math.cos((2 * Math.PI * (x % pitch)) / pitch) > 0.4;
+    ctx.fillStyle = inValley
+      ? `rgba(92,104,70,${0.05 + rnd() * 0.14})`
+      : `rgba(150,148,140,${0.03 + rnd() * 0.06})`;
+    ctx.fillRect(x, rnd() * N, 1 + rnd() * 2, 5 + rnd() * 40);
+  }
+  return {
+    map: makeTex(c, 1, true),
+    normalMap: makeTex(normalFromHeight(h, N, N, 1.6), 1, false),
+    normalScale: 0.75,
+    roughness: 0.92,
+    metalness: 0,
+    color: '#ffffff',
+  };
+}
+
 const cache = new Map<RoofType, RoofSurface | null>();
 
 /** The covering for a roof type — null for 'ground' (no roof surface). */
@@ -220,6 +278,7 @@ export function getRoofSurface(type: RoofType): RoofSurface | null {
   let s: RoofSurface | null = null;
   if (type === 'rcc_flat') s = concrete();
   else if (type === 'metal_shed') s = metalSheet();
+  else if (type === 'ac_sheet') s = acSheet();
   else if (type === 'tile') s = clayTile();
   cache.set(type, s);
   return s;

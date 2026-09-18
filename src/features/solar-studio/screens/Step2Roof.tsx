@@ -1757,6 +1757,18 @@ export function Step2Roof() {
                 onClick={() => setRoofType(selected.id, 'metal_shed')}
               />
               <OptionCard
+                title="Asbestos / Cement Sheet"
+                // The sub line is doing real work. An EPC reaching for "Metal
+                // Shed" on an AC roof gets the wrong fixing priced AND loses the
+                // fragile-roof access and the method statement from the job, so
+                // the card says what makes this covering different rather than
+                // describing the material.
+                sub="Corrugated AC sheet on purlins – hook bolts AROUND the purlin, never a screw into the sheet. FRAGILE roof: adds crawling-board access and an asbestos method statement."
+                icon={<Factory size={20} />}
+                selected={selected.roofType === 'ac_sheet'}
+                onClick={() => setRoofType(selected.id, 'ac_sheet')}
+              />
+              <OptionCard
                 title="Tile (Mangalore / Clay)"
                 // A tile roof is always pitched. Setting the covering FIRST and
                 // converting after is the intended order — the covering now

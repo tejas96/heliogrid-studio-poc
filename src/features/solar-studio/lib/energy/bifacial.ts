@@ -63,6 +63,12 @@ export function surfaceAlbedo(roofType: RoofType): number {
       return 0.25; // weathered concrete
     case 'metal_shed':
       return 0.3; // coated / galvanised sheet, weathered
+    // Asbestos cement is a matt grey mineral sheet, not a coated metal one, and
+    // an in-service one carries moss and dirt. It reflects less than galvanised
+    // steel and more than clay tile. Taking the shed's 0.3 would have inflated
+    // every bifacial yield quoted on an AC roof.
+    case 'ac_sheet':
+      return 0.2; // weathered asbestos-cement, matt grey
     case 'tile':
       return 0.15; // clay / Mangalore tile, dark
     case 'ground':

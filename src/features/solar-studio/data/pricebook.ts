@@ -55,6 +55,35 @@ export const PRICE_BOOK = {
   basePlatePc: 120, // HDG base plate per pc
   structureBoltPc: 14, // M10 SS bolt+nut+washer set per pc
   metalShedClampPerPanel: 420, // flush mount on metal shed: mini-rails + roof clamps per panel
+  // ── Asbestos-cement (AC) sheet. A different roof from a metal shed, not a
+  // recoloured one, and every figure below is why it needs its own lines.
+  //
+  // FIXING. A metal shed takes a self-drilling screw or an L-foot standing on
+  // the crown: the sheet itself is structural. An AC sheet is not — it is a
+  // brittle mineral board that carries only itself — so the fixing is a HOOK
+  // BOLT (J-bolt) that reaches past the sheet, wraps the purlin underneath and
+  // clamps the bracket down onto the crown from above. More steel, more labour
+  // (one person under the roof on every bolt), and it cannot be shot from a gun.
+  acHookBoltSetPerPanel: 890, // 4 × HDG J-bolt + crown bracket + nuts, per module
+  acHookBoltPc: 240, // one hook-bolt assembly, for the member-model node count
+  // SEALING. A hook bolt makes a hole at the highest point of a corrugation and
+  // the sheet around it cannot be re-tightened later without cracking, so the
+  // seal is a bitumen/EPDM washer pair under a dished GI cap, plus a mastic
+  // bead. Dearer than a shed's plain EPDM washer for the same reason: you get
+  // one attempt.
+  acSheetSealPerPanel: 260, // bitumen + EPDM washer pair, GI cap and mastic, per module
+  acSheetSealPc: 65, // the same seal per FIXING — 260 ÷ ~4 bolts, for the member model's node count
+  // FRAGILE-ROOF ACCESS. Not optional and not a metal-shed cost: nobody may
+  // stand on asbestos cement, so the crew works off crawling boards and roof
+  // ladders spanning purlin to purlin, with edge protection. LUMP SUM per AC
+  // roof and ESTIMATED — the real figure follows roof area, span and how many
+  // crews work at once, none of which this tool models.
+  acFragileAccessLumpsum: 28000, // crawling boards, roof ladders, edge protection
+  // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
+  // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
+  // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is
+  // priced by the state's authorised handler.
+  acAsbestosMethodLumpsum: 18500, // method statement, wet-drill kit, PPE, bagged disposal
   // ── Pitched (sloped) roof flush mounting. A pitched roof takes NO ballasted
   // tilt legs: the modules sit flush on the pitch, carried by anchors that go
   // through the covering into the rafter or slab. Assumes ~4 anchors/module.

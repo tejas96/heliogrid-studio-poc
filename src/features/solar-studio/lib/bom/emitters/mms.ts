@@ -48,13 +48,18 @@ export function emitMms(ctx: BomContext): BomLine[] {
     add('pile', `Ground foundation — driven pile · ${seg.label}`, `HDG post · Ø${pile.d} mm · ${pile.embedMm} mm embedment ASSUMED`, total('piles'), 'nos', ctx.pricebook.pileFoundation, `1 pile per leg base, counted from the connection graph. Embedment and pull-out are SOIL-dependent — geotechnical survey and engineer sign-off required`);
     const pedestal = ruleFor('concrete', s.foundationShape);
     add('pedestal', `Concrete pedestal · ${seg.label}`, `${pedestal.shape} · ${foundationVolumeM3(pedestal).toFixed(3)} m³ each · size ASSUMED`, total('pedestals'), 'nos', ctx.pricebook.concretePedestal, `1 pedestal per leg base, counted from the connection graph. Plan size is NOT calculated from uplift or overturning`);
-    const attachment = ['standing_seam', 'clamp_mounted'].includes(c.strategy) ? 'Standing-seam clamps' : ['roof_hook', 'adjustable_hook'].includes(c.strategy) ? 'Roof hooks' : c.strategy === 'direct_sheet' ? 'Direct sheet fixings' : c.strategy === 'rafter_mounted' ? 'Rafter attachments' : c.strategy === 'purlin_mounted' ? 'Purlin clamps / L-brackets' : 'Sheet fixing / L-bracket';
+    // An AC hook bolt is its own part: it reaches PAST the sheet and wraps the
+    // purlin, so it is neither an L-foot standing on a structural crown nor a
+    // tile hook reaching a batten. Pricing it as `sheetStandoff` (₹210, a metal
+    // shed's L-foot) under-buys it on every fixing of every module.
+    const acHook = ['hook_bolt', 'ac_spreader'].includes(c.strategy);
+    const attachment = ['standing_seam', 'clamp_mounted'].includes(c.strategy) ? 'Standing-seam clamps' : acHook ? `Hook bolts${c.strategy === 'ac_spreader' ? ' + load-spreading brackets' : ''} · AC sheet` : ['roof_hook', 'adjustable_hook'].includes(c.strategy) ? 'Roof hooks' : c.strategy === 'direct_sheet' ? 'Direct sheet fixings' : c.strategy === 'rafter_mounted' ? 'Rafter attachments' : c.strategy === 'purlin_mounted' ? 'Purlin clamps / L-brackets' : 'Sheet fixing / L-bracket';
     // The L-foot through a sheet crown is the one attachment the pricebook
     // rates per piece (`sheetStandoff`). A standing-seam clamp and a tile hook
     // are priced per PANEL there, not per node, so mapping them onto this count
     // would invent a number — they stay unpriced until a per-piece rate exists.
-    const standoffRate = ['standing_seam', 'clamp_mounted', 'roof_hook', 'adjustable_hook'].includes(c.strategy) ? 0 : ctx.pricebook.sheetStandoff;
-    add('attachment', `${attachment} · ${seg.label}`, `Nominal assembly · ${c.attachmentSpacingM} m centres · manufacturer approval required`, total('standoffs'), 'nos', standoffRate, 'Counted at rail-to-roof nodes; surveyed structure alignment not verified');
+    const standoffRate = ['standing_seam', 'clamp_mounted', 'roof_hook', 'adjustable_hook'].includes(c.strategy) ? 0 : acHook ? ctx.pricebook.acHookBoltPc : ctx.pricebook.sheetStandoff;
+    add('attachment', `${attachment} · ${seg.label}`, acHook ? `HDG J-bolt around purlin${c.strategy === 'ac_spreader' ? ' + load-spreading bracket' : ' + crown bracket'} · ${c.attachmentSpacingM} m centres` : `Nominal assembly · ${c.attachmentSpacingM} m centres · manufacturer approval required`, total('standoffs'), 'nos', standoffRate, acHook ? 'Counted at rail-to-purlin nodes. The bolt reaches PAST the sheet: the sheet carries nothing. Purlin spacing and sheet condition are NOT measured — fragile-roof survey required' : 'Counted at rail-to-roof nodes; surveyed structure alignment not verified');
     // Clamps and bolts carry the SAME pricebook rates the pre-MMS mechanical
     // lines used. They were shipped at zero, so turning a table over to MMS
     // quietly took real money out of the quote: on a 2000-module C&I job the
@@ -65,7 +70,11 @@ export function emitMms(ctx: BomContext): BomLine[] {
     for (const kind of ['panel_clamp_end', 'panel_clamp_mid'] as const) add(kind, `${kind === 'panel_clamp_end' ? 'End' : 'Mid'} clamps · ${seg.label}`, `Module clamp · manufacturer clamp zone to confirm`, s.nodes.filter(n => n.kind === kind).reduce((sum, n) => sum + (n.fastenerSpec.clamps ?? 0), 0), 'nos', kind === 'panel_clamp_end' ? ctx.pricebook.endClamp : ctx.pricebook.midClamp, 'Counted from module-support connections');
     add('bolts', `Connection bolts · ${seg.label}`, 'Nominal M10 / M12; connection schedule to confirm', total('bolts'), 'nos', ctx.pricebook.structureBoltPc, 'Counted at beam / rafter / rail / brace joints');
     for (const kind of ['rail_splice', 'bonding_lug', 'cable_clip'] as const) add(kind, `${kind.replaceAll('_', ' ')} · ${seg.label}`, 'Nominal hardware · manufacturer detail required', s.nodes.filter(n => n.kind === kind).length, 'nos', 0, 'Counted from the connection graph');
-    if (!['standing_seam', 'clamp_mounted', 'roof_hook', 'adjustable_hook'].includes(c.strategy)) add('seals', `Sealing washers · ${seg.label}`, 'EPDM · penetration seal', total('sealingWashers'), 'nos', ctx.pricebook.sealingWasher, 'Counted at sheet penetrations');
+    // An AC sheet's seal is not a shed's ₹12 EPDM washer. The hole is at the
+    // crown of a brittle corrugation and cannot be re-tightened later without
+    // cracking the sheet, so it is a bitumen + EPDM pair under a dished GI cap
+    // with a mastic bead — made once, and priced accordingly.
+    if (!['standing_seam', 'clamp_mounted', 'roof_hook', 'adjustable_hook'].includes(c.strategy)) add('seals', `${acHook ? 'Hook-bolt seal set' : 'Sealing washers'} · ${seg.label}`, acHook ? 'Bitumen + EPDM washer pair, dished GI cap and mastic bead' : 'EPDM · penetration seal', total('sealingWashers'), 'nos', acHook ? ctx.pricebook.acSheetSealPc : ctx.pricebook.sealingWasher, acHook ? 'Counted at sheet penetrations. Sheet breakage during fixing is NOT included — an old AC sheet cracks and the allowance is site- and age-dependent' : 'Counted at sheet penetrations');
   }
   return out;
 }

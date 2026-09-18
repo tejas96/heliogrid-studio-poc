@@ -27,7 +27,7 @@ import {
 } from './geo';
 import { higherOverlapFootprints } from './roof-topology';
 import { isBridgedAt, resolveCapabilities } from './capabilities';
-import { isSloped, slopePanelPose, slopeVector } from './roof-plane';
+import { isSheetRoof, isSloped, slopePanelPose, slopeVector } from './roof-plane';
 import { resolveRules } from '../data/rules/india';
 import { shadowFreePitchM, wallShadowSetbackM } from './spacing';
 
@@ -84,7 +84,8 @@ export function defaultPanelPose(roof: Roof): {
   azimuthDeg: number;
 } {
   if (isSloped(roof)) return slopePanelPose(roof);
-  if (roof.roofType === 'metal_shed') return { tiltDeg: 0, azimuthDeg: 180 };
+  // any profiled SHEET on purlins — metal or asbestos-cement — is flush
+  if (isSheetRoof(roof)) return { tiltDeg: 0, azimuthDeg: 180 };
   // a FLAT tile deck cannot take ballasted tilt legs — tile is a covering you
   // hook through, not a slab you stand a structure on. Flush, like metal shed.
   if (roof.roofType === 'tile') return { tiltDeg: 0, azimuthDeg: 180 };
@@ -601,8 +602,7 @@ export function fillRoofAsSegment(
   // the fill's OWN under-structure clearance (defaults chain) drives §26c
   // bridging: a walk-under default lets the fill span bridgeable obstructions.
   // Tile is flush like metal shed (defaultPanelPose) — no elevated structure.
-  const elevatedPose =
-    !isSloped(roof) && roof.roofType !== 'metal_shed' && roof.roofType !== 'tile';
+  const elevatedPose = !isSloped(roof) && !isSheetRoof(roof) && roof.roofType !== 'tile';
   const fillOpts: FillOptions =
     opts.bridgeClearanceM !== undefined || !elevatedPose
       ? opts
@@ -619,8 +619,7 @@ export function fillRoofAsSegment(
   const pose = defaultPanelPose(roof);
   // flush ⇔ the pose has no structure under it — must stay in lockstep with
   // defaultPanelPose (a flat TILE deck is flush too: hooks, not tilt legs)
-  const flush =
-    isSloped(roof) || roof.roofType === 'metal_shed' || roof.roofType === 'tile';
+  const flush = isSloped(roof) || isSheetRoof(roof) || roof.roofType === 'tile';
   const racking: RackingSpec = flush
     ? { kind: 'flush' }
     : {

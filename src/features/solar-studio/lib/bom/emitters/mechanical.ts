@@ -124,10 +124,13 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     nGround,
     nSloped,
     nMetal,
+    nAc,
     slopedByCovering,
     slopedRoofIdsByCovering,
     flatRccRoofIds,
     metalRoofIdList,
+    acRoofIdList,
+    acRoofCount,
     groundRoofIdList,
     pricebook: PRICE_BOOK,
   } = ctx;
@@ -434,6 +437,82 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         sourceRoofId: soleSource(metalRoofIdList),
       }),
     );
+  // ── Asbestos-cement sheet. Four lines, and none of them is a metal-shed line
+  // with a different label.
+  //
+  // A shed's `metalShedClampPerPanel` buys mini-rails and a clamp that stands on
+  // a STRUCTURAL sheet. An AC sheet carries nothing: the fixing is a hook bolt
+  // that reaches past the sheet and wraps the purlin, which is more steel and a
+  // second person working underneath. Quoting the shed rate here under-prices
+  // the fixing and then silently drops the two things the law requires before
+  // anyone climbs onto a fragile asbestos roof at all.
+  if (nAc > 0)
+    out.push(
+      line({
+        key: 'mech.mms_ac_sheet',
+        category: 'Mechanical BOS',
+        item: 'Mounting Structure (AC sheet) — hook bolts',
+        spec: 'HDG J-bolt around purlin + crown bracket, flush mount (mini-rails INCLUDED)',
+        qty: nAc,
+        unit: 'panel-set',
+        unitPriceInr: PRICE_BOOK.acHookBoltSetPerPanel,
+        confidence: 'estimated',
+        formula:
+          `${nAc} panels on asbestos-cement sheet × ~4 hook bolts each. The bolt reaches PAST the sheet and clamps the purlin — ` +
+          `the sheet itself carries nothing and is never drilled to hold load. ESTIMATE: bolts per module follow PURLIN SPACING, which is not modelled; ` +
+          `sheet age, thickness and purlin condition must be confirmed by a fragile-roof survey. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(acRoofIdList),
+      }),
+      line({
+        key: 'mech.ac_sheet_seal',
+        category: 'Mechanical BOS',
+        item: 'AC Sheet Penetration Sealing',
+        spec: 'Bitumen + EPDM washer pair, dished GI cap and mastic bead, per fixing',
+        qty: nAc,
+        unit: 'panel-set',
+        unitPriceInr: PRICE_BOOK.acSheetSealPerPanel,
+        confidence: 'estimated',
+        formula:
+          `${nAc} panels — every hook bolt makes a hole at the crown of a corrugation. An AC sheet cannot be re-tightened later without cracking, ` +
+          `so the seal is made once, under a cap. ALLOWANCE for sheet breakage during fixing is NOT included; an old sheet cracks and the rate is site- and age-dependent.`,
+        sourceRoofId: soleSource(acRoofIdList),
+      }),
+    );
+  // Per ROOF, not per panel: you scaffold a roof once, whatever goes on it.
+  // These two are the reason AC sheet is its own covering. Neither is optional
+  // and neither appears on any other roof type in this app.
+  if (acRoofCount > 0)
+    out.push(
+      line({
+        key: 'mech.ac_fragile_access',
+        category: 'Mechanical BOS',
+        item: 'Fragile Roof Access (AC sheet)',
+        spec: 'Crawling boards, roof ladders spanning purlin to purlin, edge protection',
+        qty: acRoofCount,
+        unit: 'lot',
+        unitPriceInr: PRICE_BOOK.acFragileAccessLumpsum,
+        confidence: 'assumed',
+        formula:
+          `${acRoofCount} asbestos-cement roof(s). NOBODY STANDS ON THE SHEET — it is a fragile roof, and a fall through one is the single most common ` +
+          `fatality on this kind of job. The crew works off boards bearing on the purlins. ASSUMED LUMP SUM: the real figure follows roof area, purlin span ` +
+          `and crew count, none of which this tool models. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(acRoofIdList),
+      }),
+      line({
+        key: 'mech.ac_asbestos_method',
+        category: 'Mechanical BOS',
+        item: 'Asbestos Method Statement & Controlled Drilling',
+        spec: 'Written method statement, wet-drilling kit, PPE, bagged debris disposal',
+        qty: acRoofCount,
+        unit: 'lot',
+        unitPriceInr: PRICE_BOOK.acAsbestosMethodLumpsum,
+        confidence: 'assumed',
+        formula:
+          `${acRoofCount} asbestos-cement roof(s). Drilling releases fibre: wet-drill or reuse existing fixing holes, never cut or grind, and bag the debris. ` +
+          `ASSUMED LUMP SUM — disposal is priced by the state's authorised handler and the statement is written by a competent person, not by this tool.`,
+        sourceRoofId: soleSource(acRoofIdList),
+      }),
+    );
   // rail applies ONLY to loose/flush RCC panels: structured segments carry
   // purlins in the member model; metal-shed bundles mini-rails (the old
   // all-panels rail line double-billed both)
@@ -473,7 +552,34 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
   // off the node graph, and both carry the survey caveat: the standoff COUNT
   // follows an assumed purlin pitch, and whether each one lands on a crown
   // rather than in a valley follows an assumed rib pitch.
-  if (ft.standoffs > 0) {
+  // ── Sheet fixings, split by COVERING.
+  //
+  // `ft` sums the WHOLE project's node graph, so one blended pair of lines
+  // priced every sheet roof as whichever covering the rates happened to name —
+  // and they named the metal shed. On an asbestos roof that bought an L-foot
+  // standing on a structural sheet (₹210) and a plain EPDM washer (₹12), when
+  // what goes in is a hook bolt around the purlin (₹240) and a seal made once
+  // under a cap (₹65). On a 69 kWp AC shed that is ~₹27,000 missing.
+  //
+  // AC takes its OWN keys rather than an `instance` suffix on these, so every
+  // metal-shed project keeps its historical line ids and any override the user
+  // has written on them.
+  const sheetFixings = new Map<'metal_shed' | 'ac_sheet', { standoffs: number; washers: number; roofIds: string[] }>();
+  for (const st of structures) {
+    if (st.mms) continue; // the detailed MMS lines already consume this graph
+    const roofId = roofOfSegment(st.segmentId);
+    const covering = project.roofs.find((r) => r.id === roofId)?.roofType;
+    if (covering !== 'metal_shed' && covering !== 'ac_sheet') continue;
+    const bucket = sheetFixings.get(covering) ?? { standoffs: 0, washers: 0, roofIds: [] };
+    for (const nd of st.nodes) {
+      bucket.standoffs += nd.fastenerSpec.standoffs ?? 0;
+      bucket.washers += nd.fastenerSpec.sealingWashers ?? 0;
+    }
+    if (roofId) bucket.roofIds.push(roofId);
+    sheetFixings.set(covering, bucket);
+  }
+  const metalFix = sheetFixings.get('metal_shed');
+  if (metalFix && metalFix.standoffs > 0) {
     out.push(
       line({
         key: 'mech.sheet_standoff',
@@ -481,10 +587,11 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         item: 'Sheet Standoffs (L-feet)',
         spec: 'HDG/SS L-foot, fixed through the sheet crown into the purlin',
         confidence: 'assumed',
-        qty: ft.standoffs,
+        qty: metalFix.standoffs,
         unit: 'nos',
         unitPriceInr: PRICE_BOOK.sheetStandoff,
-        formula: `${ft.standoffs} fixings from the structure node graph. ASSUMED purlin pitch sets the count and ASSUMED rib pitch decides whether each lands on a crown — confirm both at survey before drilling. ${STRUCTURE_DISCLAIMER}`,
+        formula: `${metalFix.standoffs} fixings from the structure node graph. ASSUMED purlin pitch sets the count and ASSUMED rib pitch decides whether each lands on a crown — confirm both at survey before drilling. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(metalFix.roofIds),
       }),
       line({
         key: 'mech.sealing_washer',
@@ -492,11 +599,45 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         item: 'EPDM Sealing Washers',
         spec: 'bonded EPDM washer, one per sheet penetration',
         confidence: 'derived',
-        qty: ft.sealingWashers,
+        qty: metalFix.washers,
         unit: 'nos',
         unitPriceInr: PRICE_BOOK.sealingWasher,
         // the count is not an estimate: it is one per hole, by definition
-        formula: `One per sheet penetration — ${ft.standoffs} standoffs ⇒ ${ft.sealingWashers} washers. Every fixing is a hole in the roof.`,
+        formula: `One per sheet penetration — ${metalFix.standoffs} standoffs ⇒ ${metalFix.washers} washers. Every fixing is a hole in the roof.`,
+        sourceRoofId: soleSource(metalFix.roofIds),
+      }),
+    );
+  }
+  const acFix = sheetFixings.get('ac_sheet');
+  if (acFix && acFix.standoffs > 0) {
+    out.push(
+      line({
+        key: 'mech.ac_hook_bolt',
+        category: 'Mechanical BOS',
+        item: 'Hook Bolts (AC sheet)',
+        spec: 'HDG J-bolt around the purlin + crown bracket, nuts and washers',
+        confidence: 'assumed',
+        qty: acFix.standoffs,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.acHookBoltPc,
+        formula:
+          `${acFix.standoffs} fixings from the structure node graph. The bolt reaches PAST the sheet and clamps the purlin — asbestos cement carries nothing, ` +
+          `so no fixing may bear on it. ASSUMED purlin pitch sets the count; sheet condition and purlin corrosion are a fragile-roof survey output. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(acFix.roofIds),
+      }),
+      line({
+        key: 'mech.ac_hook_seal',
+        category: 'Mechanical BOS',
+        item: 'Hook-Bolt Seal Sets (AC sheet)',
+        spec: 'Bitumen + EPDM washer pair, dished GI cap and mastic bead',
+        confidence: 'derived',
+        qty: acFix.washers,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.acSheetSealPc,
+        formula:
+          `One per sheet penetration — ${acFix.standoffs} hook bolts ⇒ ${acFix.washers} seal sets. The hole is at the crown of a brittle corrugation and ` +
+          `cannot be re-tightened later without cracking the sheet, so the seal is made once, under a cap. Sheet breakage during fixing is NOT included.`,
+        sourceRoofId: soleSource(acFix.roofIds),
       }),
     );
   }

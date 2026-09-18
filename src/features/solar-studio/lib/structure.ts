@@ -27,7 +27,7 @@ import { resolveRules } from '../data/rules/india';
 import { ruleFor } from './foundation';
 import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
-import { isSloped, surfaceHeightAt } from './roof-plane';
+import { isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
 import { STRUCTURE_PROFILES } from '../data/profiles';
 import { enrichMmsStructure } from './mms/generate';
 import type { Member, MemberKind, NodeKind, SegmentStructure, StructureNode, XYZ } from './structure-model';
@@ -189,7 +189,7 @@ export function resolveRacking(
     projD?.foundation ??
     (roof.roofType === 'ground'
       ? DEFAULT_GROUND_FOUNDATION
-      : roof.roofType === 'metal_shed'
+      : isSheetRoof(roof)
         ? DEFAULT_SHEET_FOUNDATION
         : DEFAULT_FOUNDATION);
   // CLAMP to what this surface can carry. A persisted value the surface cannot
@@ -775,9 +775,11 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       // or restored land). The app's own ground_ballast preset relies on it;
       // my first list omitted it and quietly rewrote those designs to pile.
       if (roof.roofType === 'ground') return ['pile', 'concrete', 'ballast'];
-      // a shed fixes through the sheet into the purlin: you cannot cast on
-      // trapezoidal steel, and ballast loads a roof built to carry its own deck
-      if (roof.roofType === 'metal_shed') return ['anchor'];
+      // a sheet roof fixes through the covering into the PURLIN: you cannot cast
+      // on trapezoidal steel, and ballast loads a roof built to carry its own
+      // deck. On asbestos-cement that is doubly true — the sheet itself carries
+      // nothing, and nobody may stand on it to place a block.
+      if (isSheetRoof(roof)) return ['anchor'];
       // a rooftop takes anything but a PILE — you do not drive a post into a slab
       return ['concrete', 'anchor', 'ballast'];
     default:
@@ -787,8 +789,9 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
 
 export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
   if (seg.racking.kind === 'flush') {
-    // a shed carries rails on standoffs through the sheet — no legs, no footing
-    return roof.roofType === 'metal_shed' ? 'sheet_monorail' : 'flush';
+    // a sheet roof carries rails on standoffs through the covering — no legs,
+    // no footing. AC sheet uses the same graph with a different FIXING.
+    return isSheetRoof(roof) ? 'sheet_monorail' : 'flush';
   }
   // the elevated member model assumes a flat deck
   return isSloped(roof) ? 'none' : 'elevated_table';
@@ -941,6 +944,14 @@ function buildMonorail(
   warnings.push(
     `${seg.label}: ${standoffs} sheet fixings assume ${purlinPitchM} m purlin centres and a ${rules.sheet.ribPitchM} m rib pitch — ASSUMED, not measured. Confirm both at survey: the pitch sets the count, and the rib pitch decides whether each fixing lands on a crown or in a valley.`,
   );
+  // An AC sheet is a FRAGILE roof in the legal sense, and this is the one
+  // warning on it that is about people rather than about price. It rides the
+  // structure so it reaches every consumer of the member model — the panel, the
+  // drawings and the BOM — not just whoever remembers to open the MMS tab.
+  if (roof.roofType === 'ac_sheet')
+    warnings.push(
+      `${seg.label}: asbestos-cement is a FRAGILE roof. Nobody stands on the sheet — crawling boards, a roof ladder and edge protection are required, and every fixing lands on a purlin, never on the sheet. Drilling releases fibre: wet-drill or reuse existing holes, never cut or grind, and dispose of debris under a written method statement.`,
+    );
 
   const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
   for (const kind of MEMBER_KINDS) {

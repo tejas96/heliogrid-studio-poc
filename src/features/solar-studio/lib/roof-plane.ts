@@ -12,6 +12,24 @@ export function isSloped(roof: Roof): boolean {
   return (roof.pitchDeg ?? 0) >= 0.5;
 }
 
+/**
+ * A profiled SHEET roof on purlins — metal or asbestos-cement.
+ *
+ * The two share their geometry completely: no deck to ballast, no slab to
+ * anchor into, rails on standoffs over the crowns, and the purlin below is what
+ * actually carries the load. Every one of those facts was written as
+ * `roofType === 'metal_shed'` in eight separate files, so adding AC sheet as a
+ * second sheet covering would have meant eight chances to forget one — and a
+ * forgotten one does not throw, it silently routes an AC roof down the flat-RCC
+ * path and quotes it ballasted tilt legs.
+ *
+ * What the two do NOT share is the FIXING, the fragility and the hazard, and
+ * those stay keyed on `roofType` where they belong (the BOM and the MMS rules).
+ */
+export function isSheetRoof(roof: Pick<Roof, 'roofType'>): boolean {
+  return roof.roofType === 'metal_shed' || roof.roofType === 'ac_sheet';
+}
+
 /** Downslope horizontal unit vector in plan (x=east, y=north) + gradient. */
 export function slopeVector(roof: Roof): { dx: number; dy: number; grad: number } {
   const a = deg(roof.slopeAzimuthDeg ?? 180);
