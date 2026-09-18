@@ -29,8 +29,8 @@ import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
 import { isSloped, surfaceHeightAt } from './roof-plane';
 import { STRUCTURE_PROFILES } from '../data/profiles';
-import type { MmsConfig } from './mms/types';
 import { enrichMmsStructure } from './mms/generate';
+import type { Member, MemberKind, NodeKind, SegmentStructure, StructureNode, XYZ } from './structure-model';
 
 /**
  * Vertical offset from the member AXIS plane (leg tops = rafter/purlin
@@ -259,82 +259,18 @@ export function defaultStructureParams(
   };
 }
 
-export interface XYZ {
-  x: number;
-  y: number;
-  z: number;
-}
-
-export type MemberKind =
-  | 'front_leg'
-  | 'back_leg'
-  | 'rafter'
-  | 'purlin'
-  | 'brace'
-  | 'beam'
-  /** metal-shed monorail: a rail running along a module row, on standoffs */
-  | 'rail';
-export type NodeKind =
-  | 'roof_anchor' // leg base: base plate + anchors (or ballast block)
-  | 'leg_rafter' // leg top → rafter bolt joint
-  | 'rafter_purlin' // purlin resting on a rafter
-  | 'panel_clamp_end'
-  | 'panel_clamp_mid'
-  | 'brace_bolt'
-  /** L-foot through the sheet crown into the purlin, with a sealing washer */
-  | 'sheet_standoff'
-  | 'rail_splice'
-  | 'bonding_lug'
-  | 'cable_clip';
-
-export interface Member {
-  id: string; // `${seg.id}/m/<kind>/<idx>` — structural, deterministic
-  kind: MemberKind;
-  profileKey: string;
-  profile?: StructureProfile;
-  a: XYZ;
-  b: XYZ;
-  lengthM: number;
-}
-
-export interface StructureNode {
-  id: string; // `${seg.id}/n/<kind>/<idx>`
-  kind: NodeKind;
-  position: XYZ;
-  memberIds: string[];
-  /** hardware at this node — Σ over nodes = the fastener BOM */
-  fastenerSpec: {
-    anchors?: number;
-    plates?: number;
-    bolts?: number;
-    clamps?: number;
-    ballast?: number;
-    /** driven/rammed galvanised post (ground) */
-    piles?: number;
-    /** cast-in-situ concrete pedestal (ground) */
-    pedestals?: number;
-    /** metal shed: L-foot fixed through the sheet into the purlin below */
-    standoffs?: number;
-    /** EPDM washer under every sheet penetration — the waterproofing */
-    sealingWashers?: number;
-  };
-}
-
-export interface SegmentStructure {
-  segmentId: string;
-  mms?: MmsConfig;
-  members: Member[];
-  nodes: StructureNode[];
-  /** the resolved foundation this table stands on — stamped here so the
-   *  renderer, the DRC and the BOM all read ONE answer (§A0) rather than each
-   *  re-deriving it from fastenerSpec and drifting */
-  foundation: FoundationKind;
-  foundationShape: FoundationShape;
-  steelKg: number;
-  /** total member metres per kind — the BOM formula breakdown */
-  memberSummary: Record<Exclude<MemberKind, 'beam'>, { count: number; totalM: number }> & { beam?: { count: number; totalM: number } };
-  warnings: string[];
-}
+/**
+ * The shape of a built table now lives in `./structure-model`, a leaf.
+ *
+ * This file calls `mms/generate`, and the generator needs these types to
+ * declare what it returns — the two files importing each other is an import
+ * loop, and `npm run cycles` is a hard gate. The types moved; this file is
+ * still the front door for everyone who reads them, so nothing else changed.
+ */
+// MemberKind is deliberately NOT re-exported: nothing outside this file reads
+// it, and `npm run dead` calls an unused re-export what it is. It is exported
+// from ./structure-model for whoever needs it next.
+export type { XYZ, NodeKind, Member, StructureNode, SegmentStructure } from './structure-model';
 
 /**
  * The plan direction a table's rails run along, as a unit vector in EN metres.

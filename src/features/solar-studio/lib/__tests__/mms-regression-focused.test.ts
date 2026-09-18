@@ -113,7 +113,10 @@ describe('MMS focused regressions', () => {
     ];
     const conflicted: Project = {
       ...p,
-      keepouts: [{ id: 'ko_1', roofId: roof.id, kind: 'service', shape: keepoutPoly, heightM: 2 } as Project['keepouts'][number]],
+      // 'obstruction', not 'service': there is no such KeepoutKind (types.ts),
+      // and the cast hid it. What this case needs is only a keepout the array
+      // runs into, and any kind clashes the same way.
+      keepouts: [{ id: 'ko_1', roofId: roof.id, kind: 'obstruction', shape: keepoutPoly, heightM: 2 }],
     };
     const findings = validateMms(conflicted, projectStructures(conflicted));
     const clashes = findings.filter(f => f.code.startsWith('clash-') && f.status === 'error');

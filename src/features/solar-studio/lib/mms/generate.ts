@@ -1,5 +1,7 @@
 import type { ArraySegment, PanelSpec } from '../../types';
-import type { Member, SegmentStructure, XYZ } from '../structure';
+// the leaf, NOT '../structure': that file calls this one, and the pair
+// importing each other is the import loop `npm run cycles` refuses
+import type { Member, SegmentStructure, XYZ } from '../structure-model';
 import { STRUCTURE_PROFILES } from '../../data/profiles';
 import { MATERIALS } from './catalogue';
 
