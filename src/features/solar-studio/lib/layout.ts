@@ -29,7 +29,7 @@ import { higherOverlapFootprints } from './roof-topology';
 import { isBridgedAt, resolveCapabilities } from './capabilities';
 import { isSloped, slopePanelPose, slopeVector } from './roof-plane';
 import { resolveRules } from '../data/rules/india';
-import { shadowFreePitchM } from './spacing';
+import { shadowFreePitchM, wallShadowSetbackM } from './spacing';
 
 export interface FillOptions {
   orientation: PanelOrientation;
@@ -59,6 +59,13 @@ export interface FillOptions {
    * this clearance STOP blocking placement (§26c). Absent = no bridging.
    */
   bridgeClearanceM?: number;
+  /**
+   * Keep the array out of the parapet's winter shadow (`fillSetbacksM`).
+   * Default ON: the tool already refuses to let row 1 shade row 2, and a wall
+   * is no different. `false` is the EPC's call to take the capacity and accept
+   * the early/late shading — the energy engine prices it either way.
+   */
+  parapetShadow?: boolean;
 }
 
 export const DEFAULT_FILL: FillOptions = {
@@ -267,6 +274,98 @@ export function fillRowPitchM(
   );
 }
 
+/**
+ * The low edge of a tilted fill's modules, above the deck.
+ *
+ * A fill places modules before the racking is resolved, so it cannot read a
+ * real front leg — this is the one `segment-ops` will give it (`frontLegM`).
+ * It only feeds the parapet-shadow setback, where being 5 cm out moves the
+ * front row by a few centimetres.
+ */
+const FILL_LOW_EDGE_M = 0.3;
+
+/**
+ * Compass azimuth the roof's INTERIOR lies in, seen from edge `i`.
+ *
+ * The polygon is in the image frame (+y is image-up, +x east), and true north
+ * sits `northOffsetDeg` clockwise of image-up — the same conversion
+ * `roof-map-fit` makes. Winding is not assumed: the normal that points at a
+ * probe INSIDE the polygon is the inward one.
+ */
+function edgeInwardAzimuthDeg(poly: XY[], i: number, northOffsetDeg: number): number | null {
+  const a = poly[i];
+  const b = poly[(i + 1) % poly.length];
+  const ex = b.x - a.x;
+  const ey = b.y - a.y;
+  const len = Math.hypot(ex, ey);
+  if (len < 1e-6) return null;
+  const nx = -ey / len;
+  const ny = ex / len;
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const PROBE_M = 0.05;
+  const inside = pointInPolygon({ x: mx + nx * PROBE_M, y: my + ny * PROBE_M }, poly);
+  const ix = inside ? nx : -nx;
+  const iy = inside ? ny : -ny;
+  const frameAz = (Math.atan2(ix, iy) * 180) / Math.PI;
+  return (((frameAz - northOffsetDeg) % 360) + 360) % 360;
+}
+
+/**
+ * The per-edge setbacks a FILL must respect: the regulatory setback, widened on
+ * any edge whose parapet would throw a winter shadow onto the first module.
+ *
+ * Placement only. The DRC and the leg editor keep measuring against the
+ * regulatory setback alone — a module in a parapet's shadow is a shading
+ * matter, not a setback breach, and re-judging already-placed modules here
+ * would flood every existing project with warnings and move nothing.
+ */
+export function fillSetbacksM(project: Project, roof: Roof, on = true): number[] {
+  const base = roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM);
+  const wall = roof.parapet;
+  const loc = project.location;
+  // a pitched roof's modules lie ON the slope and carry no parapet (roof-gable)
+  if (!on || !wall?.enabled || !loc || isSloped(roof)) return base;
+  const lowEdgeM = defaultPanelPose(roof).tiltDeg > 0.1 ? FILL_LOW_EDGE_M : 0;
+  const shadeHeightM = wall.heightM - lowEdgeM;
+  if (shadeHeightM <= 0.01) return base;
+  // an inward wall eats its own width of roof before its shadow even starts
+  const footM = wall.direction === 'inward' ? wall.widthM : 0;
+  const north = project.calibration?.northOffsetDeg ?? 0;
+  return base.map((s, i) => {
+    if (wall.perEdge && !wall.perEdge[i]) return s;
+    const inward = edgeInwardAzimuthDeg(roof.polygon, i, north);
+    if (inward === null) return s;
+    return Math.max(
+      s,
+      footM + wallShadowSetbackM(loc.latLng.lat, loc.latLng.lng, shadeHeightM, inward),
+    );
+  });
+}
+
+/**
+ * What the parapet cost this roof's fill: the widest setback the wall's shadow
+ * forced, and on how many edges it beat the regulatory one. Null when the wall
+ * changed nothing. For telling the user WHY the array starts where it does —
+ * a layout that quietly shrinks is worse than one that explains itself.
+ */
+export function parapetSetbackNotice(
+  project: Project,
+  roof: Roof,
+): { maxM: number; edges: number } | null {
+  const base = roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM);
+  const eff = fillSetbacksM(project, roof);
+  let maxM = 0;
+  let edges = 0;
+  for (let i = 0; i < eff.length; i++) {
+    if (eff[i] > base[i] + 0.005) {
+      edges++;
+      if (eff[i] > maxM) maxM = eff[i];
+    }
+  }
+  return edges > 0 ? { maxM, edges } : null;
+}
+
 /** Panel footprint in metres for the given orientation (w across, h along). */
 export function panelFootprintM(
   spec: PanelSpec,
@@ -355,9 +454,11 @@ export function autoFillRoof(
   opts: FillOptions = DEFAULT_FILL,
   areaLimit?: XY[],
 ): PlacedPanel[] {
+  // the regulatory setback, widened where a parapet would shade the first row
+  // (see fillSetbacksM — same winter window the row pitch is solved for)
   const insetRegions = insetPolygonRobust(
     roof.polygon,
-    roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM),
+    fillSetbacksM(project, roof, opts.parapetShadow ?? true),
   );
   if (insetRegions.length === 0) return [];
   const insideInset = (corners: XY[]) =>

@@ -66,7 +66,7 @@ export function planRoofFill(
   project: Project,
   roof: Roof,
   spec: PanelSpec,
-  opts: { capKwp?: number; heat?: HeatmapResult | null } = {},
+  opts: { capKwp?: number; heat?: HeatmapResult | null; parapetShadow?: boolean } = {},
 ): RoofFillPlan | null {
   const maxPanels =
     opts.capKwp && opts.capKwp > 0 && spec.watt > 0 ? Math.floor((opts.capKwp * 1000) / spec.watt) : undefined;
@@ -77,6 +77,7 @@ export function planRoofFill(
     gapM: 0.05,
     grouped: true,
     avoidPanels: project.panels,
+    parapetShadow: opts.parapetShadow ?? true,
     ...(maxPanels !== undefined ? { maxPanels } : {}),
     ...(bestFirst ? { scoreCandidates: heatmapScorer(opts.heat!) } : {}),
   });

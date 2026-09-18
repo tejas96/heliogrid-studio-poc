@@ -49,3 +49,42 @@ export function shadowFreePitchM(
   }
   return base + maxD;
 }
+
+/**
+ * How far IN from a roof edge the first module must start so a wall standing on
+ * that edge — a parapet, almost always — never shades it during the same
+ * winter shadow-free window the row pitch is solved for.
+ *
+ * The tool has always refused to let row 1 shade row 2, then placed row 1
+ * against a 1 m parapet. Same sun, same window, same formula: a wall is just an
+ * upstream row that throws a shadow and collects nothing.
+ *
+ * `shadeHeightM` is the wall top above the MODULE's lowest point, not above the
+ * deck — a table on 0.3 m legs only sees 0.7 m of a 1 m wall.
+ *
+ * `inwardAzimuthDeg` is the compass direction the roof's interior lies in, seen
+ * from that edge. The shadow reaches inward only while the sun stands on the
+ * far side of the wall, so the reach is measured along the OUTWARD normal and
+ * an edge whose sun never crosses it (the north parapet in India) returns 0.
+ */
+export function wallShadowSetbackM(
+  lat: number,
+  lng: number,
+  shadeHeightM: number,
+  inwardAzimuthDeg: number,
+  windowStartHr = 9,
+  windowEndHr = 15,
+): number {
+  if (shadeHeightM <= 1e-6) return 0;
+  const year = new Date().getFullYear();
+  const month = lat >= 0 ? 11 : 5;
+  const outward = ((inwardAzimuthDeg + 180) * Math.PI) / 180;
+  let maxD = 0;
+  for (let hr = windowStartHr; hr <= windowEndHr + 1e-9; hr += 0.5) {
+    const s = sunPosition(solarHourDate(year, month, 21, hr, lng), lat, lng);
+    if (s.altitude <= 0.05) continue;
+    const d = (shadeHeightM / Math.tan(s.altitude)) * Math.cos(s.azimuth - outward);
+    if (d > maxD) maxD = d;
+  }
+  return maxD;
+}

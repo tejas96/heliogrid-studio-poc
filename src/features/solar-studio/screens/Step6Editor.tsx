@@ -78,6 +78,7 @@ import {
   nextSegmentLabel,
   panelCornersOnRoof,
   panelFitsAt,
+  parapetSetbackNotice,
   snapPanelCenter,
 } from '../lib/layout';
 import { heatColor, type HeatmapResult } from '../lib/solar-heatmap';
@@ -359,6 +360,8 @@ export function Step6Editor() {
    */
   const [fillSheet, setFillSheet] = useState(false);
   const [fillCapKwp, setFillCapKwp] = useState<number | undefined>(undefined);
+  /** keep a fill out of the parapet's winter shadow (lib/layout: fillSetbacksM) */
+  const [fillParapetShadow, setFillParapetShadow] = useState(true);
   const [whySheet, setWhySheet] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const [stringSheet, setStringSheet] = useState(false);
@@ -500,10 +503,14 @@ export function Step6Editor() {
             .filter((r) => r.polygon.length >= 3)
             .map((roof) => ({
               roof,
-              plan: planRoofFill(project, roof, spec, { capKwp: fillCapKwp, heat: peekHeatmap(heatFp) }),
+              plan: planRoofFill(project, roof, spec, {
+                capKwp: fillCapKwp,
+                heat: peekHeatmap(heatFp),
+                parapetShadow: fillParapetShadow,
+              }),
             }))
         : [],
-    [fillSheet, project, spec, fillCapKwp, heatFp],
+    [fillSheet, project, spec, fillCapKwp, heatFp, fillParapetShadow],
   );
 
   const selectedPanels = useMemo(
@@ -2393,6 +2400,19 @@ export function Step6Editor() {
               style={{ width: 120 }}
             />
           </div>
+          {/* The array is kept out of the parapet's winter shadow by default,
+              on the same 9–3 window the row pitch is solved for. Turning it off
+              is the EPC's call to take the capacity and wear the early/late
+              shading — the energy engine prices it honestly either way. */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, marginBottom: 12 }}>
+            <input
+              type="checkbox"
+              data-testid="fill-parapet-shadow"
+              checked={fillParapetShadow}
+              onChange={(e) => setFillParapetShadow(e.target.checked)}
+            />
+            <span>Keep clear of the parapet&rsquo;s winter shadow</span>
+          </label>
           {fillCapKwp !== undefined && fillCapKwp > 0 && (
             <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginBottom: 12 }}>
               {peekHeatmap(heatFp)
@@ -2409,6 +2429,16 @@ export function Step6Editor() {
                     ? `${plan.count} module${plan.count === 1 ? '' : 's'} · ${plan.kwp} kWp fit around what is there${plan.bestFirst ? ' · sunniest first' : ''}`
                     : 'Nothing more fits'}
                 </div>
+                {/* why the array starts where it does — a layout that quietly
+                    shrinks is worse than one that says what took the space */}
+                {(() => {
+                  const p = fillParapetShadow ? parapetSetbackNotice(project, roof) : null;
+                  return p ? (
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                      Parapet shadow: {p.maxM.toFixed(1)} m clear of {p.edges} edge{p.edges === 1 ? '' : 's'} · winter 9–3
+                    </div>
+                  ) : null;
+                })()}
               </div>
               <button
                 className="btn btn-primary"

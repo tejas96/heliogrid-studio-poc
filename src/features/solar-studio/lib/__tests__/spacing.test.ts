@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gcr, shadowFreePitchM } from '../spacing';
+import { gcr, shadowFreePitchM, wallShadowSetbackM } from '../spacing';
 
 const LAT = 18.52; // Pune
 const LNG = 73.86;
@@ -44,5 +44,26 @@ describe('shadowFreePitchM', () => {
     const a = shadowFreePitchM(LAT, LNG, 20, L, 180);
     const b = shadowFreePitchM(LAT, LNG, 20, L, 180);
     expect(a).toBe(b);
+  });
+});
+
+describe('wallShadowSetbackM — a parapet is an upstream row that collects nothing', () => {
+  // inwardAzimuth = the direction the ROOF lies in, from that edge. In India
+  // the sun sits south, so the SOUTH wall (roof to its north, inward 0°) throws
+  // its shadow across the deck and the NORTH wall throws it off the building.
+  it('the south parapet costs metres, the north one costs nothing', () => {
+    const south = wallShadowSetbackM(LAT, LNG, 0.7, 0);
+    const north = wallShadowSetbackM(LAT, LNG, 0.7, 180);
+    expect(south).toBeGreaterThan(0.5);
+    expect(north).toBe(0);
+  });
+
+  it('a taller wall, or a lower module, reaches further', () => {
+    expect(wallShadowSetbackM(LAT, LNG, 1, 0)).toBeGreaterThan(wallShadowSetbackM(LAT, LNG, 0.7, 0));
+    expect(wallShadowSetbackM(LAT, LNG, 0, 0)).toBe(0);
+  });
+
+  it('higher latitude — a lower winter sun — reaches further', () => {
+    expect(wallShadowSetbackM(32, LNG, 0.7, 0)).toBeGreaterThan(wallShadowSetbackM(18, LNG, 0.7, 0));
   });
 });
