@@ -1,7 +1,7 @@
 import type { Project } from '../../types';
 import type { MmsConfig, MountStrategy } from './types';
 import { defaultMms, MOUNT_CATALOGUE } from './catalogue';
-import { setSegmentAzimuth, setSegmentRacking, setSegmentStructureFields, setSegmentTilt } from '../segment-ops';
+import { faceSegmentForPreset, setSegmentAzimuth, setSegmentRacking, setSegmentStructureFields, setSegmentTilt } from '../segment-ops';
 import { COL_STRIDE } from '../layout';
 import { GROUND_CLEARANCE_M, reconcileBridgedPanels } from '../structure-edit';
 import { resolveRules } from '../../data/rules/india';
@@ -45,7 +45,12 @@ export function configureMms(project: Project, segmentId: string, strategy?: Mou
     // Facing comes from the preset, not from a list of strategy names the next
     // east–west system would have had to be added to.
     const facing = preset.azimuth ?? (strategy === 'east_west' ? 90 : strategy === 'south_facing' ? 180 : undefined);
-    if (facing !== undefined) ({ segment: seg, panels } = setSegmentAzimuth(seg, panels, facing));
+    // A preset turning the table is an AUTOMATIC path, so it keeps the table on
+    // the roof. With an MMS the frame is rigid and the whole footprint turns —
+    // a 7 × 22 table becoming 22 × 7 walked most of the array off a roof it fit
+    // perfectly well a moment earlier, and handed the user 70 boundary errors
+    // for choosing a mounting system that is entirely legitimate.
+    if (facing !== undefined) ({ segment: seg, panels } = faceSegmentForPreset(roof, spec, seg, panels, facing));
   }
   seg = { ...seg, mms };
   panels = panels.map(p => p.segmentId === seg!.id ? { ...p, azimuthDeg: mmsFacing(seg!.azimuthDeg, seg!.racking.kind, p.cellIndex) } : p);

@@ -321,6 +321,81 @@ function edgeInwardAzimuthDeg(poly: XY[], i: number, northOffsetDeg: number): nu
  * matter, not a setback breach, and re-judging already-placed modules here
  * would flood every existing project with warnings and move nothing.
  */
+/**
+ * The shift that brings a RE-FACED table back onto its roof — or null when no
+ * shift can do it.
+ *
+ * Turning a table east–west is not a pose change. With an MMS the frame is
+ * RIGID: rows, rails and torque tubes all run one way, so `setSegmentAzimuth`
+ * turns the whole footprint about its centroid rather than spinning each module
+ * where it stands. That is correct engineering, and on a long table it sweeps
+ * most of the array off the roof — a user who picked a legitimate mounting
+ * system was handed 70 boundary errors to clear by hand.
+ *
+ * This is deliberately a TRANSLATION and nothing else. It keeps every module,
+ * the module count, the strings, and whatever the user had grown or removed; a
+ * re-fill would silently replace all of that with a fresh layout. And it is
+ * applied only on the AUTOMATIC preset paths — a table the user turns by hand
+ * stays exactly where they put it. That is the same split the fill's parapet
+ * shadow setback already follows: automatic paths may be opinionated, manual
+ * gestures may not be overruled.
+ */
+export function refitShiftAfterTurn(
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  panels: PlacedPanel[],
+): XY | null {
+  const mine = panels.filter((p) => p.segmentId === seg.id && p.enabled);
+  const zero = { x: 0, y: 0 };
+  if (mine.length === 0) return zero;
+  const insetRegions = insetPolygonRobust(
+    roof.polygon,
+    roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM),
+  );
+  if (insetRegions.length === 0) return null;
+  // A tracker rests FLAT, so its footprint only follows the module's own
+  // azimuth when asked — see `panelCornersOnRoof`. Judge the same plate the DRC
+  // will measure, or this says "fits" about a rectangle nobody else believes in.
+  const faceAzimuth = seg.racking.kind === 'tracker_hsat';
+  const corners = mine.map((p) => panelCornersOnRoof(p, spec, roof, faceAzimuth));
+  const fits = (d: XY) =>
+    insetRegions.some((region) =>
+      corners.every((pts) => pts.every((c) => pointInPolygon({ x: c.x + d.x, y: c.y + d.y }, region))),
+    );
+  if (fits(zero)) return zero;
+  const all = corners.flat();
+  const box = (pts: XY[]) => ({
+    x0: Math.min(...pts.map((p) => p.x)),
+    x1: Math.max(...pts.map((p) => p.x)),
+    y0: Math.min(...pts.map((p) => p.y)),
+    y1: Math.max(...pts.map((p) => p.y)),
+  });
+  const t = box(all);
+  // Land a millimetre INSIDE the line, never exactly on it. A point sitting on
+  // a polygon edge is a coin flip in a ray-casting test, so clamping flush to
+  // the setback made the verification below fail at random — and a module
+  // balanced exactly on the setback is not something anyone wants to defend at
+  // site either.
+  const EPS = 1e-3;
+  for (const region of insetRegions) {
+    const r = box(region);
+    // wider or deeper than the roof itself: no amount of sliding will help, and
+    // saying so is the honest answer — the table needs re-filling, not nudging
+    if (t.x1 - t.x0 > r.x1 - r.x0 - 2 * EPS || t.y1 - t.y0 > r.y1 - r.y0 - 2 * EPS) continue;
+    const d = {
+      x: t.x0 < r.x0 + EPS ? r.x0 + EPS - t.x0 : t.x1 > r.x1 - EPS ? r.x1 - EPS - t.x1 : 0,
+      y: t.y0 < r.y0 + EPS ? r.y0 + EPS - t.y0 : t.y1 > r.y1 - EPS ? r.y1 - EPS - t.y1 : 0,
+    };
+    // Bounding boxes are exact for a rectangular roof and a first guess for any
+    // other shape, so the guess is VERIFIED against the real polygon, never
+    // trusted. An L-shaped roof simply reports "cannot shift" instead of being
+    // told a lie about where its corner is.
+    if (fits(d)) return d;
+  }
+  return null;
+}
+
 export function fillSetbacksM(project: Project, roof: Roof, on = true): number[] {
   const base = roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM);
   const wall = roof.parapet;

@@ -1,6 +1,7 @@
 import type { Project, XY } from '../../types';
 import { intersectPolygons, polygonArea, rectCorners, stripFootprint, pointSegDist } from '../geo';
 import { isNoPenetrationRoof, surfaceHeightAt } from '../roof-plane';
+import { refitShiftAfterTurn } from '../layout';
 import { validateStructure, type SegmentStructure, type Member } from '../structure';
 import { foundationFootprints } from './parts';
 import type { MmsFinding } from './types';
@@ -63,6 +64,19 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       }
     }
     for (const message of validateStructure(s)) add('assembly', 'error', message);
+    // When the table has been TURNED by its mounting system and still hangs off
+    // the roof, the boundary errors above are true but not useful: they name
+    // every member that is outside without saying why any of them is. The turn
+    // is why. `refitShiftAfterTurn` has already slid it as far as it can, so a
+    // null here means no slide exists — the table is longer than the roof is
+    // wide in its new orientation, and what it needs is a re-fill, not a nudge.
+    if (
+      ['dual_tilt', 'tracker_hsat'].includes(seg.racking.kind) &&
+      out.some((f) => f.segmentId === seg.id && f.code === 'roof_boundary') &&
+      project.components.panel &&
+      refitShiftAfterTurn(roof, project.components.panel, seg, project.panels) === null
+    )
+      add('turned_table_refit', 'error', `This system runs the table east–west, so the whole frame is turned — and turned, it is larger than ${roof.name} can hold. Re-fill this roof in the new orientation, or choose a system that keeps the table facing as it is.`);
     // A flush SHEET monorail has no footing at all: it carries rails on fixings
     // through the covering, and `foundation: 'anchor'` is only "the nearest
     // truth" the field can hold (structure.ts). Running the anchor checks on it

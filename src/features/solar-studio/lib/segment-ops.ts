@@ -25,6 +25,7 @@ import {
   panelFitsAt,
   panelFootprintM,
   planCellM,
+  refitShiftAfterTurn,
 } from './layout';
 import {
   TRACKER_FIELD_FACING_DEG,
@@ -601,7 +602,10 @@ export function setSegmentRacking(
   // than leaving the rows pointing wherever the fill put them, is the
   // difference between a tracker field and a row of modules that shade each
   // other all morning. Re-space the rows afterwards to finish the re-lay.
-  return setSegmentAzimuth({ ...seg, racking }, tilted, TRACKER_FIELD_FACING_DEG);
+  //
+  // Picking "Tracker" is a PRESET, not a drag, so the turned table is slid back
+  // onto the roof rather than left breaching the setback where the turn put it.
+  return faceSegmentForPreset(roof, spec, { ...seg, racking }, tilted, TRACKER_FIELD_FACING_DEG);
 }
 
 /** Set the tilt of an elevated table (0–35°); no-op on flush racking. */
@@ -647,6 +651,51 @@ export function setSegmentAzimuth(
     segment: { ...seg, azimuthDeg: az, ...(rotated ? { polygon: seg.polygon.map(turn) } : {}) },
     panels: panels.map((p) => (p.segmentId === seg.id ? { ...p, ...(rotated ? { center: turn(p.center) } : {}), azimuthDeg: seg.mms && seg.racking.kind === 'dual_tilt' && Math.floor((p.cellIndex ?? 0) / COL_STRIDE) % 2 ? (az + 180) % 360 : az } : p)),
   };
+}
+
+/**
+ * Slide a whole table, frame and modules together, by `d` metres.
+ *
+ * Rigid: nothing is re-posed, re-indexed, added or dropped, so the module
+ * count, the grid, the holes the user punched and every string survive
+ * untouched. That is the whole reason a re-faced table is rescued by a SHIFT
+ * rather than a re-fill.
+ */
+function shiftSegment(
+  seg: ArraySegment,
+  panels: PlacedPanel[],
+  d: XY,
+): { segment: ArraySegment; panels: PlacedPanel[] } {
+  if (d.x === 0 && d.y === 0) return { segment: seg, panels };
+  return {
+    segment: { ...seg, polygon: seg.polygon.map((p) => ({ x: p.x + d.x, y: p.y + d.y })) },
+    panels: panels.map((p) =>
+      p.segmentId === seg.id ? { ...p, center: { x: p.center.x + d.x, y: p.center.y + d.y } } : p,
+    ),
+  };
+}
+
+/**
+ * Turn a table to a new facing on an AUTOMATIC path, and keep it on the roof.
+ *
+ * `setSegmentAzimuth` alone is the manual gesture: it turns the table and
+ * leaves it wherever that puts it, which is right when a person dragged the
+ * handle. When a PRESET turns it — an east–west tray, a tracker — the user
+ * asked for a mounting system, not for a relocation, so the table is slid back
+ * inside the roof. When no slide can do it (the turned table is simply longer
+ * than the roof is wide) the turn still applies and `validateMms` says so with
+ * a finding that names the cause; nothing is deleted to make the geometry work.
+ */
+export function faceSegmentForPreset(
+  roof: Roof,
+  spec: PanelSpec,
+  seg: ArraySegment,
+  panels: PlacedPanel[],
+  azimuthDeg: number,
+): { segment: ArraySegment; panels: PlacedPanel[] } {
+  const turned = setSegmentAzimuth(seg, panels, azimuthDeg);
+  const shift = refitShiftAfterTurn(roof, spec, turned.segment, turned.panels);
+  return shift ? shiftSegment(turned.segment, turned.panels, shift) : turned;
 }
 
 /** Set the structural profile of an elevated table (no-op on flush). */

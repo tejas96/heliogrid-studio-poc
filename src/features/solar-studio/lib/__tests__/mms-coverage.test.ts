@@ -14,6 +14,9 @@ import { configureMms } from '../mms/configure';
 import type { MountStrategy } from '../mms/types';
 import { validateMms } from '../mms/validate';
 import { deriveStructures } from '../derive/structures';
+import { insetPolygonRobust, pointInPolygon } from '../geo';
+import { panelCornersOnRoof } from '../layout';
+import { setSegmentAzimuth } from '../segment-ops';
 import { allowedFoundations, resolveRacking } from '../structure';
 import { deriveBom } from '../bom';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
@@ -122,6 +125,102 @@ describe('a ground array can be configured, and what it builds is what it keeps'
     const pile = deriveBom(after).filter((l) => l.id.includes(':pile'));
     expect(pile).not.toHaveLength(0);
     expect(pile.every((l) => l.qty > 0 && l.unitPriceInr > 0)).toBe(true);
+  });
+});
+
+// ─── Turning a table must not throw it off the roof ─────────────────────────
+// With an MMS the frame is rigid, so re-facing turns the whole footprint about
+// its centroid. A 7 × 22 table becoming 22 × 7 walked most of a 111-module array
+// off a roof it had fitted a moment earlier, and the user — who had only picked
+// a legitimate mounting system — got 70 boundary errors to clear by hand.
+//
+// The fix is a SHIFT on the AUTOMATIC path only. Both halves of that matter, so
+// both are pinned here: a preset slides the table back on, and a hand turn is
+// left exactly where the user put it.
+describe('a preset that turns a table keeps it on the roof', () => {
+  const PITCH = W + 0.05; // panel width + module gap
+
+  /** A long single row parked near one edge, so a 90° turn overhangs. */
+  function longRow(cols: number, centreY: number): { project: Project; seg: ArraySegment } {
+    const base = fixtureProject(0);
+    const roof: Roof = {
+      ...fixtureRoof(),
+      polygon: [
+        { x: -12, y: -8 },
+        { x: 12, y: -8 },
+        { x: 12, y: 8 },
+        { x: -12, y: 8 },
+      ],
+    };
+    const seg: ArraySegment = {
+      id: 'seg_t',
+      roofId: roof.id,
+      label: 'A1',
+      polygon: [],
+      rows: 1,
+      cols,
+      orientation: 'portrait',
+      azimuthDeg: 180,
+      racking: { kind: 'fixed_tilt', tiltDeg: 10, rowPitchM: 0, frontLegM: 0.3, backLegM: 0.3, profile: { key: 'c_channel', label: 'C-Channel', kgPerM: 2.2 } },
+      moduleGapM: 0.05,
+      removed: [],
+    };
+    const panels: PlacedPanel[] = Array.from({ length: cols }, (_, c) => ({
+      id: `pv_${c}`,
+      roofId: roof.id,
+      segmentId: seg.id,
+      cellIndex: c,
+      center: { x: (c - (cols - 1) / 2) * PITCH, y: centreY },
+      orientation: 'portrait' as const,
+      azimuthDeg: 180,
+      tiltDeg: 10,
+      solarAccess: 1,
+      enabled: true,
+    }));
+    return { project: { ...base, roofs: [roof], segments: [seg], panels }, seg };
+  }
+
+  const outsideCount = (p: Project) => {
+    const roof = p.roofs[0];
+    const spec = p.components.panel!;
+    const inset = insetPolygonRobust(roof.polygon, roof.polygon.map(() => roof.setbackM));
+    return p.panels.filter(
+      (pv) =>
+        !inset.some((region) =>
+          panelCornersOnRoof(pv, spec, roof).every((c) => pointInPolygon(c, region)),
+        ),
+    ).length;
+  };
+
+  it('slides the turned table back in, instead of leaving it hanging off', () => {
+    const { project, seg } = longRow(10, 6);
+    expect(outsideCount(project), 'the fixture must FIT before the turn').toBe(0);
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'east_west') };
+    expect(after.segments[0].azimuthDeg, 'it really did turn').toBe(90);
+    expect(outsideCount(after), 'and it is still on the roof').toBe(0);
+  });
+
+  it('keeps every module — a shift is not a re-fill', () => {
+    const { project, seg } = longRow(10, 6);
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'east_west') };
+    expect(after.panels).toHaveLength(project.panels.length);
+    expect(after.panels.filter((p) => p.enabled)).toHaveLength(10);
+  });
+
+  it('a table the USER turns by hand is left exactly where they put it', () => {
+    const { project, seg } = longRow(10, 6);
+    const withMms: Project = { ...project, ...configureMms(project, seg.id, 'rcc_fixed') };
+    const mid = (pts: { x: number; y: number }[]) => ({
+      x: pts.reduce((v, p) => v + p.x, 0) / pts.length,
+      y: pts.reduce((v, p) => v + p.y, 0) / pts.length,
+    });
+    const before = mid(withMms.panels.map((p) => p.center));
+    // the manual op: turn only. Rotation is about the centroid, so the centroid
+    // may not move — if it did, something slid the table under the user's hand.
+    const turned = setSegmentAzimuth(withMms.segments[0], withMms.panels, 90);
+    const after = mid(turned.panels.map((p) => p.center));
+    expect(after.x).toBeCloseTo(before.x, 9);
+    expect(after.y).toBeCloseTo(before.y, 9);
   });
 });
 
