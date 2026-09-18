@@ -28,7 +28,13 @@ export function emitMms(ctx: BomContext): BomLine[] {
     }
     const total = (key: keyof typeof s.nodes[number]['fastenerSpec']) => s.nodes.reduce((sum, n) => sum + (n.fastenerSpec[key] ?? 0), 0);
     const bases = s.nodes.filter(n => n.kind === 'roof_anchor').length;
-    add('base_plate', `Base plates · ${seg.label}`, `${c.anchor.plateSizeMm} × ${c.anchor.plateSizeMm} × ${c.anchor.plateThicknessMm} mm`, total('plates'), 'nos', ctx.pricebook.basePlatePc, `${bases} support positions`);
+    // The plate the model actually DRAWS — `ruleFor` is what `foundationAssembly`
+    // builds the plate part from, and it honours the MMS plate size only for the
+    // kinds whose plate that setting governs. Naming `c.anchor.plateSizeMm`
+    // unconditionally printed 200 × 200 against a pile whose drawn plate is
+    // 140 × 140 and a pedestal whose drawn plate is 160 × 160.
+    const plateRule = ruleFor(s.foundation, s.foundationShape, c);
+    add('base_plate', `Base plates · ${seg.label}`, `${plateRule.plateMm} × ${plateRule.plateMm} × ${plateRule.plateThkMm} mm`, total('plates'), 'nos', ctx.pricebook.basePlatePc, `${bases} support positions`);
     add('anchor', `${c.anchor.type} anchors · ${seg.label}`, `M${c.anchor.diameterMm} · embedment ${c.anchor.embedmentMm == null ? 'NOT SUPPLIED' : c.anchor.embedmentMm + ' mm'} · spacing ${c.anchor.spacingMm} mm`, total('anchors'), 'nos', ctx.pricebook.anchorBoltPc, `${c.anchor.count} per support, counted from connections; capacity NOT calculated`);
     // A precast block has a rate in the pricebook; a custom one is whatever the
     // site casts, so only the catalogue type may carry a price.

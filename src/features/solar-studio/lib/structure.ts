@@ -727,7 +727,13 @@ function anchorSpec(r: ResolvedRacking): StructureNode['fastenerSpec'] {
     case 'ballast':
       return { plates: 1, ballast: 1 };
     case 'pile':
-      return { piles: 1 };
+      // A pile carries a plate like every other kind. `foundationAssembly`
+      // says so in as many words — "every kind gets a base plate" — and the
+      // pile rule in data/rules/india.ts declares its size (140 × 140 × 10),
+      // so the renderer drew one on every pile head while this branch counted
+      // none. The drawing and the rule agreed; only the BOM disagreed, and a
+      // part that is drawn but never counted is a part nobody buys.
+      return { piles: 1, plates: 1 };
     case 'concrete':
       return { pedestals: 1, plates: 1, anchors: 2 };
     default:

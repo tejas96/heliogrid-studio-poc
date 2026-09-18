@@ -161,4 +161,22 @@ describe('a foundation rests on the deck, whatever kind it is', () => {
       if (built) expect(validateStructure(built.s), kind).toEqual([]);
     }
   });
+
+  // ─── What is DRAWN is what is COUNTED ─────────────────────────────────────
+  // `foundationAssembly` says "every kind gets a base plate" and the pile rule
+  // declares that plate's size, but `anchorSpec` returned `{ piles: 1 }` with
+  // no `plates` — so a ground array showed a plate on every pile head and
+  // bought none of them. The renderer, the DRC and the BOM all read ONE spec
+  // precisely so they cannot drift; this is the assertion that says so.
+  it('every plate the assembly draws is one the node spec counts', () => {
+    for (const kind of KINDS) {
+      const built = build(kind);
+      if (!built) continue;
+      const drawn = foundationAssembly(kind).parts.filter((p) => p.bucket === 'plate').length;
+      expect(drawn, `${kind} should draw a plate`).toBeGreaterThan(0);
+      for (const n of built.s.nodes.filter((n) => n.kind === 'roof_anchor')) {
+        expect(n.fastenerSpec.plates ?? 0, `${kind} ${n.id}`).toBe(drawn);
+      }
+    }
+  });
 });
