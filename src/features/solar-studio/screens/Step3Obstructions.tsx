@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   AirVent,
   ArrowUpFromLine,
@@ -55,6 +55,7 @@ import {
   rotate,
   sub,
 } from '../lib/geo';
+import { siteCoverM } from '../lib/site-cover';
 import { typedInto } from '../lib/keyboard';
 
 // palette = UI concerns (icon/label/beta); the physical presets (code + L/W/H)
@@ -105,6 +106,8 @@ export function Step3Obstructions() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
   const loc = project.location!;
+  /** same ground the other two editors show — see lib/site-cover */
+  const coverM = useMemo(() => siteCoverM(project), [project]);
 
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [placing, setPlacing] = useState<(typeof OBSTRUCTION_TYPES)[number] | null>(null);
@@ -305,6 +308,7 @@ export function Step3Obstructions() {
       <SatCanvas
         lat={loc.latLng.lat}
         lng={loc.latLng.lng}
+        coverM={coverM}
         scaleFactor={project.calibration.scaleFactor}
         northOffsetDeg={project.calibration.northOffsetDeg}
         cursor={placing || measure.active ? (measure.active ? 'crosshair' : 'copy') : drag ? 'grabbing' : 'default'}

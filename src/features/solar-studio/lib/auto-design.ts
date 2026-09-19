@@ -328,8 +328,16 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
     );
   }
 
-  // sanctioned-load SOFT cap (net-metering practice) — warn, never block
-  const sanctioned = project.info.sanctionedLoadKw;
+  // sanctioned-load SOFT cap (net-metering practice) — warn, never block.
+  //
+  // It does not apply to a GROUND MOUNT project. Sanctioned load is the
+  // consumer's own contracted demand, and net metering caps export against it;
+  // an open-access or PPA plant sells through a different instrument and has no
+  // sanctioned load to exceed. The Step 1 toggle has said "no sanctioned load
+  // required" since before it did anything — this is the half of that promise
+  // that lives in the engine, so a 5 MW field stops being flagged for
+  // overshooting a load it does not have.
+  const sanctioned = project.info.groundMount ? 0 : project.info.sanctionedLoadKw;
   if (sanctioned > 0 && achievedKwp > sanctioned) {
     warnings.push(
       `Designed ${achievedKwp} kWp exceeds the sanctioned load (${sanctioned} kW) — many DISCOMs cap net-metering at the sanctioned load; verify before proceeding.`,

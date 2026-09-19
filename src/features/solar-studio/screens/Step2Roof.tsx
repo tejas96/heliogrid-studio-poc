@@ -66,6 +66,7 @@ import { frameFor, toEN } from '../lib/site/frame';
 import { defaultPanelPose, panelCornersOnRoof } from '../lib/layout';
 import { facadeBandM, facadeSillM } from '../lib/facade';
 import { cascadeDeleteRoof } from '../lib/cascade';
+import { siteCoverM } from '../lib/site-cover';
 import { gableFaces } from '../lib/roof-gable';
 import { hipFaces } from '../lib/roof-hip';
 import { skeletonFaces } from '../lib/roof-skeleton';
@@ -74,6 +75,7 @@ import {
   MIN_ROOF_AREA_M2,
   MIN_ROOF_EDGE_M,
   makeRoof,
+  makeGroundSurface,
   sanitizeRoofPolygon,
   carportSurfaceFrom,
   facadeSurfaceFrom,
@@ -135,6 +137,13 @@ export function Step2Roof() {
   const surroundGrid = useSurroundGrid(project.surround);
   const { state, dispatch } = useStore();
   const loc = project.location!;
+  /**
+   * Ground the basemap has to hold. Shared derivation (lib/site-cover) so all
+   * three 2D editors show the same amount of site, and deliberately read from
+   * COMMITTED geometry only — a draft polygon growing past the plane must not
+   * resize the plane under the cursor mid-trace.
+   */
+  const coverM = useMemo(() => siteCoverM(project), [project]);
 
   /** null = select tool; array = draw tool with points so far */
   const [draft, setDraft] = useState<XY[] | null>(null);
@@ -692,11 +701,31 @@ export function Step2Roof() {
         polygon.every((p) => pointInPolygon(p, r.polygon)) &&
         pointInPolygon(polygonCentroid(polygon), r.polygon),
     );
+    // ── What did the user just draw? ─────────────────────────────────────────
+    // On a GROUND MOUNT project, a field. This is the defect the owner reported:
+    // `makeRoof` defaults its covering to 'rcc_flat', so tracing a 6,000 m²
+    // plot produced "Roof 1" — 3 m in the air, parapet fields live, a 0.3 m
+    // rooftop edge setback instead of the boundary offset, and an elevated-RCC
+    // ballast BOM — and the only way back was to find the type picker and
+    // convert it by hand, on every area, every time.
+    //
+    // `makeGroundSurface` is the existing factory for exactly this and already
+    // routes through `makeRoof`, so the two cannot drift. A roof drawn INSIDE
+    // another is still a rooftop structure (a mumty): a parent wins, because a
+    // building on a solar farm site is a building.
+    const ground = project.info.groundMount && !parent;
     // shared factory — identical defaults for hand-drawn and AI-imported roofs
-    let roof: Roof = makeRoof({ polygon, existing: project.roofs, parent });
+    let roof: Roof = ground
+      ? makeGroundSurface({ polygon, existing: project.roofs })
+      : makeRoof({ polygon, existing: project.roofs, parent });
     // the aerial height map knows this roof: its height, pitch and facing are
-    // MEASURED, not typed — the user can still change any of them
-    const grid = surroundGrid;
+    // MEASURED, not typed — the user can still change any of them.
+    // NOT for a field: the DSM over open ground reads the ground, so the fit
+    // would stamp a grade-level area with the pavement's own height as
+    // 'aerial_map' and then re-flatten it on every map adopt. Same defect
+    // class as the facade slice, and the same answer — a surface that IS the
+    // datum does not take its height from a height map.
+    const grid = ground ? null : surroundGrid;
     const fit = grid ? roofMapFit(grid, roof, project.calibration.northOffsetDeg) : null;
     if (fit) {
       roof = {
@@ -717,6 +746,10 @@ export function Step2Roof() {
       );
     } else if (parent) {
       showHint(`Placed on ${parent.name} — height set to ${roof.heightM.toFixed(1)} m`);
+    } else if (ground) {
+      showHint(
+        `${roof.name} — array area at grade · ${roof.setbackM} m boundary setback. Change it to a roof in Surface Type if this is a building.`,
+      );
     }
   }
 
@@ -1187,6 +1220,7 @@ export function Step2Roof() {
       <SatCanvas
         lat={loc.latLng.lat}
         lng={loc.latLng.lng}
+        coverM={coverM}
         scaleFactor={project.calibration.scaleFactor}
         northOffsetDeg={project.calibration.northOffsetDeg}
         cursor={draft || measure.active ? 'crosshair' : dragVertex || dragBody || dragRotate ? 'grabbing' : 'default'}

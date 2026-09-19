@@ -6,7 +6,6 @@ import {
   Home,
   Image as ImageIcon,
   Info,
-  Lock,
   MapPin,
   Satellite,
   Sun,
@@ -188,22 +187,43 @@ export function Step1Setup() {
         );
       })()}
 
+      {/*
+        GROUND MOUNT is a project MODE, not a decoration.
+        It used to be a greyed-out card with a bare `<div className="toggle" />`
+        — no handler, no state, `info.groundMount` written once as false and
+        read nowhere — while its own caption promised "no sanctioned load
+        required" next to a form that still warned on it. Drawing an area then
+        produced "Roof 1" at 3 m with a parapet and a rooftop setback, because
+        `finishRoof` always called `makeRoof` (covering 'rcc_flat').
+
+        On now it decides three things, each in the one place that owns it:
+          Step 2 `finishRoof`  a drawn area is an Array Area at grade
+          auto-design          the sanctioned-load cap does not apply
+          SatCanvas `coverM`   the imagery steps back to hold a field
+      */}
       <div
         className="card"
-        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, opacity: 0.55 }}
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}
       >
         <div>
           <div style={{ fontSize: 13.5, fontWeight: 700 }}>
-            Ground Mount Project <span className="badge badge-beta">BETA</span>{' '}
-            <span className="badge badge-pro">
-              <Lock aria-hidden /> PRO
-            </span>
+            Ground Mount Project <span className="badge badge-beta">BETA</span>
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
-            Open access / PPA — no sanctioned load required
+            {info.groundMount
+              ? 'Areas you draw become Array Areas at grade — no parapet, boundary setback, no sanctioned-load cap'
+              : 'Open access / PPA — areas you draw become fields at grade, not roofs'}
           </div>
         </div>
-        <div className="toggle" />
+        <button
+          type="button"
+          className={`toggle ${info.groundMount ? 'on' : ''}`}
+          role="switch"
+          aria-checked={info.groundMount}
+          aria-label="Ground mount project"
+          data-testid="ground-mount-toggle"
+          onClick={() => setInfo({ groundMount: !info.groundMount })}
+        />
       </div>
 
       <div className="field">

@@ -71,6 +71,7 @@ import {
   pointSegDist,
   rectCorners,
 } from '../lib/geo';
+import { siteCoverM } from '../lib/site-cover';
 import {
   autoFillRoof,
   defaultPanelPose,
@@ -323,6 +324,8 @@ export function Step6Editor() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
   const ops = useOps();
+  /** same ground the other two editors show — see lib/site-cover */
+  const coverM = useMemo(() => siteCoverM(project), [project]);
   /** One place decides what an op's outcome looks like: a refusal, or the impact line. */
   function report(r: OpPreview): r is Extract<OpPreview, { ok: true }> {
     if (!r.ok) {
@@ -1653,6 +1656,7 @@ export function Step6Editor() {
         ref={canvasRef}
         lat={loc.latLng.lat}
         lng={loc.latLng.lng}
+        coverM={coverM}
         scaleFactor={project.calibration.scaleFactor}
         northOffsetDeg={project.calibration.northOffsetDeg}
         dim

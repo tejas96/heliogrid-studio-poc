@@ -10,6 +10,7 @@ import {
   useCallback,
   useContext,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -20,14 +21,41 @@ import { useEffect } from 'react';
 import { Plus, Minus, Maximize2, Hand } from 'lucide-react';
 import type { XY } from '../types';
 import { SAT_ZOOM, metersPerStaticMap, pickScaleBar, staticSatelliteUrl, zoomCovering } from '../lib/maps';
+import {
+  MIN_TILE_ZOOM,
+  MOSAIC_TILE_PX,
+  MOSAIC_TILE_SCALE,
+  backdropZoom,
+  mosaicTiles,
+} from '../lib/mosaic';
 
 /** static-map request size. scale=2 returns 1280 px of imagery for the SAME
  *  ground — twice the detail under a fingertip, one quota line either way. */
 const TILE_PX = 640;
 const TILE_SCALE = 2;
-/** the widest tile the canvas will step back to (zoomCovering's own floor is
- *  14 — a whole town, which no site needs and no key should pay for) */
-const MIN_TILE_ZOOM = 16;
+/*
+ * The widest PLANE the canvas lays out is MIN_TILE_ZOOM, owned by lib/mosaic —
+ * the module that also draws the backdrop which has to cover that plane.
+ *
+ * It used to be 16 here (1.36 km), on the reasoning that a wider picture was
+ * imagery nobody could use. That was sound while the plane WAS the picture: one
+ * stretched Static Maps image at zoom 14 is 8.5 m per pixel, and a module row in
+ * it is a smudge. With the mosaic the plane and the picture are no longer the
+ * same object — detail comes from tiles chosen for the current magnification —
+ * so widening the plane costs resolution nowhere. 14 gives a 5.4 km plane,
+ * which holds any utility-scale site an Indian EPC will trace.
+ */
+/**
+ * How coarsely the visible rect is quantised before it picks tiles.
+ *
+ * The tile list must not be rebuilt on every frame of a pan. `mosaicTiles`
+ * already quantises its OUTPUT to whole tiles, so the list is stable across
+ * small movements — but the memo that calls it would still re-run 60 times a
+ * second on the raw rect and re-diff every `<img>`. Rounding the rect out to a
+ * 16 m grid means the work happens only when the view has actually travelled
+ * far enough to possibly need a different tile.
+ */
+const VIEW_QUANTUM_M = 16;
 /** View-zoom limits, stated for a zoom-20 tile. A wider tile scales them by
  *  the same factor, so "fit" and "as close as the imagery goes" keep meaning
  *  the same amount of ground on screen whatever tile the site needed. */
@@ -130,6 +158,34 @@ export const SatCanvas = forwardRef<
     el.addEventListener('wheel', cancel, { passive: false });
     return () => el.removeEventListener('wheel', cancel);
   }, []);
+  /**
+   * The viewport's own size, watched — the mosaic only requests tiles the user
+   * can see, so it has to know how much screen there is. Measured rather than
+   * assumed: this editor sits in a flex column beside panels that open and
+   * close, so a hard-coded size would fetch a screenful of tiles for a pane
+   * half that wide (wasted requests) or leave a black band down the side of a
+   * wider one.
+   */
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const read = () => {
+      const r = el.getBoundingClientRect();
+      // round to whole px: a sub-pixel flex reflow must not invalidate the
+      // mosaic memo, and nothing here resolves finer than a pixel anyway
+      setViewport((v) => {
+        const w = Math.round(r.width);
+        const h = Math.round(r.height);
+        return v.w === w && v.h === h ? v : { w, h };
+      });
+    };
+    read();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const sizePx = 1000;
   // Tile zoom follows the SITE, not a constant: step back until one tile holds
   // what the caller has to cover. `coverM` is world metres, so the calibration
@@ -145,10 +201,76 @@ export const SatCanvas = forwardRef<
   // deepest zoom still resolves the same centimetres per screen pixel.
   const tileStep = 2 ** (SAT_ZOOM - tileZoom);
   const maxZoom = MAX_VIEW_ZOOM * tileStep;
-  const fitZoom = Math.min(maxZoom, FIT_VIEW_ZOOM * tileStep);
+  /**
+   * The opening view — and the "Fit view" button.
+   *
+   * The legacy rule was `FIT_VIEW_ZOOM × tileStep`: always the same amount of
+   * ground on screen, whatever plane the site needed. That was right while no
+   * caller passed `coverM`, because the plane was then always one zoom-20 tile.
+   * With the plane sized to the SITE it is wrong in the way that matters most
+   * here: a ground-mount project opens on a 678 m plane, and 1.5 × 8 = 12×
+   * magnification put 68 m of it on screen — the user lands zoomed inside their
+   * own plot with no way to tell there is more of it, which is the very
+   * complaint this work started from.
+   *
+   * So fit now means fit: never tighter than the legacy view (residential work
+   * opens exactly where it always did), and widened as far as it takes to hold
+   * `coverM` across the shorter side of the viewport.
+   */
+  const legacyFit = Math.min(maxZoom, FIT_VIEW_ZOOM * tileStep);
+  const shortSidePx = Math.min(viewport.w, viewport.h);
+  const fitZoom =
+    coverM && coverM > 0 && shortSidePx > 0
+      ? Math.max(MIN_VIEW_ZOOM, Math.min(legacyFit, (shortSidePx * spanM) / (coverM * sizePx)))
+      : legacyFit;
   const clampZoom = (z: number) => Math.min(maxZoom, Math.max(MIN_VIEW_ZOOM, z));
 
   const [zoom, setZoom] = useState(fitZoom);
+  /**
+   * Hold the picture STILL when the plane resizes underneath it.
+   *
+   * `spanM` is now a function of the site (`coverM`), so finishing a large
+   * field can step the basemap plane to the next zoom — 678 m to 1356 m, say.
+   * On-screen scale is `(sizePx / spanM) × zoom`, so a plane that doubles
+   * halves everything the user is looking at: the moment they close a boundary,
+   * the site jumps to half size. Nothing moved in the model — `spanM` is only
+   * the canvas's own ruler — but it reads as the drawing collapsing.
+   *
+   * Compensating `zoom` by the same ratio keeps metres-per-screen-pixel exactly
+   * where it was, so the resize is invisible. `pan` needs no correction: it is
+   * in screen pixels about the plane's centre, and the plane stays centred on
+   * the site pin whatever its span.
+   *
+   * Adjusting state DURING render (rather than in an effect) is deliberate and
+   * is React's documented pattern for state derived from changing props: React
+   * re-runs this component before painting, so there is no frame at the wrong
+   * scale. An effect would paint the jump and then correct it — a flicker
+   * instead of a jump, which is not an improvement.
+   */
+  const [spanBasis, setSpanBasis] = useState(spanM);
+  if (spanBasis !== spanM) {
+    setSpanBasis(spanM);
+    if (spanBasis > 0) {
+      const ratio = spanM / spanBasis;
+      setZoom((z) => Math.min(maxZoom, Math.max(MIN_VIEW_ZOOM, z * ratio)));
+    }
+  }
+  /**
+   * Apply the fit ONCE, when the viewport has first been measured.
+   *
+   * `useState(fitZoom)` runs before the ResizeObserver has reported anything,
+   * so the first value is always the legacy fallback. Without this the canvas
+   * would open at rooftop magnification on a kilometre-wide site and only
+   * correct itself if the user happened to press Fit view. It is deliberately
+   * a one-shot: re-fitting on every later resize would yank the view out from
+   * under someone who had panned to a corner and then opened a side panel.
+   */
+  const didFit = useRef(false);
+  useEffect(() => {
+    if (didFit.current || shortSidePx <= 0) return;
+    didFit.current = true;
+    setZoom(fitZoom);
+  }, [shortSidePx, fitZoom]);
   const [pan, setPan] = useState<XY>({ x: 0, y: 0 });
   /**
    * The PAN TOOL: a drag moves the picture, whatever else is going on.
@@ -207,6 +329,72 @@ export const SatCanvas = forwardRef<
       y: (0.5 - px.y / sizePx) * spanM,
     }),
   };
+
+  // ── The basemap ────────────────────────────────────────────────────────────
+  // What the user can see right now, in world metres. The content plane is laid
+  // out centre-anchored and then `translate(pan) scale(zoom)`, so a screen
+  // offset from the viewport centre is (offset - pan)/zoom content px, and the
+  // plane's centre is world (0,0).
+  //
+  // Rounded OUT to VIEW_QUANTUM_M so panning does not re-run the tile layout on
+  // every frame. Rounding out (never in) guarantees the rect never reports less
+  // ground than is actually on screen, which would cull a tile the user is
+  // looking at.
+  const viewRect = useMemo(() => {
+    const halfW = (viewport.w / 2 - pan.x) / zoom;
+    const halfH = (viewport.h / 2 - pan.y) / zoom;
+    // content px of the viewport's edges, measured from the plane's centre
+    const mPerPx = spanM / sizePx;
+    const q = VIEW_QUANTUM_M;
+    const out = (v: number, dir: 1 | -1) =>
+      dir > 0 ? Math.ceil(v / q) * q : Math.floor(v / q) * q;
+    return {
+      minX: out(-halfW * mPerPx, -1),
+      maxX: out(halfW * mPerPx, 1),
+      // screen y grows downward, world y grows north — the halves swap sign
+      minY: out(-halfH * mPerPx, -1),
+      maxY: out(halfH * mPerPx, 1),
+    };
+  }, [viewport.w, viewport.h, pan.x, pan.y, zoom, spanM, sizePx]);
+
+  /**
+   * Screen pixels per world metre — what decides how sharp the imagery has to
+   * be. Quantised to 2 significant figures for the same reason as the rect: a
+   * wheel notch changes it continuously, and the answer is a discrete zoom
+   * level that only moves every factor of two.
+   */
+  const screenPxPerM = useMemo(() => {
+    const raw = (sizePx / spanM) * zoom;
+    if (!(raw > 0)) return 1;
+    const mag = Math.pow(10, Math.floor(Math.log10(raw)) - 1);
+    return Math.round(raw / mag) * mag;
+  }, [sizePx, spanM, zoom]);
+
+  const tiles = useMemo(
+    () =>
+      mosaicTiles({
+        lat,
+        lng,
+        spanM,
+        sizePx,
+        view: viewRect,
+        screenPxPerM,
+        scaleFactor,
+      }),
+    [lat, lng, spanM, sizePx, viewRect, screenPxPerM, scaleFactor],
+  );
+
+  /**
+   * One wide picture under the mosaic, so the canvas is never black.
+   *
+   * It is also the ONLY imagery when the site is zoomed out past what the
+   * mosaic will pay for, and it is what the very first paint shows while the
+   * sharp tiles are still in flight. One request, cached after that.
+   */
+  const backdrop = useMemo(
+    () => staticSatelliteUrl(lat, lng, backdropZoom(lat, spanM, scaleFactor), TILE_PX, TILE_SCALE),
+    [lat, lng, spanM, scaleFactor],
+  );
 
   // Centre the viewport on a world point: content is centre-anchored then
   // translate(pan)·scale(zoom), so pan = -(basePx - sizePx/2)·zoom lands it dead
@@ -486,8 +674,23 @@ export const SatCanvas = forwardRef<
             touchAction: 'none',
           }}
         >
+          {/*
+            THE BASEMAP, in two layers.
+
+            Layer 1 is one wide picture of the whole plane. Layer 2 is the
+            mosaic: Static Maps tiles at the sharpest zoom this magnification
+            actually resolves, only where the viewport can see them.
+
+            Why two. A single stretched image is what limited the app to 84.8 m
+            of ground — 800 kWp — because the plane and the picture were the
+            same object, so a wider site meant a coarser photo. Splitting them
+            lets the plane grow to kilometres while detail under the cursor
+            stays at 7 cm per pixel. And keeping the wide one underneath means
+            there is no instant at which the user sees black: a tile arriving is
+            the picture getting sharper, never the picture appearing.
+          */}
           <img
-            src={staticSatelliteUrl(lat, lng, tileZoom, TILE_PX, TILE_SCALE)}
+            src={backdrop}
             alt=""
             aria-hidden
             draggable={false}
@@ -505,6 +708,38 @@ export const SatCanvas = forwardRef<
               imageRendering: 'auto',
             }}
           />
+          {tiles.map((t) => (
+            <img
+              // stable key = zoom/i/j, so a tile that survives a pan keeps its
+              // element, its decoded bitmap and its place in the browser cache.
+              // Re-keying per frame would re-request and re-bill every tile.
+              key={t.key}
+              src={staticSatelliteUrl(t.lat, t.lng, t.zoom, MOSAIC_TILE_PX, MOSAIC_TILE_SCALE)}
+              alt=""
+              aria-hidden
+              draggable={false}
+              decoding="async"
+              style={{
+                position: 'absolute',
+                // Grown by one px about its own centre, so neighbours overlap
+                // by a hair instead of risking a hairline gap. Tile centres are
+                // exact in Mercator pixels, but each box is finally snapped to
+                // the browser's layout grid, and two boxes rounding opposite
+                // ways show a line of the backdrop between them — which reads
+                // as a grid drawn over the site. The cost is that each tile is
+                // 1 px oversized (~0.1%); it does not accumulate, because every
+                // tile is positioned from its own centre, so the worst error is
+                // half a pixel at a seam.
+                left: t.leftPx - 0.5,
+                top: t.topPx - 0.5,
+                width: t.sizePx + 1,
+                height: t.sizePx + 1,
+                filter: dim ? 'brightness(0.6) saturate(0.9)' : 'brightness(0.94)',
+                userSelect: 'none',
+                imageRendering: 'auto',
+              }}
+            />
+          ))}
           <svg
             viewBox={`0 0 ${sizePx} ${sizePx}`}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
