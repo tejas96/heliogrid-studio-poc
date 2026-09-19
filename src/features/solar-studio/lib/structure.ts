@@ -205,7 +205,11 @@ export function resolveRacking(
           // and casting on waterproofing is not a thing anyone does
           isNoPenetrationRoof(roof)
           ? DEFAULT_MEMBRANE_FOUNDATION
-          : DEFAULT_FOUNDATION);
+          : // a stone slab takes a fixing down to the joist, never a pedestal
+            // cast on a brittle spanning plate
+            roof.roofType === 'stone_slab'
+            ? DEFAULT_SHEET_FOUNDATION
+            : DEFAULT_FOUNDATION);
   // CLAMP to what this surface can carry. A persisted value the surface cannot
   // take is not honoured — it is corrected, at read time, so an existing
   // project stops drawing and pricing a foundation that cannot be built there.
@@ -799,6 +803,11 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       // pedestal cast in place puts wet concrete straight onto bitumen. This
       // list is the refusal: offer either and the app would be proposing a leak.
       if (isNoPenetrationRoof(roof)) return ['ballast'];
+      // A STONE SLAB carries no cast pedestal. The slab is a 30 mm plate
+      // spanning between joists, not a structural deck: a pedestal's point load
+      // cracks it. What it takes is a fixing that reaches the JOIST (anchor) or
+      // mass spread across several slabs on pads (ballast).
+      if (roof.roofType === 'stone_slab') return ['anchor', 'ballast'];
       // a rooftop takes anything but a PILE — you do not drive a post into a slab
       return ['concrete', 'anchor', 'ballast'];
     default:

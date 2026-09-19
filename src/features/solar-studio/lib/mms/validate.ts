@@ -86,7 +86,11 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
     const hasFooting = s.nodes.some((n) => n.kind === 'roof_anchor');
     if (hasFooting && (s.foundation === 'anchor' || s.foundation === 'concrete')) {
       const a = cfg.anchor;
-      if (!a.embedmentMm || !a.substrate || !a.tensileCapacityKn || !a.shearCapacityKn) add('anchor_incomplete', 'warning', 'Anchor embedment, substrate and certified tensile/shear capacities are incomplete.');
+      // On a STONE SLAB the "anchor" is a bracket clamped to a steel joist, not
+      // a chemical anchor drilled into a substrate: embedment means nothing and
+      // the substrate is the beam. The certified capacity question is still real
+      // — it is the clamp's — so the finding is reworded, not dropped.
+      if (!a.embedmentMm || !a.substrate || !a.tensileCapacityKn || !a.shearCapacityKn) add('anchor_incomplete', 'warning', roof.roofType === 'stone_slab' ? 'Joist clamp certified tensile/shear capacity and the beam section it grips are not supplied — an embedment depth does not apply to a clamp.' : 'Anchor embedment, substrate and certified tensile/shear capacities are incomplete.');
       if (!Number.isInteger(a.count) || a.count < 2 || a.count > 16 || a.diameterMm <= 0 || a.spacingMm + a.diameterMm >= a.plateSizeMm || a.spacingMm <= 0 || a.plateThicknessMm <= 0) add('anchor_position', 'error', 'Invalid anchor count, spacing, diameter or base-plate edge distance.', s.nodes.filter(n => n.kind === 'roof_anchor').map(n => n.id));
     }
     if (s.foundation === 'ballast') {
@@ -102,6 +106,13 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('membrane_uplift', 'not_calculated', 'Ballast mass is set by WIND UPLIFT and limited by what the deck can carry, with more ballast at edges and corners (IS 875 Part 3). Neither the uplift nor the deck capacity is calculated here — the block count shown is a placeholder for an engineer’s check.');
       add('membrane_protection', 'warning', 'Every bearing point needs a protection layer. Concrete set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps and sinks into it.');
       add('membrane_warranty', 'warning', 'Loading the membrane voids its warranty unless the membrane manufacturer inspects and accepts the design in writing. Confirm before any material reaches the roof.');
+    }
+    // Stone slab on joists. Looks like a flat deck, is not one.
+    if (roof.roofType === 'stone_slab') {
+      add('stone_beam_line', 'not_calculated', 'Every leg must land on a JOIST, not on the slab between them. Joist size, spacing and corrosion are not modelled — where the beams actually run is a survey output, and it decides whether this table can be built where it is drawn.');
+      add('stone_no_slab_fixing', 'warning', 'Nothing is fixed INTO the slab. A 30 mm limestone plate spanning between beams splits on a chemical anchor and cracks under a point load; brackets reach the joist through a mortar joint, which is re-pointed afterwards.');
+      if (!['stone_beam_clamp', 'stone_spread_ballast', 'custom'].includes(cfg.strategy))
+        add('stone_wrong_fixing', 'error', 'This mounting system bears on the deck. A stone slab is not a deck — the load has to reach the joist below, or be spread across several slabs on pads.');
     }
     // Asbestos-cement. These three are the reason this covering is not a metal
     // shed with a different texture, and they are about people before money.

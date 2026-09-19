@@ -37,7 +37,15 @@ export function emitMms(ctx: BomContext): BomLine[] {
     // 140 × 140 and a pedestal whose drawn plate is 160 × 160.
     const plateRule = ruleFor(s.foundation, s.foundationShape, c);
     add('base_plate', `Base plates · ${seg.label}`, `${plateRule.plateMm} × ${plateRule.plateMm} × ${plateRule.plateThkMm} mm`, total('plates'), 'nos', ctx.pricebook.basePlatePc, `${bases} support positions`);
-    add('anchor', `${c.anchor.type} anchors · ${seg.label}`, `M${c.anchor.diameterMm} · embedment ${c.anchor.embedmentMm == null ? 'NOT SUPPLIED' : c.anchor.embedmentMm + ' mm'} · spacing ${c.anchor.spacingMm} mm`, total('anchors'), 'nos', ctx.pricebook.anchorBoltPc, `${c.anchor.count} per support, counted from connections; capacity NOT calculated`);
+    // On a STONE SLAB that count is not chemical anchors into concrete — it is
+    // brackets clamped to the JOIST, reached through a mortar joint that is then
+    // re-pointed. Same nodes, different part, four times the rate, and a second
+    // line that would otherwise be forgotten entirely.
+    const stone = roof?.roofType === 'stone_slab';
+    if (stone) {
+      add('anchor', `Joist clamp brackets · ${seg.label}`, 'HDG bracket clamped to the RSJ flange, set through a slab joint', total('anchors'), 'nos', ctx.pricebook.stoneBeamClampPc, 'Counted at leg bases. Set from BELOW onto the joist — never drilled into the slab, which would split it. Joist spacing is NOT modelled; a fragile-slab survey decides whether a leg lands on a beam at all');
+      add('stone_joint', `Slab joint make-good · ${seg.label}`, 'Rake out and re-point every joint opened for a bracket', total('anchors'), 'nos', ctx.pricebook.stoneJointRepointPc, 'One per bracket, from the same connection graph. An unpointed joint is why an old stone roof starts leaking the monsoon after a solar install');
+    } else add('anchor', `${c.anchor.type} anchors · ${seg.label}`, `M${c.anchor.diameterMm} · embedment ${c.anchor.embedmentMm == null ? 'NOT SUPPLIED' : c.anchor.embedmentMm + ' mm'} · spacing ${c.anchor.spacingMm} mm`, total('anchors'), 'nos', ctx.pricebook.anchorBoltPc, `${c.anchor.count} per support, counted from connections; capacity NOT calculated`);
     // A precast block has a rate in the pricebook; a custom one is whatever the
     // site casts, so only the catalogue type may carry a price.
     // On a membrane every block bears on the covering, so every block needs the

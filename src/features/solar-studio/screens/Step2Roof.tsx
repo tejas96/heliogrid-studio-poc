@@ -1779,6 +1779,17 @@ export function Step2Roof() {
                 onClick={() => setRoofType(selected.id, 'membrane')}
               />
               <OptionCard
+                title="Stone Slab (Shahabad / Kota)"
+                // The card has to say the one thing that separates this from
+                // RCC Flat, which it otherwise looks exactly like: the deck is
+                // not the structure. Under RCC Flat it was offered a cast
+                // pedestal and a chemical anchor, both of which crack the slab.
+                sub="Limestone slabs on steel joists – brackets reach the JOIST below, never the slab. Adds joint re-pointing and a beam-locating survey."
+                icon={<Layers size={20} />}
+                selected={selected.roofType === 'stone_slab'}
+                onClick={() => setRoofType(selected.id, 'stone_slab')}
+              />
+              <OptionCard
                 title="Tile (Mangalore / Clay)"
                 // A tile roof is always pitched. Setting the covering FIRST and
                 // converting after is the intended order — the covering now

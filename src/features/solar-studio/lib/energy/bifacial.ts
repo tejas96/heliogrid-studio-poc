@@ -76,6 +76,13 @@ export function surfaceAlbedo(roofType: RoofType): number {
     // conservative figure stands until someone measures it.
     case 'membrane':
       return 0.1; // torch-on bitumen, black
+    // Shahabad and Kota are grey-to-buff limestone. A quarried, in-service roof
+    // slab is dusty and often carries a mud or lime topping, which lands it at
+    // the same figure as weathered concrete — the same answer for the same
+    // reason, not a copied number. A polished or pale Kota finish reflects
+    // considerably more, but which finish is on the roof is a survey fact.
+    case 'stone_slab':
+      return 0.25; // weathered limestone slab, dusty
     case 'tile':
       return 0.15; // clay / Mangalore tile, dark
     case 'ground':

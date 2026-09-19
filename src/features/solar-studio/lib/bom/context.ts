@@ -92,6 +92,8 @@ export interface BomContext {
   nAc: number;
   /** loose panels on a waterproofing membrane — mass on mats, never a fixing */
   nMembrane: number;
+  /** loose panels on a stone slab — the load reaches the joist, not the slab */
+  nStone: number;
   nGround: number;
   nSloped: number;
   nStructured: number;
@@ -106,6 +108,9 @@ export interface BomContext {
   membraneRoofIdList: string[];
   /** how many membrane roofs — the per-ROOF manufacturer sign-off */
   membraneRoofCount: number;
+  stoneRoofIdList: string[];
+  /** how many stone roofs — the per-ROOF beam-locating and slab survey */
+  stoneRoofCount: number;
   groundRoofIdList: string[];
 }
 
@@ -243,6 +248,18 @@ export function buildContext(project: Project): BomContext | null {
     (p) => membraneRoofIds.has(p.roofId) && !structuredPanelIds.has(p.id),
   );
   const nMembrane = membranePanels.length;
+  // A STONE SLAB is a flat deck to look at and a spanning plate to build on, so
+  // it too is its own bucket. The flat-RCC remainder buys a table founded on a
+  // cast pedestal — a point load on a 30 mm slab, which cracks it — and prices
+  // a chemical anchor into concrete where what goes in is a bracket clamped to
+  // the joist below, through a joint that then has to be re-pointed.
+  const stoneRoofIds = new Set(
+    project.roofs.filter((r) => r.roofType === 'stone_slab').map((r) => r.id),
+  );
+  const stonePanels = panels.filter(
+    (p) => stoneRoofIds.has(p.roofId) && !structuredPanelIds.has(p.id),
+  );
+  const nStone = stonePanels.length;
   // A PITCHED face is not an elevated flat deck. makeRoof stamps every roof
   // 'rcc_flat' and the gable/hip/skeleton factories only set pitchDeg, so a
   // sloped roof used to land in nFlatRcc and get quoted ballasted 10° tilt
@@ -268,6 +285,7 @@ export function buildContext(project: Project): BomContext | null {
       !metalRoofIds.has(p.roofId) &&
       !acRoofIds.has(p.roofId) &&
       !membraneRoofIds.has(p.roofId) &&
+      !stoneRoofIds.has(p.roofId) &&
       !groundRoofIds.has(p.roofId),
   );
   const nSloped = slopedPanels.length;
@@ -283,7 +301,7 @@ export function buildContext(project: Project): BomContext | null {
     slopedByCovering.set(cov, (slopedByCovering.get(cov) ?? 0) + 1);
     slopedRoofIdsByCovering.set(cov, [...(slopedRoofIdsByCovering.get(cov) ?? []), p.roofId]);
   }
-  const nFlatRcc = Math.max(0, n - nMetal - nAc - nMembrane - nStructured - nGround - nSloped); // loose/flush on FLAT RCC
+  const nFlatRcc = Math.max(0, n - nMetal - nAc - nMembrane - nStone - nStructured - nGround - nSloped); // loose/flush on FLAT RCC
   // The flat-RCC bucket is a REMAINDER, not a filter, so it has no panel list of
   // its own; reconstruct the roofs it drew from the same exclusions. Every new
   // covering must be subtracted ABOVE and excluded HERE, or its panels are
@@ -295,6 +313,7 @@ export function buildContext(project: Project): BomContext | null {
         !metalRoofIds.has(p.roofId) &&
         !acRoofIds.has(p.roofId) &&
         !membraneRoofIds.has(p.roofId) &&
+        !stoneRoofIds.has(p.roofId) &&
         !groundRoofIds.has(p.roofId) &&
         !slopedRoofIds.has(p.roofId),
     )
@@ -329,6 +348,7 @@ export function buildContext(project: Project): BomContext | null {
     nMetal,
     nAc,
     nMembrane,
+    nStone,
     nGround,
     nSloped,
     nStructured,
@@ -340,6 +360,8 @@ export function buildContext(project: Project): BomContext | null {
     acRoofCount: acRoofIds.size,
     membraneRoofIdList: membranePanels.map((p) => p.roofId),
     membraneRoofCount: membraneRoofIds.size,
+    stoneRoofIdList: stonePanels.map((p) => p.roofId),
+    stoneRoofCount: stoneRoofIds.size,
     groundRoofIdList: groundPanels.map((p) => p.roofId),
   };
 }

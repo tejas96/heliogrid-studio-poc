@@ -331,6 +331,63 @@ function bitumenMembrane(): RoofSurface {
   };
 }
 
+/**
+ * Shahabad / Kota limestone slabs on joists.
+ *
+ * The thing that has to read from the air is the JOINT GRID — big rectangular
+ * slabs with pointed mortar lines between them. That is how a surveyor
+ * recognises this roof, and it is also the working information: the joints are
+ * where a bracket goes down to the beam, and the beam lines run under one set
+ * of them. Each slab is tinted slightly differently, because quarried stone is
+ * never one colour and a roof of identical tiles reads as ceramic, not stone.
+ */
+function stoneSlab(): RoofSurface {
+  const N = 512; // 1 m
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d')!;
+  const rnd = seeded(71);
+  const h = new Float32Array(N * N);
+  // 2 × 1 slabs per metre — a common Shahabad size is roughly 600 × 450
+  const cols = 2;
+  const rows = 3;
+  const w = N / cols;
+  const d = N / rows;
+  ctx.fillStyle = '#6f6a60'; // the mortar behind everything
+  ctx.fillRect(0, 0, N, N);
+  for (let r = 0; r < rows; r++) {
+    for (let k = 0; k < cols; k++) {
+      // every slab its own tone: grey-buff limestone, quarried, never uniform
+      const t = rnd();
+      const base = [150 + t * 26, 145 + t * 24, 132 + t * 22];
+      ctx.fillStyle = `rgb(${base.map((v) => Math.round(v)).join(',')})`;
+      const x = k * w + 3;
+      const y = r * d + 3;
+      ctx.fillRect(x, y, w - 6, d - 6);
+      for (let py = Math.round(y); py < y + d - 6; py++)
+        for (let px = Math.round(x); px < x + w - 6; px++) h[py * N + px] = 1;
+      // bedding-plane streaks along the slab, and old damp at the edges
+      for (let i = 0; i < 90; i++) {
+        const sx = x + rnd() * (w - 6);
+        const sy = y + rnd() * (d - 6);
+        ctx.fillStyle = `rgba(${110 + rnd() * 40},${105 + rnd() * 38},${95 + rnd() * 34},${0.08 + rnd() * 0.16})`;
+        ctx.fillRect(sx, sy, 6 + rnd() * 40, 1);
+      }
+      ctx.fillStyle = `rgba(90,86,78,${0.1 + rnd() * 0.1})`;
+      ctx.fillRect(x, y, w - 6, 3);
+    }
+  }
+  return {
+    map: makeTex(c, 1, true),
+    normalMap: makeTex(normalFromHeight(h, N, N, 1.1), 1, false),
+    normalScale: 0.6,
+    roughness: 0.9,
+    metalness: 0,
+    color: '#ffffff',
+  };
+}
+
 const cache = new Map<RoofType, RoofSurface | null>();
 
 /** The covering for a roof type — null for 'ground' (no roof surface). */
@@ -341,6 +398,7 @@ export function getRoofSurface(type: RoofType): RoofSurface | null {
   else if (type === 'metal_shed') s = metalSheet();
   else if (type === 'ac_sheet') s = acSheet();
   else if (type === 'membrane') s = bitumenMembrane();
+  else if (type === 'stone_slab') s = stoneSlab();
   else if (type === 'tile') s = clayTile();
   cache.set(type, s);
   return s;

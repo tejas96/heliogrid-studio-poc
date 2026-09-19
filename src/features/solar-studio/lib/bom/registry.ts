@@ -70,6 +70,13 @@ export type LineKey =
   /** the same pads counted per NODE, for panels that are in a table */
   | 'mech.membrane_pad'
   | 'mech.membrane_warranty'
+  /** Shahabad / Kota slab on joists: reach the beam, re-point the joint */
+  | 'mech.mms_stone'
+  | 'mech.stone_joint'
+  | 'mech.stone_survey'
+  /** the same clamps and joints counted per NODE, for panels in a table */
+  | 'mech.stone_beam_clamp'
+  | 'mech.stone_joint_node'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an

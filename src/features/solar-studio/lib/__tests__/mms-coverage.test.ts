@@ -33,6 +33,7 @@ const ALL_ROOF_TYPES: Record<RoofType, true> = {
   metal_shed: true,
   ac_sheet: true,
   membrane: true,
+  stone_slab: true,
   tile: true,
   ground: true,
 };
@@ -301,6 +302,83 @@ describe('a membrane roof cannot be given a fixing that goes through it', () => 
     const after: Project = { ...project, ...configureMms(project, seg.id, 'aero_tray') };
     expect(after.segments[0].racking.kind).toBe('dual_tilt');
     expect(after.segments[0].azimuthDeg).toBe(90);
+  });
+});
+
+// ─── Shahabad / Kota stone slab on joists ───────────────────────────────────
+// It looks exactly like a flat RCC deck and is nothing like one: a 30 mm
+// limestone plate spanning between beams splits on a chemical anchor and cracks
+// under a pedestal. Filed under 'rcc_flat' it was offered both.
+describe('a stone slab is built on its joists, not on the slab', () => {
+  function stoneProject(): Project {
+    const base = fixtureProject(6);
+    return { ...base, roofs: [{ ...fixtureRoof(), roofType: 'stone_slab' }] };
+  }
+
+  it('refuses a cast pedestal — the point load cracks the slab', () => {
+    const { project, seg } = scene('stone_slab');
+    const allowed = allowedFoundations(project.roofs[0], seg);
+    expect(allowed).not.toContain('concrete');
+    expect(allowed).toEqual(['anchor', 'ballast']);
+  });
+
+  it('buys joist clamps, joint re-pointing and the beam survey', () => {
+    const bom = deriveBom(stoneProject());
+    for (const key of ['mech.mms_stone', 'mech.stone_joint', 'mech.stone_survey']) {
+      const l = bom.find((x) => x.id.startsWith(key));
+      expect(l, key).toBeDefined();
+      expect(l!.unitPriceInr, key).toBeGreaterThan(0);
+    }
+    expect(bom.some((l) => l.id.startsWith('mech.mms_rcc'))).toBe(false);
+  });
+
+  // The trap the AC and membrane slices both fell into: a real roof's panels are
+  // in a TABLE, and a stone table resolves to `anchor` like a rooftop one — so
+  // the generic plate-and-anchor line would have billed a chemical anchor into
+  // concrete for the SAME fixings the joist clamps already cover.
+  it('a TABLE buys joist clamps ONCE, not clamps plus chemical anchors', () => {
+    const { project } = scene('stone_slab');
+    const bom = deriveBom(project);
+    const clamps = bom.find((l) => l.id.startsWith('mech.stone_beam_clamp'));
+    const joints = bom.find((l) => l.id.startsWith('mech.stone_joint_node'));
+    expect(clamps).toBeDefined();
+    expect(clamps!.qty).toBeGreaterThan(0);
+    expect(joints?.qty).toBe(clamps!.qty); // one joint per bracket, one graph
+    // the generic line must not also claim those bases
+    const plate = bom.find((l) => l.id.startsWith('mech.base_plate'));
+    expect(plate?.item ?? 'Base Plates').not.toMatch(/Anchors/);
+  });
+
+  it('a fixing that bears on the deck is an ERROR', () => {
+    const { project, seg } = scene('stone_slab');
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'stone_beam_clamp') };
+    const wrong: Project = {
+      ...after,
+      segments: after.segments.map((s) => ({ ...s, mms: { ...s.mms!, strategy: 'rcc_anchor' as const } })),
+    };
+    const findings = validateMms(wrong, deriveStructures(wrong));
+    expect(findings.some((f) => f.code === 'stone_wrong_fixing' && f.status === 'error')).toBe(true);
+  });
+});
+
+// ─── Seasonal manual tilt is no longer RCC-only ─────────────────────────────
+describe('seasonal tilt reaches past the RCC slab', () => {
+  it('is offered on RCC, ground and a metal shed', () => {
+    const seasonal = MOUNT_CATALOGUE.filter((p) =>
+      ['adjustable', 'ground_seasonal', 'shed_seasonal'].includes(p.id),
+    );
+    expect(seasonal.flatMap((p) => p.roofs).sort()).toEqual(['ground', 'metal_shed', 'rcc_flat']);
+  });
+
+  it('is deliberately NOT offered where the roof cannot take a moment frame', () => {
+    // a tile hook reaches a batten, an AC sheet carries nothing, a membrane may
+    // not be fixed through — inventing a product for them would be worse than
+    // leaving the gap, so this pins the refusal rather than leaving it to drift
+    for (const roof of ['tile', 'ac_sheet', 'membrane'] as RoofType[]) {
+      const here = MOUNT_CATALOGUE.filter((p) => p.roofs.includes(roof)).map((p) => p.id);
+      expect(here, roof).not.toContain('adjustable');
+      expect(here, roof).not.toContain('shed_seasonal');
+    }
   });
 });
 

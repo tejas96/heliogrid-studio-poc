@@ -67,6 +67,12 @@ const AC: RoofType[] = ['ac_sheet'];
 // anchored RCC preset are withheld here: on this covering there is no such
 // thing as a fixing, only mass.
 const MEMBRANE: RoofType[] = ['membrane'];
+// Shahabad / Kota slab on steel joists. Both presets answer the same question —
+// where does the load land? — and neither answer is "the slab". Reach the joist
+// through a pointed joint, or spread mass across several slabs on pads. The RCC
+// presets are withheld: every one of them founds on the deck, and this deck is a
+// 30 mm plate that cracks.
+const STONE: RoofType[] = ['stone_slab'];
 export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'rcc_fixed', label: 'RCC · Standard fixed tilt', roofs: RCC, heightM: .45, tilt: 10 },
   { id: 'rcc_ballast', label: 'RCC · Ballasted', roofs: RCC, heightM: .45 },
@@ -92,6 +98,19 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   // it is a wind solution, not a membrane one, and a heavy flat roof wants it
   // for the same reason.
   { id: 'aero_tray', label: 'Aerodynamic ballast tray · East–West', roofs: ['membrane', 'rcc_flat'], heightM: .3, tilt: 10, foundation: 'ballast', racking: 'dual_tilt', azimuth: 90 },
+  { id: 'stone_beam_clamp', label: 'Stone slab · Clamped to the joist below', roofs: STONE, heightM: .45, tilt: 10, foundation: 'anchor' },
+  { id: 'stone_spread_ballast', label: 'Stone slab · Spread ballast on pads', roofs: STONE, heightM: .45, tilt: 10, foundation: 'ballast' },
+  // Seasonal tilt BEYOND RCC. `adjustable` was rooftop-slab only; a low-pitch
+  // metal shed takes the same slotted frame on purlin brackets, which is
+  // ordinary on north-Indian sheds where the winter sun is low enough to pay
+  // for the labour twice a year.
+  //
+  // Deliberately NOT offered on tile, AC sheet or membrane. A seasonal frame is
+  // a MOMENT frame — it stands the array up and hands the roof a lever — and
+  // none of those three can take it: a tile hook reaches a batten, an asbestos
+  // sheet carries nothing at all, and a membrane may not be fixed through.
+  // Inventing a product for them would be worse than leaving the gap.
+  { id: 'shed_seasonal', label: 'Metal shed · Seasonal manual tilt', roofs: METAL, heightM: .5, tilt: 15, foundation: 'anchor' },
   { id: 'roof_hook', label: 'Rail + roof hook', roofs: ['tile'], flush: true },
   { id: 'adjustable_hook', label: 'Adjustable roof hook', roofs: ['tile'], flush: true },
   { id: 'ground_pile', label: 'Ground · Driven pile', roofs: GROUND, foundation: 'pile' },
@@ -105,7 +124,7 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'flush', label: 'Flush-mounted rails', roofs: ['rcc_flat', 'metal_shed', 'tile'], flush: true },
   // A custom structure on a membrane is still held by mass — the foundation is
   // pinned so "custom" cannot become the back door to an anchor.
-  { id: 'custom', label: 'Custom structure', roofs: ['rcc_flat', 'metal_shed', 'ac_sheet', 'membrane', 'tile'] },
+  { id: 'custom', label: 'Custom structure', roofs: ['rcc_flat', 'metal_shed', 'ac_sheet', 'membrane', 'stone_slab', 'tile'] },
 ];
 /** Nominal catalogue sizes, explicitly assumed until replaced by project data. */
 export function defaultMms(roof: RoofType): MmsConfig {
@@ -113,7 +132,7 @@ export function defaultMms(roof: RoofType): MmsConfig {
     // Every branch must name a strategy the roof's own list contains, or the
     // panel opens on a value it cannot apply — which is what left `Generate MMS`
     // inert on a ground array. The mms-coverage gate asserts this.
-    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'membrane' ? 'membrane_ballast' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
+    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'membrane' ? 'membrane_ballast' : roof === 'stone_slab' ? 'stone_beam_clamp' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
     material: 'galvanized_steel', railInsetRatio: .18, attachmentSpacingM: 1.2, railStockLengthM: 6,
     edgeClearanceM: .1, obstacleClearanceM: .05,
     ballast: { type: 'precast_concrete', lengthM: .6, widthM: .4, heightM: .15, massKg: 86.4, blocksPerSupport: 1 },

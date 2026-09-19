@@ -127,6 +127,7 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     nMetal,
     nAc,
     nMembrane,
+    nStone,
     slopedByCovering,
     slopedRoofIdsByCovering,
     flatRccRoofIds,
@@ -135,6 +136,8 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
     acRoofCount,
     membraneRoofIdList,
     membraneRoofCount,
+    stoneRoofIdList,
+    stoneRoofCount,
     groundRoofIdList,
     pricebook: PRICE_BOOK,
   } = ctx;
@@ -143,6 +146,22 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
 
   const roofOfSegment = (segmentId: string) =>
     project.segments.find((sg) => sg.id === segmentId)?.roofId;
+  // A STONE SLAB's leg bases are counted here and then REMOVED from the generic
+  // plate-and-anchor line below. `ft` sums the whole project, and a stone table
+  // resolves to `anchor` like a rooftop one — so without this subtraction the
+  // quote would carry the joist clamps AND a chemical-anchor-into-concrete line
+  // for the very same fixings: double-counted, and half of it the wrong part.
+  const stone = { clamps: 0, plates: 0, roofIds: [] as string[] };
+  for (const st of structures) {
+    if (st.mms) continue; // the MMS emitter counts its own
+    const roofId = roofOfSegment(st.segmentId);
+    if (project.roofs.find((x) => x.id === roofId)?.roofType !== 'stone_slab') continue;
+    for (const nd of st.nodes) {
+      stone.clamps += nd.fastenerSpec.anchors ?? 0;
+      stone.plates += nd.fastenerSpec.plates ?? 0;
+    }
+    if (roofId) stone.roofIds.push(roofId);
+  }
   /** Every structure's segment/roof — the source pool for the fastener lines. */
   const allStructureSegmentIds = structures.map((st) => st.segmentId);
   const allStructureRoofIds = structures.map((st) => roofOfSegment(st.segmentId));
@@ -242,18 +261,23 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
       sourceSegmentId: soleSource(allStructureSegmentIds),
       sourceRoofId: soleSource(allStructureRoofIds),
     };
-    if (ft.plates > 0)
+    // Stone's leg bases are bought as joist clamp brackets further down, so they
+    // are taken out here — a chemical anchor into a 30 mm limestone plate is not
+    // a cheaper way to do the same job, it is the wrong job.
+    const plates = ft.plates - stone.plates;
+    const anchors = Math.max(0, ft.anchors - stone.clamps);
+    if (plates > 0)
       out.push(
         line({
           key: 'mech.base_plate',
           category: 'Mechanical BOS',
-          item: ft.anchors > 0 ? 'Base Plates + Anchors' : 'Base Plates',
-          spec: ft.anchors > 0 ? 'HDG plates, chemical/expansion anchors' : 'HDG base plates',
-          qty: ft.plates,
+          item: anchors > 0 ? 'Base Plates + Anchors' : 'Base Plates',
+          spec: anchors > 0 ? 'HDG plates, chemical/expansion anchors' : 'HDG base plates',
+          qty: plates,
           unit: 'plate',
           unitPriceInr:
-            PRICE_BOOK.basePlatePc + Math.round((ft.anchors / ft.plates) * PRICE_BOOK.anchorBoltPc),
-          formula: `${ft.plates} leg base plates × (plate + ${Math.round(ft.anchors / ft.plates)} anchors each) from the node graph. ${STRUCTURE_DISCLAIMER}`,
+            PRICE_BOOK.basePlatePc + Math.round((anchors / plates) * PRICE_BOOK.anchorBoltPc),
+          formula: `${plates} leg base plates × (plate + ${Math.round(anchors / plates)} anchors each) from the node graph. ${STRUCTURE_DISCLAIMER}`,
           ...fastenerSource,
         }),
       );
@@ -570,6 +594,92 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
           `${membraneRoofCount} membrane roof(s). Placing an array on someone else's waterproofing voids its warranty unless the manufacturer inspects ` +
           `and accepts the design in writing. ASSUMED LUMP SUM — the fee and the conditions are the manufacturer's, not this tool's.`,
         sourceRoofId: soleSource(membraneRoofIdList),
+      }),
+    );
+  // ── Shahabad / Kota slab on steel joists. A flat deck to look at, a spanning
+  // plate to build on. The RCC line would buy a pedestal cast on a 30 mm slab
+  // and a chemical anchor into it; what goes in is a bracket clamped to the
+  // JOIST below, reached through a mortar joint that is then re-pointed.
+  if (nStone > 0)
+    out.push(
+      line({
+        key: 'mech.mms_stone',
+        category: 'Mechanical BOS',
+        item: 'Mounting Structure (stone slab) — clamped to the joist',
+        spec: 'HDG table + joist clamp brackets through the slab joints, NO fixing into the slab',
+        qty: nStone,
+        unit: 'panel-set',
+        unitPriceInr: PRICE_BOOK.stoneBeamClampSetPerPanel,
+        confidence: 'estimated',
+        formula:
+          `${nStone} panels on stone slab × ~4 joist clamps each. Nothing bears on the slab: a 30 mm limestone plate spanning between beams is brittle, ` +
+          `so the load path reaches the RSJ underneath. ESTIMATE — clamps per module follow JOIST SPACING, which is not modelled and is a survey output. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(stoneRoofIdList),
+      }),
+      line({
+        key: 'mech.stone_joint',
+        category: 'Mechanical BOS',
+        item: 'Slab Joint Make-Good (re-pointing)',
+        spec: 'Rake out and re-point every joint opened for a bracket',
+        qty: nStone,
+        unit: 'panel-set',
+        unitPriceInr: PRICE_BOOK.stoneJointRepointPc * 4,
+        confidence: 'estimated',
+        formula:
+          `${nStone} panels × ~4 joints opened. Cheap per joint and invisible if forgotten — an unpointed joint is why an old stone roof starts leaking ` +
+          `the monsoon after a solar install. Slab breakage during the work is NOT included: an aged slab cracks and the allowance is site-dependent.`,
+        sourceRoofId: soleSource(stoneRoofIdList),
+      }),
+    );
+  if (stoneRoofCount > 0)
+    out.push(
+      line({
+        key: 'mech.stone_survey',
+        category: 'Mechanical BOS',
+        item: 'Joist Location & Slab Condition Survey',
+        spec: 'Locate beams from below, record spacing and section, note cracked slabs',
+        qty: stoneRoofCount,
+        unit: 'lot',
+        unitPriceInr: PRICE_BOOK.stoneSlabSurveyLumpsum,
+        confidence: 'assumed',
+        formula:
+          `${stoneRoofCount} stone-slab roof(s). Beam size, spacing and corrosion, and whether a slab is already cracked, cannot be read off a photograph ` +
+          `and are what every figure above depends on. ASSUMED LUMP SUM. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(stoneRoofIdList),
+      }),
+    );
+  // The member-model equivalents. A real roof's panels are in a TABLE, so these
+  // are the lines that actually fire — the per-panel pair above only covers
+  // loose panels, which is the trap the AC and membrane slices both fell into.
+  const stoneClamps = stone.clamps;
+  const stoneNodeRoofIds = stone.roofIds;
+  if (stoneClamps > 0)
+    out.push(
+      line({
+        key: 'mech.stone_beam_clamp',
+        category: 'Mechanical BOS',
+        item: 'Joist Clamp Brackets (stone slab)',
+        spec: 'HDG bracket clamped to the RSJ flange, set through a slab joint',
+        qty: stoneClamps,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.stoneBeamClampPc,
+        confidence: 'assumed',
+        formula:
+          `${stoneClamps} fixings from the structure node graph. Each one is set from BELOW onto the joist flange — not drilled into the slab, which would ` +
+          `split it. ASSUMED joist spacing sets whether a leg lands on a beam at all; confirm at survey before anything is opened. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: soleSource(stoneNodeRoofIds),
+      }),
+      line({
+        key: 'mech.stone_joint_node',
+        category: 'Mechanical BOS',
+        item: 'Slab Joint Make-Good (re-pointing)',
+        spec: 'Rake out and re-point every joint opened for a bracket',
+        qty: stoneClamps,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.stoneJointRepointPc,
+        confidence: 'derived',
+        formula: `One per bracket — ${stoneClamps} brackets ⇒ ${stoneClamps} joints, counted from the same graph so the two cannot disagree.`,
+        sourceRoofId: soleSource(stoneNodeRoofIds),
       }),
     );
   // rail applies ONLY to loose/flush RCC panels: structured segments carry

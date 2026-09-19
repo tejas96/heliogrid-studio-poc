@@ -173,8 +173,16 @@ export interface SiteTmy {
  * keep concrete off the bitumen. Filed under 'rcc_flat' the app offered chemical
  * anchors — a fixing that must never be used here — and left out both the slip
  * sheets and the membrane manufacturer's sign-off.
+ *
+ * 'stone_slab' is Shahabad or Kota limestone laid across steel joists — the
+ * ordinary older Maharashtra and Karnataka roof. It LOOKS like a flat deck and
+ * is nothing like one structurally: a 30 mm slab spanning between beams is a
+ * brittle plate, so a chemical anchor into it splits it and a point load cracks
+ * it. The load path has to reach the JOIST underneath, which is the same
+ * problem a sheet roof has and the opposite of what 'rcc_flat' assumes — there,
+ * the deck itself is the structure.
  */
-export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'tile' | 'ground';
+export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground';
 
 export interface ParapetWall {
   enabled: boolean;

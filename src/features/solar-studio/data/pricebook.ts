@@ -100,6 +100,28 @@ export const PRICE_BOOK = {
   // warranty unless the membrane manufacturer inspects and accepts the design.
   // LUMP SUM per membrane roof, ESTIMATED — the fee is the manufacturer's.
   membraneWarrantyLumpsum: 22000, // manufacturer inspection + written acceptance
+  // ── Shahabad / Kota stone slab on steel joists. The slab is a 30 mm plate
+  // spanning between beams, so nothing bears on the slab: the load reaches the
+  // JOIST, or it is spread across several slabs on pads.
+  //
+  // BEAM CLAMP. A bracket that goes down through a pointed joint and clamps the
+  // flange of the RSJ below — more steel and far more labour than a chemical
+  // anchor into concrete, because the joint is opened, the beam located by hand
+  // and the bracket set from underneath.
+  stoneBeamClampSetPerPanel: 1240, // 4 × joist clamp bracket + bolts, per module
+  stoneBeamClampPc: 330, // one clamp assembly, for the member model's node count
+  // JOINT MAKE-GOOD. Every bracket opens a mortar joint between two slabs and
+  // that joint is re-pointed afterwards. Cheap per unit, invisible if forgotten,
+  // and the reason an old stone roof starts leaking the monsoon after a solar
+  // install.
+  stoneJointRepointPc: 85, // rake out and re-point one joint per fixing
+  // SPREAD BALLAST pads: wider than a membrane pad, because the point of them
+  // here is to bridge ACROSS slabs rather than to protect a surface.
+  stoneSpreaderPadPc: 260, // load-spreading pad bearing over two or more slabs
+  // SLAB SURVEY. Beam size, spacing and condition, and whether any slab is
+  // already cracked, are not modelled and cannot be read off a photograph.
+  // LUMP SUM per stone roof, ESTIMATED.
+  stoneSlabSurveyLumpsum: 12500, // beam locating, slab condition survey, access
   // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
   // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
   // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is
