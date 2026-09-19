@@ -178,6 +178,17 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       // capacity lives there.
       add('soil_capacity', 'not_calculated', 'Soil bearing, embedment depth and pile pull-out require a geotechnical survey and engineer sign-off.');
       if (seg.racking.kind === 'tracker_hsat') add('tracker_hardware', 'warning', 'Torque tube, bearings, drive and controller are manufacturer hardware. The model shows posts, tubes and modules — not a certified tracker assembly.');
+      // Dual-axis. Four things a single-axis field never has to answer.
+      if (seg.racking.kind === 'tracker_azel') {
+        add('azel_hardware', 'warning', 'Mast, slew ring, linear actuator, drive and controller are manufacturer hardware, and the frame size assumed here is what sets how many of each you buy. The model shows masts, frames and modules — not a certified tracker assembly.');
+        // A WARNING and not an error: `error` in this panel means the geometry
+        // as drawn conflicts, and the BOM prefixes those with "GEOMETRIC
+        // CONFLICT". A missing wind stow is not something the model can see in
+        // the drawing — it is a requirement on the machine that is bought.
+        add('azel_wind_stow', 'warning', 'A dual-axis frame MUST stow flat in high wind, and its structural rating assumes the stow works. Without a proven anemometer and stow chain this is a pointed sail on a single mast — the one failure that takes the whole unit and its pier with it. Confirm the stow wind speed, the power-failure behaviour and the manual override before this is built (IS 875 Part 3).');
+        add('azel_spacing', 'not_calculated', 'A pointed frame cannot backtrack its way out of its own shadow the way a single-axis row can — only DISTANCE keeps one unit out of the next one\'s light, so a dual-axis field takes far more land per kWp. The spacing used here is an assumption; the shading figures come from raycasting this design as drawn, so read them before the land area is fixed.');
+        add('azel_om', 'warning', 'Two driven axes per unit, and one unit per eight modules — this is an order of magnitude more moving parts than a fixed field, and every one of them is an annual service item and a failure mode. Price the O&M contract for it, not for a fixed array.');
+      }
       if (cfg.strategy === 'ground_seasonal') add('seasonal_position', 'warning', 'One seasonal tilt position is modelled. Summer and winter angles, slotted travel and locking hardware require manufacturer detail.');
     } else if (roof.roofType === 'floating') {
       // There is no structure under a floating array to overload — it is on

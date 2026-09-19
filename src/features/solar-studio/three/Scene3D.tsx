@@ -17,6 +17,7 @@ import { designBounds, shadowBounds, type SceneBounds } from './scene-bounds';
 import { projectForStage, stageShowsDesign, stageShowsHandoffTools } from '../lib/scene-stage';
 import { RadialMenu, type RadialGroup, type RadialItem } from '../components/RadialMenu';
 import { ACCESS_GRADIENT_CSS } from '../lib/shade-ramp';
+import { isTrackerKind } from '../lib/energy/tracker';
 import { PanelYieldCard, usePanelYield } from '../components/PanelYieldCard';
 import { AccessScale } from '../components/AccessScale';
 import { PanelLabels } from './PanelLabels';
@@ -3772,7 +3773,7 @@ function SceneContent({
   // to half a degree so a slider drag does not thrash the instanced meshes.
   // Every other project keeps exactly the old cost.
   const hasTracker = useMemo(
-    () => project.segments.some((s) => s.racking.kind === 'tracker_hsat'),
+    () => project.segments.some((s) => isTrackerKind(s.racking.kind)),
     [project.segments],
   );
   // `sunAzimuth` is already the SCENE frame (true north + the imagery's

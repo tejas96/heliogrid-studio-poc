@@ -621,8 +621,22 @@ export type RackingSpec =
        * the fields the fixed kinds do — its `tiltDeg` is 0 because a tracker
        * lies FLAT at rest and its real tilt is a function of the time of day
        * (lib/energy/tracker.ts), read wherever a module's pose is needed.
+       *
+       * `tracker_azel` is a DUAL-AXIS tracker, and the name is deliberate:
+       * `dual_tilt` is already taken and means an east–west fixed tub, so
+       * calling this one "dual" anything would put two unrelated machines a
+       * letter apart in the same union. AZ-EL is what the hardware is called —
+       * it turns about a vertical mast and lifts about a horizontal one, so it
+       * POINTS at the sun instead of approximating it. It shares the elevated
+       * fields for the same reason HSAT does, and its `tiltDeg` is 0 at rest
+       * for the same reason too.
+       *
+       * What it does NOT share is the structure: a row of HSAT is one tube,
+       * one drive and a line of posts, while every AZ-EL unit is its own mast,
+       * its own slew drive and its own cast pier. That is why it has its own
+       * topology (`azel_pedestal`) rather than an elevated table's legs.
        */
-      kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat'; // flat roof / open ground: elevated
+      kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat' | 'tracker_azel'; // flat roof / open ground: elevated
       tiltDeg: number;
       rowPitchM: number; // centre-to-centre; GCR solver fills this (Phase 3)
       frontLegM: number;

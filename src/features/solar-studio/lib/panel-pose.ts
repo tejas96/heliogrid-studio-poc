@@ -12,7 +12,7 @@ import type { ArraySegment, PanelSpec, PlacedPanel, Project, Roof } from '../typ
 import { isFacade, isSloped, surfaceHeightAt } from './roof-plane';
 import { panelFootprintM, roofGridAngle } from './layout';
 import { MODULE_STANDOFF_M, resolveRacking } from './structure';
-import { measuredRowPitchM, resolveTrackerAxis, trackerPose, type TrackerAxis } from './energy/tracker';
+import { isTrackerKind, measuredRowPitchM, resolveTrackerAxis, trackerPose, type TrackerAxis } from './energy/tracker';
 
 /** Where the sun is, for the one racking kind whose geometry depends on it. */
 export interface SunAngles {
@@ -36,7 +36,9 @@ export function trackerAxisFor(
   const seg: ArraySegment | undefined = panel.segmentId
     ? project.segments.find((s) => s.id === panel.segmentId)
     : undefined;
-  if (!seg || seg.racking.kind !== 'tracker_hsat') return null;
+  // `flush` is named as well as tested so the elevated shape (and its
+  // `rowPitchM`) narrows — `isTrackerKind` takes a string and cannot do that.
+  if (!seg || seg.racking.kind === 'flush' || !isTrackerKind(seg.racking.kind)) return null;
   // The pitch is MEASURED off where the modules stand, never read from the
   // racking's declared field: switching a table to a tracker widens the
   // declared pitch, but until the rows are actually re-spaced they are still
@@ -96,8 +98,10 @@ export function panelPose(
 
   // A TRACKER'S plate is where the sun put it. The tube carries the modules'
   // centres, so they turn about the axis without rising or falling — which is
-  // why its height below is the tube's, with no tilt term.
-  const tube = sun && racking?.kind === 'tracker_hsat' ? (axis ?? trackerAxisFor(project, panel, spec, roof)) : null;
+  // why its height below is the tube's, with no tilt term. The same is true of
+  // a dual-axis frame: the mast carries the frame's centre, and the frame
+  // turns and lifts about it without the centre moving.
+  const tube = sun && racking && isTrackerKind(racking.kind) ? (axis ?? trackerAxisFor(project, panel, spec, roof)) : null;
   const tracked = tube && sun ? trackerPose(tube, sun.altitudeDeg, sun.azimuthDeg) : null;
   const tiltRad = tracked ? (tracked.tiltDeg * Math.PI) / 180 : (panel.tiltDeg * Math.PI) / 180;
 
@@ -128,7 +132,7 @@ export function panelPose(
     : sloped
     ? FLUSH_STANDOFF_M
     : racking
-      ? racking.kind === 'tracker_hsat'
+      ? isTrackerKind(racking.kind)
         ? racking.frontLegM + MODULE_STANDOFF_M
         : racking.frontLegM + (d * Math.sin(tiltRad)) / 2 + MODULE_STANDOFF_M
       : LOOSE_STANDOFF_M;

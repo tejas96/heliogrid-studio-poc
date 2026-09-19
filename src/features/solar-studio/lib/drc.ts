@@ -15,6 +15,7 @@ import { isFacade } from './roof-plane';
 import { facadeAlongM, facadeFace, facadeSillM } from './facade';
 import { requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
 import { resolveRacking } from './structure';
+import { isTrackerKind } from './energy/tracker';
 import { deriveStructures } from './derive/structures';
 import { validateMms } from './mms/validate';
 import {
@@ -42,12 +43,13 @@ function shrink(c: XY[]): XY[] {
  */
 /**
  * Modules on a TRACKER lie flat at rest but are NOT grid-aligned — they sit
- * along their torque tube. Their plan footprint must follow their own azimuth
- * or DRC measures a rectangle turned 90° from the one placement validated,
- * and reports overlaps that are not there.
+ * along their torque tube, or on their mast's frame. Their plan footprint must
+ * follow their own azimuth or DRC measures a rectangle turned 90° from the one
+ * placement validated, and reports overlaps that are not there. True of both
+ * machines, so it asks the predicate and not one kind's name.
  */
 function trackerSegmentIds(project: Project): Set<string> {
-  return new Set(project.segments.filter((s) => s.racking.kind === 'tracker_hsat').map((s) => s.id));
+  return new Set(project.segments.filter((s) => isTrackerKind(s.racking.kind)).map((s) => s.id));
 }
 
 export function layoutIssues(

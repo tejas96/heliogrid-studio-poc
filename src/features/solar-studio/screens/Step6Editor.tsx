@@ -106,6 +106,12 @@ import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
 import { estimateDcCableM, stringSizing, vocAtTemp } from '../lib/stringing';
 import {
+  AZEL_DEFAULT_AZIMUTH_RANGE_DEG,
+  AZEL_DEFAULT_MAX_TILT_DEG,
+  AZEL_DEFAULT_MIN_TILT_DEG,
+  AZEL_DEFAULT_PITCH_FACTOR,
+  AZEL_FRAME_MODULES,
+  isTrackerKind,
   measuredRowPitchM,
   TRACKER_DEFAULT_GCR,
   TRACKER_DEFAULT_MAX_ROTATION_DEG,
@@ -121,6 +127,7 @@ import {
   STRUCTURE_DISCLAIMER,
   validateStructure,
 } from '../lib/structure';
+import { deriveStructures } from '../lib/derive/structures';
 import { StructurePreview } from '../components/StructurePreview';
 import { MmsConfiguration } from '../components/mms/MmsConfiguration';
 import { AccessScale } from '../components/AccessScale';
@@ -781,7 +788,7 @@ export function Step6Editor() {
   const tableCountLabel = (verb: string) =>
     selectedSegments.length > 1 ? `${verb} · ${selectedSegments.length} tables` : verb;
 
-  function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat') {
+  function applyRacking(kind: 'flush' | 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat' | 'tracker_azel') {
     const ids = targetSegIds();
     if (!ids) return;
     reportMany(
@@ -2551,8 +2558,11 @@ export function Step6Editor() {
         const segPanels = project.panels.filter((p) => p.segmentId && segIds.includes(p.segmentId));
         const kwp = Math.round(((segPanels.length * spec.watt) / 1000) * 10) / 10;
         const isFlush = seg.racking.kind === 'flush';
-        // a tracker's tilt is the time of day, so its panel controls differ
-        const isTracker = seg.racking.kind === 'tracker_hsat';
+        // a tracker's tilt is the time of day, so its panel controls differ —
+        // true of both machines, and the rotation-limit control below is the
+        // one part that stays single-axis only (a mast has no roll to limit)
+        const isTracker = isTrackerKind(seg.racking.kind);
+        const isHsat = seg.racking.kind === 'tracker_hsat';
         const tilt = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 0;
         // `shared*` is the one value they ALL carry, or undefined when they
         // differ — the fields render "–" for undefined rather than showing the
@@ -2682,6 +2692,23 @@ export function Step6Editor() {
               const groundRacking =
                 resolved != null ? { ...resolved, tiltDeg: groundTilt } : null;
               const foundation = resolved?.foundation;
+              // A DUAL-AXIS mast has ONE foundation and the picker must not
+              // pretend otherwise: `allowedFoundations` returns ['concrete']
+              // alone, so offering "Driven pile" and "Ballasted" here is two
+              // buttons whose answer would be corrected back at the next read —
+              // and the pier the BOM buys would stop matching what is drawn.
+              if (isGround && seg.racking.kind === 'tracker_azel')
+                return (
+                  <>
+                    <div style={lbl as React.CSSProperties}>Foundation · cast pier</div>
+                    <div className="hint">
+                      One pier per mast, and no choice about it: a pointed frame delivers its entire
+                      wind moment to a single point, which is a deep cast pier with a cage and a bolt
+                      template. Depth, diameter and hold-down are an engineer&apos;s design against
+                      the site&apos;s soil and IS 875 Part 3.
+                    </div>
+                  </>
+                );
               if (isGround)
                 return (
                   <>
@@ -2746,16 +2773,52 @@ export function Step6Editor() {
                       'flush',
                       'fixed_tilt',
                       'dual_tilt',
-                      ...(selectedSegRoof?.roofType === 'ground' ? (['tracker_hsat'] as const) : []),
+                      ...(selectedSegRoof?.roofType === 'ground'
+                        ? (['tracker_hsat', 'tracker_azel'] as const)
+                        : []),
                     ] as const)
               ).map((k) => (
                 <button key={k} style={seg3btn(sharedRackKind === k) as React.CSSProperties} onClick={() => applyRacking(k)}>
-                  {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : k === 'dual_tilt' ? 'Dual tilt' : 'Tracker'}
+                  {/* "Dual tilt" and "Dual-axis" sit next to each other here and
+                      are unrelated machines — one is a fixed east–west tub, the
+                      other turns on a mast. Both are named in full so nobody
+                      picks one meaning the other. */}
+                  {k === 'flush'
+                    ? 'Flush'
+                    : k === 'fixed_tilt'
+                      ? 'Fixed tilt'
+                      : k === 'dual_tilt'
+                        ? 'East–west'
+                        : k === 'tracker_azel'
+                          ? 'Dual-axis'
+                          : 'Single-axis'}
                 </button>
               ))}
             </div>
 
-            {isTracker &&
+            {/* A DUAL-AXIS frame has no roll to limit and no tube to point, so
+                every control in the single-axis block below would be a setting
+                for a part it does not have. What it has instead are hardware
+                stops, which are the vendor's and not the user's — so they are
+                REPORTED and not offered. */}
+            {isTracker && !isHsat && (
+              <>
+                <div style={lbl as React.CSSProperties}>Dual-axis · points at the sun</div>
+                <div style={{ fontSize: 11, opacity: 0.75, lineHeight: 1.45, marginTop: 4 }}>
+                  Every <b>{AZEL_FRAME_MODULES}</b> modules ride one mast that turns and lifts, so
+                  the angle of incidence is zero all day — and every one of those masts is its own
+                  slew drive, actuator and cast pier. Elevation works between{' '}
+                  <b>{AZEL_DEFAULT_MIN_TILT_DEG}°</b> and <b>{AZEL_DEFAULT_MAX_TILT_DEG}°</b>,
+                  swinging <b>±{AZEL_DEFAULT_AZIMUTH_RANGE_DEG}°</b> either side of the table&apos;s
+                  facing; those are hardware stops, not settings. It cannot backtrack, so spacing is
+                  the only thing keeping one unit out of the next one&apos;s shadow — check the
+                  shading before fixing the land area. Open the 3D view and run the timeline to
+                  watch it track.
+                </div>
+              </>
+            )}
+
+            {isHsat &&
               (() => {
                 // the elevated variant carries the tracker's own lazy fields
                 const r = seg.racking.kind !== 'flush' ? seg.racking : null;
@@ -2819,9 +2882,16 @@ export function Step6Editor() {
                 // rows away. What a tracker field is laid out to is a ground
                 // cover ratio — the same number its backtracking is computed
                 // from — so that is what is recommended and applied here.
-                const pitch = isTracker
+                // A DUAL-AXIS field wants MORE room than a single-axis one, and
+                // for a different reason: an HSAT's recommended pitch is the
+                // GCR its BACKTRACKING is solved from, while a pointed frame
+                // has no backtracking at all and spacing is the only thing
+                // between one unit and the next one's shadow.
+                const pitch = isHsat
                   ? collectorLen / TRACKER_DEFAULT_GCR
-                  : shadowFreePitchM(loc.latLng.lat, loc.latLng.lng, tilt, collectorLen, az);
+                  : isTracker
+                    ? collectorLen * AZEL_DEFAULT_PITCH_FACTOR
+                    : shadowFreePitchM(loc.latLng.lat, loc.latLng.lng, tilt, collectorLen, az);
                 const g = gcr(collectorLen, pitch);
                 // what the rows ACTUALLY are, which is what the engines read
                 const built = measuredRowPitchM(
@@ -2829,7 +2899,7 @@ export function Step6Editor() {
                   az,
                 );
                 const builtGcr = built ? gcr(collectorLen, built) : null;
-                const tooTight = isTracker && builtGcr !== null && builtGcr > TRACKER_DEFAULT_GCR + 0.08;
+                const tooTight = isTracker && builtGcr !== null && builtGcr > g + 0.08;
                 return (
                   <div
                     style={{
@@ -2861,9 +2931,15 @@ export function Step6Editor() {
                     )}
                     {tooTight && (
                       <div style={{ marginTop: 6, color: 'var(--editor-warn, #f0b429)', lineHeight: 1.45 }}>
-                        These rows are packed tighter than the tracker was set up for, so it will
-                        backtrack hard all morning and evening and give away much of what tracking
-                        earns. Widen them to the pitch above.
+                        {/* The two machines lose it differently, and saying
+                            "backtrack" about a dual-axis field would be naming
+                            a behaviour it does not have. An HSAT flattens and
+                            keeps the next row lit; a pointed frame keeps
+                            pointing and simply stands in its neighbour's
+                            light. */}
+                        {isHsat
+                          ? 'These rows are packed tighter than the tracker was set up for, so it will backtrack hard all morning and evening and give away much of what tracking earns. Widen them to the pitch above.'
+                          : 'These units are packed tighter than a dual-axis field can carry. It cannot backtrack — it keeps pointing at the sun and simply stands in its neighbour’s light all morning and evening. Widen them to the pitch above, or accept the shading the report measures.'}
                       </div>
                     )}
                     {/* A FREE row pitch, not just the one recommended number.
@@ -3000,6 +3076,13 @@ export function Step6Editor() {
 
             {!isFlush && seg2.kind !== 'flush' && (
               <>
+                {/* The profile picker is for a table whose members all share
+                    one section. A dual-axis unit does not: its mast is a pipe
+                    chosen to take a moment and its frame is box section, and
+                    neither is the user's to swap from this list. The member
+                    model below it still shows, because that is the real graph. */}
+                {seg.racking.kind !== 'tracker_azel' && (
+                <>
                 <div style={lbl as React.CSSProperties}>Structure profile</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {STRUCTURE_PROFILES.map((p) => (
@@ -3012,25 +3095,45 @@ export function Step6Editor() {
                     </button>
                   ))}
                 </div>
+                </>
+                )}
 
                 {(() => {
                   const roofFor = project.roofs.find((r) => r.id === seg.roofId);
                   const resolved = roofFor ? resolveRacking(project, roofFor, seg, spec) : null;
                   if (!resolved || !roofFor) return null;
-                  const struct = buildStructure(seg, spec, roofFor, resolved, project.panels);
+                  // THE SAME graph the BOM and the 3D read, not a second one
+                  // built here. Calling `buildStructure` directly skipped
+                  // `topologyOf`, so a dual-axis table — which builds one mast
+                  // per unit — was reported as an elevated table with 76 legs,
+                  // 38 rafters and 38 braces it will never have (caught in the
+                  // browser). The fallback is only for segments the derived set
+                  // leaves out, where this is the model that would be built.
+                  const azel = seg.racking.kind === 'tracker_azel';
+                  const struct =
+                    deriveStructures(project).find((s) => s.segmentId === seg.id) ??
+                    buildStructure(seg, spec, roofFor, resolved, project.panels);
                   const drc = validateStructure(struct);
                   const ms = struct.memberSummary;
-                  const rows: [string, number, number][] = [
-                    ['Legs (front+back)', ms.front_leg.count + ms.back_leg.count, ms.front_leg.totalM + ms.back_leg.totalM],
-                    ['Rafters', ms.rafter.count, ms.rafter.totalM],
-                    ['Purlins', ms.purlin.count, ms.purlin.totalM],
-                    ['Braces', ms.brace.count, ms.brace.totalM],
-                  ];
+                  const rows: [string, number, number][] = azel
+                    ? [
+                        ['Masts', ms.front_leg.count, ms.front_leg.totalM],
+                        ['Frame beams', ms.beam?.count ?? 0, ms.beam?.totalM ?? 0],
+                        ['Purlins', ms.purlin.count, ms.purlin.totalM],
+                      ]
+                    : [
+                        ['Legs (front+back)', ms.front_leg.count + ms.back_leg.count, ms.front_leg.totalM + ms.back_leg.totalM],
+                        ['Rafters', ms.rafter.count, ms.rafter.totalM],
+                        ['Purlins', ms.purlin.count, ms.purlin.totalM],
+                        ['Braces', ms.brace.count, ms.brace.totalM],
+                      ];
                   return (
                     <>
                       <div style={lbl as React.CSSProperties}>Structure (member model)</div>
                       <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                        <StructurePreview racking={resolved} spec={spec} width={120} height={80} />
+                        {/* the glyph draws a tilted TABLE on legs; a mast is
+                            neither, so it is left out rather than drawn wrong */}
+                        {!azel && <StructurePreview racking={resolved} spec={spec} width={120} height={80} />}
                         <div style={{ flex: 1, fontSize: 11.5, color: 'var(--editor-ink-2)' }}>
                           {rows.map(([label, count, m]) => (
                             <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -3039,11 +3142,24 @@ export function Step6Editor() {
                             </div>
                           ))}
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, marginTop: 4, borderTop: '1px solid var(--editor-line)', paddingTop: 4 }}>
-                            <span>Steel ({resolved.profile.label})</span>
+                            {/* A dual-axis unit's steel is a CHS mast and an
+                                RHS frame, so naming the segment's stored
+                                `racking.profile` here says "C-Channel" over a
+                                mass that contains none. The BOM already splits
+                                it by the section each member carries; this just
+                                stops claiming one. */}
+                            <span>{azel ? 'Steel (mast + frame)' : `Steel (${resolved.profile.label})`}</span>
                             <span>{struct.steelKg} kg</span>
                           </div>
                         </div>
                       </div>
+                      {/* Leg spacing, clearance and a foundation pair are all
+                          settings of a TABLE. A dual-axis unit has one mast
+                          under the middle of its frame — there is no spacing
+                          between legs it does not have, its height is DERIVED
+                          from the frame and the lift (see buildAzel), and its
+                          footing is the cast pier above, with no alternative. */}
+                      {!azel && (
                       <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
                         <label style={{ fontSize: 11, color: 'var(--editor-ink-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
                           Leg spacing
@@ -3075,6 +3191,7 @@ export function Step6Editor() {
                           </button>
                         ))}
                       </div>
+                      )}
                       {drc.length > 0 && (
                         <div style={{ fontSize: 11, color: 'var(--bad, #ef4444)', marginTop: 6 }}>
                           {drc[0]} {drc.length > 1 ? `(+${drc.length - 1} more)` : ''}
@@ -4005,7 +4122,7 @@ function EditorLayers({
   // a module on a TRACKER rests flat but is not grid-aligned — it sits along
   // its torque tube, so its drawn footprint follows its own facing
   const trackerSegs = new Set(
-    project.segments.filter((sg) => sg.racking.kind === 'tracker_hsat').map((sg) => sg.id),
+    project.segments.filter((sg) => isTrackerKind(sg.racking.kind)).map((sg) => sg.id),
   );
   const onTracker = (p: PlacedPanel) => !!p.segmentId && trackerSegs.has(p.segmentId);
 

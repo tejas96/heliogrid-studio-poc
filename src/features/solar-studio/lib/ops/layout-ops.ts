@@ -17,6 +17,7 @@ import { cascadeDeletePanels } from '../cascade';
 import { genId } from '../geo';
 import { nextSegmentLabel } from '../layout';
 import { movePanels } from '../panel-move';
+import { isTrackerKind } from '../energy/tracker';
 import { applyStructChoice, reconcileBridgedPanels, type StructChoice } from '../structure-edit';
 import {
   duplicateSegment,
@@ -208,14 +209,16 @@ export const segmentSetRacking = defineOp<{ segmentId: string; kind: 'flush' | E
   id: 'segment.setRacking',
   layer: 'layout',
   label: (a) =>
-    `Mount: ${a.kind === 'flush' ? 'flush' : a.kind === 'dual_tilt' ? 'east-west' : a.kind === 'tracker_hsat' ? 'tracker' : 'fixed tilt'}`,
+    `Mount: ${a.kind === 'flush' ? 'flush' : a.kind === 'dual_tilt' ? 'east-west' : a.kind === 'tracker_hsat' ? 'single-axis tracker' : a.kind === 'tracker_azel' ? 'dual-axis tracker' : 'fixed tilt'}`,
   validate: (p, a) => {
     const gate = needTable(p, a);
     if (gate) return gate;
     // Nothing on a roof turns to follow the sun. The picker only offers a
     // tracker on open ground; this is the rule itself, so a deep link, an
     // imported project or a later roof-type change cannot get round it.
-    if (a.kind === 'tracker_hsat') {
+    // BOTH machines: a dual-axis mast takes its whole wind moment into a cast
+    // pier, which is even less of a rooftop proposition than a torque tube.
+    if (isTrackerKind(a.kind)) {
       const { roof } = segmentOf(p, a.segmentId);
       if (roof?.roofType !== 'ground') return { reason: 'A tracker needs open ground, not a roof' };
     }
@@ -242,6 +245,10 @@ export const segmentSetTilt = defineOp<{ segmentId: string; tiltDeg: number }>({
  * A tracker's rotation limit — how far the tube may roll either side of flat.
  * Real hardware differs (±45 through ±60), and the limit genuinely changes the
  * yield, so it is the tracker's equivalent of the fixed table's tilt slider.
+ *
+ * SINGLE-AXIS ONLY. A dual-axis mast has no roll to limit: what bounds it is a
+ * pair of hardware stops on two different axes, and those are the vendor's
+ * (lib/energy/tracker AZEL_DEFAULT_*), not a slider.
  */
 export const segmentSetTrackerLimit = defineOp<{ segmentId: string; maxRotationDeg: number }>({
   id: 'segment.setTrackerLimit',
@@ -251,6 +258,8 @@ export const segmentSetTrackerLimit = defineOp<{ segmentId: string; maxRotationD
     const gate = needTable(p, a);
     if (gate) return gate;
     const seg = p.segments.find((s) => s.id === a.segmentId);
+    if (seg?.racking.kind === 'tracker_azel')
+      return { reason: 'A dual-axis mast has no roll to limit — its stops are hardware, on two axes' };
     return seg && seg.racking.kind === 'tracker_hsat' ? null : { reason: 'That table is not on a tracker' };
   },
   apply: (p, a) => ({

@@ -28,6 +28,8 @@ import {
   refitShiftAfterTurn,
 } from './layout';
 import {
+  AZEL_DEFAULT_PITCH_FACTOR,
+  isTrackerKind,
   TRACKER_FIELD_FACING_DEG,
   TRACKER_DEFAULT_GCR,
   TRACKER_DEFAULT_MAX_ROTATION_DEG,
@@ -143,7 +145,7 @@ export function segmentGrid(
   // so grow/respace/duplicate/reindex keep operating in the panels' own frame
   // even after the user rotates the table.
   const angle = gridAngleFor(roof, segmentPose(seg, panels), {
-    faceAzimuth: seg.racking.kind === 'tracker_hsat',
+    faceAzimuth: isTrackerKind(seg.racking.kind),
   });
   // The plan cell comes from layout.ts — the SAME definition the fill places
   // panels with. This used to re-derive it as `w·cos(pitch)` × `h`, which is
@@ -536,7 +538,7 @@ export function oneOf<T>(vals: readonly T[]): T | undefined {
  */
 export { STRUCTURE_PROFILES } from '../data/profiles';
 
-export type ElevatedKind = 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat';
+export type ElevatedKind = 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat' | 'tracker_azel';
 
 /** Vertical rise a tilted module adds: its along-tilt dimension × sin(tilt). */
 function moduleRise(spec: PanelSpec, seg: ArraySegment, tiltDeg: number): number {
@@ -559,7 +561,7 @@ function elevatedRacking(
   tiltDeg: number,
 ): RackingSpec {
   const prev = seg.racking.kind !== 'flush' ? seg.racking : null;
-  const tracker = kind === 'tracker_hsat';
+  const tracker = isTrackerKind(kind);
   // A tracker lies FLAT at rest (its real tilt is the time of day), stands on a
   // torque tube well clear of the ground, and needs the wide pitch a tracker
   // field is laid out at — a fixed table's 3 m rows would spend the morning
@@ -568,8 +570,14 @@ function elevatedRacking(
   const front = tracker
     ? Math.max(prev?.frontLegM ?? 0, TRACKER_DEFAULT_TUBE_HEIGHT_M)
     : (prev?.frontLegM ?? 0.3);
+  // A DUAL-AXIS field needs MORE room than a single-axis one, not the same.
+  // An HSAT backtracks its way out of a low sun; a pointed frame cannot, so
+  // distance is the only thing keeping one unit out of the next one's shadow.
   const pitch = tracker
-    ? Math.max(prev?.rowPitchM ?? 0, slantM / TRACKER_DEFAULT_GCR)
+    ? Math.max(
+        prev?.rowPitchM ?? 0,
+        kind === 'tracker_azel' ? slantM * AZEL_DEFAULT_PITCH_FACTOR : slantM / TRACKER_DEFAULT_GCR,
+      )
     : (prev?.rowPitchM ?? 0);
   return {
     ...(prev ?? {}),
@@ -620,9 +628,14 @@ export function setSegmentRacking(
   // a tracker lies flat at rest; coming BACK off one, the stored 0° is not a
   // tilt any fixed table may keep, so it takes the ordinary rooftop default
   const prevTilt = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : 10;
-  const tiltDeg = kind === 'tracker_hsat' ? 0 : prevTilt >= MIN_ELEVATED_TILT_DEG ? prevTilt : 10;
+  const tiltDeg = isTrackerKind(kind) ? 0 : prevTilt >= MIN_ELEVATED_TILT_DEG ? prevTilt : 10;
   const racking = elevatedRacking(spec, seg, kind, tiltDeg);
   const tilted = syncTilt(panels, seg.id, tiltDeg);
+  // A DUAL-AXIS field is NOT turned east. An HSAT is turned so its rows run
+  // north–south, because its rows ARE its tubes and a tube must lie that way.
+  // A dual-axis unit has no tube: every mast turns on its own, so the layout's
+  // facing decides only where the frames park and which way they swing from.
+  // Turning the table here would move 75 modules for no reason at all.
   if (kind !== 'tracker_hsat') return { segment: { ...seg, racking }, panels: tilted };
   // A tracker's ROWS are its tubes, so the table must be laid out with its rows
   // running north–south — which is a table facing EAST. Turning it here, rather
@@ -644,7 +657,9 @@ export function setSegmentTilt(
 ): { segment: ArraySegment; panels: PlacedPanel[] } {
   if (seg.racking.kind === 'flush') return { segment: seg, panels };
   // A TRACKER'S tilt is the time of day, not a setting — see lib/energy/tracker.
-  if (seg.racking.kind === 'tracker_hsat') return { segment: seg, panels };
+  // Both machines: an HSAT's roll and a dual-axis frame's lift are each solved
+  // from where the sun is, so neither has a tilt anybody can type.
+  if (isTrackerKind(seg.racking.kind)) return { segment: seg, panels };
   // An ELEVATED table cannot go to 0°, for two independent reasons.
   //
   // Engineering: below ~5° a module neither drains nor self-cleans, so no
@@ -878,7 +893,7 @@ function layOnLattice(
         !panelFitsAt(without, roof, spec, world, seg.orientation, undefined, {
           tiltDeg,
           azimuthDeg: seg.azimuthDeg,
-          faceAzimuth: seg.racking.kind === 'tracker_hsat',
+          faceAzimuth: isTrackerKind(seg.racking.kind),
         })
       )
         continue;

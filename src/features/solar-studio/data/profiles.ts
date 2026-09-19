@@ -111,6 +111,12 @@ export const STRUCTURE_PROFILES: StructureProfile[] = [
   // kg/m is the HOLLOW-section rule from the header: (150² − 142²) mm² ×
   // 7850 / 1e6 = 18.34.
   profile('rhs_150', 'RHS 150 × 150 (canopy post)', 18.34, { h: 150, b: 150, t: 4.0, shape: 'rhs' }),
+  // A DUAL-AXIS mast. It carries the whole frame on one point and takes the
+  // entire wind moment at its base, so it is a pipe rather than a section —
+  // round is what a slew ring turns on, and it has no weak axis to catch a
+  // gust broadside. Far heavier than anything above it, which is the honest
+  // cost of one machine per eight modules.
+  profile('chs_219', 'CHS 219 × 6 (tracker mast)', 31.53, { h: 219, t: 6.0, shape: 'chs' }),
 ];
 
 /** Default mounting profile until the racking picker sets one. */

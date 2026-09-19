@@ -67,6 +67,12 @@ function pedestalsBySurface(ctx: BomContext): [('roof' | 'ground'), number][] {
     // uplift and overturning, then reinstate the surface. Counting it here too
     // would sell the same 24 holes twice.
     if (seg && carportRoofIds.has(seg.roofId)) continue;
+    // A DUAL-AXIS mast's footing is bought by `mech.azel_pier` for the same
+    // reason: it is a deep cast pier with a cage and a bolt template taking the
+    // frame's whole wind moment, not the 300 mm rooftop PCC block this line
+    // prices. Counted here as well it sold the same 8 holes twice, and
+    // described them as "rooftop MMS" on a desert field (caught in the browser).
+    if (seg?.racking.kind === 'tracker_azel') continue;
     const pedestals = st.nodes.reduce((n, nd) => n + (nd.fastenerSpec.pedestals ?? 0), 0);
     if (seg && groundRoofIds.has(seg.roofId)) ground += pedestals;
     else roof += pedestals;
@@ -206,6 +212,44 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
       // section lives on the members themselves. Reading only `racking.profile`
       // skipped these structures entirely, which meant 22h modelled rails that
       // nothing ever billed.
+      // A DUAL-AXIS unit is made of TWO sections and they are not alike: a CHS
+      // mast carrying the whole frame on one point, and an RHS frame on top of
+      // it. Billing `st.steelKg` under the segment's stale `racking.profile`
+      // printed "Structure Steel — C-Channel, 1010 kg" for a machine with no
+      // C-channel in it (caught in the browser), which is an order a fabricator
+      // fills wrong. Its steel is grouped by the section each member actually
+      // carries; every other topology keeps exactly the behaviour it had.
+      if (seg.racking.kind === 'tracker_azel') {
+        const byMember = new Map<string, { p: StructureProfile; kg: number }>();
+        for (const m of st.members) {
+          if (!m.profile) continue;
+          const e = byMember.get(m.profile.key) ?? { p: m.profile, kg: 0 };
+          e.kg += m.lengthM * m.profile.kgPerM;
+          byMember.set(m.profile.key, e);
+        }
+        for (const [key, { p, kg }] of byMember) {
+          const c =
+            byProfile.get(key) ??
+            byProfile
+              .set(key, {
+                kg: 0,
+                parts: [],
+                kgPerM: p.kgPerM,
+                label: p.label,
+                sectionMm: p.sectionMm,
+                isGrade: p.isGrade,
+                coating: p.coating,
+                segmentIds: [],
+                roofIds: [],
+              })
+              .get(key)!;
+          c.kg += kg;
+          c.segmentIds.push(st.segmentId);
+          c.roofIds.push(seg.roofId);
+          c.parts.push(`${seg.label}: ${memberBreakdown(st)}`);
+        }
+        continue;
+      }
       const profile =
         seg.racking.kind !== 'flush'
           ? seg.racking.profile
@@ -1339,6 +1383,73 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         }),
       );
     }
+  }
+
+  // ── Dual-axis (AZ-EL) ────────────────────────────────────────────────────
+  // Counted off the MASTS the structure actually built, not off a module
+  // count, because the unit size is what decides all three of these and the
+  // member graph is the one place it is decided. The HSAT block above filters
+  // on its own racking kind, so nothing here is billed twice.
+  //
+  // What separates this from a single-axis quote is that NOTHING IS SHARED: a
+  // whole row of HSAT runs off one tube and one drive, while every unit below
+  // is a drive and a pier of its own.
+  const azelMasts = structures.reduce((t, st) => {
+    const seg = project.segments.find((s) => s.id === st.segmentId);
+    return seg?.racking.kind === 'tracker_azel'
+      ? t + st.nodes.filter((n) => n.kind === 'roof_anchor').length
+      : t;
+  }, 0);
+  if (azelMasts > 0) {
+    const azelRoofIds = project.segments
+      .filter((s) => s.racking.kind === 'tracker_azel')
+      .map((s) => s.roofId);
+    const src = soleSource(azelRoofIds);
+    const assumedAzel =
+      'ASSUMED market rate — no dual-axis supplier pricebook is loaded, and a real tender prices the machine against a named vendor. Replace before quoting.';
+    out.push(
+      line({
+        key: 'mech.azel_drive',
+        category: 'Mechanical BOS',
+        item: 'Dual-Axis Drive Unit',
+        spec: 'Slew ring + gearbox (azimuth), linear actuator (elevation), motors, limit switches',
+        qty: azelMasts,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.azelDrivePerUnit,
+        confidence: 'assumed',
+        formula:
+          `One per mast: ${azelMasts} unit(s), counted from the member graph. This is the line that makes dual-axis what it is — a single-axis row of the same size shares ONE drive between all of it. ` +
+          assumedAzel,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.azel_pier',
+        category: 'Mechanical BOS',
+        item: 'Dual-Axis Mast Pier',
+        spec: 'Deep cast pier with reinforcement cage and M30 bolt template',
+        qty: azelMasts,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.azelPierPerUnit,
+        confidence: 'assumed',
+        formula:
+          `One per mast (${azelMasts}). A pointed frame delivers its ENTIRE wind moment to one point, so this is not comparable to a driven pile or a rooftop pedestal — the depth, the cage and the bolt circle are all an engineer's design against IS 875 Part 3 and the site's soil. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.azel_control',
+        category: 'Mechanical BOS',
+        item: 'Tracker Control & Wind Stow',
+        spec: 'Controller, anemometer, stow logic and comms',
+        qty: 1,
+        unit: 'set',
+        unitPriceInr: PRICE_BOOK.azelControlLumpsum,
+        confidence: 'assumed',
+        formula:
+          `One per plant, whatever the unit count. NOT AN OPTIONAL EXTRA: a dual-axis frame that cannot stow flat is a structure that will meet a gale face-on, and the frame's wind rating assumes the stow works. ` +
+          assumedAzel,
+        sourceRoofId: src,
+      }),
+    );
   }
 
   return out;

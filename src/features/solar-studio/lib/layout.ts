@@ -36,6 +36,7 @@ import {
   facadeSillM,
 } from './facade';
 import { resolveRules } from '../data/rules/india';
+import { isTrackerKind } from './energy/tracker';
 import { shadowFreePitchM, wallShadowSetbackM } from './spacing';
 
 export interface FillOptions {
@@ -380,7 +381,7 @@ export function refitShiftAfterTurn(
   // A tracker rests FLAT, so its footprint only follows the module's own
   // azimuth when asked — see `panelCornersOnRoof`. Judge the same plate the DRC
   // will measure, or this says "fits" about a rectangle nobody else believes in.
-  const faceAzimuth = seg.racking.kind === 'tracker_hsat';
+  const faceAzimuth = isTrackerKind(seg.racking.kind);
   const corners = mine.map((p) => panelCornersOnRoof(p, spec, roof, faceAzimuth));
   const fits = (d: XY) =>
     insetRegions.some((region) =>

@@ -6,6 +6,7 @@ import { defaultMms, MATERIALS, MOUNT_CATALOGUE } from '../../lib/mms/catalogue'
 import { clearMms, configureMms } from '../../lib/mms/configure';
 import { applyStructChoice } from '../../lib/structure-edit';
 import { setSegmentStructureFields } from '../../lib/segment-ops';
+import { isTrackerKind } from '../../lib/energy/tracker';
 import { deriveStructures } from '../../lib/derive/structures';
 import { validateMms } from '../../lib/mms/validate';
 import { panelFootprintM } from '../../lib/layout';
@@ -32,7 +33,11 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
   // taking the catalogue's first ground entry.
   const ground = roof.roofType === 'ground';
   const groundSeed: MountStrategy | undefined = !ground ? undefined
-    : seg.racking.kind === 'tracker_hsat' ? 'ground_tracker'
+    // the RACKING already says which machine this is, so the seed follows it
+    // rather than the foundation — a dual-axis unit founds on a cast pier and
+    // would otherwise seed as a plain pedestal table
+    : seg.racking.kind === 'tracker_azel' ? 'ground_tracker_dual'
+      : seg.racking.kind === 'tracker_hsat' ? 'ground_tracker'
       : mine?.foundation === 'ballast' ? 'ground_ballast'
         : mine?.foundation === 'concrete' ? 'ground_pedestal'
           : 'ground_pile';
@@ -60,7 +65,11 @@ export function MmsConfiguration({ project, segmentId, prefix, onPatch }: { proj
         {seg.racking.kind !== 'flush' && <>
           {/* A tracker's tilt is the time of day, not a setting — setSegmentTilt
               refuses it — so this slider would have moved nothing at all. */}
-          {seg.racking.kind !== 'tracker_hsat' && <MmsField id={`${prefix}-tilt`} label="Tilt (°)" value={seg.racking.tiltDeg} min={5} max={35} step={1} onChange={v => v !== undefined && choice({ kind: 'tilt', tiltDeg: v })} />}
+          {/* NEITHER tracker has a tilt anybody can type: a single axis rolls
+              to the sun and a dual-axis frame lifts to it, so the number is the
+              time of day. `setSegmentTilt` ignores it for both, which is
+              exactly the control that must not be on screen. */}
+          {!isTrackerKind(seg.racking.kind) && <MmsField id={`${prefix}-tilt`} label="Tilt (°)" value={seg.racking.tiltDeg} min={5} max={35} step={1} onChange={v => v !== undefined && choice({ kind: 'tilt', tiltDeg: v })} />}
           <MmsField id={`${prefix}-height`} label={ground ? 'Module clearance above grade (m)' : 'Low-edge height above roof (m)'} value={Math.max(seg.racking.frontLegM, seg.racking.clearanceM ?? 0)} min={.2} max={10} step={.05} onChange={v => v !== undefined && choice({ kind: 'clearance', clearanceM: v })} />
           <div className="mms-height-presets">{[3, 5, 6, 8].map(ft => <button className="btn" key={ft} data-testid={`${prefix}-height-${ft}ft`} onClick={() => choice({ kind: 'clearance', clearanceM: ft * .3048 })}>{ft} ft</button>)}</div>
           <MmsField id={`${prefix}-support-spacing`} label="Support / beam station spacing (m)" value={seg.racking.legSpacingM ?? 2} min={.3} max={6} onChange={v => v !== undefined && onPatch({ segments: project.segments.map(s => s.id === seg.id ? setSegmentStructureFields(s, { legSpacingM: v }) : s) })} />

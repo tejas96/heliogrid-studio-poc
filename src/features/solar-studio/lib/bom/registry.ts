@@ -99,6 +99,10 @@ export type LineKey =
   | 'mech.facade_cavity_barrier'
   | 'mech.facade_trim'
   | 'mech.facade_anchor_eye'
+  /** dual-axis: nothing is shared, so every unit is a drive and a pier */
+  | 'mech.azel_drive'
+  | 'mech.azel_pier'
+  | 'mech.azel_control'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an

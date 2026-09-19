@@ -78,10 +78,16 @@ export function emitMms(ctx: BomContext): BomLine[] {
     // well sold the same 24 holes twice — caught in the browser, where a
     // 22.7 kWp canopy carried ₹57,600 of pedestals it had already paid for.
     const canopy = roof?.roofType === 'carport';
+    // A DUAL-AXIS mast's footing is bought ONCE, by `mech.azel_pier`, which is a
+    // deep cast pier with a cage and a bolt template taking the frame's whole
+    // wind moment — several times a rooftop pedestal and nothing like a driven
+    // pile. Letting the generic lines below count the same node again is the
+    // double-count the carport slice was caught on; the guard is the same one.
+    const azel = seg.racking.kind === 'tracker_azel';
     const pile = ruleFor('pile');
-    if (!canopy) add('pile', `Ground foundation — driven pile · ${seg.label}`, `HDG post · Ø${pile.d} mm · ${pile.embedMm} mm embedment ASSUMED`, total('piles'), 'nos', ctx.pricebook.pileFoundation, `1 pile per leg base, counted from the connection graph. Embedment and pull-out are SOIL-dependent — geotechnical survey and engineer sign-off required`);
+    if (!canopy && !azel) add('pile', `Ground foundation — driven pile · ${seg.label}`, `HDG post · Ø${pile.d} mm · ${pile.embedMm} mm embedment ASSUMED`, total('piles'), 'nos', ctx.pricebook.pileFoundation, `1 pile per leg base, counted from the connection graph. Embedment and pull-out are SOIL-dependent — geotechnical survey and engineer sign-off required`);
     const pedestal = ruleFor('concrete', s.foundationShape);
-    if (!canopy) add('pedestal', `Concrete pedestal · ${seg.label}`, `${pedestal.shape} · ${foundationVolumeM3(pedestal).toFixed(3)} m³ each · size ASSUMED`, total('pedestals'), 'nos', ctx.pricebook.concretePedestal, `1 pedestal per leg base, counted from the connection graph. Plan size is NOT calculated from uplift or overturning`);
+    if (!canopy && !azel) add('pedestal', `Concrete pedestal · ${seg.label}`, `${pedestal.shape} · ${foundationVolumeM3(pedestal).toFixed(3)} m³ each · size ASSUMED`, total('pedestals'), 'nos', ctx.pricebook.concretePedestal, `1 pedestal per leg base, counted from the connection graph. Plan size is NOT calculated from uplift or overturning`);
     // An AC hook bolt is its own part: it reaches PAST the sheet and wraps the
     // purlin, so it is neither an L-foot standing on a structural crown nor a
     // tile hook reaching a batten. Pricing it as `sheetStandoff` (₹210, a metal

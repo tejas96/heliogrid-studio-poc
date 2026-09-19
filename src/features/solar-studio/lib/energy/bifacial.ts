@@ -35,7 +35,7 @@
 import type { PanelSpec, PlacedPanel, Project, RoofType, XY } from '../../types';
 import { panelFootprintM } from '../layout';
 import { resolveRacking } from '../structure';
-import { measuredRowPitchM, resolveTrackerAxis, type TrackerAxis } from './tracker';
+import { isTrackerKind, measuredRowPitchM, resolveTrackerAxis, type TrackerAxis } from './tracker';
 
 
 /** angular bins in the half-space sweep — the view factors are built once */
@@ -471,10 +471,13 @@ export function projectRearGeometry(
     const declared = seg && seg.racking.kind !== 'flush' ? seg.racking.rowPitchM : 0;
     const pitchM = measured ?? (declared > 0 ? declared : 0);
 
-    if (resolved?.kind === 'tracker_hsat' && seg) {
+    // Both machines turn, and the back of a module that turns sees a different
+    // patch of ground every hour — so both need the axis resolved here, not
+    // just the one with a tube.
+    if (resolved && isTrackerKind(resolved.kind) && seg) {
       let axis = axisBySeg.get(seg.id);
       if (!axis) {
-        axis = resolveTrackerAxis({ ...(seg.racking as { rowPitchM: number }), rowPitchM: pitchM > 0 ? pitchM : declared }, slantM, seg.azimuthDeg);
+        axis = resolveTrackerAxis({ ...(seg.racking as { kind: string; rowPitchM: number }), rowPitchM: pitchM > 0 ? pitchM : declared }, slantM, seg.azimuthDeg);
         axisBySeg.set(seg.id, axis);
       }
       trackerByPanel.set(p.id, axis);

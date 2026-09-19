@@ -29,6 +29,7 @@ import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
 import { isFacade, isNoPenetrationRoof, isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
 import { FACADE_PLAN_DEPTH_M, facadeFace } from './facade';
+import { AZEL_DEFAULT_MAX_TILT_DEG, AZEL_FRAME_COLS, AZEL_FRAME_ROWS } from './energy/tracker';
 import { STRUCTURE_PROFILES, profileByKey } from '../data/profiles';
 import { enrichMmsStructure } from './mms/generate';
 import type { Member, MemberKind, NodeKind, SegmentStructure, StructureNode, XYZ } from './structure-model';
@@ -161,7 +162,7 @@ const GUTTER_DROP_M = 0.12;
 const DOWNPIPE_EVERY_N_POSTS = 2;
 
 export interface ResolvedRacking {
-  kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat';
+  kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat' | 'tracker_azel';
   tiltDeg: number;
   /** effective low-edge leg height (clearanceM wins when larger) */
   frontLegM: number;
@@ -873,7 +874,7 @@ function norm(v: { x: number; y: number }): { x: number; y: number } {
  * Lives here rather than in structure-view because the BUILDER dispatches on
  * it — what the UI offers and what the model builds must come from one answer.
  */
-export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'facade_rail' | 'none';
+export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'facade_rail' | 'azel_pedestal' | 'none';
 
 /**
  * Foundations this surface can physically carry.
@@ -922,6 +923,16 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       if (roof.roofType === 'stone_slab') return ['anchor', 'ballast'];
       // a rooftop takes anything but a PILE — you do not drive a post into a slab
       return ['concrete', 'anchor', 'ballast'];
+    case 'azel_pedestal':
+      // ONE answer, deliberately. The whole wind moment of a pointed frame
+      // arrives at a single point at the bottom of a single mast, and what
+      // takes that is a deep cast pier with a cage and a bolt template. A
+      // ballast block would have to weigh more than anybody puts in a field
+      // and an anchor has nothing to anchor into; a driven pile can carry a
+      // small unit, but offering it here would let the model DRAW a pile while
+      // `mech.azel_pier` bought a pier — drawn and counted have to be the same
+      // thing (§A0), and if this list ever grows the BOM line grows with it.
+      return ['concrete'];
     case 'facade_rail':
       // A WALL has no footing at all. Nothing is cast, driven or stood on:
       // the bracket is bolted sideways into the masonry, which is the one
@@ -941,6 +952,12 @@ export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
   // across a deck, the elevated table stands legs on one. A facade's rails run
   // horizontally at two heights and its supports go sideways into masonry.
   if (isFacade(roof)) return 'facade_rail';
+  // A DUAL-AXIS field is not a table. The elevated model lays legs along the
+  // rows of a shared frame; this is one MAST per unit, carrying its own frame,
+  // with nothing structural between one unit and the next. Building it as a
+  // table would quote a line of legs and a line of footings for a machine that
+  // has one of each.
+  if (seg.racking.kind === 'tracker_azel') return 'azel_pedestal';
   if (seg.racking.kind === 'flush') {
     // a sheet roof carries rails on standoffs through the covering — no legs,
     // no footing. AC sheet uses the same graph with a different FIXING.
@@ -1306,6 +1323,195 @@ function buildFacade(
   };
 }
 
+/** Lowest the frame's bottom edge comes to the ground at full lift, m. ASSUMED. */
+const AZEL_GROUND_CLEARANCE_M = 0.5;
+
+/**
+ * Build the member/node graph for a DUAL-AXIS field — one mast per unit.
+ *
+ * Its own builder because every assumption the elevated table makes is wrong
+ * here. A table has legs at stations along shared rows, a front and a back
+ * height, and one footing per leg; a dual-axis unit has ONE mast under the
+ * middle of its own frame, no front or back (the frame's centre does not move,
+ * whatever it is pointing at), and one large pier taking the entire wind
+ * moment. Nothing structural joins one unit to the next.
+ *
+ * The mast height is DERIVED and not typed, which is the one piece of real
+ * geometry here: when the frame lifts to its limit, its lower edge swings down
+ * by half the frame's height times the sine of that lift, and it must still
+ * clear the ground. A taller frame therefore needs a taller mast, and saying
+ * so beats letting a user set 1.5 m and watching the modules plough a field.
+ *
+ * The members are drawn AT REST — flat, facing home. The modules are not: they
+ * are posed by `panelPose` from the sun. That is the same approximation the
+ * HSAT model already makes (its tubes do not roll either) and it is stated in
+ * the warnings, because a still frame under turning modules is the sort of
+ * thing a reviewer should be told about rather than discover.
+ */
+function buildAzel(
+  seg: ArraySegment,
+  spec: PanelSpec,
+  roof: Roof,
+  racking: ResolvedRacking,
+  panels: PlacedPanel[],
+): SegmentStructure {
+  const mine = panels
+    .filter((p) => p.enabled && p.segmentId === seg.id && p.cellIndex != null)
+    .sort((a, b) => a.cellIndex! - b.cellIndex!);
+  const members: Member[] = [];
+  const nodes: StructureNode[] = [];
+  const warnings: string[] = [];
+  if (mine.length === 0) return emptyStructure(seg, racking.foundation, racking.foundationShape);
+
+  const mastProfile = STRUCTURE_PROFILES.find((p) => p.key === 'chs_219') ?? STRUCTURE_PROFILES[0];
+  const frameProfile = STRUCTURE_PROFILES.find((p) => p.key === 'rhs') ?? STRUCTURE_PROFILES[0];
+  const { w, h } = panelFootprintM(spec, seg.orientation);
+  const gap = seg.moduleGapM;
+  // the frame's own extent, from the unit size — half of it is the lever the
+  // lower edge swings on when the frame lifts
+  const frameAcrossM = AZEL_FRAME_ROWS * h + (AZEL_FRAME_ROWS - 1) * gap;
+  const maxTiltRad = (AZEL_DEFAULT_MAX_TILT_DEG * Math.PI) / 180;
+  const mastM = Math.max(
+    racking.frontLegM,
+    (frameAcrossM / 2) * Math.sin(maxTiltRad) + AZEL_GROUND_CLEARANCE_M,
+  );
+
+  const mi: Record<string, number> = {};
+  const ni: Record<string, number> = {};
+  const addMember = (kind: MemberKind, profile: StructureProfile, a: XYZ, b: XYZ): Member => {
+    const idx = (mi[kind] = (mi[kind] ?? 0) + 1);
+    const m: Member = {
+      id: `${seg.id}/m/${kind}/${idx - 1}`,
+      kind,
+      profileKey: profile.key,
+      profile,
+      a,
+      b,
+      lengthM: rnd(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z)),
+    };
+    members.push(m);
+    return m;
+  };
+  const addNode = (
+    kind: NodeKind,
+    position: XYZ,
+    memberIds: string[],
+    fastenerSpec: StructureNode['fastenerSpec'],
+  ) => {
+    const idx = (ni[kind] = (ni[kind] ?? 0) + 1);
+    nodes.push({ id: `${seg.id}/n/${kind}/${idx - 1}`, kind, position, memberIds, fastenerSpec });
+  };
+
+  // ── which modules ride which frame ───────────────────────────────────────
+  // A block of the table's grid is a unit. Grid blocks rather than distance so
+  // that a hole in the layout leaves a SMALLER frame, not a second mast half a
+  // metre from the first.
+  const units = new Map<string, PlacedPanel[]>();
+  for (const p of mine) {
+    const row = Math.floor(p.cellIndex! / COL_STRIDE);
+    const col = p.cellIndex! % COL_STRIDE;
+    const key = `${Math.floor(row / AZEL_FRAME_ROWS)}:${Math.floor(col / AZEL_FRAME_COLS)}`;
+    (units.get(key) ?? units.set(key, []).get(key)!).push(p);
+  }
+
+  const azRad = (seg.azimuthDeg * Math.PI) / 180;
+  // the frame's two axes in plan: "across" runs the way the modules face, and
+  // "along" runs across the face — the same pair the table model uses
+  const across = { x: Math.sin(azRad), y: Math.cos(azRad) };
+  const along = { x: across.y, y: -across.x };
+
+  for (const [, unit] of [...units.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    const cx = unit.reduce((s, p) => s + p.center.x, 0) / unit.length;
+    const cy = unit.reduce((s, p) => s + p.center.y, 0) / unit.length;
+    const base = surfaceHeightAt(roof, { x: cx, y: cy });
+    const headZ = base + mastM;
+
+    const mast = addMember(
+      'front_leg',
+      mastProfile,
+      { x: cx, y: cy, z: base },
+      { x: cx, y: cy, z: headZ },
+    );
+    // the pier: one per mast, and it carries the whole overturning moment
+    addNode('roof_anchor', { x: cx, y: cy, z: base }, [mast.id], {
+      pedestals: racking.foundation === 'concrete' ? 1 : 0,
+      piles: racking.foundation === 'pile' ? 1 : 0,
+      plates: 1,
+      bolts: 8,
+    });
+
+    // the torque beam across the mast head — this is what the slew ring turns
+    // and what the elevation actuator lifts
+    const beamHalf = (unit.length >= AZEL_FRAME_COLS
+      ? AZEL_FRAME_COLS * w + (AZEL_FRAME_COLS - 1) * gap
+      : unit.length * w + (unit.length - 1) * gap) / 2;
+    const beam = addMember(
+      'beam',
+      frameProfile,
+      { x: cx - along.x * beamHalf, y: cy - along.y * beamHalf, z: headZ },
+      { x: cx + along.x * beamHalf, y: cy + along.y * beamHalf, z: headZ },
+    );
+    // the drive head itself — a bearing joint, so the member model can say the
+    // mast is connected to something rather than ending in the air
+    addNode('leg_rafter', { x: cx, y: cy, z: headZ }, [mast.id, beam.id], { bolts: 12 });
+
+    // purlins across the beam, one under each module row of this unit
+    const rowsHere = new Set(unit.map((p) => Math.floor(p.cellIndex! / COL_STRIDE)));
+    const sortedRows = [...rowsHere].sort((a, b) => a - b);
+    sortedRows.forEach((rowIdx, i) => {
+      const inRow = unit.filter((p) => Math.floor(p.cellIndex! / COL_STRIDE) === rowIdx);
+      const offset = (i - (sortedRows.length - 1) / 2) * (h + gap);
+      const px = cx + across.x * offset;
+      const py = cy + across.y * offset;
+      const a = { x: px - along.x * beamHalf, y: py - along.y * beamHalf, z: headZ };
+      const b = { x: px + along.x * beamHalf, y: py + along.y * beamHalf, z: headZ };
+      const purlin = addMember('purlin', frameProfile, a, b);
+      addNode('rafter_purlin', { x: px, y: py, z: headZ }, [purlin.id, beam.id], { bolts: 4 });
+      addNode('panel_clamp_end', a, [purlin.id], { clamps: 1 });
+      addNode('panel_clamp_end', b, [purlin.id], { clamps: 1 });
+      for (let k = 1; k < inRow.length; k++)
+        addNode(
+          'panel_clamp_mid',
+          { x: px + along.x * (-beamHalf + k * (w + gap)), y: py + along.y * (-beamHalf + k * (w + gap)), z: headZ },
+          [purlin.id],
+          { clamps: 1 },
+        );
+    });
+  }
+
+  warnings.push(
+    `${seg.label}: ${units.size} dual-axis unit(s), ${AZEL_FRAME_ROWS} × ${AZEL_FRAME_COLS} modules each — an ASSUMED frame size. A vendor's frame decides it, and it is what sets the number of masts, drives and piers, which is most of the cost of this system.`,
+  );
+  warnings.push(
+    `${seg.label}: mast ${mastM.toFixed(2)} m, derived so the frame's lower edge still clears the ground by ${AZEL_GROUND_CLEARANCE_M} m at ${AZEL_DEFAULT_MAX_TILT_DEG}° of lift. The whole wind moment of a pointed frame arrives at the bottom of this one pipe — the mast section, the pier and the hold-down are an engineer's design, not this figure.`,
+  );
+  warnings.push(
+    `${seg.label}: the frame is drawn AT REST while the modules are drawn where the sun puts them, so the steel below them does not turn with them in the view. The member count, lengths and masses are the unit's real ones.`,
+  );
+
+  const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
+  for (const kind of MEMBER_KINDS) {
+    const of = members.filter((m) => m.kind === kind);
+    memberSummary[kind] = { count: of.length, totalM: rnd(of.reduce((s, m) => s + m.lengthM, 0)) };
+  }
+  const beams = members.filter((m) => m.kind === 'beam');
+  if (beams.length)
+    memberSummary.beam = { count: beams.length, totalM: rnd(beams.reduce((s, m) => s + m.lengthM, 0)) };
+
+  return {
+    segmentId: seg.id,
+    members,
+    nodes,
+    foundation: racking.foundation,
+    foundationShape: racking.foundationShape,
+    steelKg: rnd(
+      members.reduce((s, m) => s + m.lengthM * (m.profile?.kgPerM ?? 0), 0),
+    ),
+    memberSummary,
+    warnings,
+  };
+}
+
 function emptyStructure(
   seg: ArraySegment,
   foundation: FoundationKind,
@@ -1344,6 +1550,17 @@ export function projectStructures(project: Project): SegmentStructure[] {
       const s = buildFacade(seg, spec, roof, project.panels);
       // NOT enriched by `enrichMmsStructure`: it re-derives leg sections and
       // table geometry from an elevated frame, and a facade has neither.
+      if (s.members.length > 0) out.push(seg.mms ? { ...s, mms: seg.mms } : s);
+      continue;
+    }
+    // A DUAL-AXIS field before the generic elevated path: `resolveRacking`
+    // would hand it a front and a back leg height for a frame that has neither.
+    if (topo === 'azel_pedestal') {
+      const racking = resolveRacking(project, roof, seg, spec);
+      if (!racking) continue;
+      const s = buildAzel(seg, spec, roof, racking, project.panels);
+      // NOT enriched: `enrichMmsStructure` re-derives an elevated table's leg
+      // and rafter sections, and a mast is neither.
       if (s.members.length > 0) out.push(seg.mms ? { ...s, mms: seg.mms } : s);
       continue;
     }

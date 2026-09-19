@@ -196,6 +196,22 @@ export const PRICE_BOOK = {
   // PULL-OUT TEST. The honest answer to "what is this wall made of?" is not an
   // assumption, it is a test. LUMP SUM per facade.
   facadePullTestLumpsum: 42000, // on-site anchor pull tests + anchorage design sign-off
+  // ── Dual-axis tracker (AZ-EL). What makes this system expensive is not the
+  // steel, it is that NOTHING IS SHARED: a row of single-axis trackers runs off
+  // one tube and one motor, while every dual-axis unit is its own mast, its own
+  // slew drive, its own actuator and its own cast pier. Every figure ASSUMED.
+  //
+  // DRIVE, per unit. Slew ring and its gearbox for the azimuth, a linear
+  // actuator for the elevation, motors, limit switches and the harness.
+  azelDrivePerUnit: 118000, // slew drive + linear actuator + motors + limits
+  // PIER, per unit. A pointed frame delivers its entire wind moment to one
+  // point, so this is a deep cast pier with a cage and a bolt template —
+  // several times a rooftop pedestal, and not comparable to a driven pile.
+  azelPierPerUnit: 46000, // excavation, cage, M30 bolt template, cast + cure
+  // CONTROL, per site. A dual-axis tracker without a working wind stow is a
+  // structure designed for a gale it will meet face-on. The anemometer and the
+  // stow logic are not optional extras — they are what the frame is rated on.
+  azelControlLumpsum: 96000, // tracker controller, anemometer, wind-stow, comms
   // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
   // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
   // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is

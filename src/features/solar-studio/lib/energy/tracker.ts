@@ -29,8 +29,34 @@
 // control, wind stow, and diffuse-driven "smart" tracking. The rows here all
 // carry the same angle, which is what a shared-drive row actually does.
 
-/** the axis is horizontal — a tilted-axis tracker is not modelled */
+/**
+ * What kind of machine is carrying the modules.
+ *
+ * 'hsat' is everything described above: one horizontal tube, one degree of
+ * freedom, and a rotation that is the best a single axis can do.
+ *
+ * 'azel' is a DUAL-AXIS tracker, and it is a different machine rather than a
+ * better version of the same one. It turns about a vertical mast AND lifts
+ * about a horizontal one, so it does not approximate the sun — it points at
+ * it, and the angle of incidence is zero all day. What that costs is not
+ * subtle: every unit is a mast, a slew drive, a linear actuator and a cast
+ * pier of its own, where a whole row of HSAT shares one tube and one motor.
+ *
+ * It also cannot backtrack its way out of self-shading the way an HSAT does.
+ * An HSAT gives up incidence by flattening, which is cheap because its rows
+ * are long and parallel; a pointed dish has nothing to give up without
+ * throwing away the entire reason for the machine. A dual-axis field is kept
+ * out of its own shadow by SPACING instead, which is why one covers so much
+ * more land per kWp. Nothing here assumes that spacing is right — the shading
+ * engine re-poses every plate at every sun sample and measures what the design
+ * as drawn actually does.
+ */
+type TrackerKind = 'hsat' | 'azel';
+
+/** the HSAT axis is horizontal — a tilted single axis is not modelled */
 export interface TrackerAxis {
+  /** absent ⇒ 'hsat', so every stored tracker keeps its existing behaviour */
+  kind?: TrackerKind;
   /** bearing of the torque tube, degrees from north; 0 = a true north–south axis */
   axisAzimuthDeg: number;
   /** rotation limit either side of flat, degrees (45–60 is the usual hardware) */
@@ -39,6 +65,20 @@ export interface TrackerAxis {
   gcr: number;
   /** turn back at a low sun to keep the rows out of each other's light */
   backtracking: boolean;
+
+  // ── dual-axis only. Ignored by 'hsat'. ──────────────────────────────────
+  /**
+   * Flattest the frame will lie, degrees. Never 0: a dual-axis frame parked
+   * dead flat holds water and dust, and every hour of that is soiling loss on
+   * the one array that was bought for its output.
+   */
+  minTiltDeg?: number;
+  /** Steepest the frame will lift, degrees — a structural and wind limit. */
+  maxTiltDeg?: number;
+  /** How far either side of `homeAzimuthDeg` the mast will turn, degrees. */
+  azimuthRangeDeg?: number;
+  /** Bearing the mast turns about its centre from, degrees from north. */
+  homeAzimuthDeg?: number;
 }
 
 export interface TrackerPose {
@@ -67,6 +107,7 @@ const TRACKER_STOW: TrackerPose ={ tiltDeg: 0, azimuthDeg: 0, rotationDeg: 0, ba
  * convention). Below the horizon the tracker stows flat.
  */
 export function trackerPose(axis: TrackerAxis, sunAltDeg: number, sunAzDeg: number): TrackerPose {
+  if (axis.kind === 'azel') return azelPose(axis, sunAltDeg, sunAzDeg);
   if (sunAltDeg <= 0) return { ...TRACKER_STOW, azimuthDeg: norm360(axis.axisAzimuthDeg + 90) };
 
   // The sun, split into the part across the tube (which the tube can chase)
@@ -103,6 +144,93 @@ export function trackerPose(axis: TrackerAxis, sunAltDeg: number, sunAzDeg: numb
     rotationDeg: rotation,
     backtracked,
   };
+}
+
+/**
+ * Where a DUAL-AXIS frame points: straight at the sun, within its stops.
+ *
+ * There is no cleverness to model here and that is the point of the machine —
+ * tilt is the sun's zenith angle and facing is the sun's bearing, so the angle
+ * of incidence is zero whenever the sun is inside the stops. What the stops do
+ * is the honest part:
+ *
+ *   ELEVATION. A frame that lies dead flat ponds water and holds dust, so the
+ *   hardware keeps a minimum lift; and it will not stand fully upright either,
+ *   because a vertical frame on a mast is a sail. Early and late, when the sun
+ *   is below the minimum lift's complement, the frame is AT its stop and is no
+ *   longer pointing at the sun — the incidence loss that follows is real and
+ *   the transposition sees it, because it is handed this pose and not an
+ *   assumption.
+ *
+ *   AZIMUTH. Cable management and the slew ring's own travel keep the mast
+ *   inside a range about its home bearing, so at the ends of a long summer day
+ *   the frame stops turning before the sun does.
+ *
+ * Deliberately NO backtracking. An HSAT flattens to keep the next row lit,
+ * which costs it a little incidence on long parallel rows; a pointed frame has
+ * no equivalent move — turning away from the sun is giving up the whole reason
+ * the machine was bought. A dual-axis field is kept out of its own shadow by
+ * being spaced further apart, and whether THIS design is spaced far enough is
+ * not assumed here: the shading engine re-poses every plate at every sun
+ * sample and measures it (see `validateMms` → azel_spacing).
+ */
+function azelPose(axis: TrackerAxis, sunAltDeg: number, sunAzDeg: number): TrackerPose {
+  const minTilt = axis.minTiltDeg ?? AZEL_DEFAULT_MIN_TILT_DEG;
+  const maxTilt = axis.maxTiltDeg ?? AZEL_DEFAULT_MAX_TILT_DEG;
+  const home = axis.homeAzimuthDeg ?? AZEL_DEFAULT_HOME_AZIMUTH_DEG;
+  const range = Math.abs(axis.azimuthRangeDeg ?? AZEL_DEFAULT_AZIMUTH_RANGE_DEG);
+  // below the horizon it parks at its flattest, facing home — the same "at
+  // rest" the renderer and the BOM describe
+  if (sunAltDeg <= 0) return { tiltDeg: minTilt, azimuthDeg: norm360(home), rotationDeg: 0, backtracked: false };
+
+  const tiltDeg = Math.max(minTilt, Math.min(maxTilt, 90 - sunAltDeg));
+  // shortest signed turn from home to the sun, then clipped to the slew range
+  const offset = ((((sunAzDeg - home) % 360) + 540) % 360) - 180;
+  const turn = Math.max(-range, Math.min(range, offset));
+  return {
+    tiltDeg,
+    azimuthDeg: norm360(home + turn),
+    // `rotationDeg` on this machine is the MAST's turn from home, not a tube's
+    // roll — same field, same sign convention (+ is clockwise from home)
+    rotationDeg: turn,
+    backtracked: false,
+  };
+}
+
+/** A dual-axis frame never lies dead flat: it would pond water and hold dust. */
+export const AZEL_DEFAULT_MIN_TILT_DEG = 8;
+/** Nor stand upright — a vertical frame on a mast is a sail. */
+export const AZEL_DEFAULT_MAX_TILT_DEG = 60;
+/** Slew travel either side of home; cable management and the ring set it. */
+export const AZEL_DEFAULT_AZIMUTH_RANGE_DEG = 120;
+/** Home bearing — due south, the middle of the sun's day in India. Only ever
+ *  the fallback: a real unit's home is the table's own facing, which
+ *  `resolveTrackerAxis` writes, so nothing outside this file needs it. */
+const AZEL_DEFAULT_HOME_AZIMUTH_DEG = 180;
+/**
+ * Land a dual-axis field takes per unit, as a multiple of the module frame's
+ * own span. A pointed frame cannot backtrack, so the only thing keeping one
+ * unit out of the next one's shadow is distance. ASSUMED — the real figure
+ * comes from a shading study at the site's own latitude.
+ */
+export const AZEL_DEFAULT_PITCH_FACTOR = 3;
+/**
+ * How many modules ride ONE dual-axis frame, as rows × columns of the table's
+ * grid. ASSUMED, and a vendor's frame is whatever the vendor builds — but it
+ * must be SOME number, because it decides how many masts, drives and piers the
+ * design buys, and that is most of a dual-axis quote.
+ *
+ * Eight is an ordinary mid-size unit: about 4.8 kWp on a frame roughly 5 m
+ * square, which is the size that still fits one slew ring and one actuator
+ * without becoming a special.
+ */
+export const AZEL_FRAME_ROWS = 2;
+export const AZEL_FRAME_COLS = 4;
+export const AZEL_FRAME_MODULES = AZEL_FRAME_ROWS * AZEL_FRAME_COLS;
+
+/** Is this racking a tracker at all — of either kind? */
+export function isTrackerKind(kind: string): boolean {
+  return kind === 'tracker_hsat' || kind === 'tracker_azel';
 }
 
 /**
@@ -205,12 +333,35 @@ export function trackerRowsFrom(
 
 /** The axis a stored racking spec describes, with its lazy fields resolved. */
 export function resolveTrackerAxis(
-  racking: { axisAzimuthDeg?: number; maxRotationDeg?: number; backtracking?: boolean; rowPitchM: number },
+  racking: {
+    kind?: string;
+    axisAzimuthDeg?: number;
+    maxRotationDeg?: number;
+    backtracking?: boolean;
+    rowPitchM: number;
+  },
   slantM: number,
   /** the table's facing; the tube runs across it, along the rows */
   segmentAzimuthDeg = 180,
 ): TrackerAxis {
+  // A DUAL-AXIS frame has no tube and no roll, so the three fields below mean
+  // nothing to it: its home bearing is the table's own facing, and its stops
+  // are hardware. `gcr` is still carried because the field is real — it is
+  // what `azel_spacing` is judged against — but nothing backtracks from it.
+  if (racking.kind === 'tracker_azel')
+    return {
+      kind: 'azel',
+      axisAzimuthDeg: norm360(segmentAzimuthDeg),
+      homeAzimuthDeg: norm360(segmentAzimuthDeg),
+      maxRotationDeg: AZEL_DEFAULT_AZIMUTH_RANGE_DEG,
+      minTiltDeg: AZEL_DEFAULT_MIN_TILT_DEG,
+      maxTiltDeg: AZEL_DEFAULT_MAX_TILT_DEG,
+      azimuthRangeDeg: AZEL_DEFAULT_AZIMUTH_RANGE_DEG,
+      gcr: trackerGcr(slantM, racking.rowPitchM > 0 ? racking.rowPitchM : slantM * AZEL_DEFAULT_PITCH_FACTOR),
+      backtracking: false,
+    };
   return {
+    kind: 'hsat',
     axisAzimuthDeg: racking.axisAzimuthDeg ?? trackerAxisFromSegment(segmentAzimuthDeg),
     maxRotationDeg: racking.maxRotationDeg ?? TRACKER_DEFAULT_MAX_ROTATION_DEG,
     gcr: trackerGcr(slantM, racking.rowPitchM > 0 ? racking.rowPitchM : slantM / TRACKER_DEFAULT_GCR),

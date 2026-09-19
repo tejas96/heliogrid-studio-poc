@@ -163,6 +163,14 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'ground_ballast', label: 'Ground · Ballasted — no excavation', roofs: GROUND, foundation: 'ballast' },
   { id: 'ground_seasonal', label: 'Ground · Seasonal manual tilt', roofs: GROUND, foundation: 'pile' },
   { id: 'ground_tracker', label: 'Ground · Single-axis tracker (HSAT)', roofs: GROUND, foundation: 'pile', racking: 'tracker_hsat' },
+  // DUAL-AXIS. Not a better HSAT — a different machine, and the foundation
+  // says so: a row of HSAT shares one tube, one drive and a line of light
+  // piles, while every dual-axis unit is a mast taking the whole wind moment
+  // at one point, which is a CAST pier and not a driven post. It is offered
+  // here because the app would otherwise have no way to express the one system
+  // an EPC is occasionally asked for and has to price honestly; the findings
+  // it carries say plainly where it costs more and where it takes more land.
+  { id: 'ground_tracker_dual', label: 'Ground · Dual-axis tracker (AZ-EL)', roofs: GROUND, foundation: 'concrete', racking: 'tracker_azel' },
   { id: 'flush', label: 'Flush-mounted rails', roofs: ['rcc_flat', 'metal_shed', 'tile'], flush: true },
   // A custom structure on a membrane is still held by mass — the foundation is
   // pinned so "custom" cannot become the back door to an anchor.

@@ -97,9 +97,19 @@ describe('every surface the picker offers has a mounting system', () => {
 describe('a ground array can be configured, and what it builds is what it keeps', () => {
   const groundPresets = MOUNT_CATALOGUE.filter((p) => p.roofs.includes('ground'));
 
-  it('offers driven pile, pedestal, ballast, seasonal tilt and a tracker', () => {
+  it('offers driven pile, pedestal, ballast, seasonal tilt and both trackers', () => {
     expect(groundPresets.map((p) => p.id).sort()).toEqual(
-      ['ground_ballast', 'ground_pedestal', 'ground_pile', 'ground_seasonal', 'ground_tracker'] satisfies MountStrategy[],
+      [
+        'ground_ballast',
+        'ground_pedestal',
+        'ground_pile',
+        'ground_seasonal',
+        'ground_tracker',
+        // the dual-axis machine. A separate entry and not an option on the
+        // single-axis one, because nothing about it is shared: its own mast,
+        // its own drive, its own cast pier, and far more land per kWp.
+        'ground_tracker_dual',
+      ] satisfies MountStrategy[],
     );
   });
 
