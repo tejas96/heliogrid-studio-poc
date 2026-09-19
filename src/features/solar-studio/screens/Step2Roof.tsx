@@ -75,6 +75,7 @@ import {
   makeRoof,
   sanitizeRoofPolygon,
   carportSurfaceFrom,
+  floatingSurfaceFrom,
   groundSurfaceFrom,
 } from '../lib/roof-factory';
 import { useSurroundGrid } from '../lib/use-surround-grid';
@@ -358,6 +359,12 @@ export function Step2Roof() {
     if (roofType === 'carport') {
       const c = carportSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id));
       patchRoofAndPose(id, { ...c, heightSource: undefined });
+      return;
+    }
+    // Water is a ground area in plan and nothing like one underneath.
+    if (roofType === 'floating') {
+      const w = floatingSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id));
+      patchRoofAndPose(id, { ...w, heightSource: undefined });
       return;
     }
     patchRoofAndPose(id, { roofType });
@@ -1830,6 +1837,21 @@ export function Step2Roof() {
                 // would silently discard the pitch and azimuth it modelled
                 disabled={selected.pitchDeg > 0}
                 onClick={() => setRoofType(selected.id, 'carport')}
+              />
+              <OptionCard
+                title="Floating (Pond / Reservoir)"
+                // The card leads with the mooring because that is the system an
+                // FPV quote lives or dies on, and with the level range because
+                // it is the input the tool cannot know and the design needs.
+                sub={
+                  selected.pitchDeg > 0
+                    ? `Not available on a ${selected.pitchDeg}° pitched face — water is flat. Draw the water body separately.`
+                    : 'Modules on HDPE pontoons – held by a MOORING, not a footing. Water-level range sets the design; adds anchors, walkways and a bed survey.'
+                }
+                icon={<Trees size={20} />}
+                selected={selected.roofType === 'floating'}
+                disabled={selected.pitchDeg > 0}
+                onClick={() => setRoofType(selected.id, 'floating')}
               />
               <OptionCard
                 title="Ground Array"

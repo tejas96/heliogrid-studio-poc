@@ -111,6 +111,15 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('membrane_protection', 'warning', 'Every bearing point needs a protection layer. Concrete set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps and sinks into it.');
       add('membrane_warranty', 'warning', 'Loading the membrane voids its warranty unless the membrane manufacturer inspects and accepts the design in writing. Confirm before any material reaches the roof.');
     }
+    // Floating. Everything here is about the water, because the array is not
+    // attached to anything solid at all.
+    if (roof.roofType === 'floating') {
+      add('float_level_range', 'not_calculated', 'The WATER-LEVEL RANGE governs this design and is not modelled. On an Indian reservoir the level can move several metres between seasons, and that range sets every mooring line length. The mooring figures in the BOM are a placeholder for a mooring design, not a result.');
+      add('float_bed', 'not_calculated', 'Whether an anchor can hold where it is drawn depends on the BED — silt, rock or weed — and on the depth. Both need a bathymetry and bed survey; neither is assumed here.');
+      add('float_wind_wave', 'warning', 'Wind fetch across open water and the wave it raises drive the loads in the floats, the connectors and the mooring. Not calculated — an FPV structural design is a marine engineering exercise, not a rooftop one.');
+      if (cfg.strategy !== 'float_raft')
+        add('float_access', 'warning', 'Nobody walks on a pure float. Every cleaning visit, module swap and fault trace needs a floating walkway or a boat — check the O&M route exists before this layout is fixed.');
+    }
     // Carport. Cars drive under it, so two of these are about people and metal
     // moving at speed, not about the array.
     if (roof.roofType === 'carport') {
@@ -147,6 +156,10 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('soil_capacity', 'not_calculated', 'Soil bearing, embedment depth and pile pull-out require a geotechnical survey and engineer sign-off.');
       if (seg.racking.kind === 'tracker_hsat') add('tracker_hardware', 'warning', 'Torque tube, bearings, drive and controller are manufacturer hardware. The model shows posts, tubes and modules — not a certified tracker assembly.');
       if (cfg.strategy === 'ground_seasonal') add('seasonal_position', 'warning', 'One seasonal tilt position is modelled. Summer and winter angles, slotted travel and locking hardware require manufacturer detail.');
+    } else if (roof.roofType === 'floating') {
+      // There is no structure under a floating array to overload — it is on
+      // water. What has to be checked is the float and the mooring, which
+      // `float_wind_wave` and `float_level_range` above say outright.
     } else if (roof.roofType === 'carport') {
       // There is no roof under a canopy — it stands on its own footings in a
       // car park. Asking for "roof structural capacity" here names a structure

@@ -191,8 +191,15 @@ export interface SiteTmy {
  * open underneath, so wind gets at both faces and uplift governs the whole
  * frame. `high_height` only ever raised an RCC table into the air — it has no
  * bays, no gutter and no parking surface to found in.
+ *
+ * 'floating' is a reservoir, a pond or a quarry lake. It behaves like a ground
+ * area in plan and like nothing else at all underneath: there is no bearing
+ * surface, so the modules sit on HDPE pontoons and the array is held in place
+ * by a MOORING rather than by a footing. The input that governs the whole
+ * design is how far the water level moves between seasons — it sets every
+ * mooring line length — and this tool cannot know it.
  */
-export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground' | 'carport';
+export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground' | 'carport' | 'floating';
 
 export interface ParapetWall {
   enabled: boolean;
@@ -551,7 +558,17 @@ export interface StructureProfile {
  *   pile      driven/rammed galvanised post — the ground-mount default
  *   concrete  cast-in-situ pedestal, for rock or poor bearing soil
  */
-export type FoundationKind = 'anchor' | 'ballast' | 'pile' | 'concrete';
+/**
+ * What a leg base stands on.
+ *
+ * 'float' is the odd one and is deliberately in this union rather than beside
+ * it: on water the thing under the leg is an HDPE pontoon, and every consumer
+ * that asks "what is this table founded on?" — the renderer, the DRC, the BOM,
+ * the dead-load warning — needs an answer. It carries NO ground bearing and no
+ * dead load onto anything; what holds a floating array in place is the MOORING,
+ * which is a separate system and not a footing at all.
+ */
+export type FoundationKind = 'anchor' | 'ballast' | 'pile' | 'concrete' | 'float';
 
 /**
  * How a cast foundation is formed. Both are ordinary Indian practice and the

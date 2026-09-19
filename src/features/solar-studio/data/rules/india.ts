@@ -310,6 +310,9 @@ export interface FoundationRules {
   anchor: FoundationGeometryRule;
   ballast: FoundationGeometryRule;
   pile: FoundationGeometryRule;
+  /** HDPE pontoon. Not a footing: it displaces water instead of bearing on
+   *  anything, and what holds the array in place is the mooring. */
+  float: FoundationGeometryRule;
 }
 
 /**
@@ -528,6 +531,17 @@ export const INDIA_RULES: MarketRules = {
     ballast: { shape: 'square', l: 400, w: 300, heightMm: 110, plateMm: 160, plateThkMm: 10 },
     // driven/rammed galvanised post — ground arrays
     pile: { shape: 'circular', d: 90, heightMm: 150, plateMm: 140, plateThkMm: 10, embedMm: 1200 },
+    // HDPE pontoon — a "main float" of roughly 1.2 × 0.8 m carrying one module,
+    // sitting proud of the water by its freeboard. ASSUMED, like every figure
+    // here: the real float is a named vendor's product and its buoyancy is
+    // matched to the module and the wind case, neither of which is calculated.
+    // `heightMm` on every other kind is how much of the leg's clearance the
+    // foundation eats (D15). A float is the one kind that is mostly BELOW the
+    // datum, so what it consumes is its FREEBOARD — the part standing out of
+    // the water — and not its body depth. Setting the body depth here instead
+    // left no buildable leg inside a 300 mm clearance and errored on every
+    // floating table, which is how this was found.
+    float: { shape: 'square', l: 1200, w: 800, heightMm: 120, plateMm: 140, plateThkMm: 6 },
   },
   // ALL ASSUMED — see SheetRules. 1.4 m purlin centres and a 200 mm trapezoidal
   // rib are ordinary Indian industrial sheeting, but "ordinary" is not

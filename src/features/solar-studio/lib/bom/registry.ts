@@ -84,6 +84,14 @@ export type LineKey =
   | 'mech.carport_paving'
   | 'mech.carport_lighting'
   | 'mech.carport_bollard'
+  /** floating: pontoons, the mooring that holds them, and the survey that
+   *  decides whether either is possible where they are drawn */
+  | 'mech.float_body'
+  | 'mech.float_walkway'
+  | 'mech.float_mooring'
+  | 'mech.float_anchor'
+  | 'mech.float_cable'
+  | 'mech.float_survey'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an

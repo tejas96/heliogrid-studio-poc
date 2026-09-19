@@ -140,6 +140,29 @@ export const PRICE_BOOK = {
   // ANTI-CRASH. A post in a car park gets hit. Bollards or a kerb at the
   // exposed posts are cheap next to replacing a column and its footing.
   carportBollardEach: 4200, // HDG bollard set in concrete at an exposed post
+  // ── Floating (FPV). Nothing here bears on anything: the array floats, and
+  // what stops it drifting is the MOORING. Every figure is ASSUMED — a real FPV
+  // tender prices a named vendor's float and a mooring designed against the
+  // reservoir's own wind fetch and level range.
+  //
+  // FLOAT BODY, per module. UV-stabilised HDPE, marine grade throughout,
+  // and the buoyancy is matched to the module and the wind case.
+  floatPontoonPerPanel: 2450, // main float + secondary float + connecting pins
+  floatRaftPerPanel: 3350, // steel raft on smaller floats — dearer, and walkable
+  // WALKWAY. You cannot walk on a pure float, so O&M needs its own floating
+  // path between rows. Per metre of walkway.
+  floatWalkwayPerM: 3800, // HDPE walkway float with handrail
+  // MOORING. The system that actually holds the plant in position. Line length
+  // follows the water-level RANGE, which this tool does not know, so the line
+  // is priced per metre and the count of anchor points is an assumption.
+  floatMooringLinePerM: 410, // marine rope/chain with thimbles and shackles
+  floatAnchorEach: 26000, // bed deadweight or helical anchor, set from a barge
+  // CABLE ON WATER. Floating DC cable carried on buoys to a shore riser —
+  // not the same product as a buried run.
+  floatCablePerM: 780, // floating-grade cable with buoy supports
+  // SURVEYS. Bathymetry and a bed survey decide where an anchor can go at all,
+  // and the level range decides the mooring. LUMP SUM per water body.
+  floatSurveyLumpsum: 185000, // bathymetry, bed survey, level-range records
   // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
   // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
   // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is

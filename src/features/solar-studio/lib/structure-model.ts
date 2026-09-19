@@ -76,6 +76,9 @@ export interface StructureNode {
     piles?: number;
     /** cast-in-situ concrete pedestal (ground) */
     pedestals?: number;
+    /** HDPE pontoon under a leg base — floating arrays. Not a footing: it
+     *  bears on nothing and carries no dead load anywhere. */
+    floats?: number;
     /** metal shed: L-foot fixed through the sheet into the purlin below */
     standoffs?: number;
     /** EPDM washer under every sheet penetration — the waterproofing */

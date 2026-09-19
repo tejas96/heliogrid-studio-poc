@@ -33,7 +33,7 @@ export interface FoundationPart {
   /** which instanced bucket this belongs to */
   // `clamp` and `standoff` are node HARDWARE rather than foundation parts (see
   // lib/hardware) — they share this shape so the renderer keeps one loop.
-  bucket: 'pedestal' | 'ballast' | 'pile' | 'plate' | 'bolt' | 'grout' | 'clamp' | 'standoff';
+  bucket: 'pedestal' | 'ballast' | 'pile' | 'plate' | 'bolt' | 'grout' | 'clamp' | 'standoff' | 'float';
   geometry: 'box' | 'cylinder';
   /** metres, relative to the leg base (roof surface at the leg centre) */
   size: { x: number; y: number; z: number };
@@ -64,7 +64,7 @@ export interface FoundationAssembly {
 export function ruleFor(kind: FoundationKind, shape?: FoundationShape, mms?: MmsConfig): FoundationGeometryRule {
   const f = resolveRules().foundations;
   const base =
-    kind === 'concrete' ? f.pedestal : kind === 'ballast' ? f.ballast : kind === 'pile' ? f.pile : f.anchor;
+    kind === 'concrete' ? f.pedestal : kind === 'ballast' ? f.ballast : kind === 'pile' ? f.pile : kind === 'float' ? f.float : f.anchor;
   if (mms && kind === 'ballast') return { ...base, shape: 'square', l: mms.ballast.lengthM * 1000, w: mms.ballast.widthM * 1000, heightMm: mms.ballast.heightM * 1000, plateMm: mms.anchor.plateSizeMm, plateThkMm: mms.anchor.plateThicknessMm };
   if (mms && kind === 'anchor') return { ...base, plateMm: mms.anchor.plateSizeMm, plateThkMm: mms.anchor.plateThicknessMm, embedMm: mms.anchor.embedmentMm };
   if (kind !== 'concrete' || !shape || shape === base.shape) return base;
@@ -93,8 +93,10 @@ export function foundationVolumeM3(r: FoundationGeometryRule): number {
 /** Mass one foundation adds to the roof, kg. ASSUMED — engineer to confirm. */
 export function foundationDeadLoadKg(kind: FoundationKind, shape?: FoundationShape, mms?: MmsConfig): number {
   if (kind === 'ballast' && mms) return mms.ballast.massKg * mms.ballast.blocksPerSupport;
-  // A pile is driven into the ground, not stood on a slab: no roof load.
-  if (kind === 'pile' || kind === 'anchor') return 0;
+  // A pile is driven into the ground, not stood on a slab: no roof load. A
+  // FLOAT bears on nothing at all — it displaces water, and reporting its mass
+  // as a dead load would warn about tonnes landing on a lake.
+  if (kind === 'pile' || kind === 'anchor' || kind === 'float') return 0;
   const { concreteDensityKgM3 } = resolveRules().foundations;
   return foundationVolumeM3(ruleFor(kind, shape)) * concreteDensityKgM3;
 }
@@ -112,6 +114,10 @@ export function foundationTooTall(frontLegM: number, kind: FoundationKind): bool
 const BOLT_D = 0.012; // M12 anchor bolt, m
 const BOLT_PROUD = 0.026; // how far it stands above the plate, m
 const GROUT_MM = 12; // levelling grout bed under the plate
+/** How much of a loaded HDPE float stands proud of the water. ASSUMED — real
+ *  draft follows the float's buoyancy against the module and frame it carries,
+ *  which is a vendor figure and is not calculated here. */
+const FLOAT_FREEBOARD_FRACTION = 0.35;
 
 /**
  * The complete sub-assembly for one leg base, in the leg's local frame with
@@ -148,6 +154,22 @@ export function foundationAssembly(
         offset: { x: 0, y: h + (GROUT_MM * MM) / 2, z: 0 },
       });
     }
+  }
+
+  // An HDPE pontoon. It sits IN the water rather than on a surface, so most of
+  // its body is below the datum and only the freeboard shows — drawing it like
+  // a ballast block standing proud of a lake would read as a raft of concrete.
+  if (kind === 'float') {
+    // `h` is the FREEBOARD — what stands out of the water and eats leg
+    // clearance (D15). The body is deeper than that and sits below the surface,
+    // so the box is drawn spanning from `h` above the datum down to the draft.
+    const body = h / FLOAT_FREEBOARD_FRACTION;
+    parts.push({
+      bucket: 'float',
+      geometry: 'box',
+      size: { x: (r.l ?? 0) * MM, y: body, z: (r.w ?? r.l ?? 0) * MM },
+      offset: { x: 0, y: h - body / 2, z: 0 },
+    });
   }
 
   if (kind === 'pile') {
@@ -215,7 +237,9 @@ export function foundationKindOfSpec(spec: {
   ballast?: number;
   piles?: number;
   pedestals?: number;
+  floats?: number;
 }): FoundationKind {
+  if ((spec.floats ?? 0) > 0) return 'float';
   if ((spec.ballast ?? 0) > 0) return 'ballast';
   if ((spec.piles ?? 0) > 0) return 'pile';
   if ((spec.pedestals ?? 0) > 0) return 'concrete';

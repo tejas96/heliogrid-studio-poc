@@ -83,6 +83,16 @@ export function surfaceAlbedo(roofType: RoofType): number {
     // considerably more, but which finish is on the roof is a survey fact.
     case 'stone_slab':
       return 0.25; // weathered limestone slab, dusty
+    // Open water is the DARKEST surface in the list. Its reflection is also
+    // mostly specular — a mirror at a low sun angle, nearly black overhead —
+    // which a single diffuse albedo cannot represent, so the conservative
+    // diffuse figure stands rather than a flattering average.
+    case 'floating':
+      return 0.07; // open water, diffuse component only
+    // A carport's rear side sees the CAR PARK, not a roof: dark bitumen or
+    // grey paver, and usually a car. Lower than any deck.
+    case 'carport':
+      return 0.15; // tarmac / paver under a canopy
     case 'tile':
       return 0.15; // clay / Mangalore tile, dark
     case 'ground':

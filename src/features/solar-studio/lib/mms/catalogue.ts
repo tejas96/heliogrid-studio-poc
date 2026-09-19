@@ -80,6 +80,12 @@ const STONE: RoofType[] = ['stone_slab'];
 // a butterfly runs one central post line for two bay rows and drains inward, so
 // the run-off never reaches the edge where people walk.
 const CARPORT: RoofType[] = ['carport'];
+// Floating. Tilt stays LOW — 10° or so — because an array on open water has
+// nothing sheltering it and every degree is more sail and more wave-induced
+// motion in the mooring. The two systems differ in what carries the module: a
+// pure-float pontoon body, or a steel raft sitting on smaller floats, which
+// costs more and is the only one you can walk on.
+const FLOATING: RoofType[] = ['floating'];
 export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'rcc_fixed', label: 'RCC · Standard fixed tilt', roofs: RCC, heightM: .45, tilt: 10 },
   { id: 'rcc_ballast', label: 'RCC · Ballasted', roofs: RCC, heightM: .45 },
@@ -123,6 +129,8 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'carport_cantilever', label: 'Carport · Single-post cantilever', roofs: CARPORT, heightM: 2.5, tilt: 5, foundation: 'concrete' },
   { id: 'carport_portal', label: 'Carport · Two-post portal over the aisle', roofs: CARPORT, heightM: 2.5, tilt: 5, foundation: 'concrete' },
   { id: 'carport_butterfly', label: 'Carport · Butterfly, central posts', roofs: CARPORT, heightM: 2.7, tilt: 7, foundation: 'concrete' },
+  { id: 'float_pontoon', label: 'Floating · HDPE pontoon (pure float)', roofs: FLOATING, heightM: .3, tilt: 10, foundation: 'float' },
+  { id: 'float_raft', label: 'Floating · Steel raft on floats (walkable)', roofs: FLOATING, heightM: .45, tilt: 10, foundation: 'float' },
   { id: 'roof_hook', label: 'Rail + roof hook', roofs: ['tile'], flush: true },
   { id: 'adjustable_hook', label: 'Adjustable roof hook', roofs: ['tile'], flush: true },
   { id: 'ground_pile', label: 'Ground · Driven pile', roofs: GROUND, foundation: 'pile' },
@@ -144,7 +152,7 @@ export function defaultMms(roof: RoofType): MmsConfig {
     // Every branch must name a strategy the roof's own list contains, or the
     // panel opens on a value it cannot apply — which is what left `Generate MMS`
     // inert on a ground array. The mms-coverage gate asserts this.
-    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'membrane' ? 'membrane_ballast' : roof === 'stone_slab' ? 'stone_beam_clamp' : roof === 'carport' ? 'carport_cantilever' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
+    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'membrane' ? 'membrane_ballast' : roof === 'stone_slab' ? 'stone_beam_clamp' : roof === 'carport' ? 'carport_cantilever' : roof === 'floating' ? 'float_pontoon' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
     material: 'galvanized_steel', railInsetRatio: .18, attachmentSpacingM: 1.2, railStockLengthM: 6,
     edgeClearanceM: .1, obstacleClearanceM: .05,
     ballast: { type: 'precast_concrete', lengthM: .6, widthM: .4, heightM: .15, massKg: 86.4, blocksPerSupport: 1 },

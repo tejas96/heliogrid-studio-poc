@@ -218,7 +218,9 @@ export function resolveRacking(
     r.foundation ??
     roofO?.foundation ??
     projD?.foundation ??
-    (roof.roofType === 'carport'
+    (roof.roofType === 'floating'
+      ? ('float' as const)
+      : roof.roofType === 'carport'
       ? DEFAULT_CARPORT_FOUNDATION
       : roof.roofType === 'ground'
         ? DEFAULT_GROUND_FOUNDATION
@@ -833,6 +835,15 @@ function anchorSpec(r: ResolvedRacking): StructureNode['fastenerSpec'] {
   switch (r.foundation) {
     case 'ballast':
       return { plates: 1, ballast: 1 };
+    // A pontoon, and nothing else. There is no plate and no anchor: the float
+    // IS the support, and what stops the array drifting is the mooring, which
+    // is a separate system counted per anchor point rather than per leg.
+    case 'float':
+      // The plate is the bracket that joins the frame to the float's moulded
+      // boss, and `foundationAssembly` draws one on every kind. Counting the
+      // float but not the plate would repeat exactly the defect the driven
+      // pile had: 112 brackets on screen and none in the quote.
+      return { floats: 1, plates: 1 };
     case 'pile':
       // A pile carries a plate like every other kind. `foundationAssembly`
       // says so in as many words — "every kind gets a base plate" — and the
@@ -888,6 +899,11 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       // would need a mass nobody puts in a car park, and the first storm would
       // find that out.
       if (roof.roofType === 'carport') return ['concrete', 'pile'];
+      // WATER bears nothing. There is no pedestal to cast, no pile to drive and
+      // no block to stand: the array floats, and it stays where it is put by
+      // the mooring. Offering any of the other three here would be offering to
+      // build something into a lake bed under a table that is not touching it.
+      if (roof.roofType === 'floating') return ['float'];
       // a sheet roof fixes through the covering into the PURLIN: you cannot cast
       // on trapezoidal steel, and ballast loads a roof built to carry its own
       // deck. On asbestos-cement that is doubly true — the sheet itself carries

@@ -18,6 +18,7 @@ import { insetPolygonRobust, pointInPolygon } from '../geo';
 import { panelCornersOnRoof } from '../layout';
 import { setSegmentAzimuth } from '../segment-ops';
 import { allowedFoundations, resolveRacking } from '../structure';
+import { foundationDeadLoadKg } from '../foundation';
 import { deriveBom } from '../bom';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
 import type { ArraySegment, PlacedPanel, Project, Roof, RoofType } from '../../types';
@@ -37,6 +38,7 @@ const ALL_ROOF_TYPES: Record<RoofType, true> = {
   tile: true,
   ground: true,
   carport: true,
+  floating: true,
 };
 const ROOF_TYPES = Object.keys(ALL_ROOF_TYPES) as RoofType[];
 const W = 1.134;
@@ -303,6 +305,72 @@ describe('a membrane roof cannot be given a fixing that goes through it', () => 
     const after: Project = { ...project, ...configureMms(project, seg.id, 'aero_tray') };
     expect(after.segments[0].racking.kind).toBe('dual_tilt');
     expect(after.segments[0].azimuthDeg).toBe(90);
+  });
+});
+
+// ─── Floating (FPV) ─────────────────────────────────────────────────────────
+// Water bears nothing. There is no pedestal to cast, no pile to drive and no
+// block to stand — the array floats, and what holds it where it was drawn is
+// the MOORING, a system with no equivalent anywhere else in this app.
+describe('a floating array is held by its mooring, not by a footing', () => {
+  function waterScene() {
+    const s = scene('floating');
+    const roof: Roof = { ...s.project.roofs[0], heightM: 0 };
+    return { project: { ...s.project, roofs: [roof] }, seg: s.seg };
+  }
+
+  it('offers a float and NOTHING you could build into a lake bed', () => {
+    const { project, seg } = waterScene();
+    expect(allowedFoundations(project.roofs[0], seg)).toEqual(['float']);
+    const r = resolveRacking(project, project.roofs[0], seg, project.components.panel!)!;
+    expect(r.foundation).toBe('float');
+  });
+
+  it('a float carries no dead load — it displaces water, it does not bear', () => {
+    expect(foundationDeadLoadKg('float')).toBe(0);
+  });
+
+  it('buys floats, the mooring that holds them, and the survey it all rests on', () => {
+    const { project, seg } = waterScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'float_pontoon') };
+    const bom = deriveBom(after);
+    for (const key of [
+      'mech.float_body',
+      'mech.float_mooring',
+      'mech.float_anchor',
+      'mech.float_cable',
+      'mech.float_survey',
+      'mech.float_walkway',
+    ]) {
+      const l = bom.find((x) => x.id.startsWith(key));
+      expect(l, key).toBeDefined();
+      expect(l!.qty, key).toBeGreaterThan(0);
+      expect(l!.unitPriceInr, key).toBeGreaterThan(0);
+    }
+    // and none of the dry-land foundations may appear
+    for (const dry of ['mech.pedestal', 'mech.pile', 'mech.ballast']) {
+      expect(bom.some((l) => l.id.startsWith(dry)), dry).toBe(false);
+    }
+  });
+
+  // You cannot walk on a pure float. A walkable raft already includes the path,
+  // so charging for it again would be selling the same deck twice.
+  it('a walkable raft does not also buy a walkway', () => {
+    const { project, seg } = waterScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'float_raft') };
+    const bom = deriveBom(after);
+    expect(bom.some((l) => l.id.startsWith('mech.float_body'))).toBe(true);
+    expect(bom.some((l) => l.id.startsWith('mech.float_walkway'))).toBe(false);
+  });
+
+  it('says outright that the water level — the governing input — is unknown', () => {
+    const { project, seg } = waterScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'float_pontoon') };
+    const findings = validateMms(after, deriveStructures(after));
+    expect(findings.some((f) => f.code === 'float_level_range' && f.status === 'not_calculated')).toBe(true);
+    expect(findings.some((f) => f.code === 'float_bed' && f.status === 'not_calculated')).toBe(true);
+    // and it must NOT claim a roof capacity for a structure standing on a lake
+    expect(findings.some((f) => f.code === 'roof_capacity')).toBe(false);
   });
 });
 

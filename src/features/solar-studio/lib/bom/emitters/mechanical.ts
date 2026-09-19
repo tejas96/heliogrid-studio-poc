@@ -11,6 +11,13 @@ import { resolveRacking } from '../../structure';
 import { fastenerTotals } from '../../structure';
 import { emitMms } from './mms';
 import { isNoPenetrationRoof } from '../../roof-plane';
+import { polygonPerimeter } from '../../geo';
+
+/** Mooring line length, m. A PLACEHOLDER for a mooring design: the real length
+ *  follows the water-level range and the depth at each anchor, and this tool
+ *  knows neither. Named here rather than buried so it reads as the assumption
+ *  it is. */
+const ASSUMED_MOORING_LINE_M = 25;
 
 /** Plural-safe member phrase, e.g. "12 legs 4.2m". Omits absent kinds. */
 function memberBreakdown(st: SegmentStructure): string {
@@ -817,6 +824,127 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         sourceRoofId: src,
       }),
     );
+  }
+  // ── Floating (FPV) ───────────────────────────────────────────────────────
+  // Nothing here bears on anything. The array floats, and what keeps it where
+  // it was drawn is the MOORING — a system with no equivalent anywhere else in
+  // this app, and the one an FPV quote is judged on. Floats are counted from
+  // the node graph; the mooring is counted from the array's own perimeter,
+  // because that is where the lines leave from.
+  const floating = { floats: 0, modules: 0, perimeterM: 0, roofIds: [] as string[] };
+  for (const st of structures) {
+    const roofId = roofOfSegment(st.segmentId);
+    const r = project.roofs.find((x) => x.id === roofId);
+    if (r?.roofType !== 'floating') continue;
+    for (const nd of st.nodes) floating.floats += nd.fastenerSpec.floats ?? 0;
+    floating.modules += project.panels.filter((p) => p.enabled && p.segmentId === st.segmentId).length;
+    if (roofId && !floating.roofIds.includes(roofId)) {
+      floating.roofIds.push(roofId);
+      floating.perimeterM += polygonPerimeter(r.polygon);
+    }
+  }
+  if (floating.floats > 0) {
+    const src = soleSource(floating.roofIds);
+    const raft = structures.some(
+      (st) => st.mms?.strategy === 'float_raft' && floating.roofIds.includes(roofOfSegment(st.segmentId) ?? ''),
+    );
+    // A mooring line every ~10 m of the array's perimeter is ordinary practice;
+    // the LENGTH of each is set by the water-level range and the depth, neither
+    // of which this tool knows, so the assumed length is stated outright.
+    const anchors = Math.max(4, Math.ceil(floating.perimeterM / 10));
+    const lineM = anchors * ASSUMED_MOORING_LINE_M;
+    out.push(
+      line({
+        key: 'mech.float_body',
+        category: 'Mechanical BOS',
+        item: raft ? 'Float Raft (walkable)' : 'HDPE Pontoon Floats',
+        spec: raft
+          ? 'Steel raft on HDPE floats, marine-grade fasteners throughout'
+          : 'UV-stabilised HDPE main + secondary float with connecting pins',
+        qty: floating.modules,
+        unit: 'panel-set',
+        unitPriceInr: raft ? PRICE_BOOK.floatRaftPerPanel : PRICE_BOOK.floatPontoonPerPanel,
+        confidence: 'assumed',
+        formula:
+          `${floating.modules} modules, ${floating.floats} float positions from the node graph. ASSUMED market rate — a real FPV tender prices a NAMED ` +
+          `vendor's float, whose buoyancy is matched to this module and to the site's wind case. Neither is calculated here. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.float_mooring',
+        category: 'Mechanical BOS',
+        item: 'Mooring Lines',
+        spec: 'Marine rope/chain with thimbles and shackles',
+        qty: lineM,
+        unit: 'm',
+        unitPriceInr: PRICE_BOOK.floatMooringLinePerM,
+        confidence: 'assumed',
+        formula:
+          `${anchors} lines × ${ASSUMED_MOORING_LINE_M} m ASSUMED. Line length follows the WATER-LEVEL RANGE and the depth at each anchor — on an Indian ` +
+          `reservoir the level can move several metres between seasons, and that range is what the whole mooring is designed around. This tool does not ` +
+          `know it, so this figure is a placeholder for a mooring design, not a result.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.float_anchor',
+        category: 'Mechanical BOS',
+        item: 'Mooring Anchors',
+        spec: 'Bed deadweight or helical anchor, set from a barge',
+        qty: anchors,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.floatAnchorEach,
+        confidence: 'assumed',
+        formula:
+          `~1 per 10 m of array perimeter (${Math.round(floating.perimeterM)} m), ASSUMED. Whether an anchor can hold at all depends on the BED — silt, ` +
+          `rock or weed — which the survey below establishes and which no figure here assumes.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.float_cable',
+        category: 'Mechanical BOS',
+        item: 'Floating DC Cable & Buoys',
+        spec: 'Floating-grade cable carried on buoys to a shore riser',
+        qty: Math.round(floating.perimeterM / 2),
+        unit: 'm',
+        unitPriceInr: PRICE_BOOK.floatCablePerM,
+        confidence: 'estimated',
+        formula:
+          `ESTIMATED at half the array perimeter (${Math.round(floating.perimeterM)} m). A run over water is carried on buoys and is not the same product ` +
+          `as a buried one; where it comes ashore is a site decision and the riser is NOT included.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.float_survey',
+        category: 'Mechanical BOS',
+        item: 'Bathymetry & Bed Survey',
+        spec: 'Depth survey, bed composition, and the recorded water-level range',
+        qty: floating.roofIds.length,
+        unit: 'lot',
+        unitPriceInr: PRICE_BOOK.floatSurveyLumpsum,
+        confidence: 'assumed',
+        formula:
+          `${floating.roofIds.length} water body(s). Depth and bed composition decide where an anchor can go at all, and the level range decides every ` +
+          `mooring line length. Everything above depends on this and none of it can be read off a satellite image. ASSUMED LUMP SUM.`,
+        sourceRoofId: src,
+      }),
+    );
+    if (!raft)
+      out.push(
+        line({
+          key: 'mech.float_walkway',
+          category: 'Mechanical BOS',
+          item: 'Floating Walkway',
+          spec: 'HDPE walkway float with handrail, between module rows',
+          qty: Math.round(floating.perimeterM / 2),
+          unit: 'm',
+          unitPriceInr: PRICE_BOOK.floatWalkwayPerM,
+          confidence: 'estimated',
+          formula:
+            `ESTIMATED at half the array perimeter. YOU CANNOT WALK ON A PURE FLOAT — every cleaning visit, every module swap and every fault trace ` +
+            `needs a path, or it needs a boat. A walkable raft system includes this and does not carry the line.`,
+          sourceRoofId: src,
+        }),
+      );
   }
   // rail applies ONLY to loose/flush RCC panels: structured segments carry
   // purlins in the member model; metal-shed bundles mini-rails (the old

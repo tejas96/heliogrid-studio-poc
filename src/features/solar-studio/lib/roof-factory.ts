@@ -224,6 +224,29 @@ export function nextGroundName(existing: Roof[]): string {
  * and the name matters: "Roof 3" over a car park tells the installer nothing,
  * and "Array Area A" tells them the wrong thing.
  */
+/**
+ * A FLOATING surface — a reservoir, pond or quarry lake.
+ *
+ * In plan it behaves exactly like a ground area, which is why it reuses the
+ * same factory: at grade, no parapet, the wider boundary setback. What is
+ * different is entirely below the waterline, and none of it is geometry.
+ */
+export function floatingSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
+  const g = makeGroundSurface({ polygon: roof.polygon, existing, provenance: roof.provenance });
+  const n = existing.filter((r) => r.roofType === 'floating').length;
+  const out: Roof = {
+    ...roof,
+    roofType: 'floating',
+    heightM: 0,
+    pitchDeg: 0,
+    setbackM: g.setbackM,
+    parapet: { ...roof.parapet, enabled: false },
+    name: `Water Body ${String.fromCharCode(65 + (n % 26))}`,
+  };
+  delete out.heightSource;
+  return out;
+}
+
 export function carportSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
   const g = makeGroundSurface({ polygon: roof.polygon, existing, provenance: roof.provenance });
   const n = existing.filter((r) => r.roofType === 'carport').length;

@@ -47,6 +47,7 @@ const FOUNDATION_LABEL: Record<FoundationKind, string> = {
   anchor: 'Chemical anchor',
   ballast: 'Ballast block',
   pile: 'Driven pile',
+  float: 'HDPE pontoon',
 };
 
 const FOUNDATION_HINT: Record<FoundationKind, string> = {
@@ -54,6 +55,7 @@ const FOUNDATION_HINT: Record<FoundationKind, string> = {
   anchor: 'Bolted through the slab — penetrates the waterproofing membrane',
   ballast: 'Dead weight, no penetration',
   pile: 'Driven into the ground',
+  float: 'Floats on the water — held in place by the mooring, not by a footing',
 };
 
 /**

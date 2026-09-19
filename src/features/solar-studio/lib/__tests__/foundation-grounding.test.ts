@@ -17,7 +17,7 @@ import { foundationAssembly, ruleFor } from '../foundation';
 import { fixtureProject, fixtureRoof } from './fixtures/project';
 import type { ArraySegment, FoundationKind, PlacedPanel, Project } from '../../types';
 
-const KINDS: FoundationKind[] = ['anchor', 'concrete', 'ballast', 'pile'];
+const KINDS: FoundationKind[] = ['anchor', 'concrete', 'ballast', 'pile', 'float'];
 const W = 1.134;
 const GAP = 0.05;
 
@@ -64,10 +64,18 @@ function build(kind: FoundationKind) {
   // A pile is DRIVEN — it belongs on ground, not on a slab, and `resolveRacking`
   // now clamps an impossible pairing instead of honouring it. Building every
   // kind on a rooftop was only ever a shortcut for exercising the geometry.
+  // A FLOAT belongs on water for the same reason a pile belongs on ground: the
+  // resolver clamps an impossible pairing rather than honouring it.
   const roof =
     kind === 'pile'
       ? { ...fixtureRoof(), roofType: 'ground' as const }
-      : fixtureRoof();
+      : kind === 'float'
+        ? // heightM stays the fixture's, NOT 0: this file compares the height
+          // CHAIN across kinds, and moving the datum for one of them would make
+          // the D15 "module plane never moves" check compare two datums instead
+          // of two foundations.
+          { ...fixtureRoof(), roofType: 'floating' as const }
+        : fixtureRoof();
   const project: Project = {
     ...base,
     roofs: [roof],
@@ -113,10 +121,12 @@ describe('a foundation rests on the deck, whatever kind it is', () => {
         roof.heightM + 1e-6,
       );
 
-      if (kind === 'pile') {
-        // a pile is DRIVEN — it is meant to pass through the deck and continue
-        // below grade, so it is the one kind whose lowest part sits under it
-        expect(lowest, 'pile embedment').toBeLessThan(roof.heightM);
+      if (kind === 'pile' || kind === 'float') {
+        // Two kinds are meant to sit BELOW the datum. A pile is driven through
+        // it and continues below grade; a float is mostly under the waterline
+        // and only its freeboard shows. Both would fail a "rests on the
+        // surface" check for the right reason.
+        expect(lowest, `${kind} sits below the datum`).toBeLessThan(roof.heightM);
       } else {
         // everything else rests exactly on the surface: no float, no sinking
         expect(lowest, `${kind} rests on the deck`).toBeCloseTo(roof.heightM, 6);
