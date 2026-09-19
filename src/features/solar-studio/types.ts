@@ -181,8 +181,18 @@ export interface SiteTmy {
  * it. The load path has to reach the JOIST underneath, which is the same
  * problem a sheet roof has and the opposite of what 'rcc_flat' assumes — there,
  * the deck itself is the structure.
+ *
+ * 'carport' is not a covering at all — it is a STRUCTURE the array sits on,
+ * standing in a car park over vehicles that have to drive under it and park
+ * between its posts. That makes three things load-bearing that no roof has:
+ * the posts fall on PARKING BAYS, so their spacing is set by the bay module and
+ * not by what is cheapest in steel; the modules ARE the roof, so the water they
+ * shed lands on somebody's car unless a gutter takes it away; and the canopy is
+ * open underneath, so wind gets at both faces and uplift governs the whole
+ * frame. `high_height` only ever raised an RCC table into the air — it has no
+ * bays, no gutter and no parking surface to found in.
  */
-export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground';
+export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground' | 'carport';
 
 export interface ParapetWall {
   enabled: boolean;

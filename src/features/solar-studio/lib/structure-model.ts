@@ -27,7 +27,16 @@ export type MemberKind =
   | 'brace'
   | 'beam'
   /** metal-shed monorail: a rail running along a module row, on standoffs */
-  | 'rail';
+  | 'rail'
+  /**
+   * Carport drainage. On a canopy the MODULES are the roof, so the water they
+   * shed lands on whatever is parked underneath unless something catches it.
+   * These are real members with a real length and a real price — not a note in
+   * a formula — because a carport quoted without them is a carport that rains
+   * on the customer's cars.
+   */
+  | 'gutter'
+  | 'downpipe';
 export type NodeKind =
   | 'roof_anchor' // leg base: base plate + anchors (or ballast block)
   | 'leg_rafter' // leg top → rafter bolt joint
@@ -86,6 +95,11 @@ export interface SegmentStructure {
   foundationShape: FoundationShape;
   steelKg: number;
   /** total member metres per kind — the BOM formula breakdown */
-  memberSummary: Record<Exclude<MemberKind, 'beam'>, { count: number; totalM: number }> & { beam?: { count: number; totalM: number } };
+  /** total member metres per kind — the BOM formula breakdown. The kinds that
+   *  only SOME topologies produce are optional, following `beam`: a rooftop
+   *  table has no gutter and a carport has no sheet rail, and requiring either
+   *  would make every existing structure fixture invalid. */
+  memberSummary: Record<Exclude<MemberKind, 'beam' | 'gutter' | 'downpipe'>, { count: number; totalM: number }> &
+    Partial<Record<'beam' | 'gutter' | 'downpipe', { count: number; totalM: number }>>;
   warnings: string[];
 }

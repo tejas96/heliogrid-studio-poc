@@ -215,6 +215,33 @@ export function nextGroundName(existing: Roof[]): string {
   return `Array Area ${String.fromCharCode(65 + (n % 26))}`;
 }
 
+/**
+ * A CARPORT surface, from whatever the user drew.
+ *
+ * Geometrically identical to a ground area — it sits at grade, takes the wider
+ * boundary setback and cannot have a parapet, because the posts start on the
+ * tarmac and the canopy is what goes up. Only the name and the covering differ,
+ * and the name matters: "Roof 3" over a car park tells the installer nothing,
+ * and "Array Area A" tells them the wrong thing.
+ */
+export function carportSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
+  const g = makeGroundSurface({ polygon: roof.polygon, existing, provenance: roof.provenance });
+  const n = existing.filter((r) => r.roofType === 'carport').length;
+  const out: Roof = {
+    ...roof,
+    roofType: 'carport',
+    heightM: 0,
+    pitchDeg: 0,
+    setbackM: g.setbackM,
+    parapet: { ...roof.parapet, enabled: false },
+    name: `Carport ${String.fromCharCode(65 + (n % 26))}`,
+  };
+  // the height's provenance goes WITH the height — a DSM-fitted eave stamped
+  // 'aerial_map' at 0.0 m would claim a measured car park
+  delete out.heightSource;
+  return out;
+}
+
 // ─── Obstruction construction ────────────────────────────────────────────────
 
 /** Per-type presets — moved verbatim from Step 3 (label code + L/W/H meters). */

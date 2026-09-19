@@ -74,6 +74,7 @@ import {
   MIN_ROOF_EDGE_M,
   makeRoof,
   sanitizeRoofPolygon,
+  carportSurfaceFrom,
   groundSurfaceFrom,
 } from '../lib/roof-factory';
 import { useSurroundGrid } from '../lib/use-surround-grid';
@@ -349,6 +350,14 @@ export function Step2Roof() {
       // cannot delete a key, so the drop is explicit.
       const g = groundSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id));
       patchRoofAndPose(id, { ...g, heightSource: undefined });
+      return;
+    }
+    // A CARPORT drops to grade for the same reason a ground area does: the
+    // posts start on the tarmac and the canopy is what goes up, so an eave
+    // height and a parapet are both meaningless on it.
+    if (roofType === 'carport') {
+      const c = carportSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id));
+      patchRoofAndPose(id, { ...c, heightSource: undefined });
       return;
     }
     patchRoofAndPose(id, { roofType });
@@ -1803,6 +1812,24 @@ export function Step2Roof() {
                 icon={<Layers size={20} />}
                 selected={selected.roofType === 'tile'}
                 onClick={() => setRoofType(selected.id, 'tile')}
+              />
+              <OptionCard
+                title="Carport / Canopy"
+                // Not a covering — a structure with cars under it. The card
+                // leads with the post spacing because that is what an EPC gets
+                // wrong: "high height" raised an RCC table into the air with a
+                // column in the middle of every parking bay.
+                sub={
+                  selected.pitchDeg > 0
+                    ? `Not available on a ${selected.pitchDeg}° pitched face — a canopy is a structure at grade, not a roof plane. Draw the car park area separately.`
+                    : 'Posts and beams over parking – 2.5 m clear, posts on bay lines. Adds gutters, downpipes, footings and paving make-good.'
+                }
+                icon={<Building2 size={20} />}
+                selected={selected.roofType === 'carport'}
+                // same reason Ground Array refuses: converting a pitched face
+                // would silently discard the pitch and azimuth it modelled
+                disabled={selected.pitchDeg > 0}
+                onClick={() => setRoofType(selected.id, 'carport')}
               />
               <OptionCard
                 title="Ground Array"

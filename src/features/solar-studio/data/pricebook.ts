@@ -122,6 +122,24 @@ export const PRICE_BOOK = {
   // already cracked, are not modelled and cannot be read off a photograph.
   // LUMP SUM per stone roof, ESTIMATED.
   stoneSlabSurveyLumpsum: 12500, // beam locating, slab condition survey, access
+  // ── Carport / canopy. The steel is already priced by weight from the member
+  // model; everything here is what a canopy needs and a ROOF never does.
+  //
+  // DRAINAGE. The modules are the roof, so their run-off lands on the cars
+  // unless it is caught. Both are counted from real members with real lengths.
+  carportGutterPerM: 940, // HDG/Al box gutter with brackets and end caps
+  carportDownpipePerM: 620, // downpipe strapped to the post, plus shoe and outlet
+  // FOOTING IN A CAR PARK. Not a ground-array pedestal: the pad is bigger
+  // because an open canopy's overturning is taken at the base, and the paving
+  // has to be cut, spoil carted away and the surface reinstated afterwards.
+  carportFootingEach: 9800, // excavation through paving, RCC pad, backfill
+  carportPavingReinstateEach: 2600, // saw-cut, re-lay and make good around each post
+  // UNDER-CANOPY LIGHTING. A carport is a place people walk at night. Ordinary
+  // scope on every canopy tender, and left out of a solar quote every time.
+  carportLightPerBay: 3400, // LED luminaire, wiring and switching per bay
+  // ANTI-CRASH. A post in a car park gets hit. Bollards or a kerb at the
+  // exposed posts are cheap next to replacing a column and its footing.
+  carportBollardEach: 4200, // HDG bollard set in concrete at an exposed post
   // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
   // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
   // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is

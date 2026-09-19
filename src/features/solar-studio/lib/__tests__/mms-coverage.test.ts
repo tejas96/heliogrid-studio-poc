@@ -36,6 +36,7 @@ const ALL_ROOF_TYPES: Record<RoofType, true> = {
   stone_slab: true,
   tile: true,
   ground: true,
+  carport: true,
 };
 const ROOF_TYPES = Object.keys(ALL_ROOF_TYPES) as RoofType[];
 const W = 1.134;
@@ -302,6 +303,105 @@ describe('a membrane roof cannot be given a fixing that goes through it', () => 
     const after: Project = { ...project, ...configureMms(project, seg.id, 'aero_tray') };
     expect(after.segments[0].racking.kind).toBe('dual_tilt');
     expect(after.segments[0].azimuthDeg).toBe(90);
+  });
+});
+
+// ─── Carport / canopy ───────────────────────────────────────────────────────
+// Not a covering: a structure with CARS under it. Three things are load-bearing
+// that no roof has — the posts land on parking bays, the modules are the roof so
+// their run-off has to go somewhere, and the frame is open so uplift governs.
+// `high_height` only ever raised an RCC table into the air.
+describe('a carport is a structure over cars, not a roof', () => {
+  function carportScene() {
+    const s = scene('carport');
+    // a canopy stands on the tarmac; the posts are what go up
+    const roof: Roof = { ...s.project.roofs[0], heightM: 0 };
+    return { project: { ...s.project, roofs: [roof] }, seg: s.seg };
+  }
+
+  it('stands on a cast or driven footing — never on a ballast block', () => {
+    const { project, seg } = carportScene();
+    const allowed = allowedFoundations(project.roofs[0], seg);
+    expect(allowed).toEqual(['concrete', 'pile']);
+    expect(allowed).not.toContain('ballast');
+  });
+
+  it('clears a vehicle and spaces its posts on bays, not on cheap steel', () => {
+    const { project, seg } = carportScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'carport_cantilever') };
+    const r = resolveRacking(after, after.roofs[0], after.segments[0], after.components.panel!)!;
+    expect(r.frontLegM).toBeGreaterThanOrEqual(2.2); // a car fits under it
+    expect(r.legSpacingM).toBe(5); // two 2.5 m bays per post, so every bay is usable
+  });
+
+  it('actually builds a gutter and downpipes — the modules ARE the roof', () => {
+    const { project, seg } = carportScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'carport_cantilever') };
+    const st = deriveStructures(after).find((x) => x.segmentId === seg.id)!;
+    expect(st.members.filter((m) => m.kind === 'gutter').length).toBeGreaterThan(0);
+    expect(st.members.filter((m) => m.kind === 'downpipe').length).toBeGreaterThan(0);
+  });
+
+  it('buys the drainage, the footings and the make-good, all priced', () => {
+    const { project, seg } = carportScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'carport_cantilever') };
+    const bom = deriveBom(after);
+    for (const key of [
+      'mech.carport_gutter',
+      'mech.carport_downpipe',
+      'mech.carport_footing',
+      'mech.carport_paving',
+      'mech.carport_lighting',
+      'mech.carport_bollard',
+    ]) {
+      const l = bom.find((x) => x.id.startsWith(key));
+      expect(l, key).toBeDefined();
+      expect(l!.qty, key).toBeGreaterThan(0);
+      expect(l!.unitPriceInr, key).toBeGreaterThan(0);
+    }
+  });
+
+  // Drainage is bought per METRE as finished goods. Left in the structure's
+  // steel weight it would also be billed by the kilo — the same pipe twice.
+  it('never bills the gutter twice, by weight and by length', () => {
+    const { project, seg } = carportScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'carport_cantilever') };
+    const st = deriveStructures(after).find((x) => x.segmentId === seg.id)!;
+    const drainage = st.members.filter((m) => m.kind === 'gutter' || m.kind === 'downpipe');
+    expect(drainage.length, 'there IS drainage to exclude').toBeGreaterThan(0);
+    // Σ of the STRUCTURAL members alone. If drainage were still in `steelKg` it
+    // would exceed this, because the pipe would carry a section and a weight.
+    const structuralKg = st.members
+      .filter((m) => m.kind !== 'gutter' && m.kind !== 'downpipe')
+      .reduce((v, m) => v + m.lengthM * (m.profile?.kgPerM ?? 0), 0);
+    expect(st.steelKg).toBeCloseTo(structuralKg, 1);
+    // and drainage carries no structural section that a steel line could price
+    expect(drainage.every((m) => m.profile === undefined)).toBe(true);
+  });
+
+  // Caught in the browser: a 22.7 kWp canopy carried ₹57,600 of concrete
+  // pedestals AND ₹2,35,200 of canopy footings — the same 24 holes, sold twice.
+  it('buys each post footing ONCE — a canopy footing is not also a pedestal', () => {
+    const { project, seg } = carportScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'carport_cantilever') };
+    const bom = deriveBom(after);
+    expect(bom.find((l) => l.id.startsWith('mech.carport_footing'))).toBeDefined();
+    expect(bom.some((l) => l.id.includes(':pedestal'))).toBe(false);
+    expect(bom.some((l) => l.id.startsWith('mech.pedestal'))).toBe(false);
+    expect(bom.some((l) => l.id.startsWith('mech.pile'))).toBe(false);
+  });
+
+  it('a canopy too low for a car is an ERROR, not a note', () => {
+    const { project, seg } = carportScene();
+    const after: Project = { ...project, ...configureMms(project, seg.id, 'carport_cantilever') };
+    const low: Project = {
+      ...after,
+      segments: after.segments.map((s) =>
+        s.racking.kind === 'flush' ? s : { ...s, racking: { ...s.racking, clearanceM: 1.8, frontLegM: 1.8 } },
+      ),
+    };
+    const findings = validateMms(low, deriveStructures(low));
+    expect(findings.some((f) => f.code === 'carport_headroom' && f.status === 'error')).toBe(true);
   });
 });
 

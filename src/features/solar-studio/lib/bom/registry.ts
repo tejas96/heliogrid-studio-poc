@@ -77,6 +77,13 @@ export type LineKey =
   /** the same clamps and joints counted per NODE, for panels in a table */
   | 'mech.stone_beam_clamp'
   | 'mech.stone_joint_node'
+  /** carport: everything a canopy needs that a roof never does */
+  | 'mech.carport_gutter'
+  | 'mech.carport_downpipe'
+  | 'mech.carport_footing'
+  | 'mech.carport_paving'
+  | 'mech.carport_lighting'
+  | 'mech.carport_bollard'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an

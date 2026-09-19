@@ -101,6 +101,16 @@ export const STRUCTURE_PROFILES: StructureProfile[] = [
   profile('top_hat', 'Top Hat', 2.01, { h: 40, b: 40, lip: 20, t: 1.6, shape: 'hat' }),
   // the heavy lipped channel the reference BOM quotes; blank 190 mm × 2.5 mm
   profile('c_channel_80', 'C-Channel 80 (heavy)', 3.73, { h: 80, b: 40, lip: 15, t: 2.5, shape: 'c' }),
+  // ── Canopy column ─────────────────────────────────────────────────────────
+  // A carport post is 2.5 m of free-standing cantilever with a car park around
+  // it and wind uplift trying to lift the canopy off it. An 80 mm lipped
+  // channel at 2.2 kg/m is a rooftop table leg 300 mm long — drawn as a canopy
+  // post it reads like scaffolding and prices the steel at a fifth of what the
+  // job takes. 150 × 150 × 4.0 RHS is the ordinary Indian canopy column.
+  //
+  // kg/m is the HOLLOW-section rule from the header: (150² − 142²) mm² ×
+  // 7850 / 1e6 = 18.34.
+  profile('rhs_150', 'RHS 150 × 150 (canopy post)', 18.34, { h: 150, b: 150, t: 4.0, shape: 'rhs' }),
 ];
 
 /** Default mounting profile until the racking picker sets one. */

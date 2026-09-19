@@ -6,6 +6,10 @@ import { validateStructure, type SegmentStructure, type Member } from '../struct
 import { foundationFootprints } from './parts';
 import type { MmsFinding } from './types';
 
+/** Lowest clear height under a canopy that a car can actually use, m. Below
+ *  this the first vehicle through takes the structure with it. */
+const CARPORT_MIN_CLEAR_M = 2.2;
+
 const resultCache = new WeakMap<Project, { structures: SegmentStructure[]; result: MmsFinding[] }>();
 /** Central roof-aware validation. Result IDs are stable and refer to the rendered graph. */
 export function validateMms(project: Project, structures: SegmentStructure[]): MmsFinding[] {
@@ -107,6 +111,16 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('membrane_protection', 'warning', 'Every bearing point needs a protection layer. Concrete set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps and sinks into it.');
       add('membrane_warranty', 'warning', 'Loading the membrane voids its warranty unless the membrane manufacturer inspects and accepts the design in writing. Confirm before any material reaches the roof.');
     }
+    // Carport. Cars drive under it, so two of these are about people and metal
+    // moving at speed, not about the array.
+    if (roof.roofType === 'carport') {
+      const clear = seg.racking.kind === 'flush' ? 0 : Math.max(seg.racking.frontLegM, seg.racking.clearanceM ?? 0);
+      if (clear < CARPORT_MIN_CLEAR_M)
+        add('carport_headroom', 'error', `Only ${clear.toFixed(2)} m of clear height under the canopy. A car needs about 2.1 m and an SUV or small van about 2.4 m — at this height the first vehicle through takes the structure with it.`);
+      add('carport_uplift', 'not_calculated', 'Wind UPLIFT governs an open canopy, not dead load: the wind gets at both faces and the whole moment is taken at the post base. Nothing here is calculated — the frame, the footing and the hold-down are an engineer’s design (IS 875 Part 3).');
+      add('carport_drainage', 'warning', 'The modules ARE this roof. The gutter and downpipes are counted, but the falls and the point the water discharges to — a surface drain, a soakaway, a storm connection — are not modelled and must be designed.');
+      add('carport_bays', 'warning', 'Post positions come from the structural spacing, not from the car park’s bay layout. Check every post lands on a bay line and not in the middle of a bay or a drive aisle before anything is set in concrete.');
+    }
     // Stone slab on joists. Looks like a flat deck, is not one.
     if (roof.roofType === 'stone_slab') {
       add('stone_beam_line', 'not_calculated', 'Every leg must land on a JOIST, not on the slab between them. Joist size, spacing and corrosion are not modelled — where the beams actually run is a survey output, and it decides whether this table can be built where it is drawn.');
@@ -133,6 +147,11 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('soil_capacity', 'not_calculated', 'Soil bearing, embedment depth and pile pull-out require a geotechnical survey and engineer sign-off.');
       if (seg.racking.kind === 'tracker_hsat') add('tracker_hardware', 'warning', 'Torque tube, bearings, drive and controller are manufacturer hardware. The model shows posts, tubes and modules — not a certified tracker assembly.');
       if (cfg.strategy === 'ground_seasonal') add('seasonal_position', 'warning', 'One seasonal tilt position is modelled. Summer and winter angles, slotted travel and locking hardware require manufacturer detail.');
+    } else if (roof.roofType === 'carport') {
+      // There is no roof under a canopy — it stands on its own footings in a
+      // car park. Asking for "roof structural capacity" here names a structure
+      // that is not in the design; what actually has to be checked is the frame
+      // and the footing, which `carport_uplift` above says outright.
     } else if (!project.mmsEngineering?.roofCapacityKpa) add('roof_capacity', 'not_calculated', 'Roof structural capacity unavailable — engineering verification required.');
     if (!project.mmsEngineering?.basicWindSpeedMs || !project.mmsEngineering?.terrainCategory) add('wind_incomplete', 'warning', 'Wind configuration incomplete (IS 875 Part 3).');
     if (!out.some(f => f.segmentId === seg.id && f.status === 'error')) add('geometry_clear', 'pass', 'No geometric conflicts detected in the modelled members and attachments.');

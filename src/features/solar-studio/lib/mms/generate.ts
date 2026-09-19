@@ -2,7 +2,7 @@ import type { ArraySegment, PanelSpec } from '../../types';
 // the leaf, NOT '../structure': that file calls this one, and the pair
 // importing each other is the import loop `npm run cycles` refuses
 import type { Member, SegmentStructure, XYZ } from '../structure-model';
-import { STRUCTURE_PROFILES } from '../../data/profiles';
+import { STRUCTURE_PROFILES, profileByKey } from '../../data/profiles';
 import { MATERIALS } from './catalogue';
 
 /** Extend, never replace, the existing deterministic member/node graph. */
@@ -74,7 +74,23 @@ export function enrichMmsStructure(s: SegmentStructure, seg: ArraySegment, _spec
   s.steelKg = 0;
   for (const value of Object.values(s.memberSummary)) { value.count = 0; value.totalM = 0; }
   for (const member of s.members) {
-    const declared = member.kind === 'rail' ? railProfile : member.kind.includes('leg') ? profiles?.legs ?? base : member.kind === 'rafter' ? profiles?.rafters ?? base : profiles?.purlins ?? base;
+    // CARPORT DRAINAGE passes straight through. A gutter is a box trough and a
+    // downpipe a round tube, both chosen in `profileFor` and neither a member
+    // of the table: re-declaring them as the purlin section would draw a gutter
+    // as a lipped channel, and adding them to `steelKg` would bill the same
+    // pipe twice — once by the kilo here and once by the metre in its own line.
+    if (member.kind === 'gutter' || member.kind === 'downpipe') {
+      member.lengthM = length(member.a, member.b);
+      const d = s.memberSummary[member.kind] ?? (s.memberSummary[member.kind] = { count: 0, totalM: 0 });
+      d.count++; d.totalM += member.lengthM;
+      continue;
+    }
+    // LEGS keep whatever `buildStructure` already resolved for them, unless the
+    // user set an explicit per-class section. Re-deriving from the table's base
+    // profile here threw away the carport's 150 × 150 canopy column and put a
+    // rooftop table's 80 mm channel under a 2.5 m canopy — right in the picture,
+    // and a fifth of the real steel weight in the quote.
+    const declared = member.kind === 'rail' ? railProfile : member.kind.includes('leg') ? profiles?.legs ?? profileByKey(member.profileKey) ?? base : member.kind === 'rafter' ? profiles?.rafters ?? base : profiles?.purlins ?? base;
     member.profile = { ...declared, kgPerM: declared.kgPerM * MATERIALS[mms.material].density / 7850, ...(mms.material === 'aluminium' || mms.material === 'stainless_steel' ? { isGrade: undefined, coating: undefined } : {}) };
     member.profileKey = declared.key;
     member.lengthM = length(member.a, member.b);

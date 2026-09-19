@@ -28,7 +28,7 @@ import { ruleFor } from './foundation';
 import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
 import { isNoPenetrationRoof, isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
-import { STRUCTURE_PROFILES } from '../data/profiles';
+import { STRUCTURE_PROFILES, profileByKey } from '../data/profiles';
 import { enrichMmsStructure } from './mms/generate';
 import type { Member, MemberKind, NodeKind, SegmentStructure, StructureNode, XYZ } from './structure-model';
 
@@ -142,6 +142,22 @@ const DEFAULT_SHEET_FOUNDATION = 'anchor' as const;
  * arrives correct rather than arriving wrong and being corrected.
  */
 const DEFAULT_MEMBRANE_FOUNDATION = 'ballast' as const;
+/** A canopy post is cast into the car park, because uplift and overturning are
+ *  taken at its base and there is nothing else up there to resist them. */
+const DEFAULT_CARPORT_FOUNDATION = 'concrete' as const;
+/** Clear height under a canopy, m. A car needs ~2.1 m and an SUV or a small van
+ *  ~2.4 m, so the default clears both and the validator complains below 2.2. */
+const CARPORT_CLEAR_HEIGHT_M = 2.5;
+/** Post spacing along a canopy, m. A car bay is 2.5 m wide, so a post every TWO
+ *  bays keeps every bay usable; the generic 2.0 m default would plant a column
+ *  in the middle of every single one. */
+const CARPORT_POST_SPACING_M = 5.0;
+/** How far the gutter sits below the module underside, m — it catches the run-off
+ *  at the low edge, so it hangs just under it. ASSUMED. */
+const GUTTER_DROP_M = 0.12;
+/** A gutter needs an outlet every 10–12 m and the posts are what a pipe straps
+ *  to, so at 5 m post spacing that is every second post. */
+const DOWNPIPE_EVERY_N_POSTS = 2;
 
 export interface ResolvedRacking {
   kind: 'fixed_tilt' | 'dual_tilt' | 'tracker_hsat';
@@ -189,7 +205,12 @@ export function resolveRacking(
   if (roof.pitchDeg > 0) return null;
   const roofO = roof.structureOverride;
   const projD = project.structureDefaults;
-  const clearance = r.clearanceM ?? roofO?.clearanceM ?? projD?.clearanceM ?? 0;
+  // A canopy's clearance is not an optional nicety like a walk-under table's:
+  // below it, cars drive. So it defaults to a real vehicle height rather than
+  // to 0, which would have drawn a carport 300 mm off the tarmac.
+  const clearance =
+    r.clearanceM ?? roofO?.clearanceM ?? projD?.clearanceM ??
+    (roof.roofType === 'carport' ? CARPORT_CLEAR_HEIGHT_M : 0);
   const frontLegM = Math.max(r.frontLegM, clearance);
   const { h } = panelFootprintM(spec, seg.orientation);
   const rise = h * Math.sin((r.tiltDeg * Math.PI) / 180);
@@ -197,8 +218,10 @@ export function resolveRacking(
     r.foundation ??
     roofO?.foundation ??
     projD?.foundation ??
-    (roof.roofType === 'ground'
-      ? DEFAULT_GROUND_FOUNDATION
+    (roof.roofType === 'carport'
+      ? DEFAULT_CARPORT_FOUNDATION
+      : roof.roofType === 'ground'
+        ? DEFAULT_GROUND_FOUNDATION
       : isSheetRoof(roof)
         ? DEFAULT_SHEET_FOUNDATION
         : // a membrane is held by MASS: the rooftop default is a cast pedestal,
@@ -223,7 +246,13 @@ export function resolveRacking(
     frontLegM,
     backLegM: frontLegM + rise,
     profile: r.profile,
-    legSpacingM: r.legSpacingM ?? roofO?.legSpacingM ?? projD?.legSpacingM ?? DEFAULT_LEG_SPACING_M,
+    // A canopy's posts land in a CAR PARK. The generic 2.0 m spacing would put
+    // a column in the middle of every single bay; a post every two 2.5 m bays
+    // keeps all of them usable, which is the whole reason the customer is
+    // building a carport rather than a ground array.
+    legSpacingM:
+      r.legSpacingM ?? roofO?.legSpacingM ?? projD?.legSpacingM ??
+      (roof.roofType === 'carport' ? CARPORT_POST_SPACING_M : DEFAULT_LEG_SPACING_M),
     foundation,
     // same lazy chain; absent falls through to whatever the rule config says
     // this kind is normally formed as, so untouched projects are unchanged
@@ -237,9 +266,25 @@ export function resolveRacking(
     // Every default below reproduces the hardcode it replaced, so a segment
     // that sets none of them yields the graph the golden snapshot pins.
     profileFor: (kind: MemberKind) => {
+      // Drainage is not structural steel and must not borrow the table's
+      // section — a gutter drawn as a lipped C-channel and a downpipe drawn as
+      // a flat strip would read as more frame, which is the one thing a canopy
+      // already has plenty of. A gutter is a box trough; a downpipe is a round
+      // tube. These are fixed sections, not user choices.
+      if (kind === 'gutter') return profileByKey('rhs') ?? r.profile;
+      if (kind === 'downpipe') return profileByKey('chs') ?? r.profile;
       const p = r.profiles;
+      if (kind === 'front_leg' || kind === 'back_leg') {
+        // An explicit choice always wins. Absent one, a CANOPY POST is not a
+        // rooftop table leg: it is 2.5 m of free-standing cantilever in a car
+        // park with uplift trying to take the canopy off it. Leaving it at the
+        // table's 80 mm channel drew scaffolding and priced the steel — which
+        // on a carport is mostly columns — at a fraction of the real tonnage.
+        if (p?.legs) return p.legs;
+        if (roof.roofType === 'carport') return profileByKey('rhs_150') ?? r.profile;
+        return r.profile;
+      }
       if (!p) return r.profile;
-      if (kind === 'front_leg' || kind === 'back_leg') return p.legs ?? r.profile;
       if (kind === 'rafter') return p.rafters ?? r.profile;
       if (kind === 'purlin') return p.purlins ?? r.profile;
       return r.profile; // a brace follows the table's base section
@@ -356,6 +401,10 @@ const MEMBER_KINDS = [
   'purlin',
   'brace',
   'rail',
+  // `beam`, `gutter` and `downpipe` are deliberately ABSENT. They belong to one
+  // topology each — a bridged MMS, a carport — and listing them here would
+  // print "gutter: count=0" on every rooftop table in every drawing and golden
+  // snapshot. They are added to the summary only where they exist.
 ] as const satisfies readonly MemberKind[];
 
 /** How far past a run's end a planned leg may sit and still count as its own. */
@@ -680,6 +729,33 @@ export function buildStructure(
         addNode('brace_bolt', brace.b, [brace.id], { bolts: 1 });
       }
 
+      // ── Carport drainage ─────────────────────────────────────────────────
+      // On a canopy the MODULES are the roof. Every drop that runs off the
+      // low edge lands on whatever is parked underneath, so a carport without
+      // a gutter is not a cheaper carport — it is one that rains on the
+      // customer's cars, which is the complaint that arrives in week two.
+      //
+      // The gutter runs the length of the run along the LOW edge (the front leg
+      // line, which is the low side of a tilted table), and a downpipe comes
+      // down every second post: a gutter needs an outlet roughly every 10–12 m,
+      // and the posts are the only thing there to strap a pipe to.
+      if (roof.roofType === 'carport') {
+        const gz = dz + racking.frontLegM - GUTTER_DROP_M;
+        const gutter = addMember(
+          'gutter',
+          { x: frontMid.x + along.x * -spanHalf, y: frontMid.y + along.y * -spanHalf, z: gz },
+          { x: frontMid.x + along.x * spanHalf, y: frontMid.y + along.y * spanHalf, z: gz },
+        );
+        for (let s = 0; s < stations; s += DOWNPIPE_EVERY_N_POSTS) {
+          const t = stationT(s);
+          const px = frontMid.x + along.x * t;
+          const py = frontMid.y + along.y * t;
+          // strapped to the post, from the gutter down to a discharge at grade
+          addMember('downpipe', { x: px, y: py, z: gz }, { x: px, y: py, z: dz });
+        }
+        void gutter;
+      }
+
       // panel clamps along both purlins: 2 ends + shared mids per purlin
       for (const purlin of purlins) {
         addNode('panel_clamp_end', purlin.a, [purlin.id], { clamps: 1 });
@@ -719,11 +795,24 @@ export function buildStructure(
       totalM: rnd(of.reduce((s, m) => s + m.lengthM, 0)),
     };
   }
+  // Carport drainage joins the summary only when it EXISTS, so a rooftop table's
+  // breakdown does not grow two lines reading "gutter: 0" that describe nothing.
+  for (const kind of ['gutter', 'downpipe'] as const) {
+    const of = members.filter((m) => m.kind === kind);
+    if (of.length > 0)
+      memberSummary[kind] = { count: of.length, totalM: rnd(of.reduce((s, m) => s + m.lengthM, 0)) };
+  }
   // Σ PER MEMBER against its own section (22g) — a table mixing a heavy leg
   // with a light purlin cannot be priced off one kgPerM. Identical to the old
   // single-profile sum whenever `profiles` is unset.
+  // DRAINAGE IS NOT STRUCTURE. A gutter and a downpipe are bought per metre as
+  // finished goods, so leaving them in this sum would bill them twice — once by
+  // weight in the steel line and once again by length in their own. They also
+  // are not steel: a box gutter is usually aluminium.
   const steelKg = rnd(
-    members.reduce((s, m) => s + m.lengthM * racking.profileFor(m.kind).kgPerM, 0),
+    members
+      .filter((m) => m.kind !== 'gutter' && m.kind !== 'downpipe')
+      .reduce((s, m) => s + m.lengthM * racking.profileFor(m.kind).kgPerM, 0),
   );
 
   return {
@@ -793,6 +882,12 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       // or restored land). The app's own ground_ballast preset relies on it;
       // my first list omitted it and quietly rewrote those designs to pile.
       if (roof.roofType === 'ground') return ['pile', 'concrete', 'ballast'];
+      // A CARPORT is three metres of open frame with cars under it. Uplift acts
+      // on both faces and the overturning moment is taken at the base, so the
+      // post is cast in or driven — never stood on a block. Ballasting a canopy
+      // would need a mass nobody puts in a car park, and the first storm would
+      // find that out.
+      if (roof.roofType === 'carport') return ['concrete', 'pile'];
       // a sheet roof fixes through the covering into the PURLIN: you cannot cast
       // on trapezoidal steel, and ballast loads a roof built to carry its own
       // deck. On asbestos-cement that is doubly true — the sheet itself carries
@@ -1118,6 +1213,13 @@ export function validateStructure(s: SegmentStructure): string[] {
     // a rail with no standoff is a rail resting on nothing. Listed here or the
     // monorail model would validate silently however it was built.
     rail: ['sheet_standoff', 'panel_clamp_end'],
+    // Drainage carries no structural load and supports nothing: a gutter hangs
+    // off the front purlin on brackets and a downpipe is strapped to a post.
+    // They are listed with NO required node rather than left out, so that
+    // adding a member kind stays a deliberate decision here instead of a
+    // silent pass.
+    gutter: [],
+    downpipe: [],
   };
   for (const m of s.members) {
     const kinds = new Set((nodesByMember.get(m.id) ?? []).map((n) => n.kind));

@@ -47,10 +47,18 @@ function profileOfMembers(st: SegmentStructure): StructureProfile | undefined {
  */
 function pedestalsBySurface(ctx: BomContext): [('roof' | 'ground'), number][] {
   const groundRoofIds = new Set(ctx.groundRoofIdList);
+  const carportRoofIds = new Set(
+    ctx.project.roofs.filter((r) => r.roofType === 'carport').map((r) => r.id),
+  );
   let roof = 0;
   let ground = 0;
   for (const st of ctx.structures) {
     const seg = ctx.project.segments.find((s) => s.id === st.segmentId);
+    // A CANOPY POST's footing is bought by `mech.carport_footing`, which is a
+    // different and dearer scope: cut through the paving, a pad sized for
+    // uplift and overturning, then reinstate the surface. Counting it here too
+    // would sell the same 24 holes twice.
+    if (seg && carportRoofIds.has(seg.roofId)) continue;
     const pedestals = st.nodes.reduce((n, nd) => n + (nd.fastenerSpec.pedestals ?? 0), 0);
     if (seg && groundRoofIds.has(seg.roofId)) ground += pedestals;
     else roof += pedestals;
@@ -295,14 +303,24 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
           ...fastenerSource,
         }),
       );
-    if (ft.piles > 0)
+    // A driven canopy post's base is bought by `mech.carport_footing` too, for
+    // the same reason the pedestal is: cutting a car park open and reinstating
+    // it is not the same job as driving a pile into a field.
+    let carportPiles = 0;
+    for (const st of structures) {
+      if (st.mms) continue;
+      const rid = roofOfSegment(st.segmentId);
+      if (project.roofs.find((x) => x.id === rid)?.roofType !== 'carport') continue;
+      for (const nd of st.nodes) carportPiles += nd.fastenerSpec.piles ?? 0;
+    }
+    if (ft.piles - carportPiles > 0)
       out.push(
         line({
           key: 'mech.pile',
           category: 'Mechanical BOS',
           item: 'Ground Foundation — Driven Pile',
           spec: 'HDG rammed post, embedment per soil survey',
-          qty: ft.piles,
+          qty: ft.piles - carportPiles,
           unit: 'nos',
           unitPriceInr: PRICE_BOOK.pileFoundation,
           formula: `1 pile per leg base from the node graph. Embedment depth and pull-out capacity are SOIL-dependent — site survey required. ${STRUCTURE_DISCLAIMER}`,
@@ -682,6 +700,124 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
         sourceRoofId: soleSource(stoneNodeRoofIds),
       }),
     );
+  // ── Carport / canopy ─────────────────────────────────────────────────────
+  // The steel is already bought by weight from the member model above. These
+  // six are what a CANOPY needs and a roof never does, and every one of them is
+  // counted from the real graph rather than estimated: gutter and downpipe are
+  // members with lengths, footings are leg bases, bays come from the modules.
+  const carport = { gutterM: 0, downpipeM: 0, posts: 0, modules: 0, roofIds: [] as string[] };
+  for (const st of structures) {
+    const roofId = roofOfSegment(st.segmentId);
+    if (project.roofs.find((x) => x.id === roofId)?.roofType !== 'carport') continue;
+    for (const m of st.members) {
+      if (m.kind === 'gutter') carport.gutterM += m.lengthM;
+      else if (m.kind === 'downpipe') carport.downpipeM += m.lengthM;
+    }
+    carport.posts += st.nodes.filter((nd) => nd.kind === 'roof_anchor').length;
+    carport.modules += project.panels.filter(
+      (p) => p.enabled && p.segmentId === st.segmentId,
+    ).length;
+    if (roofId) carport.roofIds.push(roofId);
+  }
+  if (carport.posts > 0) {
+    const src = soleSource(carport.roofIds);
+    // A car bay is 2.5 m wide and 5 m deep, so a canopy covers roughly one bay
+    // per 12.5 m² of module deck. ASSUMED — the bay layout is the client's car
+    // park, not something this tool can read off a polygon.
+    const bays = Math.max(1, Math.round((carport.modules * (spec ? (spec.lengthMm * spec.widthMm) / 1e6 : 2.6)) / 12.5));
+    if (carport.gutterM > 0)
+      out.push(
+        line({
+          key: 'mech.carport_gutter',
+          category: 'Mechanical BOS',
+          item: 'Canopy Gutter',
+          spec: 'HDG/Al box gutter along the low edge, brackets and end caps',
+          qty: Math.round(carport.gutterM * 10) / 10,
+          unit: 'm',
+          unitPriceInr: PRICE_BOOK.carportGutterPerM,
+          confidence: 'derived',
+          formula:
+            `Measured along the low edge of every canopy run. On a carport the MODULES are the roof — without this line the run-off lands on the cars ` +
+            `parked underneath, which is the complaint that arrives in week two. Falls and the discharge point are NOT modelled.`,
+          sourceRoofId: src,
+        }),
+      );
+    if (carport.downpipeM > 0)
+      out.push(
+        line({
+          key: 'mech.carport_downpipe',
+          category: 'Mechanical BOS',
+          item: 'Canopy Downpipes',
+          spec: 'Downpipe strapped to the post, with shoe and outlet',
+          qty: Math.round(carport.downpipeM * 10) / 10,
+          unit: 'm',
+          unitPriceInr: PRICE_BOOK.carportDownpipePerM,
+          confidence: 'derived',
+          formula:
+            `One pipe every second post, gutter to grade, measured from the member graph. Where the water then GOES — a surface drain, a soakaway, ` +
+            `a storm connection — is a site decision and is NOT included.`,
+          sourceRoofId: src,
+        }),
+      );
+    out.push(
+      line({
+        key: 'mech.carport_footing',
+        category: 'Mechanical BOS',
+        item: 'Canopy Post Footings (in car park)',
+        spec: 'Excavate through paving, RCC pad, backfill and compact',
+        qty: carport.posts,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.carportFootingEach,
+        confidence: 'estimated',
+        formula:
+          `${carport.posts} post positions from the node graph. Bigger than a ground-array pedestal because an OPEN canopy takes its uplift and ` +
+          `overturning at the base — that is the governing load case here and it is NOT calculated. ${STRUCTURE_DISCLAIMER}`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.carport_paving',
+        category: 'Mechanical BOS',
+        item: 'Paving Reinstatement',
+        spec: 'Saw-cut, re-lay and make good the surface around each post',
+        qty: carport.posts,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.carportPavingReinstateEach,
+        confidence: 'estimated',
+        formula:
+          `One per post. You cut somebody's car park open to build this, and leaving the trench is not an option. Surface TYPE is not modelled — ` +
+          `paver block, bitumen and concrete are not the same job — so this is an ESTIMATE until the survey says which.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.carport_lighting',
+        category: 'Mechanical BOS',
+        item: 'Under-Canopy Lighting',
+        spec: 'LED luminaire, wiring and switching, per bay',
+        qty: bays,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.carportLightPerBay,
+        confidence: 'assumed',
+        formula:
+          `~${bays} bay(s), ASSUMED at one bay per 12.5 m² of module deck (a 2.5 × 5 m bay). A carport is somewhere people walk at night; this is ` +
+          `ordinary scope on a canopy tender and is left out of a solar quote every time. The real bay layout is the client's car park.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.carport_bollard',
+        category: 'Mechanical BOS',
+        item: 'Post Protection Bollards',
+        spec: 'HDG bollard set in concrete at exposed posts',
+        qty: carport.posts,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.carportBollardEach,
+        confidence: 'assumed',
+        formula:
+          `One per post, ASSUMED. A column in a car park gets hit, and a bollard is cheap next to replacing the post, its footing and the canopy ` +
+          `bay above it. Which posts are genuinely exposed is a layout decision — reduce this line once the bay plan is known.`,
+        sourceRoofId: src,
+      }),
+    );
+  }
   // rail applies ONLY to loose/flush RCC panels: structured segments carry
   // purlins in the member model; metal-shed bundles mini-rails (the old
   // all-panels rail line double-billed both)
