@@ -11,6 +11,7 @@ import { resolveRacking } from '../../structure';
 import { fastenerTotals } from '../../structure';
 import { emitMms } from './mms';
 import { isNoPenetrationRoof } from '../../roof-plane';
+import { facadeBandM, facadeFace } from '../../facade';
 import { polygonPerimeter } from '../../geo';
 
 /** Mooring line length, m. A PLACEHOLDER for a mooring design: the real length
@@ -945,6 +946,107 @@ export function emitMechanical(ctx: BomContext): BomLine[] {
           sourceRoofId: src,
         }),
       );
+  }
+  // ── Facade / BIPV ────────────────────────────────────────────────────────
+  // What separates a facade quote from a rooftop one is not the hardware. It is
+  // that there is nowhere to stand, nothing to prove the wall will hold, and a
+  // ventilated cavity behind the modules that fire has to be stopped from
+  // running up. All three are real money and none of them has an equivalent on
+  // any other surface in this app, so all three are lines rather than caveats.
+  //
+  // Counted off the WALL, not off the module count: the cradle covers the whole
+  // elevation it is hung over whether every course is clad or not.
+  const facade = { wallM: 0, elevationM2: 0, roofIds: [] as string[] };
+  for (const r of project.roofs) {
+    if (r.roofType !== 'facade') continue;
+    const claddedHere = project.panels.some((p) => p.enabled && p.roofId === r.id);
+    if (!claddedHere) continue;
+    const face = facadeFace(r);
+    if (!face) continue;
+    facade.roofIds.push(r.id);
+    facade.wallM += face.lengthM;
+    facade.elevationM2 += face.lengthM * facadeBandM(r);
+  }
+  if (facade.roofIds.length > 0) {
+    const src = soleSource(facade.roofIds);
+    const wallM = Math.round(facade.wallM);
+    const areaM2 = Math.round(facade.elevationM2);
+    const eyes = Math.max(2, Math.ceil(facade.wallM / 10));
+    out.push(
+      line({
+        key: 'mech.facade_access',
+        category: 'Mechanical BOS',
+        item: 'Facade Access — Cradle / Rope Access',
+        spec: 'Suspended platform or rope access team for the install phase',
+        qty: areaM2,
+        unit: 'm²',
+        unitPriceInr: PRICE_BOOK.facadeAccessPerM2,
+        confidence: 'assumed',
+        formula:
+          `${wallM} m of wall × the clad band = ${areaM2} m² of elevation. THERE IS NO ROOF TO STAND ON: every module here is set, wired and ` +
+          `inspected from a cradle, a rope or a scaffold, and the same is true of every clean for the next 25 years (that recurring cost is O&M, not ` +
+          `this line). ASSUMED rate — an access contractor prices the building, its height and its ground conditions, none of which is modelled.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.facade_pull_test',
+        category: 'Mechanical BOS',
+        item: 'Anchor Pull-Out Test & Anchorage Design',
+        spec: 'On-site pull tests plus a signed anchorage design for the substrate found',
+        qty: facade.roofIds.length,
+        unit: 'lot',
+        unitPriceInr: PRICE_BOOK.facadePullTestLumpsum,
+        confidence: 'assumed',
+        formula:
+          `${facade.roofIds.length} facade(s). Every bracket count above is derived; not one of them is a CAPACITY. What the wall is made of — RCC, ` +
+          `solid brick, hollow block, or an infill panel spanning between columns — changes the holding power by an order of magnitude, and it cannot ` +
+          `be read off a drawing or a satellite image. This is the line that replaces the assumption with a measurement. ASSUMED LUMP SUM.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.facade_cavity_barrier',
+        category: 'Safety',
+        item: 'Cavity Fire Barrier',
+        spec: 'Mineral-wool barrier with intumescent seal, behind the clad band',
+        qty: wallM,
+        unit: 'm',
+        unitPriceInr: PRICE_BOOK.facadeCavityBarrierPerM,
+        confidence: 'assumed',
+        formula:
+          `${wallM} m of wall, ONE run. A ventilated cavity behind cladding is a chimney, and NBC 2016 Part 4 wants it interrupted at every floor ` +
+          `level — so the real quantity is this length × the number of floors the band crosses. THIS MODEL DOES NOT KNOW THE FLOOR LEVELS: they are on ` +
+          `the elevation drawing. Multiply this line by the floor count before you quote it.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.facade_trim',
+        category: 'Mechanical BOS',
+        item: 'Head & Sill Flashing',
+        spec: 'GI / aluminium flashing, sealed, closing the top and bottom of the band',
+        qty: wallM * 2,
+        unit: 'm',
+        unitPriceInr: PRICE_BOOK.facadeFlashingPerM,
+        confidence: 'assumed',
+        formula:
+          `${wallM} m of wall × 2 (head and sill). The clad band has to be closed top and bottom or water gets behind the modules and runs down the ` +
+          `INSIDE of the wall, which shows up as damp on somebody's office ceiling. The detail itself is the architect's; this is an allowance.`,
+        sourceRoofId: src,
+      }),
+      line({
+        key: 'mech.facade_anchor_eye',
+        category: 'Safety',
+        item: 'Permanent Fall-Arrest Anchor Eyes',
+        spec: 'Certified eye at roof level, installed and load-tested',
+        qty: eyes,
+        unit: 'nos',
+        unitPriceInr: PRICE_BOOK.facadeAnchorEyeEach,
+        confidence: 'assumed',
+        formula:
+          `~1 per 10 m of wall (${wallM} m), minimum 2. Whoever cleans this facade in year 12 needs something certified to hang from, and retro-fitting ` +
+          `eyes to a finished elevation costs many times what installing them now does. ASSUMED spacing — the access plan decides the real one.`,
+        sourceRoofId: src,
+      }),
+    );
   }
   // rail applies ONLY to loose/flush RCC panels: structured segments carry
   // purlins in the member model; metal-shed bundles mini-rails (the old

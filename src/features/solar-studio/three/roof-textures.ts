@@ -388,6 +388,67 @@ function stoneSlab(): RoofSurface {
   };
 }
 
+/**
+ * A rendered / plastered wall — what a facade's modules are bolted to.
+ *
+ * Deliberately NOT `concrete()`: that one is a weathered rooftop deck, with the
+ * pooling, staining and trowel marks of a surface that rain sits on. A wall
+ * sheds water, so what shows on it instead is the vertical streaking below
+ * every ledge, the faint grid of a render's control joints, and the patchiness
+ * of a repaint. Using the deck texture read as a roof stood on its end.
+ */
+function renderedWall(): RoofSurface {
+  const N = 512; // 1 m
+  const c = document.createElement('canvas');
+  c.width = N;
+  c.height = N;
+  const ctx = c.getContext('2d')!;
+  const rnd = seeded(123);
+  const h = new Float32Array(N * N).fill(1);
+  ctx.fillStyle = '#c9c4ba'; // painted cement render, a warm off-white
+  ctx.fillRect(0, 0, N, N);
+  // patchy repaint: broad soft blotches, nothing crisp
+  for (let i = 0; i < 40; i++) {
+    const g = ctx.createRadialGradient(rnd() * N, rnd() * N, 0, rnd() * N, rnd() * N, 40 + rnd() * 90);
+    g.addColorStop(0, `rgba(${180 + rnd() * 30},${176 + rnd() * 28},${166 + rnd() * 26},0.16)`);
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, N, N);
+  }
+  // RAIN STREAKS, running down. The one mark that says "wall" and not "deck".
+  for (let i = 0; i < 70; i++) {
+    const x = rnd() * N;
+    const len = 60 + rnd() * 300;
+    const y = rnd() * (N - len);
+    ctx.fillStyle = `rgba(${120 + rnd() * 30},${116 + rnd() * 28},${106 + rnd() * 26},${0.05 + rnd() * 0.08})`;
+    ctx.fillRect(x, y, 1 + rnd() * 3, len);
+  }
+  // render control joints — a shallow grid, a couple per metre
+  ctx.fillStyle = 'rgba(112,108,100,0.35)';
+  for (const t of [0.5]) {
+    ctx.fillRect(0, t * N - 1, N, 2);
+    ctx.fillRect(t * N - 1, 0, 2, N);
+    for (let p = 0; p < N; p++) {
+      h[Math.round(t * N) * N + p] = 0.4;
+      h[p * N + Math.round(t * N)] = 0.4;
+    }
+  }
+  // fine render grain
+  for (let i = 0; i < 9000; i++) {
+    const px = Math.floor(rnd() * N);
+    const py = Math.floor(rnd() * N);
+    h[py * N + px] = 0.86 + rnd() * 0.14;
+  }
+  return {
+    map: makeTex(c, 1, true),
+    normalMap: makeTex(normalFromHeight(h, N, N, 0.7), 1, false),
+    normalScale: 0.35,
+    roughness: 0.92,
+    metalness: 0,
+    color: '#ffffff',
+  };
+}
+
 const cache = new Map<RoofType, RoofSurface | null>();
 
 /** The covering for a roof type — null for 'ground' (no roof surface). */
@@ -399,6 +460,7 @@ export function getRoofSurface(type: RoofType): RoofSurface | null {
   else if (type === 'ac_sheet') s = acSheet();
   else if (type === 'membrane') s = bitumenMembrane();
   else if (type === 'stone_slab') s = stoneSlab();
+  else if (type === 'facade') s = renderedWall();
   else if (type === 'tile') s = clayTile();
   cache.set(type, s);
   return s;

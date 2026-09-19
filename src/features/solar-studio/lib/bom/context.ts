@@ -94,6 +94,9 @@ export interface BomContext {
   nMembrane: number;
   /** loose panels on a stone slab — the load reaches the joist, not the slab */
   nStone: number;
+  /** loose modules on a FACADE — hung off a wall, reached from a cradle */
+  nFacade: number;
+  facadeRoofIdList: string[];
   nGround: number;
   nSloped: number;
   nStructured: number;
@@ -260,6 +263,18 @@ export function buildContext(project: Project): BomContext | null {
     (p) => stoneRoofIds.has(p.roofId) && !structuredPanelIds.has(p.id),
   );
   const nStone = stonePanels.length;
+  // A FACADE is the one surface here that is not a surface. The flat-RCC
+  // remainder buys an elevated table on a deck — legs, ballast or a cast
+  // pedestal, and a walk-around to install it — and a wall has none of those
+  // things and one big cost none of them have: the access. A loose module on a
+  // wall billed as loose module on a roof is wrong by the whole cradle.
+  const facadeRoofIds = new Set(
+    project.roofs.filter((r) => r.roofType === 'facade').map((r) => r.id),
+  );
+  const facadePanels = panels.filter(
+    (p) => facadeRoofIds.has(p.roofId) && !structuredPanelIds.has(p.id),
+  );
+  const nFacade = facadePanels.length;
   // A PITCHED face is not an elevated flat deck. makeRoof stamps every roof
   // 'rcc_flat' and the gable/hip/skeleton factories only set pitchDeg, so a
   // sloped roof used to land in nFlatRcc and get quoted ballasted 10° tilt
@@ -286,6 +301,7 @@ export function buildContext(project: Project): BomContext | null {
       !acRoofIds.has(p.roofId) &&
       !membraneRoofIds.has(p.roofId) &&
       !stoneRoofIds.has(p.roofId) &&
+      !facadeRoofIds.has(p.roofId) &&
       !groundRoofIds.has(p.roofId),
   );
   const nSloped = slopedPanels.length;
@@ -301,7 +317,7 @@ export function buildContext(project: Project): BomContext | null {
     slopedByCovering.set(cov, (slopedByCovering.get(cov) ?? 0) + 1);
     slopedRoofIdsByCovering.set(cov, [...(slopedRoofIdsByCovering.get(cov) ?? []), p.roofId]);
   }
-  const nFlatRcc = Math.max(0, n - nMetal - nAc - nMembrane - nStone - nStructured - nGround - nSloped); // loose/flush on FLAT RCC
+  const nFlatRcc = Math.max(0, n - nMetal - nAc - nMembrane - nStone - nFacade - nStructured - nGround - nSloped); // loose/flush on FLAT RCC
   // The flat-RCC bucket is a REMAINDER, not a filter, so it has no panel list of
   // its own; reconstruct the roofs it drew from the same exclusions. Every new
   // covering must be subtracted ABOVE and excluded HERE, or its panels are
@@ -314,6 +330,7 @@ export function buildContext(project: Project): BomContext | null {
         !acRoofIds.has(p.roofId) &&
         !membraneRoofIds.has(p.roofId) &&
         !stoneRoofIds.has(p.roofId) &&
+        !facadeRoofIds.has(p.roofId) &&
         !groundRoofIds.has(p.roofId) &&
         !slopedRoofIds.has(p.roofId),
     )
@@ -349,6 +366,8 @@ export function buildContext(project: Project): BomContext | null {
     nAc,
     nMembrane,
     nStone,
+    nFacade,
+    facadeRoofIdList: facadePanels.map((p) => p.roofId),
     nGround,
     nSloped,
     nStructured,

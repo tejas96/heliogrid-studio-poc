@@ -86,6 +86,23 @@ const CARPORT: RoofType[] = ['carport'];
 // pure-float pontoon body, or a steel raft sitting on smaller floats, which
 // costs more and is the only one you can walk on.
 const FLOATING: RoofType[] = ['floating'];
+// Facade. The two are not variants of one product — they are two different
+// TRADES, and which one a job is decides who builds it and what the module is.
+//
+// Rails on brackets is the retrofit: an ordinary framed module, an ordinary
+// clamp, on an aluminium rail bolted to a wall that is already finished and
+// already weathertight. The solar contractor does all of it.
+//
+// Spandrel infill is cladding: the module IS the wall, glazed into a curtain
+// wall's mullions with structural gaskets, and it has to satisfy the facade
+// system's weather line as well as make power. The facade contractor owns the
+// interface, the module is usually a made-to-size glass-glass laminate, and the
+// two costs are nothing like each other.
+//
+// Neither is offered on any other roof and nothing else is offered here: every
+// rooftop preset in this table founds on a horizontal surface, and there is not
+// one of them whose ballast, pedestal or tilt frame means anything on a wall.
+const FACADE: RoofType[] = ['facade'];
 export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'rcc_fixed', label: 'RCC · Standard fixed tilt', roofs: RCC, heightM: .45, tilt: 10 },
   { id: 'rcc_ballast', label: 'RCC · Ballasted', roofs: RCC, heightM: .45 },
@@ -129,6 +146,11 @@ export const MOUNT_CATALOGUE: MountPreset[] = [
   { id: 'carport_cantilever', label: 'Carport · Single-post cantilever', roofs: CARPORT, heightM: 2.5, tilt: 5, foundation: 'concrete' },
   { id: 'carport_portal', label: 'Carport · Two-post portal over the aisle', roofs: CARPORT, heightM: 2.5, tilt: 5, foundation: 'concrete' },
   { id: 'carport_butterfly', label: 'Carport · Butterfly, central posts', roofs: CARPORT, heightM: 2.7, tilt: 7, foundation: 'concrete' },
+  // No tilt and no height: a facade's angle is 90° by definition (the pose
+  // sets it) and its "height" is the wall's, which the roof already holds.
+  // Writing either here would be inventing a second answer for both.
+  { id: 'facade_rail', label: 'Facade · Rails on wall brackets (retrofit)', roofs: FACADE, flush: true, foundation: 'anchor' },
+  { id: 'facade_spandrel', label: 'Facade · BIPV spandrel infill in curtain wall', roofs: FACADE, flush: true, foundation: 'anchor' },
   { id: 'float_pontoon', label: 'Floating · HDPE pontoon (pure float)', roofs: FLOATING, heightM: .3, tilt: 10, foundation: 'float' },
   { id: 'float_raft', label: 'Floating · Steel raft on floats (walkable)', roofs: FLOATING, heightM: .45, tilt: 10, foundation: 'float' },
   { id: 'roof_hook', label: 'Rail + roof hook', roofs: ['tile'], flush: true },
@@ -152,7 +174,7 @@ export function defaultMms(roof: RoofType): MmsConfig {
     // Every branch must name a strategy the roof's own list contains, or the
     // panel opens on a value it cannot apply — which is what left `Generate MMS`
     // inert on a ground array. The mms-coverage gate asserts this.
-    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'membrane' ? 'membrane_ballast' : roof === 'stone_slab' ? 'stone_beam_clamp' : roof === 'carport' ? 'carport_cantilever' : roof === 'floating' ? 'float_pontoon' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
+    version: 1, strategy: roof === 'metal_shed' ? 'purlin_mounted' : roof === 'ac_sheet' ? 'hook_bolt' : roof === 'membrane' ? 'membrane_ballast' : roof === 'stone_slab' ? 'stone_beam_clamp' : roof === 'carport' ? 'carport_cantilever' : roof === 'floating' ? 'float_pontoon' : roof === 'facade' ? 'facade_rail' : roof === 'tile' ? 'roof_hook' : roof === 'ground' ? 'ground_pile' : 'rcc_fixed',
     material: 'galvanized_steel', railInsetRatio: .18, attachmentSpacingM: 1.2, railStockLengthM: 6,
     edgeClearanceM: .1, obstacleClearanceM: .05,
     ballast: { type: 'precast_concrete', lengthM: .6, widthM: .4, heightM: .15, massKg: 86.4, blocksPerSupport: 1 },

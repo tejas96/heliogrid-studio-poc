@@ -47,6 +47,25 @@ export function isNoPenetrationRoof(roof: Pick<Roof, 'roofType'>): boolean {
   return roof.roofType === 'membrane';
 }
 
+/**
+ * A VERTICAL mounting surface — a wall, not a deck.
+ *
+ * This predicate exists because `isSloped` cannot answer for it and must never
+ * be made to. The plane formula is `heightM + tan(pitch) · run`, and at 90° the
+ * gradient is infinite: every height, every setback and every foreshortening
+ * derived from it becomes NaN or Infinity. So a facade is deliberately stored
+ * with `pitchDeg` 0 — its plan FOOTPRINT is horizontal, which is true, it is
+ * the top of a wall — and the vertical dimension is answered by the modules'
+ * own `mountHeightM` instead of by a plane.
+ *
+ * Read it as "the surface height is not a function of plan position". Any code
+ * that wants to reason about where a module physically is must go through
+ * `panelPose`, never through `surfaceHeightAt` alone.
+ */
+export function isFacade(roof: Pick<Roof, 'roofType'>): boolean {
+  return roof.roofType === 'facade';
+}
+
 /** Downslope horizontal unit vector in plan (x=east, y=north) + gradient. */
 export function slopeVector(roof: Roof): { dx: number; dy: number; grad: number } {
   const a = deg(roof.slopeAzimuthDeg ?? 180);

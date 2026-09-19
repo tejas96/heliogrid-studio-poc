@@ -1892,6 +1892,7 @@ export function Step6Editor() {
             onToggleEnable={toggleEnableSelected}
             onRotate={rotateSelected}
             onTilt={tiltSelected}
+            onWall={selectedSegRoof?.roofType === 'facade'}
             onDelete={deleteSelected}
             onClear={() => setSelectedIds([])}
           />
@@ -2659,6 +2660,24 @@ export function Step6Editor() {
               // the rooftop presets (flush / walk-under) do not apply to it —
               // and the ground presets do not apply to a roof. Show one set.
               const isGround = roofFor?.roofType === 'ground';
+              // A FACADE takes none of the three rooftop presets below. Flush,
+              // Standard 10° and Walk-under 2.2 m all describe a table standing
+              // on a deck, and there is no deck — the modules hang off a wall.
+              // Saying so beats three buttons that each do the wrong thing.
+              if (roofFor?.roofType === 'facade')
+                return (
+                  <>
+                    <div style={lbl as React.CSSProperties}>Facade mounting</div>
+                    <div className="hint">
+                      Modules hang on wall brackets, coplanar with the wall — there is no
+                      table and no footing, so the rooftop presets do not apply. Choose
+                      between rails on brackets and curtain-wall spandrel infill in the
+                      mounting-system panel. Courses and columns come from re-filling the
+                      wall; a module cannot be dragged in plan, because a course is a
+                      height.
+                    </div>
+                  </>
+                );
               const groundTilt = resolveRules().defaults.groundTiltDeg;
               const groundRacking =
                 resolved != null ? { ...resolved, tiltDeg: groundTilt } : null;
@@ -2713,13 +2732,22 @@ export function Step6Editor() {
             <div style={rowStyle}>
               {/* A tracker belongs on open ground: nothing on a roof turns, so
                   the option is not offered where it could not be built. */}
+              {/* A FACADE offers ONE kind, because only one exists on a wall.
+                  The modules are coplanar with the surface they hang on — that
+                  is what a facade is. Offering "fixed tilt" here would look
+                  alive and would tip every module 10° off the wall, and "dual
+                  tilt" would face half of them into the building. Which facade
+                  SYSTEM it is (rails on brackets, or spandrel infill) is a real
+                  choice, and it is in the mounting-system panel. */}
               {(
-                [
-                  'flush',
-                  'fixed_tilt',
-                  'dual_tilt',
-                  ...(selectedSegRoof?.roofType === 'ground' ? (['tracker_hsat'] as const) : []),
-                ] as const
+                selectedSegRoof?.roofType === 'facade'
+                  ? (['flush'] as const)
+                  : ([
+                      'flush',
+                      'fixed_tilt',
+                      'dual_tilt',
+                      ...(selectedSegRoof?.roofType === 'ground' ? (['tracker_hsat'] as const) : []),
+                    ] as const)
               ).map((k) => (
                 <button key={k} style={seg3btn(sharedRackKind === k) as React.CSSProperties} onClick={() => applyRacking(k)}>
                   {k === 'flush' ? 'Flush' : k === 'fixed_tilt' ? 'Fixed tilt' : k === 'dual_tilt' ? 'Dual tilt' : 'Tracker'}
@@ -2936,6 +2964,18 @@ export function Step6Editor() {
             <div style={lbl as React.CSSProperties}>
               Azimuth (facing) · {sharedAz === undefined ? '–  mixed' : `${sharedAz}° ${dir}`}
             </div>
+            {/* A FACADE's azimuth is the WALL's, and nothing here may change it
+                independently. "Due S" on an east wall would leave the modules
+                claiming to face south while still bolted to the east elevation
+                — a number that no longer describes the thing it came from, and
+                one the energy engine would believe. Which way the wall looks is
+                set in Step 2, where the wall is. */}
+            {selectedSegRoof?.roofType === 'facade' ? (
+              <div className="hint">
+                Set by the wall — change which way it looks in Step 2. The modules face
+                wherever the wall does.
+              </div>
+            ) : (
             <div style={rowStyle}>
               {/* ±5 and "Roof slope" are RELATIVE — each table moves from its own
                   current value, and the roof is looked up per table. Sending the
@@ -2956,6 +2996,7 @@ export function Step6Editor() {
               </button>
               <button className="tool-btn" onClick={() => applyAzimuth((s) => s.azimuthDeg + 5, 'Azimuth +5°')}>+</button>
             </div>
+            )}
 
             {!isFlush && seg2.kind !== 'flush' && (
               <>
@@ -3403,6 +3444,7 @@ function SelectionContextBar({
   onToggleEnable,
   onRotate,
   onTilt,
+  onWall,
   onDelete,
   onClear,
 }: {
@@ -3425,6 +3467,8 @@ function SelectionContextBar({
   onToggleEnable: () => void;
   onRotate: (deltaDeg: number) => void;
   onTilt: (deltaDeg: number) => void;
+  /** the selection is on a FACADE — its facing and its tilt come from the wall */
+  onWall?: boolean;
   onDelete: () => void;
   onClear: () => void;
 }) {
@@ -3622,59 +3666,84 @@ function SelectionContextBar({
               </span>
             )}
             <span className="sep" />
-            <span className="ctx-label" aria-hidden>
-              Rotate
-            </span>
-            <button
-              className="ctx-btn"
-              title="Rotate azimuth 90° counter-clockwise"
-              aria-label="Rotate azimuth 90 degrees counter-clockwise"
-              aria-disabled={locked || undefined}
-              style={dim}
-              onClick={() => onRotate(-90)}
-            >
-              <RotateCcw />
-            </button>
-            <span className="ctx-val" title="Azimuth — the direction the panels face">
-              {azLabel}
-            </span>
-            <button
-              className="ctx-btn"
-              title="Rotate azimuth 90° clockwise"
-              aria-label="Rotate azimuth 90 degrees clockwise"
-              aria-disabled={locked || undefined}
-              style={dim}
-              onClick={() => onRotate(90)}
-            >
-              <RotateCw />
-            </button>
-            <span className="sep" />
-            <span className="ctx-label" aria-hidden>
-              Tilt
-            </span>
-            <button
-              className="ctx-btn"
-              title="Tilt −5° (affects yield)"
-              aria-label="Decrease tilt by 5 degrees"
-              aria-disabled={locked || undefined}
-              style={dim}
-              onClick={() => onTilt(-5)}
-            >
-              <ChevronsDown />
-            </button>
-            <span className="ctx-val" title="Panel tilt (min of selection)">
-              {Math.min(...panels.map((p) => p.tiltDeg))}°
-            </span>
-            <button
-              className="ctx-btn"
-              title="Tilt +5° (affects yield)"
-              aria-label="Increase tilt by 5 degrees"
-              aria-disabled={locked || undefined}
-              style={dim}
-              onClick={() => onTilt(5)}
-            >
-              <ChevronsUp />
-            </button>
+            {/* ── A table ON A WALL has neither of these to set ───────────────
+                Both would look alive and neither would be right. Rotating a
+                facade table in plan swings it off the wall it is bolted to,
+                and its azimuth is the WALL's facing, which is changed in Step 2
+                where the wall is. Tilt is worse: it is 90° by definition, and
+                because a facade segment is stored `flush`, `setSegmentTilt`
+                ignores the buttons entirely — the exact "looks alive, does
+                nothing" control this product refuses to ship. The values still
+                READ here, because they are worth seeing. */}
+            {onWall ? (
+              <>
+                <span className="ctx-label" aria-hidden>
+                  Wall
+                </span>
+                <span
+                  className="ctx-val"
+                  title="A facade's facing is the wall's, and its tilt is vertical by definition. Change which way the wall looks in Step 2."
+                >
+                  {azLabel} · 90° vertical
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="ctx-label" aria-hidden>
+                  Rotate
+                </span>
+                <button
+                  className="ctx-btn"
+                  title="Rotate azimuth 90° counter-clockwise"
+                  aria-label="Rotate azimuth 90 degrees counter-clockwise"
+                  aria-disabled={locked || undefined}
+                  style={dim}
+                  onClick={() => onRotate(-90)}
+                >
+                  <RotateCcw />
+                </button>
+                <span className="ctx-val" title="Azimuth — the direction the panels face">
+                  {azLabel}
+                </span>
+                <button
+                  className="ctx-btn"
+                  title="Rotate azimuth 90° clockwise"
+                  aria-label="Rotate azimuth 90 degrees clockwise"
+                  aria-disabled={locked || undefined}
+                  style={dim}
+                  onClick={() => onRotate(90)}
+                >
+                  <RotateCw />
+                </button>
+                <span className="sep" />
+                <span className="ctx-label" aria-hidden>
+                  Tilt
+                </span>
+                <button
+                  className="ctx-btn"
+                  title="Tilt −5° (affects yield)"
+                  aria-label="Decrease tilt by 5 degrees"
+                  aria-disabled={locked || undefined}
+                  style={dim}
+                  onClick={() => onTilt(-5)}
+                >
+                  <ChevronsDown />
+                </button>
+                <span className="ctx-val" title="Panel tilt (min of selection)">
+                  {Math.min(...panels.map((p) => p.tiltDeg))}°
+                </span>
+                <button
+                  className="ctx-btn"
+                  title="Tilt +5° (affects yield)"
+                  aria-label="Increase tilt by 5 degrees"
+                  aria-disabled={locked || undefined}
+                  style={dim}
+                  onClick={() => onTilt(5)}
+                >
+                  <ChevronsUp />
+                </button>
+              </>
+            )}
             <span className="sep" />
             {tableCount > 0 && (
               <button

@@ -38,24 +38,117 @@ const SKY_SCAN = { scanDeg: 6, refine: 1 };
 const HORIZON_BAND_DEG = 6.5;
 /** A module farther than this cannot lift a neighbour's skyline by more than ~6°. */
 const NEAR_PLATE_M = 8;
+/**
+ * Tilt from which a module's diffuse view is computed for its REAL plane rather
+ * than for a horizontal one.
+ *
+ * 60° is chosen to catch the vertical case and nothing else. Below it the two
+ * treatments agree within a couple of percent; at 90° the horizontal form
+ * under-reports diffuse by about a factor of two, because it averages the
+ * skyline over the 180° behind the module — which on a facade is the wall.
+ */
+const PLANE_AWARE_TILT_DEG = 60;
 
-/** Isotropic sky-view factor of a horizontal plane under a skyline: cos²β, averaged over azimuth. */
-export function skyViewFromSkyline(elevDeg: number[]): number {
-  if (elevDeg.length === 0) return 1;
-  let sum = 0;
-  for (const e of elevDeg) {
-    const c = Math.cos((Math.max(0, Math.min(90, e)) * Math.PI) / 180);
-    sum += c * c;
-  }
-  return sum / elevDeg.length;
+/**
+ * The plane a module's diffuse view is measured FOR.
+ *
+ * Only supplied for a module whose plane is steep enough that treating it as
+ * horizontal is not an approximation but an error — see `PLANE_AWARE_TILT_DEG`.
+ */
+export interface SkyPlane {
+  tiltDeg: number;
+  azimuthDeg: number;
+  /** azimuth spacing of the skyline samples, degrees (sample i is at i·step) */
+  azStepDeg: number;
 }
 
-/** How much of the horizon band is still open: a skyline at β hides β / band of it in that direction. */
-export function horizonBandView(elevDeg: number[]): number {
-  if (elevDeg.length === 0) return 1;
+/** Elevation steps in the per-azimuth view integral. Coarse: both outputs are means. */
+const PLANE_ELEV_STEPS = 45;
+
+/**
+ * How much diffuse sky a plane sees from ONE azimuth, above elevation `fromDeg`.
+ *
+ * ∫ max(0, n·ŝ)·cos θ dθ over the elevations still open in that direction. This
+ * is the quantity BOTH factors below are really ratios of, and writing it
+ * explicitly is what makes a vertical plane come out right:
+ *
+ *  - horizontal (tilt 0): the integral is ∫ sinθ cosθ dθ = cos²β / 2, so the
+ *    open/total ratio per azimuth is exactly cos²β and the mean over azimuths is
+ *    exactly the closed form this file has always used. The generalisation is
+ *    not a different model, it is the same one written out.
+ *  - vertical (tilt 90): n·ŝ ∝ cos(φ − A), so the 180° BEHIND the plane weigh
+ *    nothing at all. That is the whole point. A wall sees half a sky dome, and
+ *    the hourly engine's (1 + cos tilt)/2 term already accounts for that half —
+ *    averaging the skyline over the full circle as well would count the
+ *    building the modules are bolted to as something shading them, and halve a
+ *    facade's diffuse a second time.
+ */
+function planeBinView(
+  tiltDeg: number,
+  azimuthDeg: number,
+  azDeg: number,
+  fromDeg: number,
+): number {
+  const t = (tiltDeg * Math.PI) / 180;
+  const c = Math.cos(((azDeg - azimuthDeg) * Math.PI) / 180);
+  const ct = Math.cos(t);
+  const st = Math.sin(t);
+  const lo = (Math.max(0, Math.min(90, fromDeg)) * Math.PI) / 180;
+  const dz = (Math.PI / 2 - lo) / PLANE_ELEV_STEPS;
+  if (dz <= 0) return 0;
   let sum = 0;
-  for (const e of elevDeg) sum += Math.max(0, 1 - Math.max(0, e) / HORIZON_BAND_DEG);
-  return sum / elevDeg.length;
+  for (let k = 0; k < PLANE_ELEV_STEPS; k++) {
+    const th = lo + (k + 0.5) * dz;
+    const v = ct * Math.sin(th) + st * c * Math.cos(th);
+    if (v > 0) sum += v * Math.cos(th) * dz;
+  }
+  return sum;
+}
+
+/**
+ * Isotropic sky-view factor under a skyline: cos²β averaged over azimuth for a
+ * horizontal plane, and the true normal-weighted ratio when a `plane` is given.
+ */
+export function skyViewFromSkyline(elevDeg: number[], plane?: SkyPlane): number {
+  if (elevDeg.length === 0) return 1;
+  if (!plane) {
+    let sum = 0;
+    for (const e of elevDeg) {
+      const c = Math.cos((Math.max(0, Math.min(90, e)) * Math.PI) / 180);
+      sum += c * c;
+    }
+    return sum / elevDeg.length;
+  }
+  let open = 0;
+  let total = 0;
+  for (let i = 0; i < elevDeg.length; i++) {
+    const az = i * plane.azStepDeg;
+    total += planeBinView(plane.tiltDeg, plane.azimuthDeg, az, 0);
+    open += planeBinView(plane.tiltDeg, plane.azimuthDeg, az, elevDeg[i]);
+  }
+  return total > 0 ? Math.min(1, open / total) : 1;
+}
+
+/**
+ * How much of the horizon band is still open: a skyline at β hides β / band of
+ * it in that direction. With a `plane`, each azimuth is weighted by how much of
+ * that plane's view comes from it — so the band behind a wall is not averaged in.
+ */
+export function horizonBandView(elevDeg: number[], plane?: SkyPlane): number {
+  if (elevDeg.length === 0) return 1;
+  if (!plane) {
+    let sum = 0;
+    for (const e of elevDeg) sum += Math.max(0, 1 - Math.max(0, e) / HORIZON_BAND_DEG);
+    return sum / elevDeg.length;
+  }
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < elevDeg.length; i++) {
+    const w = planeBinView(plane.tiltDeg, plane.azimuthDeg, i * plane.azStepDeg, 0);
+    den += w;
+    num += w * Math.max(0, 1 - Math.max(0, elevDeg[i]) / HORIZON_BAND_DEG);
+  }
+  return den > 0 ? num / den : 1;
 }
 
 let cache: { key: string; factors: Map<string, SkyViewFactors> } | null = null;
@@ -90,7 +183,23 @@ export function moduleSkyViews(project: Project): Map<string, SkyViewFactors> {
         .filter(([id, m]) => id !== p.id && Math.hypot(m.position.x - eye.origin.x, m.position.z - eye.origin.z) <= NEAR_PLATE_M)
         .map(([, m]) => m);
       const sky = skylineOf([...fixed, ...near], eye, SKY_AZ_STEP_DEG, offset, SKY_SCAN);
-      out.set(p.id, { skyView: skyViewFromSkyline(sky), horizonView: horizonBandView(sky) });
+      // A module STEEP enough that "what would a horizontal plane see?" is no
+      // longer an approximation gets the real normal-weighted answer. Applied by
+      // tilt and not by roof type on purpose — it is a property of the plane, so
+      // any future steep surface inherits it without being listed.
+      //
+      // Deliberately NOT applied to ordinary rooftop tilts. At 10–20° the two
+      // agree closely, and switching them over would move the stored energy
+      // figure of every project in the system inside a slice about facades.
+      // That is a change worth making on its own, with its own verification.
+      const plane =
+        p.tiltDeg >= PLANE_AWARE_TILT_DEG
+          ? { tiltDeg: p.tiltDeg, azimuthDeg: p.azimuthDeg, azStepDeg: SKY_AZ_STEP_DEG }
+          : undefined;
+      out.set(p.id, {
+        skyView: skyViewFromSkyline(sky, plane),
+        horizonView: horizonBandView(sky, plane),
+      });
     }
   } finally {
     disposeGroup(group);

@@ -27,7 +27,8 @@ import { resolveRules } from '../data/rules/india';
 import { ruleFor } from './foundation';
 import { rotate } from './geo';
 import { segmentFrameAngle } from './segment-ops';
-import { isNoPenetrationRoof, isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
+import { isFacade, isNoPenetrationRoof, isSheetRoof, isSloped, surfaceHeightAt } from './roof-plane';
+import { FACADE_PLAN_DEPTH_M, facadeFace } from './facade';
 import { STRUCTURE_PROFILES, profileByKey } from '../data/profiles';
 import { enrichMmsStructure } from './mms/generate';
 import type { Member, MemberKind, NodeKind, SegmentStructure, StructureNode, XYZ } from './structure-model';
@@ -872,7 +873,7 @@ function norm(v: { x: number; y: number }): { x: number; y: number } {
  * Lives here rather than in structure-view because the BUILDER dispatches on
  * it — what the UI offers and what the model builds must come from one answer.
  */
-export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'none';
+export type StructureTopology = 'elevated_table' | 'sheet_monorail' | 'flush' | 'facade_rail' | 'none';
 
 /**
  * Foundations this surface can physically carry.
@@ -921,12 +922,25 @@ export function allowedFoundations(roof: Roof, seg: ArraySegment): FoundationKin
       if (roof.roofType === 'stone_slab') return ['anchor', 'ballast'];
       // a rooftop takes anything but a PILE — you do not drive a post into a slab
       return ['concrete', 'anchor', 'ballast'];
+    case 'facade_rail':
+      // A WALL has no footing at all. Nothing is cast, driven or stood on:
+      // the bracket is bolted sideways into the masonry, which is the one
+      // member of this union that means a fixing rather than a foundation.
+      // Offering a pedestal or a ballast block here would be offering to stand
+      // something on a vertical surface.
+      return ['anchor'];
     default:
       return [];
   }
 }
 
 export function topologyOf(roof: Roof, seg: ArraySegment): StructureTopology {
+  // A WALL first, before anything reads the racking kind. A facade segment is
+  // stored `flush` — the module plane IS the wall plane — and both branches
+  // below would then hand it a graph built in plan: the monorail lays its rails
+  // across a deck, the elevated table stands legs on one. A facade's rails run
+  // horizontally at two heights and its supports go sideways into masonry.
+  if (isFacade(roof)) return 'facade_rail';
   if (seg.racking.kind === 'flush') {
     // a sheet roof carries rails on standoffs through the covering — no legs,
     // no footing. AC sheet uses the same graph with a different FIXING.
@@ -1113,6 +1127,185 @@ function buildMonorail(
   };
 }
 
+/**
+ * Build the member/node graph for a FACADE segment — rails on wall brackets.
+ *
+ * Structurally this is the monorail's cousin: two rails per module course and a
+ * bracket every so often along each rail. What makes it a separate builder is
+ * that every one of the monorail's directions is the wrong one here. Its rails
+ * run across a deck and are placed by offsetting the module centres along the
+ * DOWN-SLOPE vector; a facade's rails run horizontally along the wall and are
+ * placed by offsetting them in HEIGHT, which is a dimension the plan frame does
+ * not contain. Its standoffs go down into a purlin; these go sideways into
+ * masonry. And its module rows are found by grouping plan positions; here every
+ * course of a column is the same plan position, so the course comes from the
+ * module's own `mountHeightM`.
+ *
+ * ONE figure here is ASSUMED and it is not the price — it is the part that
+ * matters: what the brackets are fixed INTO. A wall may be RCC, solid brick,
+ * hollow block or infill panel, and the pull-out capacity of each is different
+ * by an order of magnitude. Nothing in this model knows which, so the count is
+ * derived and the CAPACITY is refused (see `validateMms` → facade_anchorage).
+ */
+function buildFacade(
+  seg: ArraySegment,
+  spec: PanelSpec,
+  roof: Roof,
+  panels: PlacedPanel[],
+): SegmentStructure {
+  const mine = panels.filter((p) => p.enabled && p.segmentId === seg.id && p.cellIndex != null);
+  const members: Member[] = [];
+  const nodes: StructureNode[] = [];
+  const warnings: string[] = [];
+  const face = facadeFace(roof);
+  if (mine.length === 0 || !face) return emptyStructure(seg, 'anchor', 'square');
+
+  const rules = resolveRules();
+  const bracketPitchM = seg.mms?.attachmentSpacingM ?? rules.facade.bracketPitchM;
+  const railProfile =
+    STRUCTURE_PROFILES.find((p) => p.key === 'top_hat') ?? STRUCTURE_PROFILES[0];
+  const { w, h } = panelFootprintM(spec, seg.orientation);
+  // The stack, from the wall outwards: bracket, rail, module. So the rail sits
+  // BEHIND the glass and just PROUD of the masonry — not on the face line
+  // itself, which in 3D puts it inside the wall surface and z-fights with it.
+  const back = FACADE_PLAN_DEPTH_M * 0.75;
+  // clamp zones in from each end of the module's VERTICAL edge — on a wall the
+  // module's long axis is the one the rails cross, so the inset applies to `h`
+  const inset = seg.mms?.railInsetRatio ?? 0;
+  const railSpan = (h * (1 - 2 * inset)) / 2;
+
+  const mi: Record<string, number> = {};
+  const ni: Record<string, number> = {};
+  const addMember = (kind: MemberKind, a: XYZ, b: XYZ): Member => {
+    const idx = (mi[kind] = (mi[kind] ?? 0) + 1);
+    const m: Member = {
+      id: `${seg.id}/m/${kind}/${idx - 1}`,
+      kind,
+      profileKey: railProfile.key,
+      // THE RESOLVED SECTION, not just its key. `emitMms` prices a member group
+      // by Σ lengthM × profile.kgPerM and drops the line entirely when that is
+      // zero — so a rail carrying only a profileKey is a rail nobody buys. The
+      // other topologies get this from `enrichMmsStructure`, which a facade
+      // deliberately skips (it re-derives an elevated table's geometry), so it
+      // has to be attached here. Caught in the browser: 177 m of rail across a
+      // wall, and the Mechanical BOS listed eight lines and none of them steel.
+      profile: railProfile,
+      a,
+      b,
+      lengthM: rnd(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z)),
+    };
+    members.push(m);
+    return m;
+  };
+  const addNode = (
+    kind: NodeKind,
+    position: XYZ,
+    memberIds: string[],
+    fastenerSpec: StructureNode['fastenerSpec'],
+  ) => {
+    const idx = (ni[kind] = (ni[kind] ?? 0) + 1);
+    nodes.push({ id: `${seg.id}/n/${kind}/${idx - 1}`, kind, position, memberIds, fastenerSpec });
+  };
+
+  // group by COURSE (grid row), then split each course into contiguous runs —
+  // a hole in the cladding splits the rail exactly as a hole splits a table run
+  const byCourse = new Map<number, PlacedPanel[]>();
+  for (const p of mine) {
+    const row = Math.floor(p.cellIndex! / COL_STRIDE);
+    (byCourse.get(row) ?? byCourse.set(row, []).get(row)!).push(p);
+  }
+
+  for (const [, coursePanels] of [...byCourse.entries()].sort((a, b) => a[0] - b[0])) {
+    const sorted = coursePanels.sort(
+      (a, b) => (a.cellIndex! % COL_STRIDE) - (b.cellIndex! % COL_STRIDE),
+    );
+    const runs: PlacedPanel[][] = [];
+    for (const p of sorted) {
+      const last = runs[runs.length - 1];
+      const col = p.cellIndex! % COL_STRIDE;
+      if (last && col === (last[last.length - 1].cellIndex! % COL_STRIDE) + 1) last.push(p);
+      else runs.push([p]);
+    }
+
+    for (const run of runs) {
+      const n = run.length;
+      const runLen = n * w + (n - 1) * seg.moduleGapM;
+      const half = runLen / 2;
+      const first = run[0].center;
+      const last = run[n - 1].center;
+      const mid = { x: (first.x + last.x) / 2, y: (first.y + last.y) / 2 };
+      // the module centre's true height — carried by the module, not derived
+      // from a plane (see PlacedPanel.mountHeightM)
+      const centreZ = roof.heightM + (run[0].mountHeightM ?? 0);
+      const cx = mid.x - face.outward.x * back;
+      const cy = mid.y - face.outward.y * back;
+
+      // one rail under each horizontal module edge — top and bottom
+      for (const side of [1, -1]) {
+        const z = centreZ + side * railSpan;
+        const a = { x: cx - face.along.x * half, y: cy - face.along.y * half, z };
+        const b = { x: cx + face.along.x * half, y: cy + face.along.y * half, z };
+        const rail = addMember('rail', a, b);
+
+        // Brackets at the rule's centres, never fewer than the floor: a rail on
+        // one bracket is a cantilever, and on a wall it is a cantilever over a
+        // pavement.
+        const spans = Math.max(1, Math.ceil(runLen / Math.max(0.15, bracketPitchM)));
+        const count = Math.max(rules.facade.minBracketsPerRail, spans + 1);
+        for (let i = 0; i < count; i++) {
+          const t = count === 1 ? 0 : (i / (count - 1)) * runLen - half;
+          addNode(
+            'wall_bracket',
+            { x: cx + face.along.x * t, y: cy + face.along.y * t, z },
+            [rail.id],
+            { brackets: 1, bolts: 2 },
+          );
+        }
+
+        addNode('panel_clamp_end', a, [rail.id], { clamps: 1 });
+        addNode('panel_clamp_end', b, [rail.id], { clamps: 1 });
+        for (let k = 1; k < n; k++) {
+          const t = -half + k * (w + seg.moduleGapM) - seg.moduleGapM / 2;
+          addNode(
+            'panel_clamp_mid',
+            { x: cx + face.along.x * t, y: cy + face.along.y * t, z },
+            [rail.id],
+            { clamps: 1 },
+          );
+        }
+      }
+    }
+  }
+
+  const brackets = nodes.filter((nd) => nd.kind === 'wall_bracket').length;
+  warnings.push(
+    `${seg.label}: ${brackets} wall brackets at ${bracketPitchM} m centres — the COUNT is derived, the FIXING is not. A bracket's pull-out capacity depends on what the wall is made of (RCC, solid brick, hollow block or infill panel differ by an order of magnitude) and on whether it lands on a column or a panel. Pull-test on site and have the anchorage designed before ordering.`,
+  );
+  warnings.push(
+    `${seg.label}: there is no roof to stand on. Every module here is installed, inspected and cleaned from a suspended cradle, a rope access team or a scaffold — that access is a line in the quote and a permit on site, not an afterthought.`,
+  );
+
+  const memberSummary = {} as Record<MemberKind, { count: number; totalM: number }>;
+  for (const kind of MEMBER_KINDS) {
+    const of = members.filter((m) => m.kind === kind);
+    memberSummary[kind] = { count: of.length, totalM: rnd(of.reduce((s, m) => s + m.lengthM, 0)) };
+  }
+
+  return {
+    segmentId: seg.id,
+    members,
+    nodes,
+    // a fixing into a wall, not a footing under a leg. 'anchor' is the one
+    // member of FoundationKind that means "fixed to what is already there",
+    // and `allowedFoundations` offers nothing else on this topology.
+    foundation: 'anchor',
+    foundationShape: 'square',
+    steelKg: rnd(members.reduce((s, m) => s + m.lengthM * railProfile.kgPerM, 0)),
+    memberSummary,
+    warnings,
+  };
+}
+
 function emptyStructure(
   seg: ArraySegment,
   foundation: FoundationKind,
@@ -1145,6 +1338,15 @@ export function projectStructures(project: Project): SegmentStructure[] {
     // line. `topologyOf` is the same predicate the structure UI gates on, so
     // what is offered and what is built cannot disagree.
     const topo = topologyOf(roof, seg);
+    // A FACADE before the flush test below: a facade segment IS stored flush,
+    // and the monorail branch would build it a graph laid out across a deck.
+    if (topo === 'facade_rail') {
+      const s = buildFacade(seg, spec, roof, project.panels);
+      // NOT enriched by `enrichMmsStructure`: it re-derives leg sections and
+      // table geometry from an elevated frame, and a facade has neither.
+      if (s.members.length > 0) out.push(seg.mms ? { ...s, mms: seg.mms } : s);
+      continue;
+    }
     if (topo === 'sheet_monorail' || (seg.mms && seg.racking.kind === 'flush')) {
       const s = buildMonorail(seg, spec, roof, project, project.panels);
       if (s.members.length > 0) out.push(seg.mms ? enrichMmsStructure(s, seg, spec) : s);
@@ -1239,7 +1441,18 @@ export function validateStructure(s: SegmentStructure): string[] {
   };
   for (const m of s.members) {
     const kinds = new Set((nodesByMember.get(m.id) ?? []).map((n) => n.kind));
-    const required = s.mms && m.kind === 'rail' && kinds.has('rafter_purlin') ? ['rafter_purlin', 'panel_clamp_end'] as NodeKind[] : REQUIRED[m.kind];
+    // A rail is held by whatever its topology actually uses, and there are now
+    // three: an L-foot through a sheet crown, a bridge onto a rafter, and — on
+    // a FACADE — a bracket bolted sideways into the wall. Requiring
+    // `sheet_standoff` unconditionally called every correctly built facade rail
+    // an unsupported member (caught in the browser: 12 errors on a wall whose
+    // rails each carry their brackets). The rule is unchanged in substance:
+    // a rail resting on NOTHING is still an error.
+    const railHeldBy: NodeKind[] = ['sheet_standoff', 'rafter_purlin', 'wall_bracket'];
+    const required =
+      m.kind === 'rail' && railHeldBy.some((k) => kinds.has(k))
+        ? ([railHeldBy.find((k) => kinds.has(k))!, 'panel_clamp_end'] as NodeKind[])
+        : REQUIRED[m.kind];
     for (const req of required) {
       if (!kinds.has(req)) issues.push(`${m.id}: missing ${req} node — unsupported member`);
     }

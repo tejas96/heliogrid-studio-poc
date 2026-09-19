@@ -19,7 +19,7 @@ import type {
   XY,
 } from '../types';
 import { panelFitsAt } from './layout';
-import { isSheetRoof, isSloped } from './roof-plane';
+import { isFacade, isSheetRoof, isSloped } from './roof-plane';
 
 export type MoveResult =
   | { ok: true; panels: PlacedPanel[]; segments: ArraySegment[]; movedCount: number }
@@ -57,6 +57,25 @@ export function movePanels(
   const sel = new Set(selectedIds);
   const selPanels = project.panels.filter((p) => sel.has(p.id));
   if (selPanels.length === 0) return { ok: false, reason: 'Nothing selected' };
+
+  // A FACADE module cannot be moved by a plan delta, and refusing it outright is
+  // the honest answer rather than letting the drag run and land somewhere wrong.
+  // (dx, dy) can only slide a module ALONG the wall — the course it sits in is a
+  // height, and there is no height in a plan drag. Worse, sliding it off the
+  // wall line would leave it hanging in mid-air beside the building while its
+  // plan position still looked reasonable from above. Courses and columns are
+  // changed by re-cladding the wall, which is what the fill is for.
+  if (
+    selPanels.some((p) => {
+      const roof = project.roofs.find((r) => r.id === p.roofId);
+      return roof ? isFacade(roof) : false;
+    })
+  )
+    return {
+      ok: false,
+      reason:
+        'A facade module cannot be dragged in plan — a drag has no height in it, and the course is a height. Re-fill the wall to change the courses or columns.',
+    };
 
   // rule 1 — a touched segment moves in full, not just its selected modules
   const segIds = new Set(

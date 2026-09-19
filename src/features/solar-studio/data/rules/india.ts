@@ -334,6 +334,23 @@ export interface SheetRules {
   minStandoffsPerRail: number;
 }
 
+/**
+ * Facade geometry. Every figure here is ASSUMED and comes off the building's
+ * elevation drawing, not off anything this tool can measure.
+ *
+ * `sillM` is the one that changes the design rather than the price: it decides
+ * how much of the wall is available at all, and a facade detailed down to the
+ * pavement is a facade whose bottom course gets hit, washed and stolen.
+ */
+export interface FacadeRules {
+  /** default height of the bottom of the clad band above grade, m */
+  sillM: number;
+  /** wall-bracket centres along a facade rail, m — sets the bracket count */
+  bracketPitchM: number;
+  /** fewest brackets per rail, whatever the pitch arithmetic says */
+  minBracketsPerRail: number;
+}
+
 export interface MarketRules {
   market: 'india';
   temps: TempRules;
@@ -348,6 +365,7 @@ export interface MarketRules {
   financing: FinancingRules;
   foundations: FoundationRules;
   sheet: SheetRules;
+  facade: FacadeRules;
   defaults: DefaultRules;
 }
 
@@ -547,6 +565,9 @@ export const INDIA_RULES: MarketRules = {
   // rib are ordinary Indian industrial sheeting, but "ordinary" is not
   // "measured": both must be confirmed on site before anything is drilled.
   sheet: { purlinPitchM: 1.4, ribPitchM: 0.2, minStandoffsPerRail: 2 },
+  // one ordinary Indian commercial ground floor, and bracket centres a facade
+  // rail is normally supported at. ASSUMED — both come off the elevation.
+  facade: { sillM: 3.6, bracketPitchM: 1.2, minBracketsPerRail: 2 },
   defaults: {
     roofSetbackM: 0.3,
     groundSetbackM: 1.5,

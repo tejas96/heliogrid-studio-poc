@@ -247,6 +247,57 @@ export function floatingSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
   return out;
 }
 
+/**
+ * Shortest wall this tool will call a facade, m. Below one storey plus a sill
+ * there is no band left to clad, and the fill would report an empty wall.
+ */
+const FACADE_MIN_WALL_M = 9;
+
+/**
+ * Turn a drawn outline into a FACADE — a wall with a band of modules on it.
+ *
+ * Three fields have to change together and each for its own reason:
+ *
+ * `setbackM` goes to 0. A facade's footprint is a wall strip a couple of
+ * hundred millimetres deep, and the ordinary 300 mm roof setback would inset it
+ * out of existence — the fill would find nowhere to put anything and report an
+ * empty wall. What a facade does keep clear of is its CORNERS, and that is an
+ * edge clearance along the face (FACADE_EDGE_CLEARANCE_M), not a fire setback.
+ *
+ * `pitchDeg` stays 0 and is not 90. The vertical is carried by the modules, not
+ * by the plane — see roof-plane.isFacade for why a 90° plane has no finite
+ * height formula.
+ *
+ * `parapet` goes off. A parapet is drawn standing on the polygon's edges, and
+ * on a wall strip that would put a second little wall along the top of the
+ * first one.
+ */
+export function facadeSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
+  const n = existing.filter((r) => r.roofType === 'facade').length;
+  const out: Roof = {
+    ...roof,
+    roofType: 'facade',
+    pitchDeg: 0,
+    setbackM: 0,
+    perEdgeSetbacksM: null,
+    parapet: { ...roof.parapet, enabled: false },
+    // keep the wall's height if it already has a sensible one; a facade below
+    // one storey has no band to clad
+    heightM: Math.max(roof.heightM, FACADE_MIN_WALL_M),
+    // A WALL HEIGHT IS TYPED, NOT MEASURED — and saying so is what makes the
+    // control work at all. The aerial height map reads the height of a
+    // horizontal surface over a polygon, and a facade's polygon is a strip
+    // along the base of the wall, so its cells are the PAVEMENT. Leaving this
+    // as 'aerial_map' let `roofsAdoptingMap` re-flatten the wall to that
+    // reading on every render, and the wall-height slider could not hold a
+    // value (caught in the browser: 0 m, and a 0 m clad band).
+    heightSource: 'user',
+    facade: { sillM: resolveRules().facade.sillM },
+    name: `Facade ${String.fromCharCode(65 + (n % 26))}`,
+  };
+  return out;
+}
+
 export function carportSurfaceFrom(roof: Roof, existing: Roof[]): Roof {
   const g = makeGroundSurface({ polygon: roof.polygon, existing, provenance: roof.provenance });
   const n = existing.filter((r) => r.roofType === 'carport').length;

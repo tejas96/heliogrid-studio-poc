@@ -46,6 +46,17 @@ export type NodeKind =
   | 'brace_bolt'
   /** L-foot through the sheet crown into the purlin, with a sealing washer */
   | 'sheet_standoff'
+  /**
+   * Facade: a bracket bolted to the WALL, carrying a horizontal rail.
+   *
+   * Its own node kind rather than a reused `sheet_standoff` or `roof_anchor`,
+   * because what it is fixed INTO is the whole risk. A standoff lands on a
+   * purlin whose position is at least a known kind of unknown; a wall bracket
+   * lands in brick, block, or an RCC column — and the pull-out capacity of
+   * that is not something any drawing can tell you. Naming it separately is
+   * what lets the validator refuse to call a facade fixing verified.
+   */
+  | 'wall_bracket'
   | 'rail_splice'
   | 'bonding_lug'
   | 'cable_clip';
@@ -83,6 +94,16 @@ export interface StructureNode {
     standoffs?: number;
     /** EPDM washer under every sheet penetration — the waterproofing */
     sealingWashers?: number;
+    /**
+     * Facade: a wall bracket, anchor pair included.
+     *
+     * Deliberately ONE count rather than `plates` + `anchors`. Those two feed
+     * the generic base-plate and chemical-anchor lines, and a facade has
+     * neither a base plate nor a footing — billing it through them is how the
+     * stone-slab and carport slices each ended up selling the same fixing
+     * twice before it was caught.
+     */
+    brackets?: number;
   };
 }
 

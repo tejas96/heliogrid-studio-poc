@@ -33,7 +33,8 @@ import {
   TRACKER_DEFAULT_MAX_ROTATION_DEG,
   TRACKER_DEFAULT_TUBE_HEIGHT_M,
 } from './energy/tracker';
-import { isSheetRoof } from './roof-plane';
+import { isFacade, isSheetRoof } from './roof-plane';
+import { facadeAlongM, facadeFace } from './facade';
 
 /** Racking a segment gets by default from its roof (flush on pitched/sheet). */
 function defaultRacking(roof: Roof, tiltDeg: number): ArraySegment['racking'] {
@@ -176,17 +177,37 @@ export function reindexSegment(
 ): { segment: ArraySegment; panels: PlacedPanel[] } {
   const mine = panels.filter((p) => p.segmentId === seg.id);
   if (mine.length === 0) return { segment: { ...seg, rows: 0, cols: 0, removed: [] }, panels: [] };
+  // ── A FACADE's grid is not in plan ────────────────────────────────────────
+  // The plan derivation below reads the row off `locals.y`, and on a wall every
+  // course of a column IS the same plan point — so it collapsed a 5 × 15
+  // elevation into "1 × 15", rewrote 75 modules onto 15 cell indices, and left
+  // the structure builder splitting the wall into 75 one-module runs with two
+  // short rails each instead of 10 rails across it. The panels still LOOKED
+  // right in 3D, because their height rides on the module (`mountHeightM`), so
+  // only the BOM and the member graph were wrong. Caught in the browser: the
+  // table settings header said "1x15" next to a canvas label saying "5×15".
+  //
+  // The wall's own frame answers both: along the face for the column, and the
+  // module's own height for the course.
+  const wall = isFacade(roof) ? facadeFace(roof) : null;
+  const foot = panelFootprintM(spec, seg.orientation);
+  const alongOf = (p: PlacedPanel) => facadeAlongM(wall!, p.center);
+  const heightOf = (p: PlacedPanel) => p.mountHeightM ?? 0;
   const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
-  const locals = mine.map((p) => rotate(p.center, -angle));
+  const locals = mine.map((p) => (wall ? { x: alongOf(p), y: heightOf(p) } : rotate(p.center, -angle)));
   const minX = Math.min(...locals.map((l) => l.x));
   const minY = Math.min(...locals.map((l) => l.y));
+  // on a wall the pitches are the module's own extents plus the joint: a course
+  // is one module tall, a column one module wide, and neither is foreshortened
+  const stepX = wall ? foot.w + seg.moduleGapM : pitchX;
+  const stepY = wall ? foot.h + seg.moduleGapM : pitchY;
 
   let maxRow = 0;
   let maxCol = 0;
   const occupied = new Set<number>();
   const out = mine.map((p, i) => {
-    const col = Math.max(0, Math.round((locals[i].x - minX) / pitchX));
-    const row = Math.max(0, Math.round((locals[i].y - minY) / pitchY));
+    const col = Math.max(0, Math.round((locals[i].x - minX) / stepX));
+    const row = Math.max(0, Math.round((locals[i].y - minY) / stepY));
     maxRow = Math.max(maxRow, row);
     maxCol = Math.max(maxCol, col);
     occupied.add(row * COL_STRIDE + col);
@@ -587,7 +608,13 @@ export function setSegmentRacking(
   kind: 'flush' | ElevatedKind,
 ): { segment: ArraySegment; panels: PlacedPanel[] } {
   if (kind === 'flush') {
-    const tiltDeg = roof.pitchDeg > 0 ? defaultPanelPose(roof).tiltDeg : 0;
+    // Flush means "coplanar with the surface", so the tilt is the SURFACE's
+    // own angle — and a facade's is 90°, which `pitchDeg` cannot say (it is
+    // stored 0 because the plane formula has no finite value at vertical, see
+    // roof-plane.isFacade). Testing only `pitchDeg > 0` therefore flattened
+    // every module on a wall the moment a mounting system was chosen for it.
+    const tiltDeg =
+      roof.pitchDeg > 0 || isFacade(roof) ? defaultPanelPose(roof).tiltDeg : 0;
     return { segment: { ...seg, racking: { kind: 'flush' } }, panels: syncTilt(panels, seg.id, tiltDeg) };
   }
   // a tracker lies flat at rest; coming BACK off one, the stored 0° is not a

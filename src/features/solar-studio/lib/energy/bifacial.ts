@@ -93,6 +93,16 @@ export function surfaceAlbedo(roofType: RoofType): number {
     // grey paver, and usually a car. Lower than any deck.
     case 'carport':
       return 0.15; // tarmac / paver under a canopy
+    // A FACADE module's front looks sideways and its back looks at the WALL it
+    // is bolted to, 120 mm away. The ground term in the transposition
+    // (albedo × GHI × (1 − cos tilt)/2) is what this figure feeds, and for a
+    // vertical plane that term is half of GHI × albedo — a large share of the
+    // little a wall receives, so the number matters more here than on a roof.
+    // What is actually under the plane is pavement or a road, and it is the one
+    // surface in this list that is sometimes bright: a light paved plaza reads
+    // far higher. That is a survey fact, so the ordinary paving figure stands.
+    case 'facade':
+      return 0.2; // pavement / road in front of the wall
     case 'tile':
       return 0.15; // clay / Mangalore tile, dark
     case 'ground':

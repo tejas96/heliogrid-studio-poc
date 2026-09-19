@@ -9,7 +9,7 @@
 //   structured   → roof + frontLegM + rise/2 + MODULE_STANDOFF_M
 //   loose/flat   → roof + LOOSE_STANDOFF_M (no member model to consult)
 import type { ArraySegment, PanelSpec, PlacedPanel, Project, Roof } from '../types';
-import { isSloped, surfaceHeightAt } from './roof-plane';
+import { isFacade, isSloped, surfaceHeightAt } from './roof-plane';
 import { panelFootprintM, roofGridAngle } from './layout';
 import { MODULE_STANDOFF_M, resolveRacking } from './structure';
 import { measuredRowPitchM, resolveTrackerAxis, trackerPose, type TrackerAxis } from './energy/tracker';
@@ -112,7 +112,18 @@ export function panelPose(
         ? -((panel.azimuthDeg * Math.PI) / 180)
         : ((roof ? roofGridAngle(roof) : 0) * Math.PI) / 180;
 
-  const heightAboveSurfaceM = seg?.mms && seg.racking.kind === 'flush'
+  // ── A FACADE module carries its own height ────────────────────────────────
+  // This is the whole elevation model, and it is deliberately ONE line in the
+  // one function that decides where a module physically is. Everything that has
+  // to agree about a facade — the rendered mesh, the analytical shadow slab and
+  // the shading engine's ray origin — reads its answer from here, so a facade
+  // cannot end up drawn at one height and sampled at another (§A0).
+  //
+  // The value is NEGATIVE: `surfaceHeightAt` returns the top of the wall, and
+  // the modules hang below it (see PlacedPanel.mountHeightM).
+  const heightAboveSurfaceM = roof && isFacade(roof)
+    ? (panel.mountHeightM ?? 0)
+    : seg?.mms && seg.racking.kind === 'flush'
     ? .1 + MODULE_STANDOFF_M
     : sloped
     ? FLUSH_STANDOFF_M
@@ -132,7 +143,9 @@ export function panelPose(
     tiltRad,
     w: foot.w,
     d,
-    flush: sloped,
+    // a facade module lies against its wall the way a flush module lies on its
+    // roof: no tilt stand to draw, because the plane IS the surface
+    flush: sloped || !!(roof && isFacade(roof)),
     structured: !!racking,
   };
 }

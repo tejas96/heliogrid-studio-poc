@@ -10,7 +10,9 @@ import {
   rectIntersectsPolygon,
   rectsOverlap,
 } from './geo';
-import { panelCornersOnRoof } from './layout';
+import { panelCornersOnRoof, panelFootprintM } from './layout';
+import { isFacade } from './roof-plane';
+import { facadeAlongM, facadeFace, facadeSillM } from './facade';
 import { requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
 import { resolveRacking } from './structure';
 import { deriveStructures } from './derive/structures';
@@ -72,6 +74,48 @@ export function layoutIssues(
   for (const roof of project.roofs) {
     const rp = byRoof.get(roof.id);
     if (!rp || rp.length === 0) continue;
+    // ── A FACADE is checked in ELEVATION, never in plan ─────────────────────
+    // This is not a refinement, it is the difference between the checks working
+    // and being nonsense. On a wall every course of a column shares ONE plan
+    // point, so the plan overlap test below reports every module above the
+    // bottom course as overlapping the one under it — a 5 × 12 elevation would
+    // hand the user 48 overlaps it does not have. And the modules hang in front
+    // of the footprint by design (they are bolted to its face), so the plan
+    // setback test would call all 60 of them a boundary breach.
+    //
+    // The real questions on a wall are the same two, asked in the wall's own
+    // frame: does any module overlap another on the elevation, and does every
+    // module fit between the corners and inside the clad band?
+    if (isFacade(roof)) {
+      const face = facadeFace(roof);
+      if (!face) continue;
+      const sill = facadeSillM(roof);
+      // each module as a rectangle in (along the wall, height above grade)
+      const elev = rp.map((p) => {
+        const { w, h } = panelFootprintM(spec, p.orientation);
+        const u = facadeAlongM(face, p.center);
+        const z = roof.heightM + (p.mountHeightM ?? 0);
+        return [
+          { x: u - w / 2, y: z - h / 2 },
+          { x: u + w / 2, y: z - h / 2 },
+          { x: u + w / 2, y: z + h / 2 },
+          { x: u - w / 2, y: z + h / 2 },
+        ];
+      });
+      for (let i = 0; i < elev.length; i++) {
+        const [lo, , hi] = elev[i];
+        if (lo.x < -0.01 || hi.x > face.lengthM + 0.01 || lo.y < sill - 0.01 || hi.y > roof.heightM + 0.01)
+          breachIds.add(rp[i].id);
+        for (let j = i + 1; j < elev.length; j++) {
+          if (rectsOverlap(shrink(elev[i]), shrink(elev[j]))) {
+            overlapCount++;
+            overlapIds.add(rp[i].id);
+            overlapIds.add(rp[j].id);
+          }
+        }
+      }
+      continue;
+    }
     const inset = insetPolygonRobust(
       roof.polygon,
       roof.perEdgeSetbacksM ?? roof.polygon.map(() => roof.setbackM),

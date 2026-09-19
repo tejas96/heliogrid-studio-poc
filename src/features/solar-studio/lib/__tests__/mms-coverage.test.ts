@@ -39,6 +39,7 @@ const ALL_ROOF_TYPES: Record<RoofType, true> = {
   ground: true,
   carport: true,
   floating: true,
+  facade: true,
 };
 const ROOF_TYPES = Object.keys(ALL_ROOF_TYPES) as RoofType[];
 const W = 1.134;

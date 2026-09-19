@@ -28,7 +28,13 @@ export function roofHeightIssues(
   const read = roofReadings(project, grid);
   const out: ValidationIssue[] = [];
   for (const roof of project.roofs) {
-    if (roof.roofType === 'ground') continue;
+    // Open ground has no reading to disagree with, and a FACADE's reading is
+    // not about the wall at all: the map measures a horizontal surface over
+    // the polygon, and a wall's polygon is the strip at its base — so it reads
+    // the PAVEMENT and then reports an 18 m wall as "lower by 18.0 m". The
+    // same reason `roofsAdoptingMap` refuses to fit one and Step 2 no longer
+    // offers the reading (caught in the browser as a false warning).
+    if (roof.roofType === 'ground' || roof.roofType === 'facade') continue;
     const map = read[roof.id];
     if (map === undefined) continue;
     const diff = map - roof.heightM;

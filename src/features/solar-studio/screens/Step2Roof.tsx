@@ -64,6 +64,7 @@ import {
 import { typedInto } from '../lib/keyboard';
 import { frameFor, toEN } from '../lib/site/frame';
 import { defaultPanelPose, panelCornersOnRoof } from '../lib/layout';
+import { facadeBandM, facadeSillM } from '../lib/facade';
 import { cascadeDeleteRoof } from '../lib/cascade';
 import { gableFaces } from '../lib/roof-gable';
 import { hipFaces } from '../lib/roof-hip';
@@ -75,6 +76,7 @@ import {
   makeRoof,
   sanitizeRoofPolygon,
   carportSurfaceFrom,
+  facadeSurfaceFrom,
   floatingSurfaceFrom,
   groundSurfaceFrom,
 } from '../lib/roof-factory';
@@ -365,6 +367,14 @@ export function Step2Roof() {
     if (roofType === 'floating') {
       const w = floatingSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id));
       patchRoofAndPose(id, { ...w, heightSource: undefined });
+      return;
+    }
+    // A FACADE is a wall. It keeps its height — that is the wall's height, which
+    // is the one thing about it the aerial map may genuinely have measured — and
+    // gains a sill, loses its setback and drops its parapet. See
+    // facadeSurfaceFrom for why all three move together.
+    if (roofType === 'facade') {
+      patchRoofAndPose(id, facadeSurfaceFrom(roof, project.roofs.filter((r) => r.id !== id)));
       return;
     }
     patchRoofAndPose(id, { roofType });
@@ -1854,6 +1864,22 @@ export function Step2Roof() {
                 onClick={() => setRoofType(selected.id, 'floating')}
               />
               <OptionCard
+                title="Facade / Vertical BIPV"
+                // The card leads with the two things that decide whether a
+                // facade is worth building: the yield is far lower because the
+                // plane is vertical, and there is nowhere to stand, so access
+                // is a real line in the quote rather than a detail.
+                sub={
+                  selected.pitchDeg > 0
+                    ? `Not available on a ${selected.pitchDeg}° pitched face — a facade is vertical. Draw the wall separately.`
+                    : 'Modules hung on a WALL – vertical, so the yield is much lower and every install and clean is off a cradle. Adds wall brackets, access, cavity fire barrier and a pull test.'
+                }
+                icon={<Building2 size={20} />}
+                selected={selected.roofType === 'facade'}
+                disabled={selected.pitchDeg > 0}
+                onClick={() => setRoofType(selected.id, 'facade')}
+              />
+              <OptionCard
                 title="Ground Array"
                 sub={
                   selected.pitchDeg > 0
@@ -1920,7 +1946,13 @@ export function Step2Roof() {
 
       {sheet === 'height' && selected && (
         <Sheet
-          title={selected.roofType === 'ground' ? 'Level & Setback' : 'Height & Parapet'}
+          title={
+            selected.roofType === 'ground'
+              ? 'Level & Setback'
+              : selected.roofType === 'facade'
+                ? 'Wall Height & Sill'
+                : 'Height & Parapet'
+          }
           icon={<MoveVertical size={16} />}
           onClose={() => setSheet(null)}
           right={
@@ -1936,7 +1968,13 @@ export function Step2Roof() {
               tables, obstructions, every shadow — two metres into the air with
               no way back to 0 through the control. */}
           <SliderRow
-            label={selected.roofType === 'ground' ? 'Level above grade' : 'Height from Ground'}
+            label={
+              selected.roofType === 'ground'
+                ? 'Level above grade'
+                : selected.roofType === 'facade'
+                  ? 'Wall height (top of the clad band)'
+                  : 'Height from Ground'
+            }
             value={selected.heightM}
             min={selected.roofType === 'ground' ? 0 : 2}
             max={150}
@@ -1947,19 +1985,47 @@ export function Step2Roof() {
             hint={
               selected.roofType === 'ground'
                 ? '0 = the array area is the ground itself. Raise it only for a plinth or a raised platform. Module clearance above ground is set by the structure, not here.'
-                : selected.faceGroupId
+                : selected.roofType === 'facade'
+                  ? 'The top of the wall — modules are clad DOWN from here to the sill below.'
+                  : selected.faceGroupId
                   ? 'Low-side (eave) wall height — shared by every face of this roof, so it applies to all of them.'
                   : selected.pitchDeg > 0.5
                     ? 'Low-side (eave) wall height. The roof rises from here toward the ridge.'
                     : 'Height of roof surface from ground level. Used for accurate shadow calculations.'
             }
           />
+          {/* A wall needs TWO heights. Without this control the sill would sit
+              silently at the rule default and the user could see the band start
+              three and a half metres up with no way to say where it really
+              starts — and on a real elevation the ground floor is shopfront,
+              entrance or parking, so the sill is the field that decides how much
+              wall there is to clad at all. */}
+          {selected.roofType === 'facade' && (
+            <SliderRow
+              label="Sill — bottom of the clad band"
+              value={facadeSillM(selected)}
+              min={0}
+              max={Math.max(0, selected.heightM - 1)}
+              step={0.5}
+              unit={units === 'imperial' ? 'ft' : 'm'}
+              format={(v) => lenValue(v, 1)}
+              onChange={(v) => updateRoof(selected.id, { facade: { sillM: v } })}
+              hint={`Clad band is ${lenValue(facadeBandM(selected), 1)} ${units === 'imperial' ? 'ft' : 'm'} tall. Almost no facade starts at the pavement — the ground floor is usually shopfront, entrance or parking, and modules low enough to touch get broken and stolen.`}
+            />
+          )}
           {(() => {
             // what the aerial height map measured over this polygon — one tap to take it
             const grid = surroundGrid;
             const fit = grid ? roofMapFit(grid, selected, project.calibration.northOffsetDeg) : null;
-            // the aerial height map is excluded from open ground by definition
-            if (!grid || !fit || selected.roofType === 'ground') return null;
+            // the aerial height map is excluded from open ground by definition,
+            // and from a FACADE because its reading there is meaningless: the
+            // map measures a horizontal surface over the polygon, and a wall's
+            // polygon is the strip at its base, so the cells are the PAVEMENT.
+            // `roofsAdoptingMap` already refuses to fit one; showing the number
+            // with a "Use" button beside it would leave one live control whose
+            // only effect is to flatten the wall to the ground it stands on.
+            if (!grid || !fit || selected.roofType === 'ground' || selected.roofType === 'facade')
+              return null;
             const differs =
               Math.abs(fit.heightM - selected.heightM) > ROOF_HEIGHT_TOLERANCE_M ||
               (fit.rmseM <= TRUSTED_RMSE_M && Math.abs(fit.pitchDeg - selected.pitchDeg) >= 1);
@@ -2048,8 +2114,14 @@ export function Step2Roof() {
               </button>
             </div>
           )}
-          {/* v1 ground surfaces are flat terrain (lib/roof-factory) — no pitch */}
-          {selected.roofType !== 'ground' && (
+          {/* v1 ground surfaces are flat terrain (lib/roof-factory) — no pitch.
+              A FACADE has no pitch either, and this slider is not merely
+              useless on one, it is harmful: `pitchDeg` is stored 0 precisely so
+              the plane formula stays finite (roof-plane.isFacade), and any
+              non-zero value here would make `isSloped` true and send a wall
+              down every sloped-roof path in the app. What a wall needs instead
+              is which way it LOOKS, and that control is below. */}
+          {selected.roofType !== 'ground' && selected.roofType !== 'facade' && (
             <SliderRow
               label="Roof Pitch"
               value={selected.pitchDeg}
@@ -2082,17 +2154,33 @@ export function Step2Roof() {
               }
             />
           )}
-          {selected.pitchDeg > 0.5 && (
+          {/* A FACADE needs this control more than any pitched roof does: it is
+              the only thing that says WHICH WALL of the footprint the modules
+              hang on (lib/facade.facadeFace picks the edge by it), and it is
+              the module azimuth outright. Without it a facade could only ever
+              be clad on whichever face happened to face south. */}
+          {(selected.pitchDeg > 0.5 || selected.roofType === 'facade') && (
             <div className="field">
-              <label>Slopes toward (panels face)</label>
+              <label>
+                {selected.roofType === 'facade'
+                  ? 'Wall faces (modules look this way)'
+                  : 'Slopes toward (panels face)'}
+              </label>
               <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginBottom: 6 }}>
-                Tap the LOW side — the roof slopes down toward it; panels face that way.
-                {selected.faceGroupId
-                  ? ' This face only — each face of a gable/hip faces its own way, so this is not shared.'
-                  : ''}
+                {selected.roofType === 'facade' ? (
+                  'Tap the side the modules are on. That edge of the footprint becomes the clad wall, and it is the direction the modules look.'
+                ) : (
+                  <>
+                    Tap the LOW side — the roof slopes down toward it; panels face that way.
+                    {selected.faceGroupId
+                      ? ' This face only — each face of a gable/hip faces its own way, so this is not shared.'
+                      : ''}
+                  </>
+                )}
               </div>
               <SlopeDirectionPicker
                 roof={selected}
+                facade={selected.roofType === 'facade'}
                 // 'user', or the map sync puts its facing back (see Roof Pitch)
                 onPick={(az) => patchRoofAndPose(selected.id, { slopeAzimuthDeg: az, heightSource: 'user' })}
               />
@@ -2401,9 +2489,12 @@ const COMPASS_NAMES = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'] as const;
 function SlopeDirectionPicker({
   roof,
   onPick,
+  facade = false,
 }: {
   roof: Roof;
   onPick: (azimuthDeg: number) => void;
+  /** the same picker on a WALL: the edge tapped is the clad face, not a low side */
+  facade?: boolean;
 }) {
   const { fmtLen } = useUnits();
   const W = 300;
@@ -2523,7 +2614,11 @@ function SlopeDirectionPicker({
         </g>
       </svg>
       <div style={{ fontSize: 11.5, color: 'var(--ink-3)', marginTop: 5 }}>
-        Slopes toward <b style={{ color: 'var(--ink)' }}>{compass}</b> · {Math.round(currentAz)}°
+        {/* A wall does not slope anywhere. The picker is the same control and
+            the same geometry, but calling a vertical facade's facing a slope
+            reads as a bug to the one user who knows what the word means. */}
+        {facade ? 'Wall faces' : 'Slopes toward'}{' '}
+        <b style={{ color: 'var(--ink)' }}>{compass}</b> · {Math.round(currentAz)}°
         <span style={{ marginLeft: 10 }}>South-facing is best in the northern hemisphere.</span>
       </div>
     </div>

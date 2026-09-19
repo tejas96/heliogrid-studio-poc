@@ -27,7 +27,14 @@ import {
 } from './geo';
 import { higherOverlapFootprints } from './roof-topology';
 import { isBridgedAt, resolveCapabilities } from './capabilities';
-import { isSheetRoof, isSloped, slopePanelPose, slopeVector } from './roof-plane';
+import { isFacade, isSheetRoof, isSloped, slopePanelPose, slopeVector } from './roof-plane';
+import {
+  FACADE_EDGE_CLEARANCE_M,
+  FACADE_PLAN_DEPTH_M,
+  facadeBandM,
+  facadeFace,
+  facadeSillM,
+} from './facade';
 import { resolveRules } from '../data/rules/india';
 import { shadowFreePitchM, wallShadowSetbackM } from './spacing';
 
@@ -83,6 +90,13 @@ export function defaultPanelPose(roof: Roof): {
   tiltDeg: number;
   azimuthDeg: number;
 } {
+  // A FACADE is vertical, and that is not a default to be nudged — it is what
+  // the word means. 90° is also what makes the rest of the engine correct here:
+  // the hourly model's sky term (1+cos90)/2 and ground term (1−cos90)/2 both
+  // land on the half-dome a wall actually sees, and `poaBeamRatio` integrates
+  // the real beam against a sideways normal. Store any other angle and every
+  // one of those becomes a number for a plane that is not there.
+  if (isFacade(roof)) return { tiltDeg: 90, azimuthDeg: roof.slopeAzimuthDeg };
   if (isSloped(roof)) return slopePanelPose(roof);
   // any profiled SHEET on purlins — metal or asbestos-cement — is flush
   if (isSheetRoof(roof)) return { tiltDeg: 0, azimuthDeg: 180 };
@@ -262,6 +276,15 @@ export function fillRowPitchM(
   opts: FillOptions,
 ): number | null {
   if (isSloped(roof)) return null;
+  // A FACADE is coplanar with its wall, exactly as a flush module is coplanar
+  // with its slope — so its courses cannot shade each other and there is no
+  // shadow-free pitch to solve. The tilt test below would not catch it: a
+  // facade's pose IS 90°, so this returned a number for a spacing the facade
+  // fill does not use, and the auto-designer printed it to the user as
+  // "Row spacing on Facade A — 2.87 m centre-to-centre · tilt=0°" (caught in
+  // the browser). Two wrong facts in one sentence, on the screen that exists
+  // to explain the design.
+  if (isFacade(roof)) return null;
   const pose = defaultPanelPose(roof);
   if (pose.tiltDeg <= 0.1) return null;
   const { h } = panelFootprint(spec, opts.orientation);
@@ -530,6 +553,13 @@ export function autoFillRoof(
   opts: FillOptions = DEFAULT_FILL,
   areaLimit?: XY[],
 ): PlacedPanel[] {
+  // A WALL is not a deck. The lattice below steps across a plan footprint and
+  // rejects overlapping plan rectangles, and on a facade every course of a
+  // column is the same rectangle — so it would place one course and reject the
+  // rest. `fillFacade` lays the real grid; dispatching here rather than at each
+  // call site means the drag-fill, the auto-designer and the capacity estimate
+  // all reach it without each remembering to ask.
+  if (isFacade(roof)) return fillFacade(roof, spec, opts, areaLimit);
   // the regulatory setback, widened where a parapet would shade the first row
   // (see fillSetbacksM — same winter window the row pitch is solved for)
   const insetRegions = insetPolygonRobust(
@@ -656,6 +686,101 @@ export function autoFillRoof(
   return selectBudget(panels, opts.maxPanels, opts.scoreCandidates);
 }
 
+/**
+ * Clad a facade: COURSES up the wall × columns along it.
+ *
+ * Its own function, and not an option on `autoFillRoof`, because the lattice
+ * there is a plan lattice — it steps local x and local y across the footprint
+ * and rejects any candidate whose plan rectangle overlaps another. On a wall
+ * every course of a column IS the same plan rectangle, so that engine can place
+ * exactly one course and then reject the rest as collisions. The grid a facade
+ * needs is (along the wall, up the wall), and only the first of those two axes
+ * exists in plan.
+ *
+ * What this shares with the plan fill is the things that are genuinely shared:
+ * `cellIndex` encodes (course, column) with the same row·COL_STRIDE + col
+ * convention, courses run bottom-up so that course 0 is the one at the sill,
+ * and the pose is `defaultPanelPose`'s vertical one. Obstructions, keepouts and
+ * walkways are deliberately NOT consulted: every one of them is an object on a
+ * deck, and none of them is on this wall.
+ */
+// Module-PRIVATE on purpose: `autoFillRoof` dispatches to it, so every caller —
+// the drag-fill, the auto-designer, the capacity estimate, the tests — reaches
+// it through the one front door and none of them has to remember that a wall is
+// different. Exporting it also put a seventh finding on `npm run dead`.
+function fillFacade(
+  roof: Roof,
+  spec: PanelSpec,
+  opts: FillOptions = DEFAULT_FILL,
+  /**
+   * Drag-box limit, in plan. On a wall it can only ever select COLUMNS — every
+   * course of a column shares one plan point — so it is applied to the column
+   * centres. Ignoring it would leave the drag-fill box looking like it framed a
+   * region and then cladding the whole elevation.
+   */
+  areaLimit?: XY[],
+): PlacedPanel[] {
+  const face = facadeFace(roof);
+  if (!face) return [];
+  const band = facadeBandM(roof);
+  const { w, h } = panelFootprintM(spec, opts.orientation);
+  if (band < h || face.lengthM < w) return [];
+  const gap = opts.gapM;
+  const pose = defaultPanelPose(roof);
+
+  // ── along the wall ────────────────────────────────────────────────────────
+  // The cladding stops short of the corners: a module hard into a return is a
+  // module you cannot fix, flash or ever clean.
+  const edge = Math.max(roof.setbackM, FACADE_EDGE_CLEARANCE_M);
+  const usable = face.lengthM - 2 * edge;
+  const cols = Math.floor((usable + gap) / (w + gap));
+  if (cols < 1) return [];
+  // centre the run between the corners rather than pushing it to one end —
+  // an off-centre band on a symmetrical elevation is what an architect rejects
+  const runM = cols * w + (cols - 1) * gap;
+  const startAlong = (face.lengthM - runM) / 2;
+
+  // ── up the wall ───────────────────────────────────────────────────────────
+  // Courses start AT THE SILL and any remainder is left at the top, under the
+  // parapet. Centring the band instead would float it, leaving a strip of bare
+  // wall below the first course that the sill height was chosen to avoid.
+  const sill = facadeSillM(roof);
+  const courses = Math.floor((band + gap) / (h + gap));
+  if (courses < 1) return [];
+
+  // The plate hangs in FRONT of the wall, not inside it: its inner face sits on
+  // the masonry and its centre is half a bracket-stack out from the footprint
+  // edge. Anything else buries the modules in the wall solid the scene draws.
+  const outset = FACADE_PLAN_DEPTH_M / 2;
+
+  const panels: PlacedPanel[] = [];
+  for (let course = 0; course < courses; course++) {
+    const centreZ = sill + course * (h + gap) + h / 2;
+    for (let col = 0; col < cols; col++) {
+      const along = startAlong + col * (w + gap) + w / 2;
+      const plan = {
+        x: face.a.x + face.along.x * along + face.outward.x * outset,
+        y: face.a.y + face.along.y * along + face.outward.y * outset,
+      };
+      if (areaLimit && !pointInPolygon(plan, areaLimit)) continue;
+      panels.push({
+        id: genId('pv'),
+        roofId: roof.id,
+        center: plan,
+        orientation: opts.orientation,
+        ...pose,
+        solarAccess: 1,
+        enabled: true,
+        cellIndex: course * COL_STRIDE + col,
+        // the datum is the TOP of the wall, so a module below it is negative
+        mountHeightM: Math.round((centreZ - roof.heightM) * 1e4) / 1e4,
+      });
+    }
+  }
+  if (!opts.maxPanels || panels.length <= opts.maxPanels) return panels;
+  return selectBudget(panels, opts.maxPanels, opts.scoreCandidates);
+}
+
 export interface FilledSegment {
   segment: ArraySegment;
   panels: PlacedPanel[];
@@ -677,7 +802,8 @@ export function fillRoofAsSegment(
   // the fill's OWN under-structure clearance (defaults chain) drives §26c
   // bridging: a walk-under default lets the fill span bridgeable obstructions.
   // Tile is flush like metal shed (defaultPanelPose) — no elevated structure.
-  const elevatedPose = !isSloped(roof) && !isSheetRoof(roof) && roof.roofType !== 'tile';
+  const elevatedPose =
+    !isSloped(roof) && !isSheetRoof(roof) && !isFacade(roof) && roof.roofType !== 'tile';
   const fillOpts: FillOptions =
     opts.bridgeClearanceM !== undefined || !elevatedPose
       ? opts
@@ -693,8 +819,12 @@ export function fillRoofAsSegment(
   const segId = genId('seg');
   const pose = defaultPanelPose(roof);
   // flush ⇔ the pose has no structure under it — must stay in lockstep with
-  // defaultPanelPose (a flat TILE deck is flush too: hooks, not tilt legs)
-  const flush = isSloped(roof) || isSheetRoof(roof) || roof.roofType === 'tile';
+  // defaultPanelPose (a flat TILE deck is flush too: hooks, not tilt legs).
+  // A FACADE is flush in the only sense that matters here: the module plane is
+  // the wall plane. There is nothing under it — nothing is under it, it hangs —
+  // so an elevated table's tilt, row pitch and leg heights would all be numbers
+  // for members that do not exist.
+  const flush = isSloped(roof) || isSheetRoof(roof) || isFacade(roof) || roof.roofType === 'tile';
   const racking: RackingSpec = flush
     ? { kind: 'flush' }
     : {
@@ -794,6 +924,18 @@ export function panelCornersOnRoof(
   // tiltDeg == 0 keeps the grid-aligned w × h (footprint alignment governs,
   // matching pose's yaw = roofGridAngle for untilted flat panels). Sloped
   // roofs are flush — pose comes from the roof — and are untouched below.
+  // A VERTICAL module's plan projection is a LINE — cos 90° = 0 — and the
+  // branch below would hand back a zero-depth rectangle: invisible in the 2D
+  // editor and degenerate in every overlap test. What it really occupies in
+  // plan is the module's own thickness plus the bracket that holds it off the
+  // wall, so that is what it gets. Deliberately its own branch: widening the
+  // tilted case with a floor would quietly thicken every tilted array's
+  // footprint and move setback verdicts on roofs that have nothing to do with
+  // this.
+  if (isFacade(roof)) {
+    const { w } = panelFootprintM(spec, panel.orientation);
+    return rectCorners(panel.center, w, FACADE_PLAN_DEPTH_M, -panel.azimuthDeg);
+  }
   if (!isSloped(roof) && (panel.tiltDeg > 0 || faceAzimuth)) {
     const { w, h } = panelFootprintM(spec, panel.orientation);
     const cosT = Math.cos((panel.tiltDeg * Math.PI) / 180);

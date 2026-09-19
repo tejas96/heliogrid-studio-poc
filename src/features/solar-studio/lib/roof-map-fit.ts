@@ -192,7 +192,15 @@ export function roofsAdoptingMap(roofs: Roof[], g: SurroundHeights, northOffsetD
   let out = roofs;
   for (const id of roofs.map((r) => r.id)) {
     const r = out.find((x) => x.id === id)!;
-    if (r.heightSource === 'user' || r.roofType === 'ground') continue;
+    // A FACADE is never fitted, for the same reason open ground is not: this
+    // map measures the height of a HORIZONTAL surface over a polygon, and a
+    // wall is not one. A facade's footprint is a strip along the base of the
+    // wall, so the cells under it read the PAVEMENT — which flattened the wall
+    // to 0 m on every render, and no amount of typing in the wall-height
+    // control could hold against it (caught in the browser). The pitch is the
+    // second half of the same problem: a stamped pitch would make `isSloped`
+    // true on a surface whose vertical is carried by its modules.
+    if (r.heightSource === 'user' || r.roofType === 'ground' || r.roofType === 'facade') continue;
     /*
      * A face of a gable or hip is NEVER fitted on its own.
      *

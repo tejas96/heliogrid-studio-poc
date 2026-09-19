@@ -198,8 +198,26 @@ export interface SiteTmy {
  * by a MOORING rather than by a footing. The input that governs the whole
  * design is how far the water level moves between seasons — it sets every
  * mooring line length — and this tool cannot know it.
+ *
+ * 'facade' is a WALL. Every other member of this union is a surface you stand
+ * on, and this one you hang off, which breaks the assumption the whole layout
+ * engine rests on: that a mounting surface's height is a function of its plan
+ * position. A wall's is not — a facade is a LINE in plan and a rectangle in
+ * elevation, so two modules one above the other occupy the same plan point at
+ * different heights. That is why the modules carry their own height
+ * (`PlacedPanel.mountHeightM`) instead of reading it off a plane, and why the
+ * fill lays COURSES up the wall rather than rows across a deck.
+ *
+ * Three facts follow from it being vertical, and all three are money:
+ * the plane faces sideways, so a south wall in India intercepts far less than
+ * an optimally tilted array and the energy report must say so rather than
+ * flatter it; there is no roof to walk on, so installation and every future
+ * clean is work at height off a cradle or a rope; and the fixing goes into
+ * the WALL, whose pull-out capacity is a masonry question no tool can answer
+ * from a drawing. `heightM` is the top of the wall, as on every other roof,
+ * and `facade.sillM` is where the clad band starts above grade.
  */
-export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground' | 'carport' | 'floating';
+export type RoofType = 'rcc_flat' | 'metal_shed' | 'ac_sheet' | 'membrane' | 'stone_slab' | 'tile' | 'ground' | 'carport' | 'floating' | 'facade';
 
 export interface ParapetWall {
   enabled: boolean;
@@ -258,6 +276,20 @@ export interface Roof {
    * A roof without it behaves exactly as it always did (per-roof edits only).
    */
   faceGroupId?: string;
+  /**
+   * The clad band on a FACADE: where the modules start above grade.
+   *
+   * A wall needs two heights, not one. `heightM` keeps its ordinary meaning —
+   * the top of the wall — and this says where the band of modules begins, so
+   * the band runs `sillM` → `heightM`. A real facade almost never starts at
+   * the pavement: the ground floor is shopfront, entrance or parking, and
+   * modules low enough to touch get broken and stolen.
+   *
+   * OPTIONAL, and only read when `roofType` is 'facade'. Absent on every roof
+   * ever saved, and absent fields serialize identically, so no stored project's
+   * fingerprint or capture moves.
+   */
+  facade?: { sillM: number };
   /**
    * Where `heightM` (and the pitch/facing set with it) came from: measured
    * off the aerial height map, or typed by the user. Absent = typed (legacy).
@@ -733,6 +765,24 @@ export interface PlacedPanel {
   segmentId?: string;
   /** encodes (row,col): row*COL_STRIDE + col (see lib/layout.ts) */
   cellIndex?: number;
+  /**
+   * The module centre's height relative to its surface's DATUM, m — for a
+   * surface whose height is not a function of plan position.
+   *
+   * Only a FACADE needs it, and it is the whole reason a facade can exist in a
+   * plan-based tool: on a wall, `center` fixes only WHERE ALONG the wall a
+   * module is, and the course it sits in has to be carried somewhere. Here.
+   *
+   * The datum is what `surfaceHeightAt` returns — for a facade, the top of the
+   * wall — so these values are NEGATIVE: the modules hang below the roof line.
+   * `panelPose` is the single place that reads it, which is what keeps the
+   * rendered mesh, the analytical shadow slab and the shading engine's ray
+   * origin describing one plate in space (§A0).
+   *
+   * LAZY: absent ⇒ 0 ⇒ exactly the behaviour every other surface has always
+   * had, so no stored project's fingerprint moves.
+   */
+  mountHeightM?: number;
 }
 
 export interface Walkway {

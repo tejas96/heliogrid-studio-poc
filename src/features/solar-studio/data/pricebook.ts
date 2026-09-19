@@ -163,6 +163,39 @@ export const PRICE_BOOK = {
   // SURVEYS. Bathymetry and a bed survey decide where an anchor can go at all,
   // and the level range decides the mooring. LUMP SUM per water body.
   floatSurveyLumpsum: 185000, // bathymetry, bed survey, level-range records
+  // ── Facade / BIPV. The array hangs off a WALL, and the two costs that decide
+  // whether a facade job is worth doing are not in the hardware at all: getting
+  // to the wall, and proving the wall will hold. Every figure is ASSUMED.
+  //
+  // WALL BRACKET. An HDG or aluminium bracket bolted sideways into the wall,
+  // carrying the rail. The anchor pair is INSIDE this rate on purpose: a facade
+  // has no base plate and no footing, so billing it through the generic plate
+  // and anchor lines is exactly how the stone-slab and carport slices each sold
+  // the same fixing twice before it was caught.
+  facadeWallBracketPc: 340, // bracket + 2 anchors + stainless fixings
+  // SPANDREL GLAZING. On a curtain wall the module IS the cladding, so it is
+  // glazed into the system's mullions with structural gaskets and setting
+  // blocks, and the facade contractor owns that interface. Per module.
+  facadeSpandrelGlazingPerPanel: 2650, // structural gasket set, setting blocks, transoms
+  // ACCESS. THE line an EPC forgets. There is no roof to stand on: every module
+  // is installed, inspected and later cleaned from a suspended cradle, a rope
+  // access team or a scaffold. Priced per m² of ELEVATION worked, which is what
+  // an access contractor quotes against.
+  facadeAccessPerM2: 620, // suspended cradle / rope access, install phase
+  // WEATHER LINE. The clad band has to be closed at its head and its sill or
+  // water gets behind it and runs down the inside of the wall. Per metre.
+  facadeFlashingPerM: 480, // GI/aluminium head and sill flashing, sealed
+  // CAVITY FIRE BARRIER. A ventilated cavity behind cladding is a chimney. NBC
+  // 2016 Part 4 wants it interrupted at each floor level, and how many floors
+  // this band crosses is on the elevation drawing, not in this model. Per metre
+  // of wall — the FLOOR COUNT is not modelled and the formula says so.
+  facadeCavityBarrierPerM: 1150, // mineral-wool cavity barrier with intumescent seal
+  // PERMANENT ANCHOR EYES at roof level, so the cleaning contractor has
+  // something certified to hang from for the next 25 years.
+  facadeAnchorEyeEach: 8600, // certified fall-arrest eye, installed and load-tested
+  // PULL-OUT TEST. The honest answer to "what is this wall made of?" is not an
+  // assumption, it is a test. LUMP SUM per facade.
+  facadePullTestLumpsum: 42000, // on-site anchor pull tests + anchorage design sign-off
   // ASBESTOS METHOD STATEMENT. Drilling releases fibre. A written method
   // statement, wet-drilling kit, PPE and bagged debris disposal are a legal
   // requirement, not a nicety. LUMP SUM per AC roof, ESTIMATED — disposal is

@@ -39,11 +39,21 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       const b = roof.polygon[(i + 1) % roof.polygon.length];
       zones.push({ id: `parapet-${i}`, label: 'parapet', poly: stripFootprint(a, b, roof.parapet.widthM * 2000), bottom: roof.heightM, top: Math.max(surfaceHeightAt(roof, a), surfaceHeightAt(roof, b)) + roof.parapet.heightM });
     });
+    // ON A WALL, "inside the boundary" is the wrong question ────────────────
+    // Both tests below ask whether a component's PLAN footprint sits within the
+    // roof polygon. A facade's components are bolted to the FACE of that
+    // polygon and stand proud of it — the bracket, then the rail, then the
+    // module — so every one of them is outside it by construction, and by an
+    // amount that is exactly right. Left in, it reported 22 errors on a
+    // perfectly built wall (caught in the browser), which is worse than no
+    // check at all: it buries the real findings. What actually constrains a
+    // facade is its ELEVATION, and `lib/drc.ts` judges the modules there.
+    const wall = roof.roofType === 'facade';
     const checkFootprint = (id: string, poly: XY[], bottom: number, top: number, member?: Member) => {
       const area = Math.abs(polygonArea(poly));
       const inside = intersectPolygons(poly, roof.polygon).reduce((sum, p) => sum + Math.abs(polygonArea(p)), 0);
-      if (area - inside > 1e-7) add('roof_boundary', 'error', `MMS component extends outside the ${ground ? 'array area' : 'roof'} boundary.`, [id]);
-      else if (cfg.edgeClearanceM > 0 && poly.some(p => roof.polygon.some((a, i) => pointSegDist(p, a, roof.polygon[(i + 1) % roof.polygon.length]).d < cfg.edgeClearanceM))) add('edge_clearance', 'warning', `MMS is inside the requested ${ground ? 'boundary setback' : 'roof-edge'} clearance.`, [id]);
+      if (!wall && area - inside > 1e-7) add('roof_boundary', 'error', `MMS component extends outside the ${ground ? 'array area' : 'roof'} boundary.`, [id]);
+      else if (!wall && cfg.edgeClearanceM > 0 && poly.some(p => roof.polygon.some((a, i) => pointSegDist(p, a, roof.polygon[(i + 1) % roof.polygon.length]).d < cfg.edgeClearanceM))) add('edge_clearance', 'warning', `MMS is inside the requested ${ground ? 'boundary setback' : 'roof-edge'} clearance.`, [id]);
       for (const z of zones) {
         if (bottom >= z.top || top <= z.bottom) continue;
         const overlap = intersectPolygons(poly, z.poly).flat();
@@ -102,7 +112,10 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       if (![b.lengthM, b.widthM, b.heightM, b.massKg].every(v => Number.isFinite(v) && v > 0) || !Number.isInteger(b.blocksPerSupport) || b.blocksPerSupport < 1 || b.blocksPerSupport > 20) add('ballast_invalid', 'error', 'Ballast dimensions, mass and quantity must be positive; maximum 20 blocks per support.');
       add('ballast_resistance', 'not_calculated', 'Sliding, overturning and uplift: engineering verification required.');
     }
-    if (seg.racking.kind === 'flush' && !cfg.attachmentVerified) add('attachment_unverified', 'warning', 'Confirm roof profile, seam/purlin/rafter locations and manufacturer attachment capacity at survey.');
+    // On a FACADE there is no roof profile, no seam and no purlin to confirm.
+    // What has to be confirmed is the WALL: what it is built of and whether the
+    // bracket lands on a column or on a panel spanning between them.
+    if (seg.racking.kind === 'flush' && !cfg.attachmentVerified) add('attachment_unverified', 'warning', roof.roofType === 'facade' ? 'Confirm the wall construction, the column grid behind it and the bracket manufacturer’s capacity in that substrate at survey.' : 'Confirm roof profile, seam/purlin/rafter locations and manufacturer attachment capacity at survey.');
     // Waterproofing membrane. One rule, and it admits no exception.
     if (isNoPenetrationRoof(roof)) {
       if (!['membrane_ballast', 'aero_tray', 'custom'].includes(cfg.strategy))
@@ -129,6 +142,16 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       add('carport_uplift', 'not_calculated', 'Wind UPLIFT governs an open canopy, not dead load: the wind gets at both faces and the whole moment is taken at the post base. Nothing here is calculated — the frame, the footing and the hold-down are an engineer’s design (IS 875 Part 3).');
       add('carport_drainage', 'warning', 'The modules ARE this roof. The gutter and downpipes are counted, but the falls and the point the water discharges to — a surface drain, a soakaway, a storm connection — are not modelled and must be designed.');
       add('carport_bays', 'warning', 'Post positions come from the structural spacing, not from the car park’s bay layout. Check every post lands on a bay line and not in the middle of a bay or a drive aisle before anything is set in concrete.');
+    }
+    // Facade. The array hangs off a wall, so every one of these is about
+    // something a rooftop design never has to answer.
+    if (roof.roofType === 'facade') {
+      add('facade_anchorage', 'not_calculated', 'The bracket count is derived; the HOLDING POWER is not. A wall may be RCC, solid brick, hollow block or an infill panel spanning between columns, and those differ by an order of magnitude — so whether a bracket lands on a column or on a panel matters as much as how many there are. On-site pull tests and a signed anchorage design are required before ordering.');
+      add('facade_wind', 'not_calculated', 'Wind on a wall-mounted plane is a CLADDING pressure case, not a roof one: IS 875 Part 3 external pressure coefficients apply, they are worst at the corners and edges of the elevation, and they act both ways on a module standing off the wall. None of it is calculated here.');
+      add('facade_fire', 'warning', 'The gap behind the modules is a CAVITY, and a cavity behind cladding is a chimney. NBC 2016 Part 4 requires it interrupted at every floor level — the BOM carries one run of cavity barrier and cannot know the floor count, so multiply it by the floors this band crosses. Combustibility of the module backsheet and of anything in the cavity is a fire-consultant question.');
+      add('facade_yield', 'warning', 'A VERTICAL plane intercepts far less than an optimally tilted one at Indian latitudes, and it is shaded early and late by whatever stands opposite. The energy figures here do model that honestly — vertical tilt, half the sky, half the ground reflection — so read the yield before this is sold as a rooftop-equivalent array. A facade is usually chosen for the building, not for the kWh.');
+      if (!['facade_rail', 'facade_spandrel'].includes(cfg.strategy))
+        add('facade_wrong_fixing', 'error', 'This mounting system founds on a horizontal surface — legs, ballast or a cast footing. A wall has none of those. Use a wall-bracket rail system or a curtain-wall spandrel infill.');
     }
     // Stone slab on joists. Looks like a flat deck, is not one.
     if (roof.roofType === 'stone_slab') {
@@ -165,6 +188,11 @@ export function validateMms(project: Project, structures: SegmentStructure[]): M
       // car park. Asking for "roof structural capacity" here names a structure
       // that is not in the design; what actually has to be checked is the frame
       // and the footing, which `carport_uplift` above says outright.
+    } else if (roof.roofType === 'facade') {
+      // Nothing is standing on a deck here — a facade hangs. "Roof structural
+      // capacity in kPa" is the wrong question and the wrong unit: what carries
+      // this array is the WALL in tension and shear at each bracket, which
+      // `facade_anchorage` above asks for by name.
     } else if (!project.mmsEngineering?.roofCapacityKpa) add('roof_capacity', 'not_calculated', 'Roof structural capacity unavailable — engineering verification required.');
     if (!project.mmsEngineering?.basicWindSpeedMs || !project.mmsEngineering?.terrainCategory) add('wind_incomplete', 'warning', 'Wind configuration incomplete (IS 875 Part 3).');
     if (!out.some(f => f.segmentId === seg.id && f.status === 'error')) add('geometry_clear', 'pass', 'No geometric conflicts detected in the modelled members and attachments.');

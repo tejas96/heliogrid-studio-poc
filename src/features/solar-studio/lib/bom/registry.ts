@@ -92,6 +92,13 @@ export type LineKey =
   | 'mech.float_anchor'
   | 'mech.float_cable'
   | 'mech.float_survey'
+  /** facade: getting to the wall, proving it will hold, and closing the cavity
+   *  behind the modules. The hardware is the cheap part. */
+  | 'mech.facade_access'
+  | 'mech.facade_pull_test'
+  | 'mech.facade_cavity_barrier'
+  | 'mech.facade_trim'
+  | 'mech.facade_anchor_eye'
   | 'mech.rail'
   /**
    * RETIRED in 22j — split into the two lines below because a mid clamp and an

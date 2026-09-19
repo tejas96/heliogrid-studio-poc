@@ -55,6 +55,17 @@ export function emitMms(ctx: BomContext): BomLine[] {
       add('membrane_pad', `Membrane protection pads · ${seg.label}`, 'Geotextile / recycled-rubber pad under every bearing point, oversized to the block', total('ballast'), 'nos', ctx.pricebook.membraneProtectionMatPc, 'One per ballast block. A block set straight onto bitumen abrades it, and in rooftop heat the bitumen softens and the block creeps into it');
       if (c.strategy === 'aero_tray') add('aero_tray', `Aerodynamic ballast tray · ${seg.label}`, 'Closed east–west tub; the back panel turns uplift into downforce', ctx.project.panels.filter(p => p.enabled && p.segmentId === seg.id).length, 'nos', ctx.pricebook.aeroTrayPerPanel, 'One tub per module. ASSUMED market rate — a real tender prices a named vendor. The downforce claim is the VENDOR’s and is not modelled here');
     }
+    // ── Facade ────────────────────────────────────────────────────────────
+    // A wall bracket is not a base plate and not a chemical anchor on its own,
+    // which is why it is counted by its own `brackets` field and billed here.
+    // The generic plate / anchor / pile / pedestal / standoff / washer lines
+    // above all come out at zero on this topology and emit nothing, so there is
+    // no second place this hardware can appear.
+    if (roof?.roofType === 'facade') {
+      add('facade_bracket', `Wall brackets · ${seg.label}`, `Bracket + 2 anchors, bolted into the wall · ${c.attachmentSpacingM} m centres`, total('brackets'), 'nos', ctx.pricebook.facadeWallBracketPc, 'One per rail support, counted from the connection graph. The COUNT is derived; the CAPACITY is not — a bracket in RCC, solid brick, hollow block or an infill panel differs by an order of magnitude, and nothing in this model knows which the wall is. Pull-test and anchorage design required');
+      if (c.strategy === 'facade_spandrel')
+        add('facade_glazing', `Spandrel glazing set · ${seg.label}`, 'Structural gasket, setting blocks and transom interface to the curtain wall', ctx.project.panels.filter(p => p.enabled && p.segmentId === seg.id).length, 'nos', ctx.pricebook.facadeSpandrelGlazingPerPanel, 'One per module. On a curtain wall the module IS the cladding, so it must satisfy the facade system’s weather line as well as make power — that interface is the FACADE contractor’s scope and is priced as theirs. A made-to-size glass-glass laminate also costs more than the catalogue module priced above');
+    }
     add('ballast', `Ballast blocks · ${seg.label}`, `${c.ballast.type} · ${c.ballast.lengthM} × ${c.ballast.widthM} × ${c.ballast.heightM} m · ${c.ballast.massKg} kg/block`, total('ballast'), 'nos', c.ballast.type === 'precast_concrete' ? ctx.pricebook.ballastBlock : 0, `${c.ballast.blocksPerSupport} per support · ${total('ballast') * c.ballast.massKg} kg declared mass`);
     // A GROUND table is founded in earth, and `emitMechanical` skips any segment
     // that carries an MMS (`if (st.mms) continue`) so the detailed graph is not
