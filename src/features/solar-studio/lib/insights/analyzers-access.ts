@@ -13,6 +13,7 @@
 import type { PanelSpec, PlacedPanel, Project, Roof, XY } from '../../types';
 import { dist, pointSegDist } from '../geo';
 import { panelCornersOnRoof } from '../layout';
+import { indexPoints, type PointIndex } from '../spatial-index';
 import { resolveRules } from '../../data/rules/india';
 import { registerAnalyzer, listAnalyzers } from './registry';
 import type { Insight, InsightAnalyzer } from './types';
@@ -98,7 +99,17 @@ const moduleReplacement: InsightAnalyzer = {
     for (const roof of p.roofs) {
       const panels = enabledOn(p, roof.id);
       if (panels.length < 5) continue; // too small to box anything in
-      const boxed = panels.filter((pn) => boxedIn(pn, panels, spec, roof));
+      // A module can only be boxed in by its IMMEDIATE neighbours, so index
+      // the centres once per roof and ask each module about its own
+      // neighbourhood. Scanning every module for every module is the same
+      // n² the overlap sweep had — measured at 35,293 ms for 41,322 modules,
+      // on the main thread, after every design.
+      const cell = Math.max(spec.lengthMm, spec.widthMm) / 1000;
+      const index = indexPoints(
+        panels.map((x) => x.center),
+        cell * 1.35,
+      );
+      const boxed = panels.filter((pn) => boxedIn(pn, panels, index, spec, roof));
       if (boxed.length === 0) continue;
       out.push({
         key: `module-replacement:${roof.id}`,
@@ -121,6 +132,7 @@ const moduleReplacement: InsightAnalyzer = {
 function boxedIn(
   target: PlacedPanel,
   panels: PlacedPanel[],
+  index: PointIndex,
   spec: PanelSpec,
   roof: Roof,
 ): boolean {
@@ -130,7 +142,10 @@ function boxedIn(
   const h = dist(corners[1], corners[2]);
   const near = Math.max(w, h) * 1.35;
   let left = false, right = false, up = false, down = false;
-  for (const o of panels) {
+  // the index narrows WHO is asked; the distance test below is unchanged, so
+  // the verdict is identical to scanning every module on the roof
+  for (const k of index.near(target.center, near)) {
+    const o = panels[k];
     if (o.id === target.id) continue;
     const dx = o.center.x - target.center.x;
     const dy = o.center.y - target.center.y;

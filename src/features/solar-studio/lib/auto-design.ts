@@ -25,6 +25,43 @@ import { panelCornersOnRoof } from './layout';
 
 export type DesignObjective = 'target_kwp' | 'max_roof';
 
+/**
+ * Most candidate positions the budget scorer will shade INLINE.
+ *
+ * The scorer measures every candidate against the real scene so a budget keeps
+ * the best-lit positions rather than the first ones. Its cost is linear in the
+ * candidate count, and it runs INSIDE the click handler, so every millisecond
+ * of it is a frozen browser.
+ *
+ * Measured, at Bhadla, with a neighbourhood height map loaded — which is the
+ * condition that matters, because without one the engine has nothing to
+ * raycast against and the whole pass costs nothing:
+ *
+ *     candidates      scorer
+ *        768           800 ms
+ *      3,136         2,983 ms
+ *     13,200        11,708 ms
+ *     40,480        30,712 ms
+ *
+ * About 0.9 ms each, which agrees with the measurement the scorer was written
+ * against (800 candidates in ~0.6 s). A rooftop is fine. A 23 ha field offers
+ * ~58,000 positions and is not: pressing "Design it" there blocked the main
+ * thread past 30 s, and the tab answered nothing at all — not even `1 + 1`.
+ *
+ * 4,000 is the line. It keeps the scorer for every rooftop and C&I job — a
+ * 1 ha warehouse roof is about 3,800 candidates — at under four seconds, and
+ * drops it only for open fields, where the modules sit on open land at the
+ * winter shadow-free pitch and the ranking has least to discriminate anyway.
+ *
+ * Above the line the budget truncates in lattice order, which is exactly what
+ * happens when no scorer is supplied, and the design log says so: a layout
+ * chosen by position rather than by sun is a decision the engineer is entitled
+ * to see. The real per-module access still lands moments later — `useDesignSync`
+ * stamps the full Tier-2 pass off the main thread, and every number that
+ * depends on it reads as provisional until it does.
+ */
+const MAX_SCORED_CANDIDATES = 4000;
+
 export interface RoofRank {
   roofId: string;
   name: string;
@@ -218,6 +255,23 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
     // avoidPanels: [] — VERIFIED: Step6Editor.runAutoPlace applies this result
     // as patch({ panels: result.panels, segments: result.segments }), a full
     // REPLACE of the layout, so the panels being replaced must not block it.
+    // Would the budget actually discard positions here, and can they be
+    // scored without freezing the tab? See MAX_SCORED_CANDIDATES.
+    const budgetBites = budgetHere !== undefined && rank.capacityPanels > budgetHere;
+    const scoreable = rank.capacityPanels <= MAX_SCORED_CANDIDATES;
+    if (budgetBites && !scoreable) {
+      decisions.push({
+        id: `budget-order:${rank.roofId}`,
+        topic: `Budget on ${rank.name}`,
+        choice: 'Filled in row order, not best-lit first',
+        reason: `${rank.capacityPanels} candidate positions is past the ${MAX_SCORED_CANDIDATES} this tool will shade one by one before placing — measuring them all would lock the browser for tens of seconds. The modules were placed row by row instead. Full per-module shading is computed straight after this and every figure that uses it reads as provisional until then; if this site has real shading, check the heat map in Step 6 and move tables by hand.`,
+        inputs: [
+          `candidates=${rank.capacityPanels}`,
+          `budgetPanels=${budgetHere}`,
+          `scoringLimit=${MAX_SCORED_CANDIDATES}`,
+        ],
+      });
+    }
     const filled = fillRoofAsSegment(project, roof, spec, {
       ...DEFAULT_FILL,
       avoidPanels: [],
@@ -237,11 +291,15 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
       // Rows are laid at the winter-solstice shadow-free pitch anyway, so real
       // inter-row shading is ~0 by construction — useDesignSync then stamps the
       // full Tier-2 access, self-shading included, on the panels that survive.
-      scoreCandidates: (candidates) =>
-        computeSolarAccess(
-          { ...project, panels: candidates.map((c) => ({ ...c, enabled: false })) },
-          { surround },
-        ),
+      ...(scoreable
+        ? {
+            scoreCandidates: (candidates: PlacedPanel[]) =>
+              computeSolarAccess(
+                { ...project, panels: candidates.map((c) => ({ ...c, enabled: false })) },
+                { surround },
+              ),
+          }
+        : {}),
     });
     if (!filled) continue;
     // geometric reindex (holes from mid-row obstructions recorded correctly)

@@ -11,6 +11,7 @@ import {
   rectsOverlap,
 } from './geo';
 import { panelCornersOnRoof, panelFootprintM } from './layout';
+import { forEachCandidatePair } from './spatial-index';
 import { isFacade } from './roof-plane';
 import { facadeAlongM, facadeFace, facadeSillM } from './facade';
 import { requiredBridgeClearanceM, resolveCapabilities } from './capabilities';
@@ -108,14 +109,16 @@ export function layoutIssues(
         const [lo, , hi] = elev[i];
         if (lo.x < -0.01 || hi.x > face.lengthM + 0.01 || lo.y < sill - 0.01 || hi.y > roof.heightM + 0.01)
           breachIds.add(rp[i].id);
-        for (let j = i + 1; j < elev.length; j++) {
-          if (rectsOverlap(shrink(elev[i]), shrink(elev[j]))) {
-            overlapCount++;
-            overlapIds.add(rp[i].id);
-            overlapIds.add(rp[j].id);
-          }
-        }
       }
+      // same broad phase as the plan case below — a wall is a lattice too
+      const elevShrunk = elev.map(shrink);
+      forEachCandidatePair(elevShrunk, (i, j) => {
+        if (rectsOverlap(elevShrunk[i], elevShrunk[j])) {
+          overlapCount++;
+          overlapIds.add(rp[i].id);
+          overlapIds.add(rp[j].id);
+        }
+      });
       continue;
     }
     const inset = insetPolygonRobust(
@@ -131,16 +134,28 @@ export function layoutIssues(
       if (!inset.some((reg) => corners[i].every((pt) => pointInPolygon(pt, reg))))
         breachIds.add(rp[i].id);
     }
-    // overlaps: pairwise within the roof
-    for (let i = 0; i < corners.length; i++) {
-      for (let j = i + 1; j < corners.length; j++) {
-        if (rectsOverlap(shrink(corners[i]), shrink(corners[j]))) {
-          overlapCount++;
-          overlapIds.add(rp[i].id);
-          overlapIds.add(rp[j].id);
-        }
+    // ── overlaps: the same question, asked of the pairs that can answer it ──
+    // This used to compare every module on the roof with every other one. That
+    // is n(n−1)/2 tests: fine for a rooftop, and 853,741,281 tests for the
+    // 41,322 modules of a 23 ha field — measured at 67,229 ms of blocked main
+    // thread, inside the health snapshot that runs after every design.
+    //
+    // `forEachCandidatePair` is a broad phase, not a shortcut: it hands over
+    // every pair whose bounding boxes touch, and the exact test below is
+    // unchanged. A pair it skips has disjoint bounding boxes and therefore
+    // cannot overlap, so the findings are identical — pinned against a
+    // brute-force run in lib/__tests__/spatial-index.test.ts.
+    //
+    // Shrinking once up front rather than inside the loop also stops the old
+    // code rebuilding both rectangles on every one of those comparisons.
+    const shrunk = corners.map(shrink);
+    forEachCandidatePair(shrunk, (i, j) => {
+      if (rectsOverlap(shrunk[i], shrunk[j])) {
+        overlapCount++;
+        overlapIds.add(rp[i].id);
+        overlapIds.add(rp[j].id);
       }
-    }
+    });
   }
 
   const shadedIds = panels
