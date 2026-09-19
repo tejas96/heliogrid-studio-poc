@@ -107,15 +107,56 @@ export function Step4Components() {
         )
       : null;
 
+  /**
+   * What the drawn roofs actually hold, in kWp. ONE fill.
+   *
+   * THE BUG THIS REPLACES. The DC numerator used to come from
+   * `memoizedComparison(project).rows.find(r => r.isCurrent).achievedKwp`,
+   * computed DURING RENDER. That call lays out the whole site for every
+   * shortlisted module — six full designs — and runs an energy report on each.
+   * It is cheap on a roof and ruinous on a field, and it was reached only once
+   * `targetKwp > 0`: exactly the state the Auto button creates.
+   *
+   * So pressing Auto on a 23 ha field did this: the op ran, the reducer
+   * produced the right capacity, and then React re-rendered this component and
+   * sat inside the comparison. Measured in the browser, the main thread was
+   * still blocked 30,003 ms later. The commit never landed, so the field stayed
+   * empty, nothing was saved, and `lib/wizard-gate.ts` went on refusing to
+   * advance past step 4 while `targetKwp <= 0`. A utility-scale project could
+   * not be designed at all, and the app looked simply dead rather than busy.
+   *
+   * The comparison was never needed for this number. `buildCandidateProject`
+   * budgets every candidate to `floor(targetKwp * 1000 / watt)` panels, so the
+   * current row's `achievedKwp` IS `min(target, what the roofs hold)` — and the
+   * second half of that is one `estimateMaxCapacityKwp` call, no energy report,
+   * no other candidates. Same answer, measured 145 ms instead of 30 s.
+   *
+   * Keyed on what a FILL depends on, not on `project`: the capacity box writes
+   * to the project on every keystroke, and keying on the whole project would
+   * re-lay the entire site between characters. A field left out of this list
+   * can only leave the DC/AC hint one edit stale — it can never make the
+   * layout wrong, because nothing is laid out here.
+   */
+  const roofMaxKwp = useMemo(
+    () =>
+      c.panel && project.roofs.length > 0 ? estimateMaxCapacityKwp(project, c.panel).kwp : 0,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      c.panel,
+      project.roofs,
+      project.obstructions,
+      project.keepouts,
+      project.walkways,
+      project.structureDefaults,
+      project.location,
+      project.calibration,
+    ],
+  );
   // ONE recommendation rule shared with the comparison matrix: DC numerator =
-  // what the roofs actually hold toward the target (the matrix's current row),
-  // falling back to the raw target before any roof exists
-  const effectiveKwp = useMemo(() => {
-    if (c.targetKwp <= 0) return 0;
-    if (project.roofs.length === 0 || !c.panel) return c.targetKwp;
-    const cur = memoizedComparison(project).rows.find((r) => r.isCurrent);
-    return cur && cur.achievedKwp > 0 ? cur.achievedKwp : c.targetKwp;
-  }, [project, c.targetKwp, c.panel]);
+  // what the roofs actually hold toward the target, falling back to the raw
+  // target before any roof exists
+  const effectiveKwp =
+    c.targetKwp <= 0 ? 0 : roofMaxKwp > 0 ? Math.min(c.targetKwp, roofMaxKwp) : c.targetKwp;
   const recommendedPick = useMemo(() => {
     if (effectiveKwp <= 0) return null;
     const phase = project.info.connectionType === 'three' ? 3 : 1;
