@@ -17,6 +17,7 @@ import { Move, RotateCw, ArrowUpDown, PlugZap, BatteryCharging, Box, Rows3, Colu
 import { layoutGrow, layoutShrink } from '../lib/ops/layout-ops';
 import { segmentGrid, type GrowAxis, type GrowSide } from '../lib/segment-ops';
 import { pointInPolygon, rotate } from '../lib/geo';
+import { boundsOf } from '../lib/bulk';
 import { unitBaseY } from '../lib/unit-pos';
 import type { ArraySegment, PanelSpec, Project, Roof, XY } from '../types';
 import type { DesignOp } from '../lib/ops/types';
@@ -363,12 +364,8 @@ export function TableGizmo({
   // layout.grow / layout.shrink use (segmentGrid), so a drag counts real cells
   const grid = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -grid.angle));
-  const lb = {
-    minX: Math.min(...locals.map((l) => l.x)),
-    maxX: Math.max(...locals.map((l) => l.x)),
-    minY: Math.min(...locals.map((l) => l.y)),
-    maxY: Math.max(...locals.map((l) => l.y)),
-  };
+  // one pass over the table's modules, never a spread of them (lib/extent.ts)
+  const lb = boundsOf(locals, (l) => l.x, (l) => l.y);
   const midX = (lb.minX + lb.maxX) / 2;
   const midY = (lb.minY + lb.maxY) / 2;
   const edgeWorld = (side: GrowSide): XY =>

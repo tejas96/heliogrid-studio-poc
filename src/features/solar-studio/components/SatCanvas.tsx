@@ -76,6 +76,18 @@ export interface CanvasFrame {
   zoom: number;
   /** px-per-meter at current zoom — for hit-testing tolerances */
   pxPerM: number;
+  /**
+   * The world rectangle currently on screen, in the same metres as `spanM`,
+   * rounded OUT to a coarse grid so it is stable across small pans.
+   *
+   * Published because the overlay, not the basemap, is what gets expensive at
+   * scale: Step 6 draws one SVG `<path>` per module, and a 36 ha field is
+   * 129,024 of them. No browser survives that many nodes, and it is all
+   * wasted — a screen shows a few hundred modules at a working zoom. Handing
+   * the screens the same rect the mosaic culls with means the overlay can cull
+   * with it, and the two can never disagree about what is visible.
+   */
+  view: { minX: number; maxX: number; minY: number; maxY: number };
 }
 
 const FrameCtx = createContext<CanvasFrame | null>(null);
@@ -315,31 +327,16 @@ export const SatCanvas = forwardRef<
     anchor: XY;
   } | null>(null);
 
-  const frame: CanvasFrame = {
-    spanM,
-    sizePx,
-    zoom,
-    pxPerM: (sizePx / spanM) * zoom,
-    toPx: (p) => ({
-      x: (p.x / spanM + 0.5) * sizePx,
-      y: (0.5 - p.y / spanM) * sizePx,
-    }),
-    toM: (px) => ({
-      x: (px.x / sizePx - 0.5) * spanM,
-      y: (0.5 - px.y / sizePx) * spanM,
-    }),
-  };
-
-  // ── The basemap ────────────────────────────────────────────────────────────
-  // What the user can see right now, in world metres. The content plane is laid
-  // out centre-anchored and then `translate(pan) scale(zoom)`, so a screen
-  // offset from the viewport centre is (offset - pan)/zoom content px, and the
-  // plane's centre is world (0,0).
+  // ── What the user can see right now, in world metres ──────────────────────
+  // The content plane is laid out centre-anchored and then
+  // `translate(pan) scale(zoom)`, so a screen offset from the viewport centre
+  // is (offset - pan)/zoom content px, and the plane's centre is world (0,0).
   //
   // Rounded OUT to VIEW_QUANTUM_M so panning does not re-run the tile layout on
   // every frame. Rounding out (never in) guarantees the rect never reports less
-  // ground than is actually on screen, which would cull a tile the user is
-  // looking at.
+  // ground than is actually on screen, which would cull something the user is
+  // looking at — a basemap tile, or a module the overlay culls with the same
+  // rect.
   const viewRect = useMemo(() => {
     const halfW = (viewport.w / 2 - pan.x) / zoom;
     const halfH = (viewport.h / 2 - pan.y) / zoom;
@@ -395,6 +392,22 @@ export const SatCanvas = forwardRef<
     () => staticSatelliteUrl(lat, lng, backdropZoom(lat, spanM, scaleFactor), TILE_PX, TILE_SCALE),
     [lat, lng, spanM, scaleFactor],
   );
+
+  const frame: CanvasFrame = {
+    spanM,
+    sizePx,
+    zoom,
+    pxPerM: (sizePx / spanM) * zoom,
+    view: viewRect,
+    toPx: (p) => ({
+      x: (p.x / spanM + 0.5) * sizePx,
+      y: (0.5 - p.y / spanM) * sizePx,
+    }),
+    toM: (px) => ({
+      x: (px.x / sizePx - 0.5) * spanM,
+      y: (0.5 - px.y / sizePx) * spanM,
+    }),
+  };
 
   // Centre the viewport on a world point: content is centre-anchored then
   // translate(pan)·scale(zoom), so pan = -(basePx - sizePx/2)·zoom lands it dead

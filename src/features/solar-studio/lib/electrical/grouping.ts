@@ -20,6 +20,7 @@
 // partition explicit; autostring then works strictly inside one group.
 import type { PlacedPanel, Project, Roof } from '../../types';
 import { collinearOverlap } from '../geo';
+import { pushAll } from '../bulk';
 import { roofGridAngle } from '../layout';
 
 /**
@@ -304,7 +305,7 @@ export function orderGroup(group: PanelGroup, roofs: Roof[]): PlacedPanel[] {
   const out: PlacedPanel[] = [];
   for (const id of ids) {
     const panels = byRoof.get(id)!;
-    out.push(...serpentine({ ...group, roofId: id, panels }, roofs.find((r) => r.id === id)));
+    pushAll(out, serpentine({ ...group, roofId: id, panels }, roofs.find((r) => r.id === id)));
   }
   return out;
 }
@@ -334,7 +335,7 @@ export function serpentine(group: PanelGroup, roof?: Roof): PlacedPanel[] {
   const out: PlacedPanel[] = [];
   rows.forEach((row, i) => {
     row.sort((a, b) => (i % 2 === 0 ? a.u - b.u : b.u - a.u));
-    out.push(...row.map((x) => x.p));
+    pushAll(out, row.map((x) => x.p));
   });
   return out;
 }

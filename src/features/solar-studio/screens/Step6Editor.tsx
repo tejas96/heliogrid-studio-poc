@@ -59,6 +59,7 @@ import type {
   ArraySegment,
   PanelOrientation,
   PlacedPanel,
+  StringDef,
   Walkway,
   SafetyRail,
   Keepout,
@@ -72,6 +73,7 @@ import {
   rectCorners,
 } from '../lib/geo';
 import { siteCoverM } from '../lib/site-cover';
+import { boundsOf, minBy } from '../lib/bulk';
 import {
   autoFillRoof,
   defaultPanelPose,
@@ -79,6 +81,7 @@ import {
   nextSegmentLabel,
   panelCornersOnRoof,
   panelFitsAt,
+  panelFootprintM,
   parapetSetbackNotice,
   snapPanelCenter,
 } from '../lib/layout';
@@ -3851,7 +3854,7 @@ function SelectionContextBar({
                   <ChevronsDown />
                 </button>
                 <span className="ctx-val" title="Panel tilt (min of selection)">
-                  {Math.min(...panels.map((p) => p.tiltDeg))}°
+                  {minBy(panels, (p) => p.tiltDeg, 0)}°
                 </span>
                 <button
                   className="ctx-btn"
@@ -4130,6 +4133,108 @@ function EditorLayers({
   );
   const onTracker = (p: PlacedPanel) => !!p.segmentId && trackerSegs.has(p.segmentId);
 
+  // ── Drawing 129,000 modules, cheaply ──────────────────────────────────────
+  // The module layer used to do three things per module, none of which scale:
+  //
+  //   `project.strings.find((s) => s.panelIds.includes(p.id))` — a scan of
+  //   every string, and inside it a scan of every panel id in that string. On a
+  //   38 MWp field that is 72,000 modules x ~3,300 strings x 22 ids. It is the
+  //   single most expensive line in the editor and it is quadratic.
+  //
+  //   `project.roofs.find(...)` — cheap per call, 72,000 calls.
+  //
+  //   one SVG `<path>` per module, whatever the zoom. No browser keeps 129,000
+  //   DOM nodes interactive, and it is all wasted: a screen at working
+  //   magnification holds a few hundred modules.
+  //
+  // The first two become one pass each, built here and read as maps. The third
+  // is answered by the two passes below — cull, then drop to table level.
+  const roofById = useMemo(
+    () => new Map(project.roofs.map((r) => [r.id, r])),
+    [project.roofs],
+  );
+  const strings = project.strings;
+  const stringByPanel = useMemo(() => {
+    const m = new Map<string, StringDef>();
+    for (const s of strings) for (const id of s.panelIds) m.set(id, s);
+    return m;
+  }, [strings]);
+
+  /**
+   * How wide one module is on screen, in px. The whole level-of-detail
+   * decision hangs off this single number.
+   */
+  const moduleScreenPx = (spec.widthMm / 1000) * frame.pxPerM;
+  /**
+   * Below this, a module is too small to tell apart from its neighbour, so
+   * drawing them individually buys the user nothing and costs a DOM node each.
+   * At 3 px a module is narrower than its own outline stroke — the layer reads
+   * as a solid block either way, and the table outline says the same thing for
+   * one node instead of thousands.
+   */
+  const TABLE_LOD_PX = 3;
+  const tableLod = moduleScreenPx < TABLE_LOD_PX;
+
+  /**
+   * Modules the viewport can actually see, plus a margin so a pan does not
+   * reveal a blank strip before the next render.
+   *
+   * The margin is in METRES and generous (one screen's worth, capped), because
+   * the view rect is already quantised to 16 m and only moves when the view
+   * has genuinely travelled.
+   */
+  const visiblePanels = useMemo(() => {
+    if (tableLod) return [];
+    const v = frame.view;
+    const pad = Math.min(60, Math.max(8, (v.maxX - v.minX) * 0.25));
+    const minX = v.minX - pad;
+    const maxX = v.maxX + pad;
+    const minY = v.minY - pad;
+    const maxY = v.maxY + pad;
+    const out: PlacedPanel[] = [];
+    for (const p of project.panels) {
+      const c = p.center;
+      if (c.x >= minX && c.x <= maxX && c.y >= minY && c.y <= maxY) out.push(p);
+    }
+    return out;
+  }, [project.panels, frame.view, tableLod]);
+
+  /**
+   * Table-level stand-ins, drawn instead of modules when they are too small to
+   * see. One filled rectangle per segment, from the modules' own bounding box
+   * in the table's own frame — so it sits exactly where the modules do,
+   * rotation included, rather than being the drawn fill REGION (which is the
+   * area the user swept, not the area that got filled).
+   */
+  const tableBlocks = useMemo(() => {
+    if (!tableLod) return [];
+    const out: { id: string; corners: XY[]; anyOff: boolean }[] = [];
+    for (const seg of project.segments) {
+      const roof = roofById.get(seg.roofId);
+      const mine = project.panels.filter((p) => p.segmentId === seg.id);
+      if (!roof || mine.length === 0) continue;
+      const { angle } = segmentGrid(roof, spec, seg, mine);
+      const half = panelFootprintM(spec, seg.orientation);
+      const locals = mine.map((p) => rotateXY(p.center, -angle));
+      const b = boundsOf(locals, (l) => l.x, (l) => l.y);
+      const x0 = b.minX - half.w / 2;
+      const x1 = b.maxX + half.w / 2;
+      const y0 = b.minY - half.h / 2;
+      const y1 = b.maxY + half.h / 2;
+      out.push({
+        id: seg.id,
+        corners: [
+          rotateXY({ x: x0, y: y0 }, angle),
+          rotateXY({ x: x1, y: y0 }, angle),
+          rotateXY({ x: x1, y: y1 }, angle),
+          rotateXY({ x: x0, y: y1 }, angle),
+        ],
+        anyOff: mine.some((p) => !p.enabled),
+      });
+    }
+    return out;
+  }, [tableLod, project.segments, project.panels, roofById, spec]);
+
   // Live preview for the panel-table (drag-fill) tool: the drawn rectangle AND a
   // ghost of the panels that would land there — already obstruction/setback-aware
   // (autoFillRoof honours every blocker), so the user SEES panels avoid keepouts
@@ -4309,15 +4414,29 @@ function EditorLayers({
         />
       ))}
 
+      {/* Tables, when a module is too small to draw as itself. One node per
+          table instead of one per module — the picture is the same block of
+          blue, and a 129,000-module field stops being 129,000 DOM nodes. */}
+      {tableBlocks.map((t) => (
+        <path
+          key={`lod_${t.id}`}
+          d={polyPath(frame, t.corners)}
+          fill="#0f2a5c"
+          stroke="#93c5fd"
+          strokeWidth={1}
+          opacity={t.anyOff ? 0.8 : 0.96}
+        />
+      ))}
+
       {/* panels */}
-      {project.panels.map((p) => {
-        const roof = project.roofs.find((r) => r.id === p.roofId);
+      {visiblePanels.map((p) => {
+        const roof = roofById.get(p.roofId);
         // a module on a TRACKER lies flat but sits along its tube, so its
         // footprint follows its own facing rather than the site's grid
         const corners = panelCornersOnRoof(p, spec, roof, onTracker(p));
         const inString = manualString?.includes(p.id);
         const isSelected = selected.includes(p.id);
-        const stringOf = project.strings.find((s) => s.panelIds.includes(p.id));
+        const stringOf = stringByPanel.get(p.id);
         const access = p.solarAccess ?? 1;
         const accessColor =
           access > 0.95 ? '#16a34a' : access > 0.85 ? '#eab308' : '#dc2626';
@@ -4520,10 +4639,11 @@ function EditorLayers({
           if (!roof || mine.length === 0) return null;
           const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
           const locals = mine.map((p) => rotateXY(p.center, -angle));
-          const minX = Math.min(...locals.map((l) => l.x)) - pitchX / 2;
-          const maxX = Math.max(...locals.map((l) => l.x)) + pitchX / 2;
-          const minY = Math.min(...locals.map((l) => l.y)) - pitchY / 2;
-          const maxY = Math.max(...locals.map((l) => l.y)) + pitchY / 2;
+          const lb = boundsOf(locals, (l) => l.x, (l) => l.y);
+          const minX = lb.minX - pitchX / 2;
+          const maxX = lb.maxX + pitchX / 2;
+          const minY = lb.minY - pitchY / 2;
+          const maxY = lb.maxY + pitchY / 2;
           const corners = [
             { x: minX, y: minY },
             { x: maxX, y: minY },

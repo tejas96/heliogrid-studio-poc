@@ -17,6 +17,7 @@ import {
   type StudioMeta,
 } from './schema';
 import { normalizeProject } from './normalize';
+import { packProject, unpackProject, type StoredProject } from './panels-codec';
 import { putImage } from './blobs';
 
 export interface LoadedState {
@@ -66,10 +67,15 @@ async function hoistInlineImages(p: Project): Promise<{ project: Project; hoiste
 }
 
 async function parseProject(raw: string): Promise<{ project: Project; hoisted: boolean }> {
-  const parsed = JSON.parse(raw) as Project;
-  if (!parsed || typeof parsed.id !== 'string' || !Array.isArray(parsed.roofs)) {
+  const stored = JSON.parse(raw) as StoredProject;
+  if (!stored || typeof stored.id !== 'string' || !Array.isArray(stored.roofs)) {
     throw new Error('not a project payload');
   }
+  // Modules come back out of their columnar form before anything else looks at
+  // the project, so hoisting, normalising and every consumer past this line
+  // see the ordinary `Project` they always have. A payload written before the
+  // codec still carries a plain `panels` array and passes straight through.
+  const parsed = unpackProject(stored);
   const { project, hoisted } = await hoistInlineImages(parsed);
   return { project: normalizeProject(project), hoisted };
 }
@@ -106,7 +112,7 @@ async function loadV2(meta: StudioMeta): Promise<LoadedState> {
       projects.push(project);
       // image bytes just moved to IDB — persist the slim JSON now, or the
       // next boot re-hoists duplicates and the fat payload stays in the key
-      if (hoisted) write(projectKey(id), JSON.stringify(project));
+      if (hoisted) write(projectKey(id), JSON.stringify(packProject(project)));
     } catch {
       // preserve the raw payload for recovery; NEVER touch the siblings.
       // The original key is removed ONLY once the quarantine copy is safely
@@ -153,7 +159,7 @@ async function migrateV1(raw: string): Promise<LoadedState> {
   // pressure the monolith stays put and migration retries next boot, so no
   // write path can silently delete the only copy of the user's data.
   const results: SaveResult[] = [];
-  for (const p of projects) results.push(write(projectKey(p.id), JSON.stringify(p)));
+  for (const p of projects) results.push(write(projectKey(p.id), JSON.stringify(packProject(p))));
   results.push(
     write(
       META_KEY,
@@ -237,8 +243,18 @@ export function saveMeta(
   );
 }
 
+/**
+ * Write one project.
+ *
+ * Panels go out COLUMNAR (lib/persistence/panels-codec). Stored as one object
+ * each they cost 283 bytes — a third of it JSON key names repeated once per
+ * module, another third values identical for every module in the same table —
+ * and a 36 ha field is 129,024 of them, so the payload was 34.87 MB against a
+ * ~20 MB localStorage budget. The design computed in 290 ms and then could not
+ * be kept.
+ */
 export function saveProject(p: Project): SaveResult {
-  return write(projectKey(p.id), JSON.stringify(p));
+  return write(projectKey(p.id), JSON.stringify(packProject(p)));
 }
 
 export function removeProject(id: string): void {

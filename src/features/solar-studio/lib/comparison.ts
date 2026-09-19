@@ -27,6 +27,7 @@ import type {
 import { resolveCatalog } from '../data/catalog';
 import { DEFAULT_FILL, fillRoofAsSegment } from './layout';
 import { reindexSegment } from './segment-ops';
+import { pushAll } from './bulk';
 import { autoString, validateSystem } from './stringing';
 import { activeWeather } from './solar';
 import { computeEnergyReport } from './energy/report';
@@ -117,7 +118,7 @@ export function buildCandidateProject(
     const re = reindexSegment(roof, panel, filled.segment, filled.panels);
     re.segment.label = `A${segments.length + 1}`;
     segments.push(re.segment);
-    panels.push(...re.panels);
+    pushAll(panels, re.panels);
     remaining -= re.panels.length;
   }
   const strings = inverter

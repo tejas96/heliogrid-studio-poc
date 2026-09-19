@@ -13,6 +13,7 @@ import type {
 } from '../types';
 import { autoFillRoof, fillRoofAsSegment, fillRowPitchM, DEFAULT_FILL } from './layout';
 import { reindexSegment } from './segment-ops';
+import { pushAll } from './bulk';
 import { computeSolarAccess } from './shading';
 import { peekSurroundHeights } from './surround';
 import type { SurroundHeights } from './surround-geometry';
@@ -247,7 +248,11 @@ export function autoDesign(project: Project, objective: DesignObjective): AutoDe
     const re = reindexSegment(roof, spec, filled.segment, filled.panels);
     re.segment.label = `A${segments.length + 1}`;
     segments.push(re.segment);
-    panels.push(...re.panels);
+    // `pushAll`, not `push(...re.panels)`: one roof of a 36 ha field is
+    // ~128,000 modules, and the spread passes every one of them as a separate
+    // ARGUMENT — measured, this line threw RangeError with the design already
+    // computed and correct. See lib/bulk.ts.
+    pushAll(panels, re.panels);
     remaining -= re.panels.length;
     if (budgetHere !== undefined && re.panels.length < rank.capacityPanels) {
       decisions.push({

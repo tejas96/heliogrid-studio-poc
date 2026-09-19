@@ -16,6 +16,11 @@ import type {
   XY,
 } from '../types';
 import { genId, rotate } from './geo';
+// A table's extent is measured over its MODULES, so these walk a list that
+// grows with the design — 128,000 of them on a 36 ha field. The spread form
+// (`Math.min(...locals.map(…))`) passes one argument per module and throws
+// RangeError past ~100k. See lib/bulk.ts for the measurement.
+import { maxBy, minBy } from './bulk';
 import {
   COL_STRIDE,
   DEFAULT_FILL,
@@ -197,8 +202,8 @@ export function reindexSegment(
   const heightOf = (p: PlacedPanel) => p.mountHeightM ?? 0;
   const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => (wall ? { x: alongOf(p), y: heightOf(p) } : rotate(p.center, -angle)));
-  const minX = Math.min(...locals.map((l) => l.x));
-  const minY = Math.min(...locals.map((l) => l.y));
+  const minX = minBy(locals, (l) => l.x);
+  const minY = minBy(locals, (l) => l.y);
   // on a wall the pitches are the module's own extents plus the joint: a course
   // is one module tall, a column one module wide, and neither is foreshortened
   const stepX = wall ? foot.w + seg.moduleGapM : pitchX;
@@ -272,10 +277,10 @@ export function growCandidates(
   if (mine.length === 0 || count < 1) return [];
   const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
-  const minX = Math.min(...locals.map((l) => l.x));
-  const maxX = Math.max(...locals.map((l) => l.x));
-  const minY = Math.min(...locals.map((l) => l.y));
-  const maxY = Math.max(...locals.map((l) => l.y));
+  const minX = minBy(locals, (l) => l.x);
+  const maxX = maxBy(locals, (l) => l.x);
+  const minY = minBy(locals, (l) => l.y);
+  const maxY = maxBy(locals, (l) => l.y);
   const cols = Math.round((maxX - minX) / pitchX) + 1;
   const rows = Math.round((maxY - minY) / pitchY) + 1;
   // grown panels inherit the TABLE's pose, not the roof default — otherwise a
@@ -375,10 +380,10 @@ export function shrinkSegment(
   if (mine.length === 0 || count < 1) return { segment: seg, panels: mine, removed: 0 };
   const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => ({ p, l: rotate(p.center, -angle) }));
-  const minX = Math.min(...locals.map(({ l }) => l.x));
-  const maxX = Math.max(...locals.map(({ l }) => l.x));
-  const minY = Math.min(...locals.map(({ l }) => l.y));
-  const maxY = Math.max(...locals.map(({ l }) => l.y));
+  const minX = minBy(locals, ({ l }) => l.x);
+  const maxX = maxBy(locals, ({ l }) => l.x);
+  const minY = minBy(locals, ({ l }) => l.y);
+  const maxY = maxBy(locals, ({ l }) => l.y);
   const cut = (l: { x: number; y: number }): boolean =>
     axis === 'row'
       ? side === 'top'
@@ -451,10 +456,10 @@ export function segmentLines(
   if (mine.length === 0) return [];
   const { angle, pitchX, pitchY } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
-  const minX = Math.min(...locals.map((l) => l.x));
-  const maxX = Math.max(...locals.map((l) => l.x));
-  const minY = Math.min(...locals.map((l) => l.y));
-  const maxY = Math.max(...locals.map((l) => l.y));
+  const minX = minBy(locals, (l) => l.x);
+  const maxX = maxBy(locals, (l) => l.x);
+  const minY = minBy(locals, (l) => l.y);
+  const maxY = maxBy(locals, (l) => l.y);
 
   const byIndex = new Map<number, string[]>();
   mine.forEach((p) => {
@@ -831,8 +836,8 @@ export function duplicateSegment(
   if (mine.length === 0) return null;
   const { angle, pitchX } = segmentGrid(roof, spec, seg, mine);
   const locals = mine.map((p) => rotate(p.center, -angle));
-  const minX = Math.min(...locals.map((l) => l.x));
-  const maxX = Math.max(...locals.map((l) => l.x));
+  const minX = minBy(locals, (l) => l.x);
+  const maxX = maxBy(locals, (l) => l.x);
   const shift = maxX - minX + pitchX; // one column clear of the original
   const newId = genId('seg');
   const out: PlacedPanel[] = [];
@@ -875,10 +880,10 @@ function layOnLattice(
   pitchY: number,
 ): PlacedPanel[] | null {
   const locals = mine.map((p) => rotate(p.center, -angle));
-  const minX = Math.min(...locals.map((l) => l.x));
-  const maxX = Math.max(...locals.map((l) => l.x));
-  const minY = Math.min(...locals.map((l) => l.y));
-  const maxY = Math.max(...locals.map((l) => l.y));
+  const minX = minBy(locals, (l) => l.x);
+  const maxX = maxBy(locals, (l) => l.x);
+  const minY = minBy(locals, (l) => l.y);
+  const maxY = maxBy(locals, (l) => l.y);
   const tiltDeg = seg.racking.kind !== 'flush' ? seg.racking.tiltDeg : (mine[0]?.tiltDeg ?? 0);
   // fit against everything EXCEPT this table's own (about-to-be-replaced) panels
   const without: Project = { ...project, panels: project.panels.filter((p) => p.segmentId !== seg.id) };

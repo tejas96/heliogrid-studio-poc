@@ -25,6 +25,7 @@ import {
   add,
   stripFootprint,
 } from './geo';
+import { maxBy } from './bulk';
 import { higherOverlapFootprints } from './roof-topology';
 import { isBridgedAt, resolveCapabilities } from './capabilities';
 import { isFacade, isSheetRoof, isSloped, slopePanelPose, slopeVector } from './roof-plane';
@@ -848,10 +849,12 @@ export function fillRoofAsSegment(
         profile: DEFAULT_PROFILE,
       };
   for (const p of panels) p.segmentId = segId;
-  const rows =
-    Math.max(...panels.map((p) => Math.floor((p.cellIndex ?? 0) / COL_STRIDE))) + 1;
-  const cols =
-    Math.max(...panels.map((p) => (p.cellIndex ?? 0) % COL_STRIDE)) + 1;
+  // `maxBy`, not `Math.max(...panels.map(…))`. The spread passes one ARGUMENT
+  // per module, and a 36 ha field is ~128,000 of them: measured, this exact
+  // line threw `RangeError: Maximum call stack size exceeded` and destroyed a
+  // 69 MWp design that had already been computed in 61 ms. See lib/extent.ts.
+  const rows = maxBy(panels, (p) => Math.floor((p.cellIndex ?? 0) / COL_STRIDE), -1) + 1;
+  const cols = maxBy(panels, (p) => (p.cellIndex ?? 0) % COL_STRIDE, -1) + 1;
   const segment: ArraySegment = {
     id: segId,
     roofId: roof.id,

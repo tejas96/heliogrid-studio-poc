@@ -8,6 +8,7 @@ import type { PlacedPanel, Project, XY } from '../types';
 import { segmentGrid } from './segment-ops';
 import { COL_STRIDE } from './layout';
 import { rotate } from './geo';
+import { maxBy, minBy } from './bulk';
 
 export function rowExitPoint(project: Project, end: PlacedPanel, target: XY): XY | null {
   const spec = project.components.panel;
@@ -25,8 +26,8 @@ export function rowExitPoint(project: Project, end: PlacedPanel, target: XY): XY
   const endL = rotate(end.center, -angle);
   // the module's extent ALONG the row: its short side stands portrait, its long side landscape
   const halfAlong = (seg.orientation === 'portrait' ? spec.widthMm : spec.lengthMm) / 2000;
-  const minX = Math.min(...locals.map((l) => l.x)) - halfAlong - 0.3;
-  const maxX = Math.max(...locals.map((l) => l.x)) + halfAlong + 0.3;
+  const minX = minBy(locals, (l) => l.x) - halfAlong - 0.3;
+  const maxX = maxBy(locals, (l) => l.x) + halfAlong + 0.3;
   const tL = rotate(target, -angle);
   // Target within the array's span along the row (an inverter on a stand
   // among the tables, a box on the far wall): run along the row to the

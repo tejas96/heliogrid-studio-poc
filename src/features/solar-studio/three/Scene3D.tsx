@@ -74,6 +74,7 @@ function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>):
 import { obstructionDuplicate, obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
 import { castsAnalyticalShadow } from '../lib/capabilities';
 import { polygonArea } from '../lib/geo';
+import { maxBy } from '../lib/bulk';
 import type { EntityProvenance, ObstructionType } from '../types';
 
 /** What the scene can pick besides modules (modules use the shared selection). */
@@ -3826,7 +3827,9 @@ function SceneContent({
     const sphereOf = (pts: [number, number, number][], pad: number): FocusSphere | null => {
       if (!pts.length) return null;
       const c = pts.reduce((a, p) => [a[0] + p[0], a[1] + p[1], a[2] + p[2]], [0, 0, 0]).map((v) => v / pts.length);
-      const r = Math.max(...pts.map((p) => Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2])));
+      // one pass: `pts` is every module part in the scene, and the spread form
+      // throws RangeError past ~100k arguments (lib/extent.ts)
+      const r = maxBy(pts, (p) => Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]), 0);
       return { x: c[0], y: c[1], z: c[2], r: r + pad };
     };
     const wallPoint = (u: { roofId: string; edgeIndex: number; t: number; heightM: number }): FocusSphere | null => {

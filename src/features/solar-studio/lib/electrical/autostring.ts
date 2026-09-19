@@ -18,6 +18,7 @@ import type {
   ValidationIssue,
 } from '../../types';
 import { stringIdFor } from '../hash';
+import { minBy, pushAll } from '../bulk';
 import { groupPanels, orderGroup, type PanelGroup } from './grouping';
 import type { DesignTemps } from './temps';
 import { stringSizing, STRING_COLORS } from './window';
@@ -111,8 +112,8 @@ export function mergeUndersizedGroups(
       out.push(g); // nothing to merge into: splitGroup will report the tail
       continue;
     }
-    host.panels.push(...g.panels);
-    const worst = Math.min(...g.panels.map((p) => p.solarAccess ?? 1));
+    pushAll(host.panels, g.panels);
+    const worst = minBy(g.panels, (p) => p.solarAccess ?? 1, 1);
     issues.push({
       level: 'warn',
       code: 'shade_mismatch',
@@ -231,7 +232,7 @@ export function autoStringPlan(
     const { chunks, tail } = splitGroup(ordered, sizing.minPanels, sizing.maxPanels);
     for (const c of chunks) planned.push({ group: g, ids: c });
     if (tail.length > 0) {
-      unstrung.push(...tail);
+      pushAll(unstrung, tail);
       issues.push({
         level: 'warn',
         code: 'group_too_small',
@@ -260,7 +261,7 @@ export function autoStringPlan(
   planned.forEach((item, i) => {
     const slot = assignments[i];
     if (!slot) {
-      overflow.push(...item.ids);
+      pushAll(overflow, item.ids);
       return;
     }
     const ordinal = (opts.nameOffset ?? 0) + strings.length;
@@ -276,7 +277,7 @@ export function autoStringPlan(
 
   if (overflow.length > 0) {
     const slotsTotal = inverter.mppt.count * inverterCount;
-    unstrung.push(...overflow);
+    pushAll(unstrung, overflow);
     issues.push({
       level: 'error',
       code: 'mppt_capacity',
