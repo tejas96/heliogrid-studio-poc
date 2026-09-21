@@ -4555,7 +4555,7 @@ function SceneContent({
             <meshStandardMaterial
               key={showPhoto ? 'photo' : 'plain'}
               map={showPhoto ? groundTex : undefined}
-              color={showPhoto ? '#767676' : PLAIN_GROUND}
+              color={showPhoto ? PHOTO_ALBEDO_TINT : PLAIN_GROUND}
               roughness={1}
               envMapIntensity={0.15}
             />
@@ -5408,17 +5408,20 @@ function SceneContent({
 
 /** Flat concrete for the WALLS of a roof solid — the deck is handled separately. */
 const ROOF_WALL_RGB = 'vec3( 0.66, 0.64, 0.60 )';
-/** How much of the photo's staining reaches the deck. 1.0 = the picture's full contrast. */
-const DECK_STAIN = 0.8;
 /**
- * Mip level the stain is normalised against.
+ * The exposure the aerial photo is rendered at, everywhere it is used as a LIT
+ * surface — the ground plane and, since the deck shows the site too, the roof
+ * deck.
  *
- * The satellite tile is 1280 px, so level 5 is a ~40 px image — a couple of
- * metres on the ground. Big enough to divide out the picture's exposure and its
- * large-scale lighting gradient, small enough to leave the roof-scale features
- * (stains, patches, a tank's shadow) behind as stain.
+ * The picture is already exposed; it is not an albedo. Under a full sun plus
+ * sky it renders about 2.4× too bright, so it is scaled down to read as the
+ * ground it is. One constant, used by both, because the whole point of putting
+ * the photo on the deck is that the roof and the ground it sits in look like
+ * the same photograph. Two copies of this number would drift and the building
+ * would sit on the site as a brighter or darker patch — which is the very
+ * thing it is here to stop.
  */
-const DECK_STAIN_LOD = 5.0;
+const PHOTO_ALBEDO_TINT = '#767676';
 
 /**
  * ONE definition of a covering, for the two places that draw it: the
@@ -5554,31 +5557,47 @@ function roofDeckMaterial(
       return;
     }
 
+    const gain = new THREE.Color(PHOTO_ALBEDO_TINT);
     shader.uniforms.uPhoto = { value: photo };
-    shader.uniforms.uStain = { value: DECK_STAIN };
-    shader.uniforms.uStainLod = { value: DECK_STAIN_LOD };
+    shader.uniforms.uPhotoGain = { value: new THREE.Vector3(gain.r, gain.g, gain.b) };
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        '#include <common>\nvarying vec2 vPhotoUv;\nvarying float vUpness;\nuniform sampler2D uPhoto;\nuniform float uStain;\nuniform float uStainLod;',
+        '#include <common>\nvarying vec2 vPhotoUv;\nvarying float vUpness;\nuniform sampler2D uPhoto;\nuniform vec3 uPhotoGain;',
       )
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
-  // diffuseColor now carries the COVERING at true scale. Stain it with the site.
+  // THE DECK IS PART OF THE PHOTOGRAPH.
+  //
+  // The map_fragment include above has just put the synthetic COVERING in
+  // diffuseColor — weathered concrete, coated sheet, clay tile — and it is
+  // replaced here rather than tinted. In map view the building stands in the
+  // aerial picture, so its deck has to be the same picture: the real stains,
+  // patches, tanks and cable trays of THIS roof, not a generic material that
+  // makes every RCC slab in the country look identical. A synthetic deck reads
+  // as a blank white box dropped onto a photograph, which is exactly how it
+  // looked before this.
+  //
+  // uPhotoGain is the ground plane's own exposure (PHOTO_ALBEDO_TINT), so deck
+  // and ground are the same photograph at the same brightness and the roof
+  // stops being a patch.
+  //
+  // The covering is NOT wasted: its normal map, roughness and metalness still
+  // come through untouched, so a metal sheet's ribs and a tile roof's barrels
+  // still catch a raking sun. Only the albedo changes hands. And with the
+  // photo switched off (the Photo button) the material below falls back to the
+  // covering alone, which is what makes the model's own shadows readable.
   float deck = smoothstep( 0.4, 0.8, vUpness );
-  vec3 sharpPhoto = texture2D( uPhoto, vPhotoUv ).rgb;
-  vec3 localMean = textureLod( uPhoto, vPhotoUv, uStainLod ).rgb;
-  // the max() floors a black mip so a dark corner cannot divide by ~0 and blow
-  // the deck to white; the clamp keeps one bright car roof from doing the same
-  vec3 stain = clamp( sharpPhoto / max( localMean, vec3( 0.04 ) ), 0.6, 1.6 );
-  vec3 deckCol = diffuseColor.rgb * mix( vec3( 1.0 ), stain, uStain );
-  diffuseColor.rgb = mix( ${ROOF_WALL_RGB}, deckCol, deck );`,
+  vec3 sitePhoto = texture2D( uPhoto, vPhotoUv ).rgb * uPhotoGain;
+  diffuseColor.rgb = mix( ${ROOF_WALL_RGB}, sitePhoto, deck );`,
       );
   };
-  // two different shader bodies come out of one material class, so they must
-  // not share a compiled program
-  mat.customProgramCacheKey = () => (surface ? 'roofDeck:covering' : 'roofDeck:photo');
+  // Two different shader bodies come out of one material class, so they must not
+  // share a compiled program. The key also NAMES the body: three caches programs
+  // for the life of the renderer, so a key left unchanged after the shader is
+  // edited hands back the previous build and the change appears not to work.
+  mat.customProgramCacheKey = () => (surface ? 'roofDeck:sitePhoto' : 'roofDeck:photo');
   return mat;
 }
 
