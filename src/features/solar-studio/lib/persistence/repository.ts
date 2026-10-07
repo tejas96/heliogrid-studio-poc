@@ -19,6 +19,7 @@ import {
 import { normalizeProject } from './normalize';
 import { packProject, unpackProject, type StoredProject } from './panels-codec';
 import { putImage } from './blobs';
+import { STEPS_VERSION } from '../steps';
 
 export interface LoadedState {
   user: AppUser | null;
@@ -66,6 +67,12 @@ async function hoistInlineImages(p: Project): Promise<{ project: Project; hoiste
   return { project: { ...p, captures, coverImageBlobId, coverImage: null }, hoisted };
 }
 
+/**
+ * `hoisted` here means "the stored JSON is out of date — write it back": image
+ * bytes moved to IDB, or the wizard step was renumbered. A renumbered step that
+ * stayed only in memory would be migrated AGAIN from the old number if the
+ * stored copy were ever read without a save in between.
+ */
 async function parseProject(raw: string): Promise<{ project: Project; hoisted: boolean }> {
   const stored = JSON.parse(raw) as StoredProject;
   if (!stored || typeof stored.id !== 'string' || !Array.isArray(stored.roofs)) {
@@ -77,7 +84,8 @@ async function parseProject(raw: string): Promise<{ project: Project; hoisted: b
   // codec still carries a plain `panels` array and passes straight through.
   const parsed = unpackProject(stored);
   const { project, hoisted } = await hoistInlineImages(parsed);
-  return { project: normalizeProject(project), hoisted };
+  const renumbered = parsed.stepsVersion !== STEPS_VERSION;
+  return { project: normalizeProject(project), hoisted: hoisted || renumbered };
 }
 
 /** True when the write failed because storage is full. */

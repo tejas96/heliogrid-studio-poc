@@ -14,10 +14,11 @@ import { Step3Obstructions } from './Step3Obstructions';
 import { Step4Components } from './Step4Components';
 import { Step5AutoDesign } from './Step5AutoDesign';
 import { Step6Editor } from './Step6Editor';
-import { Step7Proposal } from './Step7Proposal';
-import { Step8Sld } from './Step8Sld';
-import { Step9Bom } from './Step9Bom';
+import { StructureBomStep } from './StructureBom';
+import { ProposalStep } from './ProposalStep';
+import { DrawingsStep } from './DrawingsStep';
 import { Step10Done } from './Step10Done';
+import { STEP, STEP_COUNT, stepPath } from '../lib/steps';
 
 export const STEP_NAMES = [
   'Project Setup',
@@ -26,9 +27,9 @@ export const STEP_NAMES = [
   'Components',
   'Auto Design',
   'Manual Edit',
+  'Structure & BOM',
   'Proposal',
   'SLD & Drawings',
-  'BOM & Pricing',
   'Final',
 ];
 
@@ -84,6 +85,15 @@ export const STEP_HELP: { does: string; tips: string[] }[] = [
     ],
   },
   {
+    does: 'Choose what holds the panels up, then check the bill of materials and set the price. The proposal prints this price.',
+    tips: [
+      'Tick several tables to change them all at once. Undo reverts the whole change.',
+      'Click a part group to light it up in 3D; hover a part for its size and weight.',
+      'Tilt and layout stay in Step 6 \u2014 this step changes the structure, not where the panels are.',
+      'The margin here is the ONLY margin \u2014 the proposal prints this same total.',
+    ],
+  },
+  {
     does: 'Capture the shadow study and cover imagery the proposal will print.',
     tips: ['Captures are stamped to the design — edit the design and they are flagged stale.'],
   },
@@ -92,13 +102,6 @@ export const STEP_HELP: { does: string; tips: string[] }[] = [
     tips: [
       'Ratings derive from the components; edits are stored as overrides you can reset.',
       'Export DXF for the permit set, or PNG/SVG for the proposal.',
-    ],
-  },
-  {
-    does: 'The bill of materials and the price. Every line shows the formula behind it.',
-    tips: [
-      'Overridden lines keep your value and show a divergence badge.',
-      'The margin here is the ONLY margin — the proposal prints this same total.',
     ],
   },
   {
@@ -180,13 +183,13 @@ export function Wizard({ step }: { step: number }) {
   // predicate the project list asks before it offers a proposal (lib/wizard-gate).
   const allowedStep = project ? stepGate(project).allowedStep : 1;
   useEffect(() => {
-    if (project && step > allowedStep) navigate(`/wizard/${allowedStep}`);
+    if (project && step > allowedStep) navigate(stepPath(allowedStep));
   }, [project, step, allowedStep]);
 
   // Cmd/Ctrl+Z (Shift = redo) on the steps that have no editor of their own.
   // Steps 2 and 6 own their keys already; inputs and open dialogs keep theirs.
   useEffect(() => {
-    if (step === 2 || step === 6) return;
+    if (step === STEP.roof || step === STEP.editor) return;
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
       const t = e.target as HTMLElement | null;
@@ -207,9 +210,9 @@ export function Wizard({ step }: { step: number }) {
   if (step > allowedStep) return null;
 
   function go(next: number) {
-    const clamped = Math.max(1, Math.min(10, next));
+    const clamped = Math.max(1, Math.min(STEP_COUNT, next));
     patch({ wizardStep: Math.max(project!.wizardStep, clamped) });
-    navigate(`/wizard/${clamped}`);
+    navigate(stepPath(clamped));
   }
 
   function onNext() {
@@ -226,19 +229,19 @@ export function Wizard({ step }: { step: number }) {
     go(step - 1);
   }
 
-  const dark = step === 2 || step === 3 || step === 6;
+  const dark = step === STEP.roof || step === STEP.obstructions || step === STEP.editor;
 
   let body: ReactNode;
   switch (step) {
-    case 1: body = <Step1Setup />; break;
-    case 2: body = <Step2Roof />; break;
-    case 3: body = <Step3Obstructions />; break;
-    case 4: body = <Step4Components />; break;
-    case 5: body = <Step5AutoDesign />; break;
-    case 6: body = <Step6Editor />; break;
-    case 7: body = <Step7Proposal />; break;
-    case 8: body = <Step8Sld />; break;
-    case 9: body = <Step9Bom />; break;
+    case STEP.setup: body = <Step1Setup />; break;
+    case STEP.roof: body = <Step2Roof />; break;
+    case STEP.obstructions: body = <Step3Obstructions />; break;
+    case STEP.components: body = <Step4Components />; break;
+    case STEP.autoDesign: body = <Step5AutoDesign />; break;
+    case STEP.editor: body = <Step6Editor />; break;
+    case STEP.structureBom: body = <StructureBomStep />; break;
+    case STEP.proposal: body = <ProposalStep />; break;
+    case STEP.drawings: body = <DrawingsStep />; break;
     default: body = <Step10Done />; break;
   }
 
@@ -280,8 +283,8 @@ export function Wizard({ step }: { step: number }) {
         </button>
         <div className="flex-1 min-w-0 truncate" style={{ fontSize: 13.5, fontWeight: 700 }}>
           {/* the long form is the same string; only the prefix gives way */}
-          <span className="hidden sm:inline">Step {step} of 10 · </span>
-          <span className="sm:hidden">{step}/10 · </span>
+          <span className="hidden sm:inline">Step {step} of {STEP_COUNT} · </span>
+          <span className="sm:hidden">{step}/{STEP_COUNT} · </span>
           {STEP_NAMES[step - 1]}
         </div>
         {/* Everything in here is ≥44px too (N2): `md` is a tablet, and a tablet
@@ -380,7 +383,7 @@ export function Wizard({ step }: { step: number }) {
         >
           <Ellipsis size={16} />
         </button>
-        {step < 10 ? (
+        {step < STEP_COUNT ? (
           <button
             className="btn btn-primary shrink-0 min-h-(--target-min)"
             onClick={onNext}
@@ -403,7 +406,7 @@ export function Wizard({ step }: { step: number }) {
         <div
           style={{
             height: '100%',
-            width: `${(step / 10) * 100}%`,
+            width: `${(step / STEP_COUNT) * 100}%`,
             background: 'var(--ink)',
             transition: 'width .3s',
           }}

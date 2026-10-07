@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, FileText, HardHat, Link2, ReceiptText } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { navigate } from '../router';
+import { STEP, stepPath } from '../lib/steps';
 import { InstallationSheet } from './InstallationSheet';
 
 export function Step10Done() {
@@ -61,8 +62,8 @@ export function Step10Done() {
         <button className="btn btn-secondary" onClick={() => navigate('/proposal')}>
           <FileText size={15} /> View Proposal
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/wizard/9')}>
-          <ReceiptText size={15} /> BOM & Pricing
+        <button className="btn btn-secondary" onClick={() => navigate(stepPath(STEP.structureBom))}>
+          <ReceiptText size={15} /> Structure & BOM
         </button>
         <button className="btn btn-secondary" onClick={() => setInstallSheet(true)}>
           <HardHat size={15} /> Installation Plan

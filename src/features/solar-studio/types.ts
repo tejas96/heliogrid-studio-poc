@@ -1321,7 +1321,9 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   status: ProjectStatus;
-  wizardStep: number; // last visited step 1..10
+  wizardStep: number; // last visited step, 1..STEP_COUNT (lib/steps.ts)
+  /** Step numbering `wizardStep` was saved under; absent = the pre-Structure & BOM order. */
+  stepsVersion?: number;
   info: ProjectInfo;
   location: SiteLocation | null;
   roofs: Roof[];

@@ -12,7 +12,7 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import axe from 'axe-core';
-import { BomRow } from '../../screens/Step9Bom/BomRow';
+import { BomRow } from '../../screens/StructureBom/BomRow';
 import { Dialog, DataTable, NumberField, Sheet, SR_ONLY, TextField } from '../ui';
 import { StructureSheet } from '../drawing/StructureSheet';
 import { LegPlanEditor } from '../../three/LegPlanEditor';

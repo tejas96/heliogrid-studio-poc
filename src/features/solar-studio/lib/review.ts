@@ -2,15 +2,15 @@
 // "Is this ready to send?" — answered ONCE, from the four independent signals
 // that today live on four different screens:
 //
-//   electricalGate     Step 6   can this design legally exist?
-//   insights           Step 6   what would an experienced engineer flag?
-//   bomConfidence      Step 9   which numbers are assumed rather than measured?
-//   capture staleness  Step 7   do the pictures still show this design?
+//   electricalGate     editor          can this design legally exist?
+//   insights           editor          what would an experienced engineer flag?
+//   bomConfidence      structure & BOM which numbers are assumed rather than measured?
+//   capture staleness  proposal        do the pictures still show this design?
 //
 // This DERIVES from those functions rather than re-implementing them, so the
 // checklist can never disagree with the screen it points at (§A0).
 //
-// `issuable` DOES drive Step 7's Generate control — a panel that printed
+// `issuable` DOES drive the proposal step's Generate control — a panel that printed
 // "Not ready to issue" above a live button was worse than no panel at all.
 // It still gates nothing the wizard does not already gate: only the electrical
 // item can be `blocked`, and it is `electricalGate` verbatim, the same
@@ -23,6 +23,7 @@ import { memoizedInsights } from './insights/registry';
 import { bomConfidence, mergedBom } from './bom';
 import { isCaptureFresh } from './fingerprints';
 import { siteStateMismatch } from './site-state';
+import { STEP } from './steps';
 
 type ReviewStatus = 'blocked' | 'attention' | 'ready';
 
@@ -54,14 +55,14 @@ export function preProposalReview(project: Project): ReviewResult {
     gate
       ? {
           key: 'electrical',
-          step: 6,
+          step: STEP.editor,
           title: 'Electrical design',
           status: 'blocked',
           detail: gate.message,
         }
       : {
           key: 'electrical',
-          step: 6,
+          step: STEP.editor,
           title: 'Electrical design',
           status: 'ready',
           detail: 'Every enabled module is wired into a string within the inverter’s limits.',
@@ -75,14 +76,14 @@ export function preProposalReview(project: Project): ReviewResult {
     open.length === 0
       ? {
           key: 'insights',
-          step: 6,
+          step: STEP.editor,
           title: 'Design review',
           status: 'ready',
           detail: 'No open suggestions from the design, maintenance or constructability checks.',
         }
       : {
           key: 'insights',
-          step: 6,
+          step: STEP.editor,
           title: 'Design review',
           status: open.some((i) => i.severity === 'warning' || i.severity === 'critical')
             ? 'attention'
@@ -107,7 +108,7 @@ export function preProposalReview(project: Project): ReviewResult {
     conf.preliminary
       ? {
           key: 'bom-confidence',
-          step: 9,
+          step: STEP.structureBom,
           title: 'Quantity confidence',
           status: 'attention',
           detail: `Preliminary — ${conf.needsVerification.length} line${
@@ -118,7 +119,7 @@ export function preProposalReview(project: Project): ReviewResult {
         }
       : {
           key: 'bom-confidence',
-          step: 9,
+          step: STEP.structureBom,
           title: 'Quantity confidence',
           status: 'ready',
           detail: 'Every quantity is measured or derived from the design.',
@@ -136,7 +137,7 @@ export function preProposalReview(project: Project): ReviewResult {
     withImage.length < CAPTURE_TARGET
       ? {
           key: 'captures',
-          step: 7,
+          step: STEP.proposal,
           title: 'Shadow study imagery',
           status: 'attention',
           detail: `${withImage.length} of ${CAPTURE_TARGET} captures taken.`,
@@ -144,14 +145,14 @@ export function preProposalReview(project: Project): ReviewResult {
       : stale.length > 0
         ? {
             key: 'captures',
-            step: 7,
+            step: STEP.proposal,
             title: 'Shadow study imagery',
             status: 'attention',
             detail: `${stale.length} capture${stale.length > 1 ? 's show' : ' shows'} an older version of the layout — retake before issuing.`,
           }
         : {
             key: 'captures',
-            step: 7,
+            step: STEP.proposal,
             title: 'Shadow study imagery',
             status: 'ready',
             detail: 'All captures match the current layout.',
@@ -165,7 +166,7 @@ export function preProposalReview(project: Project): ReviewResult {
   if (siteState)
     items.push({
       key: 'site_state',
-      step: 1,
+      step: STEP.setup,
       title: 'State does not match the site',
       status: 'attention',
       detail: `Set to ${siteState.typed}, but the pinned address is in ${siteState.pinned}. The DISCOM on the SLD, the IS 875 wind speed and the tariff all follow the State.`,

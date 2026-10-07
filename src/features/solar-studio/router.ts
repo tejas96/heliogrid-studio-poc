@@ -3,9 +3,10 @@
 // ─── Next.js router adapter (same API as the former hash router) ─────────────
 import { useEffect, useMemo } from 'react';
 import { usePathname, useParams, useRouter } from 'next/navigation';
+import { STEP_COUNT } from './lib/steps';
 
 export interface Route {
-  // No 'bom': the BOM is Step 9 and is reached through the wizard, which holds
+  // No 'bom': the BOM is a wizard step and is reached through the wizard, which holds
   // the step gate. `/bom` was mapped here but has no page and nothing navigates
   // to it — a name for a route that does not exist reads as a second, ungated
   // way into a commercial document.
@@ -45,7 +46,7 @@ export function useRoute(): Route {
     if (parts[0] === 'wizard') {
       const step = Math.max(
         1,
-        Math.min(10, Number(params.step ?? parts[1]) || 1),
+        Math.min(STEP_COUNT, Number(params.step ?? parts[1]) || 1),
       );
       return { name: 'wizard', step };
     }

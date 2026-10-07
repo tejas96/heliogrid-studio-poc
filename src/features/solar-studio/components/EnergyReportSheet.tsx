@@ -9,6 +9,7 @@ import { isShadingFresh } from '../lib/fingerprints';
 import { M2_TO_FT2 } from '../lib/units';
 import { useUnits } from '../store/useUnits';
 import { navigate } from '../router';
+import { STEP, STEP_COUNT, stepPath } from '../lib/steps';
 
 const MONTHS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
@@ -291,7 +292,7 @@ export function EnergyReportSheet({
 
       {!readOnly && (
         <>
-          <button className="btn btn-primary btn-block" onClick={() => navigate('/wizard/7')}>
+          <button className="btn btn-primary btn-block" onClick={() => navigate(stepPath(STEP.proposal))}>
             <FileText size={15} /> Customize Proposal
           </button>
           {/* This was the back door: it jumped straight to /proposal, past the
@@ -301,7 +302,7 @@ export function EnergyReportSheet({
           <button
             className="btn btn-secondary btn-block"
             style={{ marginTop: 8 }}
-            disabled={quoteGate.allowedStep < 10}
+            disabled={quoteGate.allowedStep < STEP_COUNT}
             title={quoteGate.blocker ?? 'Generate the proposal with default settings'}
             onClick={() => navigate('/proposal')}
           >

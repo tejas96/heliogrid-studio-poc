@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { ArrowLeft, Link2, Printer } from 'lucide-react';
 import { useActiveProject } from '../store/store';
 import { navigate } from '../router';
+import { STEP, STEP_COUNT, stepPath } from '../lib/steps';
 import { computeFinancing } from '../lib/financing';
 import { HORIZON_YEARS } from '../lib/finance';
 import { stepGate } from '../lib/wizard-gate';
@@ -52,7 +53,7 @@ export function ProposalView() {
   /**
    * THE GATE, on the document itself.
    *
-   * `lib/wizard-gate.ts` says in its own doc comment that `allowedStep === 10`
+   * `lib/wizard-gate.ts` says in its own doc comment that `allowedStep === STEP_COUNT`
    * is "the ONLY state in which the commercial documents — the proposal and the
    * quote — may be reached", and it was consumed by exactly two callers:
    * Wizard.tsx and Dashboard.tsx. This screen, the one that actually prints the
@@ -93,7 +94,7 @@ export function ProposalView() {
   // before the derivations also matters: an incomplete design is exactly what
   // makes deriveEnergy read a null panel spec, which is the crash stepGate was
   // written to prevent in the first place.
-  if (gate.allowedStep < 10) {
+  if (gate.allowedStep < STEP_COUNT) {
     return (
       <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 18px' }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10 }}>
@@ -105,7 +106,7 @@ export function ProposalView() {
           every step behind it passes, so a customer cannot be sent numbers for a design that
           cannot be built.
         </p>
-        <button className="btn btn-primary" onClick={() => navigate(`/wizard/${gate.allowedStep}`)}>
+        <button className="btn btn-primary" onClick={() => navigate(stepPath(gate.allowedStep))}>
           Go to step {gate.allowedStep}
         </button>
       </div>
@@ -115,7 +116,7 @@ export function ProposalView() {
   // still shows last week's layout — say so on screen AND in print
   const captureNotes = capturesFresh(project)
     ? []
-    : ['the 3D images show an older layout — retake the captures in Step 7'];
+    : [`the 3D images show an older layout — retake the captures in Step ${STEP.proposal}`];
   // ...and the shading pass is a third. Until the profile lands, the energy
   // and savings figures on this page are computed WITHOUT the per-hour shade
   // detail. They are provisional, and a PDF printed in that window must say so.
@@ -161,7 +162,7 @@ export function ProposalView() {
           borderBottom: '1px solid var(--line)',
         }}
       >
-        <button className="btn btn-ghost" onClick={() => navigate('/wizard/7')}>
+        <button className="btn btn-ghost" onClick={() => navigate(stepPath(STEP.proposal))}>
           <ArrowLeft size={15} /> Back
         </button>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -321,7 +322,7 @@ export function ProposalView() {
               ))}
             {project.captures.filter((c) => c.imageBlobId).length === 0 && (
               <div style={{ gridColumn: '1/-1', color: 'var(--ink-3)', fontSize: 13 }}>
-                No shadow captures — go back to Step 7 to capture them.
+                No shadow captures — go back to Step {STEP.proposal} to capture them.
               </div>
             )}
           </div>
@@ -577,7 +578,7 @@ export function ProposalView() {
               </tbody>
             </table>
             <div style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 10 }}>
-              Full single-line diagram available in the engineering pack (Step 8).
+              Full single-line diagram available in the engineering pack (Step {STEP.drawings}).
             </div>
           </Page>
         )}

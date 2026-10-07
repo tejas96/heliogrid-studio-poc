@@ -16,6 +16,7 @@ import {
 } from 'react';
 import type { AppUser, Project } from '../types';
 import { genId } from '../lib/geo';
+import { STEPS_VERSION } from '../lib/steps';
 import { DEFAULT_MARGIN_PCT } from '../data/pricebook';
 import { resolveRules } from '../data/rules/india';
 import {
@@ -106,6 +107,7 @@ export function newProject(): Project {
     updatedAt: Date.now(),
     status: 'in_progress',
     wizardStep: 1,
+    stepsVersion: STEPS_VERSION,
     info: {
       name: 'New Solar Project',
       customerName: '',

@@ -8,22 +8,23 @@
 // GST-inclusive quote for a design that cannot legally exist.
 import type { Project } from '../types';
 import { electricalGate } from './electrical/gate';
+import { STEP, STEP_COUNT } from './steps';
 
 /** Per-step gate: returns a blocking message or null when Next is allowed. */
 export function nextBlocker(step: number, p: Project): string | null {
   switch (step) {
-    case 1:
+    case STEP.setup:
       if (!p.info.state) return 'Select a state to continue';
       if (!p.location?.confirmed) return 'Confirm the installation location to continue';
       return null;
-    case 2:
+    case STEP.roof:
       return p.roofs.length === 0 ? 'Draw at least one roof to continue' : null;
-    case 4:
+    case STEP.components:
       if (!p.components.panel) return 'Select a panel to continue';
       if (!p.components.inverter) return 'Select an inverter to continue';
       if (p.components.targetKwp <= 0) return 'Set a target capacity to continue';
       return null;
-    case 6: {
+    case STEP.editor: {
       if (p.panels.filter((x) => x.enabled).length === 0)
         return 'Place at least one panel to continue';
       // THE HARD GATE (plan §B/§9): the proposal, SLD and quote are where a
@@ -42,7 +43,7 @@ export function nextBlocker(step: number, p: Project): string | null {
 }
 
 export interface StepGate {
-  /** highest step this project may be shown; 10 = every gate passes */
+  /** highest step this project may be shown; STEP_COUNT = every gate passes */
   allowedStep: number;
   /** why it stops there, in the user's language — null when nothing blocks */
   blocker: string | null;
@@ -52,13 +53,13 @@ export interface StepGate {
  * Prerequisite gating: a step reached via deep link or stale state without its
  * required data would crash (e.g. Step 6 reading a null panel spec). The
  * highest viewable step is the first one whose "Next" requirements aren't met.
- * `allowedStep === 10` is the ONLY state in which the commercial documents —
- * the proposal and the quote — may be reached.
+ * `allowedStep === STEP_COUNT` is the ONLY state in which the commercial
+ * documents — the proposal and the quote — may be reached.
  */
 export function stepGate(p: Project): StepGate {
-  for (let s = 1; s <= 9; s++) {
+  for (let s = 1; s < STEP_COUNT; s++) {
     const blocker = nextBlocker(s, p);
     if (blocker) return { allowedStep: s, blocker };
   }
-  return { allowedStep: 10, blocker: null };
+  return { allowedStep: STEP_COUNT, blocker: null };
 }

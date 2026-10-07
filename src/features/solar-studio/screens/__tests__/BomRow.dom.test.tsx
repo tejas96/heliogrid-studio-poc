@@ -12,7 +12,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BomRow } from '../Step9Bom/BomRow';
+import { BomRow } from '../StructureBom/BomRow';
 import type { BomLine } from '../../types';
 
 afterEach(cleanup);

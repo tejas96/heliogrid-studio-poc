@@ -18,6 +18,7 @@ import { useStore, newProject, newShareId } from '../store/store';
 import { genId } from '../lib/geo';
 import { duplicateProject } from '../lib/project-duplicate';
 import { navigate } from '../router';
+import { STEP, stepPath } from '../lib/steps';
 import { Dialog, EmptyState } from '../components/ui';
 import type { Project } from '../types';
 import { staticSatelliteUrl } from '../lib/maps';
@@ -105,7 +106,7 @@ export function Dashboard() {
 
   function openProject(p: Project) {
     dispatch({ type: 'open-project', id: p.id });
-    navigate(`/wizard/${p.wizardStep}`);
+    navigate(stepPath(p.wizardStep));
   }
 
   /**
@@ -301,8 +302,8 @@ export function Dashboard() {
                 : null;
               const menuItems: { label: string; icon: ReactNode; fn: () => void }[] = [
                 { label: 'Show Proposal', icon: <FileText size={14} />, fn: () => showProposal(p) },
-                { label: 'Show 3D', icon: <Box size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate('/wizard/6'); } },
-                { label: 'BOM & Pricing', icon: <ReceiptText size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate('/wizard/9'); } },
+                { label: 'Show 3D', icon: <Box size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate(stepPath(STEP.editor)); } },
+                { label: 'Structure & BOM', icon: <ReceiptText size={14} />, fn: () => { dispatch({ type: 'open-project', id: p.id }); navigate(stepPath(STEP.structureBom)); } },
                 { label: 'Duplicate', icon: <Copy size={14} />, fn: () => duplicate(p) },
               ];
               return (
@@ -546,7 +547,7 @@ export function Dashboard() {
                   const { project, step } = blocked;
                   setBlocked(null);
                   dispatch({ type: 'open-project', id: project.id });
-                  navigate(`/wizard/${step}`);
+                  navigate(stepPath(step));
                 }}
               >
                 Go to Step {blocked.step}

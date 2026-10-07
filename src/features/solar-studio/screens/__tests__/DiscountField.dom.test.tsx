@@ -12,7 +12,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DiscountField } from '../Step9Bom/DiscountField';
+import { DiscountField } from '../StructureBom/DiscountField';
 import type { QuoteDiscount } from '../../types';
 
 afterEach(cleanup);

@@ -19,6 +19,7 @@ import { DEFAULT_MARGIN_PCT } from '../../data/pricebook';
 import { makeSiteFrame } from '../site/frame';
 import type { SiteFrame } from '../site/types';
 import { routesInputFp, stringsInputFp } from '../derive/freshness';
+import { migrateWizardStep, STEPS_VERSION } from '../steps';
 
 /**
  * Validate persisted weather before it can drive energy numbers. A corrupt /
@@ -209,6 +210,10 @@ function normalizeSiteFrame(p: {
 export function normalizeProject(p: Project): Project {
   const out: Project = {
     ...p,
+    // Structure & BOM was inserted as Step 7: an older save's 7/8/9 meant
+    // Proposal/Drawings/BOM, so resume would open the wrong screen.
+    wizardStep: migrateWizardStep(p.wizardStep, p.stepsVersion),
+    stepsVersion: STEPS_VERSION,
     // pricing was added after launch — default it (and repair NaN/out-of-range).
     //
     // ⚠️ This REBUILDS the object rather than spreading `p.pricing`, so every

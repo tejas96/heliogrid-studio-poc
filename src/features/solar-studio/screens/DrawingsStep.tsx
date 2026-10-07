@@ -16,10 +16,11 @@ import { resolveDesignTemps } from '../lib/electrical/temps';
 import { resetStringsToAuto } from '../lib/derive/electrical-sync';
 import { layoutToDxf, dxfFileName } from '../lib/export-dxf';
 import { navigate } from '../router';
+import { STEP, stepPath } from '../lib/steps';
 
 type Tab = 'sld' | 'layout' | 'strings' | 'cables' | 'structure';
 
-export function Step8Sld() {
+export function DrawingsStep() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
   const [tab, setTab] = useState<Tab>('sld');
@@ -311,7 +312,7 @@ function UnstrungState() {
         >
           <Sparkles size={15} aria-hidden /> Try again
         </button>
-        <button className="btn btn-secondary" onClick={() => navigate('/wizard/6')}>
+        <button className="btn btn-secondary" onClick={() => navigate(stepPath(STEP.editor))}>
           String manually in the editor
         </button>
       </div>

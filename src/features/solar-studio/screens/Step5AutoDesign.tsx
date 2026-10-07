@@ -9,6 +9,7 @@ import { useState, type KeyboardEvent } from 'react';
 import type { Project } from '../types';
 import type { DesignObjective } from '../lib/auto-design';
 import { navigate } from '../router';
+import { STEP, stepPath } from '../lib/steps';
 import { useActiveProject } from '../store/store';
 import { useOps } from '../store/useOps';
 import { layoutAutoDesign } from '../lib/ops/layout-ops';
@@ -47,7 +48,7 @@ export function Step5AutoDesign() {
         if (r.ok) setLast(r.impact);
         else setLast({ label: r.refusal.reason, after: { modules: 0, kwp: 0, strings: 0 } });
       }}
-      onManual={() => navigate('/wizard/6')}
+      onManual={() => navigate(stepPath(STEP.editor))}
     />
   );
 }

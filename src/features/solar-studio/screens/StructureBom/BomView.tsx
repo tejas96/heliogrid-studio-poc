@@ -1,4 +1,4 @@
-// ─── Step 9 · Bill of Materials ─────────────────────────────────────────────
+// ─── Step 7 · Structure & BOM — the Bill of materials view ──────────────────
 // Rebuilt in Phase 22f. Three things changed structurally, all of which were
 // bugs rather than cosmetics:
 //
@@ -54,8 +54,9 @@ import type { BomLine } from '../../types';
 import { BomSection } from './BomSection';
 import { OrphanBanner } from './OrphanBanner';
 import { FreshnessBanner } from '../../components/FreshnessBanner';
+import { STEP } from '../../lib/steps';
 
-export function Step9Bom() {
+export function BomView() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
   const [confirmReset, setConfirmReset] = useState(false);
@@ -386,7 +387,8 @@ export function Step9Bom() {
             record)
           </li>
           <li>
-            Single line diagram (auto-generated in Step 8) signed by licensed electrical contractor
+            Single line diagram (auto-generated in Step {STEP.drawings}) signed by licensed electrical
+            contractor
           </li>
           <li>
             ALMM module + BIS inverter certificates{' '}

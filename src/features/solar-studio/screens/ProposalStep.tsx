@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, Camera, Check, FileText, ImageOff, RefreshCw, XCircle } from 'lucide-react';
 import { useActiveProject, useProjectPatch } from '../store/store';
 import { navigate } from '../router';
+import { STEP, stepPath } from '../lib/steps';
 import { Scene3D, seasonDate } from '../three/Scene3D';
 import type { ShadowCapture } from '../types';
 import { deriveEnergy } from '../lib/derive';
@@ -43,7 +44,7 @@ function presets(): CapturePreset[] {
   ];
 }
 
-export function Step7Proposal() {
+export function ProposalStep() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
   const all = useMemo(presets, []);
@@ -255,11 +256,11 @@ export function Step7Proposal() {
               </div>
               <div style={{ fontSize: 11.5, color: 'var(--ink-2)' }}>{it.detail}</div>
             </div>
-            {it.status !== 'ready' && it.step !== 7 && (
+            {it.status !== 'ready' && it.step !== STEP.proposal && (
               <button
                 className="btn-ghost"
                 style={{ fontSize: 11, padding: '2px 8px' }}
-                onClick={() => navigate(`/wizard/${it.step}`)}
+                onClick={() => navigate(stepPath(it.step))}
               >
                 Step {it.step}
               </button>
