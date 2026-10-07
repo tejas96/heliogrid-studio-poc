@@ -67,10 +67,6 @@ import { readDiagnostics, recordDiagnostic } from '../lib/diagnostics';
 import type { CanvasProps, RootState } from '@react-three/fiber';
 import { ScaleBarSync } from './ScaleBar';
 
-/** the first selected module of a table, so "Edit table" opens on the module the user picked */
-function selectedPanelOf(mine: { id: string }[], selected: ReadonlySet<string>): string | undefined {
-  return mine.find((p) => selected.has(p.id))?.id;
-}
 import { obstructionDuplicate, obstructionRemove, obstructionRotate, obstructionSetCastsShadow } from '../lib/ops/site-ops';
 import { castsAnalyticalShadow } from '../lib/capabilities';
 import { polygonArea } from '../lib/geo';
@@ -478,9 +474,8 @@ import {
   Keyboard,
   Image as PhotoIcon,
 } from 'lucide-react';
-import { useActiveProject, useProjectPatch, useStore } from '../store/store';
+import { useActiveProject, useStore } from '../store/store';
 import { useUnits } from '../store/useUnits';
-import { applyStructChoice, type StructChoice } from '../lib/structure-edit';
 import { COL_STRIDE } from '../lib/layout';
 import { heatmapFp } from '../lib/fingerprints';
 import { accessLabel, type HeatmapResult } from '../lib/solar-heatmap';
@@ -505,14 +500,10 @@ import { PanelsInstanced } from './PanelsInstanced';
 import { StructureInstanced } from './StructureInstanced';
 import { StructureNodesInstanced } from './StructureNodesInstanced';
 import { deriveStructures } from '../lib/derive';
-import {
-  DEFAULT_STRUCTURE_VIEW,
-  effectiveView,
-  partitionPanels,
-  visibleStructureIds,
-  type StructureViewState,
-} from '../lib/structure-view';
-import { StructEditPanel } from './StructEditPanel';
+import { partitionPanelsForTables } from '../lib/structure-view';
+import { structureSummary } from '../lib/structure-step';
+import { navigate } from '../router';
+import { STEP, stepPath } from '../lib/steps';
 import { validateMms } from '../lib/mms/validate';
 import { panelPose } from '../lib/panel-pose';
 import { ObstructionMesh, useWarmObstructionAssets } from './ObstructionMesh';
@@ -1044,6 +1035,23 @@ interface CameraPose {
 }
 const lastPose: Record<string, CameraPose> = {};
 
+/**
+ * Structure & BOM's scene. The SAME scene as the editor — same roof, modules,
+ * steel, camera and sun — but a click picks a TABLE or a STEEL PART and nothing
+ * else: no table chip, no placing, no wiring, no Delete. The layout cannot be
+ * changed by accident while the structure is being worked on.
+ */
+export interface StructureSceneMode {
+  /** tables the step has selected — their modules follow `panelVis` */
+  selectedSegIds: ReadonlySet<string>;
+  panelVis: 'show' | 'ghost' | 'hide';
+  /** member and node ids to light */
+  litIds: ReadonlySet<string>;
+  onTableClick: (segId: string, additive: boolean) => void;
+  onPartClick: (segId: string, partId: string) => void;
+  onPartHover: (segId: string | null, partId: string | null) => void;
+}
+
 export function Scene3D({
   onClose,
   captureMode = false,
@@ -1057,6 +1065,7 @@ export function Scene3D({
   visible = true,
   selectedIds,
   onSelectPanels,
+  structureMode,
 }: {
   onClose?: () => void;
   captureMode?: boolean;
@@ -1080,6 +1089,7 @@ export function Scene3D({
   /** the editor's module selection — 2D and 3D pick the same things */
   selectedIds?: string[];
   onSelectPanels?: (ids: string[], mode: SelectMode) => void;
+  structureMode?: StructureSceneMode;
 }) {
   const storeProject = useActiveProject();
   const fullProject = projectOverride ?? storeProject!;
@@ -1091,7 +1101,6 @@ export function Scene3D({
   // Inspect group — see lib/scene-stage.
   const handoffTools = stageShowsHandoffTools(stage);
   const loc = project.location!;
-  const patchProject = useProjectPatch();
   const ops = useOps();
   // non-module picks (obstruction / inverter / roof) — view state, never persisted
   const [pick, setPick] = useState<ScenePick | null>(null);
@@ -1224,40 +1233,15 @@ export function Scene3D({
   // out here; values go in as props.
   const { fmtLen, units } = useUnits();
 
-  // §H on-object structure editing: click a table → contextual panel at the
-  // object; clicking an option applies it INSTANTLY as one undoable patch.
-  // (Hover preview was trialed and removed by user decision 2026-07-16: every
-  // hover rebuilt the full scene — janky, expensive, and accidental cursor
-  // travel kept mutating the model. Select-only is calmer and honest: the
-  // model updates the moment you choose, and undo reverts it.)
-  const structInteractive = !readOnly && !captureMode && !projectOverride;
-  // Phase 22l inspection state. VIEW ONLY — deliberately not in the project, so
-  // it cannot reach a fingerprint and stale a capture.
-  const [structView, setStructView] = useState<StructureViewState>(DEFAULT_STRUCTURE_VIEW);
-  const [structEdit, setStructEdit] = useState<{
-    segId: string;
-    anchor: [number, number, number];
-    /** set when the click landed on a MODULE — the card then also explains
-     *  that panel's sun/energy (per-panel scope, labeled separately) */
-    panelId?: string;
-    componentId?: string;
-  } | null>(null);
-  const openStructEdit = (segId: string, panelId?: string, componentId?: string) => {
+  // Everything about what HOLDS a table up is edited in Structure & BOM
+  // (Step 7). Here a click on steel, or the table chip's Structure action,
+  // takes you there with that table selected — the editor owns the layout.
+  const structInteractive = !readOnly && !captureMode && !projectOverride && !structureMode;
+  const openStructure = (segId: string) => {
     if (!structInteractive) return;
-    const seg = project.segments.find((sg) => sg.id === segId);
-    const roof = seg ? project.roofs.find((r) => r.id === seg.roofId) : undefined;
-    const mine = project.panels.filter((pp) => pp.segmentId === segId && pp.enabled);
-    if (!seg || !roof || mine.length === 0) return;
-    const cx = mine.reduce((a, pp) => a + pp.center.x, 0) / mine.length;
-    const cy = mine.reduce((a, pp) => a + pp.center.y, 0) / mine.length;
-    setPick(null); // one card at a time
-    setStructEdit({ segId, anchor: [cx, roof.heightM + 2.2, -cy], panelId, componentId });
+    navigate(`${stepPath(STEP.structureBom)}?tables=${encodeURIComponent(segId)}`);
   };
-  const pickEntity = (p: ScenePick | null) => {
-    if (p) setStructEdit(null);
-    setPick(p);
-  };
-  const closeStructEdit = () => setStructEdit(null);
+  const pickEntity = (p: ScenePick | null) => setPick(p);
   /** Click-to-focus from the inspector: orbit to whatever is taking the sun,
    *  so "shaded by WT1" is a place you can look at, not a label to decode. */
   const focusBlocker = (kind: string, id: string) => {
@@ -1283,19 +1267,13 @@ export function Scene3D({
     if (!target) return;
     void c.moveTo(target[0], target[1], target[2], true);
   };
-  const commitStructChoice = (choice: StructChoice) => {
-    if (!structEdit) return;
-    const r = applyStructChoice(project, structEdit.segId, choice);
-    if (r) patchProject(r, true); // ONE undoable patch
-  };
   useEffect(() => {
-    if (!structEdit && !pick && !wiring) return;
+    if (!pick && !wiring) return;
     const inCard = (t: EventTarget | null) =>
-      t instanceof Element && !!t.closest('[data-struct-edit-card],[data-entity-label]');
+      t instanceof Element && !!t.closest('[data-entity-label]');
     let down: { x: number; y: number; inCard: boolean } | null = null;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        closeStructEdit();
         setPick(null);
         setWiring(null);
       }
@@ -1311,7 +1289,6 @@ export function Scene3D({
       if (!down) return;
       const dragged = Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6;
       if (!dragged && !down.inCard && !inCard(e.target)) {
-        closeStructEdit();
         setPick(null);
       }
       down = null;
@@ -1324,13 +1301,7 @@ export function Scene3D({
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('pointerup', onUp, true);
     };
-  }, [structEdit, pick, wiring]);
-  // the edited table can vanish under us (undo, delete in the 2D tab)
-  useEffect(() => {
-    if (structEdit && !project.segments.some((sg) => sg.id === structEdit.segId)) {
-      closeStructEdit();
-    }
-  }, [project.segments, structEdit]);
+  }, [pick, wiring]);
 
   const [preset, setPreset] = useState<SeasonPreset>('today');
   const [date, setDate] = useState<Date>(initial?.date ?? new Date());
@@ -1977,7 +1948,7 @@ export function Scene3D({
       setIsolate(false);
       return;
     }
-    if (e.key === 'Escape' && onClose && !structEdit && !pick && !wiring) {
+    if (e.key === 'Escape' && onClose && !pick && !wiring) {
       e.preventDefault();
       onClose();
     }
@@ -2218,7 +2189,7 @@ export function Scene3D({
         // Starting a NEW hand-made string had no way in at all: the only route
         // was to pick an existing string and choose "Wire by hand", so a fresh
         // one could never be built in the 3D. This is that way in.
-        if (!readOnly && project.panels.some((p) => p.enabled)) {
+        if (structInteractive && project.panels.some((p) => p.enabled)) {
           scene.push({
             id: 'wire',
             icon: <Cable />,
@@ -2568,15 +2539,10 @@ export function Scene3D({
         <ScaleBarSync bar={scaleBarRef} label={scaleLabelRef} imperial={units === 'imperial'} fmtLen={fmtLen} />
         <SceneContent
           project={project}
-          structEdit={structInteractive ? structEdit : null}
-          structView={structView}
-          onViewChange={setStructView}
+          structureMode={structureMode ?? null}
           captureMode={captureMode}
-          onStructOpen={openStructEdit}
-          onStructCommit={commitStructChoice}
-          onStructPatch={(p) => patchProject(p, true)}
+          onStructOpen={openStructure}
           fmtLen={fmtLen}
-          onStructClose={closeStructEdit}
           onFocusBlocker={focusBlocker}
           sunAltitude={sun.altitude}
           sunAzimuth={sceneSunAzimuth}
@@ -3123,7 +3089,7 @@ export function Scene3D({
           more than one, because a single inverter has no balance to look at —
           the string card already says everything about it. It rides the Cables
           toggle, so hiding the electrics hides this too. */}
-      {(wiring || (showElectrical && project.components.inverterCount > 1 && !readOnly && !captureMode)) &&
+      {(wiring || (showElectrical && project.components.inverterCount > 1 && structInteractive)) &&
         !heatmap &&
         project.components.inverter &&
         project.components.panel && (
@@ -3445,15 +3411,10 @@ const MONTH_NAMES = [
 
 function SceneContent({
   project,
-  structEdit,
-  structView,
-  onViewChange,
+  structureMode,
   captureMode,
   onStructOpen,
-  onStructCommit,
-  onStructPatch,
   fmtLen,
-  onStructClose,
   onFocusBlocker,
   sunAltitude,
   sunAzimuth,
@@ -3562,18 +3523,13 @@ function SceneContent({
   heatResult: HeatmapResult | null;
   heatMonth: number;
   /** §H on-object structure editing (null = read-only surface) */
-  structEdit: { segId: string; anchor: [number, number, number]; panelId?: string; componentId?: string } | null;
-  onStructOpen: (segId: string, panelId?: string, componentId?: string) => void;
-  onStructCommit: (c: StructChoice) => void;
-  /** Phase 22m — leg-plan patches, applied as ONE undoable step like the rest */
-  onStructPatch: (patch: Partial<Project>) => void;
+  /** Structure & BOM: clicks pick tables and steel parts, nothing else */
+  structureMode: StructureSceneMode | null;
+  /** opens Structure & BOM on this table (a click on its steel, or the chip) */
+  onStructOpen: (segId: string) => void;
   /** unit formatter, resolved OUTSIDE the Canvas and passed in (see below) */
   fmtLen: (m: number, dp?: number) => string;
-  onStructClose: () => void;
   onFocusBlocker?: (kind: string, id: string) => void;
-  /** Phase 22l inspection state — view only, never persisted */
-  structView: StructureViewState;
-  onViewChange: (v: StructureViewState) => void;
   captureMode?: boolean;
 }) {
   const loc = project.location!;
@@ -3630,26 +3586,11 @@ function SceneContent({
   // note) is no longer a recompute at all — no useMemo needed here.
   const allStructures = deriveStructures(project);
   const mmsConflictIds = useMemo(() => new Set(validateMms(project, allStructures).filter(f => f.status === 'error').flatMap(f => f.componentIds)), [project, allStructures]);
-  const inspectedIds = useMemo(() => new Set(structEdit?.componentId ? [structEdit.componentId] : []), [structEdit?.componentId]);
-
-  // ── Phase 22l: structure-inspection view state ────────────────────────────
-  // NEVER persisted and never fingerprinted — ghosting a module to look at a
-  // rafter is not a design change, and if it keyed layoutFp it would stale
-  // every stored capture.
-  const selectedSegId = structEdit?.segId ?? null;
-  const view = effectiveView(structView, { captureMode });
-
-  // isolate drops every table but the selected one
-  const structures = useMemo(() => {
-    const keep = visibleStructureIds(
-      allStructures.map((s) => s.segmentId),
-      selectedSegId,
-      view,
-    );
-    return allStructures.filter(
-      (s) => keep.has(s.segmentId) && (!isolate || (isolate.kind === 'table' && isolate.id === s.segmentId)),
-    );
-  }, [allStructures, selectedSegId, view, isolate]);
+  // isolate drops every table but the picked one
+  const structures = useMemo(
+    () => allStructures.filter((s) => !isolate || (isolate.kind === 'table' && isolate.id === s.segmentId)),
+    [allStructures, isolate],
+  );
   // A click SELECTS the module (shared with the 2D editor) and, for a plain
   // click, opens its table's on-object card — a flush table has no structure
   // to click, and must stay re-elevatable from 3D. Shift/ctrl adds to the
@@ -3661,6 +3602,13 @@ function SceneContent({
   // every click, which turned "pick a module" into "a form pops up".
   const onPanelClickToEdit = useCallback(
     (panelId: string, additive: boolean) => {
+      // Structure & BOM: a module stands for its table, and selecting it is all
+      // a click may do there
+      if (structureMode) {
+        const segId = project.panels.find((x) => x.id === panelId)?.segmentId;
+        if (segId) structureMode.onTableClick(segId, additive);
+        return;
+      }
       // wiring by hand: a click puts the module into the string, or takes it out
       if (wiring) {
         // Shift takes the WHOLE table (lib/electrical/wire-table)
@@ -3695,7 +3643,7 @@ function SceneContent({
       const pp = project.panels.find((x) => x.id === panelId);
       onPick(pp?.segmentId ? { kind: 'table', id: pp.segmentId } : null);
     },
-    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView, boxSelect, selectedIds],
+    [project.panels, onPick, onSelectPanels, wiring, onWiringChange, solarAccessView, boxSelect, selectedIds, structureMode],
   );
 
 
@@ -3786,35 +3734,37 @@ function SceneContent({
       }
     : undefined;
   const panelParts = useMemo(
-    () =>
-      spec
-        ? partitionPanels(
-            project.panels
-              .filter((p) => p.enabled && inScope(p.roofId) && isoPanel(p))
-              .map((p) => {
-                const roof = project.roofs.find((r) => r.id === p.roofId);
-                // ONE pose source for the mesh, the analytical shadow slab and the
-                // shading engine's rays (§A0) — they cannot drift apart
-                const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center), trackerSun);
-                return {
-                  id: p.id,
-                  segmentId: p.segmentId,
-                  position: pose.position,
-                  yawRad: pose.yawRad,
-                  tiltRad: pose.tiltRad,
-                  w: pose.w,
-                  d: pose.d,
-                  flush: pose.flush,
-                  legs: pose.structured ? false : undefined, // structure draws real legs
-                  access: p.solarAccess ?? 1,
-                };
-              }),
-            selectedSegId,
-            view,
-          )
-        : { normal: [], ghost: [], hidden: [] },
+    () => {
+      if (!spec) return { normal: [], ghost: [], hidden: [] };
+      const items = project.panels
+        .filter((p) => p.enabled && inScope(p.roofId) && isoPanel(p))
+        .map((p) => {
+          const roof = project.roofs.find((r) => r.id === p.roofId);
+          // ONE pose source for the mesh, the analytical shadow slab and the
+          // shading engine's rays (§A0) — they cannot drift apart
+          const pose = panelPose(project, p, spec, roof, surfAt(p.roofId, p.center), trackerSun);
+          return {
+            id: p.id,
+            segmentId: p.segmentId,
+            position: pose.position,
+            yawRad: pose.yawRad,
+            tiltRad: pose.tiltRad,
+            w: pose.w,
+            d: pose.d,
+            flush: pose.flush,
+            legs: pose.structured ? false : undefined, // structure draws real legs
+            access: p.solarAccess ?? 1,
+          };
+        });
+      // Structure & BOM ghosts its SELECTED tables so their steel reads; a
+      // capture always shows the modules (a proposal hero shot is never a bare
+      // frame), and so does every other scene
+      return structureMode && !captureMode
+        ? partitionPanelsForTables(items, structureMode.selectedSegIds, structureMode.panelVis)
+        : { normal: items, ghost: [], hidden: [] };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [project, spec, selectedSegId, view, focusRoof, eaveRefs, isolate, trackerSun?.altitudeDeg, trackerSun?.azimuthDeg],
+    [project, spec, focusRoof, eaveRefs, isolate, trackerSun?.altitudeDeg, trackerSun?.azimuthDeg, structureMode?.selectedSegIds, structureMode?.panelVis, captureMode],
   );
   // Object focus: a sphere around whatever is picked, reported up for the F
   // key / Focus button. View-only; computed from the same poses the scene draws.
@@ -4820,30 +4770,20 @@ function SceneContent({
           <StructureInstanced
             structures={structures}
             conflictIds={captureMode ? undefined : mmsConflictIds}
-            highlightIds={inspectedIds}
-            onMemberClick={(segId, memberId) => onStructOpen(segId, undefined, memberId)}
+            highlightIds={structureMode?.litIds}
+            onMemberClick={structureMode ? structureMode.onPartClick : (segId) => onStructOpen(segId)}
+            onMemberHover={structureMode?.onPartHover}
           />
           {/* what every leg actually stands on — pedestal / ballast / pile.
               Nothing drew these before, so a table appeared to float. */}
-          <StructureNodesInstanced structures={structures} conflictIds={captureMode ? undefined : mmsConflictIds} highlightIds={inspectedIds} onNodeClick={(segId, nodeId) => onStructOpen(segId, undefined, nodeId)} />
+          <StructureNodesInstanced
+            structures={structures}
+            conflictIds={captureMode ? undefined : mmsConflictIds}
+            highlightIds={structureMode?.litIds}
+            onNodeClick={structureMode ? structureMode.onPartClick : (segId) => onStructOpen(segId)}
+            onNodeHover={structureMode?.onPartHover}
+          />
         </>
-      )}
-      {structEdit && spec && (
-        <StructEditPanel
-          project={project}
-          segId={structEdit.segId}
-          panelId={structEdit.panelId}
-          componentId={structEdit.componentId}
-          onComponentSelect={id => onStructOpen(structEdit.segId, undefined, id)}
-          anchor={structEdit.anchor}
-          onCommit={onStructCommit}
-          onPatch={onStructPatch}
-          fmtLen={fmtLen}
-          onClose={onStructClose}
-          onFocusBlocker={onFocusBlocker}
-          view={view}
-          onViewChange={onViewChange}
-        />
       )}
       {spec && (
         <>
@@ -4909,10 +4849,13 @@ function SceneContent({
               lines={[
                 `${mine.length} modules · ${kwp.toFixed(1)} kWp · ${seg.rows}×${seg.cols}`,
                 `${tilt} · facing ${Math.round(seg.azimuthDeg)}° · ${seg.orientation}`,
+                `Structure: ${structureSummary(project, seg, allStructures, fmtLen)}`,
               ]}
               onClose={() => onPick(null)}
               actions={[
-                { label: 'Edit table', onClick: () => onStructOpen(seg.id, selectedPanelOf(mine, selectedIds)) },
+                // what holds it up is edited in Structure & BOM — this takes
+                // you there with this table selected
+                { label: 'Structure', onClick: () => onStructOpen(seg.id) },
                 // grow the table in place; the kernel refuses when the roof has no room
                 { label: '+ row', onClick: () => runOp(layoutGrow, { segmentId: seg.id, axis: 'row', side: 'bottom', count: 1 }) },
                 { label: '+ column', onClick: () => runOp(layoutGrow, { segmentId: seg.id, axis: 'column', side: 'right', count: 1 }) },

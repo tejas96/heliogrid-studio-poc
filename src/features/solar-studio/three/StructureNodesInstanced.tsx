@@ -45,11 +45,14 @@ export function StructureNodesInstanced({
   highlightIds,
   conflictIds,
   onNodeClick,
+  onNodeHover,
 }: {
   structures: SegmentStructure[];
   highlightIds?: ReadonlySet<string>;
   conflictIds?: ReadonlySet<string>;
   onNodeClick?: (segmentId: string, nodeId: string) => void;
+  /** Structure & BOM's part readout; (null, null) when the pointer leaves */
+  onNodeHover?: (segmentId: string | null, nodeId: string | null) => void;
 }) {
   const { box, cylinder, concrete, steel } = useMemo(
     () => ({
@@ -161,7 +164,13 @@ export function StructureNodesInstanced({
   return (
     <>
       {meshes.map((m, i) => (
-        <primitive key={i} object={m} onClick={onNodeClick ? (e: { instanceId?: number; delta: number; stopPropagation: () => void }) => { if (e.delta > 4 || e.instanceId == null) return; const p = buckets[i][1][e.instanceId]; if (p) { e.stopPropagation(); onNodeClick(p.segmentId, p.nodeId); } } : undefined} />
+        <primitive
+          key={i}
+          object={m}
+          onClick={onNodeClick ? (e: { instanceId?: number; delta: number; stopPropagation: () => void }) => { if (e.delta > 4 || e.instanceId == null) return; const p = buckets[i][1][e.instanceId]; if (p) { e.stopPropagation(); onNodeClick(p.segmentId, p.nodeId); } } : undefined}
+          onPointerMove={onNodeHover ? (e: { instanceId?: number; stopPropagation: () => void }) => { if (e.instanceId == null) return; const p = buckets[i][1][e.instanceId]; if (p) { e.stopPropagation(); onNodeHover(p.segmentId, p.nodeId); } } : undefined}
+          onPointerOut={onNodeHover ? () => onNodeHover(null, null) : undefined}
+        />
       ))}
     </>
   );

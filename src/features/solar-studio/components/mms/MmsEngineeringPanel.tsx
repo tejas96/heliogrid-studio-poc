@@ -5,9 +5,9 @@ import { mmsEngineering } from '../../lib/mms/engineering';
 import { validateMms } from '../../lib/mms/validate';
 import { MmsField, MmsSection } from './MmsField';
 
-export function MmsEngineeringPanel({ project, prefix, onPatch }: { project: Project; prefix: string; onPatch: (patch: Partial<Project>) => void }) {
+export function MmsEngineeringPanel({ project, prefix, onEngineering }: { project: Project; prefix: string; onEngineering: (inputs: MmsEngineeringInputs) => void }) {
   const inputs = project.mmsEngineering ?? {};
-  const update = (p: Partial<MmsEngineeringInputs>) => onPatch({ mmsEngineering: { ...inputs, ...p } });
+  const update = (p: Partial<MmsEngineeringInputs>) => onEngineering({ ...inputs, ...p });
   const structures = deriveStructures(project);
   const report = mmsEngineering(project, structures);
   const fields: [keyof MmsEngineeringInputs, string, number, number][] = [

@@ -66,6 +66,7 @@ export function StructureInstanced({
   highlightIds,
   conflictIds,
   onMemberClick,
+  onMemberHover,
 }: {
   structures: SegmentStructure[];
   /** member ids to tint — drives BOM↔3D focus (Phase 22n) */
@@ -73,6 +74,8 @@ export function StructureInstanced({
   conflictIds?: ReadonlySet<string>;
   /** §H on-object editing: reports the clicked member AND its segment */
   onMemberClick?: (segmentId: string, memberId: string) => void;
+  /** Structure & BOM's part readout; (null, null) when the pointer leaves */
+  onMemberHover?: (segmentId: string | null, memberId: string | null) => void;
 }) {
   // The leg material is SHARED with the panel renderer. Clone it: this mesh
   // sets per-instance colour, and mutating a shared material to support that
@@ -182,6 +185,16 @@ export function StructureInstanced({
               if (mem) onMemberClick(segId, mem.id);
             })
           }
+          onPointerMove={
+            onMemberHover &&
+            ((e: { instanceId?: number; stopPropagation: () => void }) => {
+              if (e.instanceId == null) return;
+              e.stopPropagation();
+              const mem = buckets[bi].members[e.instanceId];
+              if (mem) onMemberHover(buckets[bi].segmentIds[e.instanceId], mem.id);
+            })
+          }
+          onPointerOut={onMemberHover && (() => onMemberHover(null, null))}
         />
       ))}
     </>

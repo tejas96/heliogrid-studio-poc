@@ -220,6 +220,13 @@ export default function DesignPage() {
               <span className="text-xs text-on-canvas">12 panels · 7.3 kWp</span>
               <span className="h-2 w-2 rounded-full bg-data-good" />
             </div>
+            <div className="mt-3 flex flex-col gap-2 rounded-md border border-border-canvas bg-surface-canvas-panel p-3">
+              <span className="text-xs text-on-canvas-muted">on-canvas-muted · 6.81:1 — secondary text on canvas</span>
+              <span className="rounded-sm border border-border-canvas-strong px-2 py-1 text-xs text-on-canvas">
+                border-canvas-strong · 4.16:1 — control edges on canvas
+              </span>
+              <span className="text-xs text-on-canvas-muted">border-canvas · 1.45:1 — dividers only (this box)</span>
+            </div>
           </div>
         </Row>
 

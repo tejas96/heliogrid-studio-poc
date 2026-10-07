@@ -37,6 +37,13 @@ const GROUND_TILT_DEG = () => resolveRules().defaults.groundTiltDeg;
 
 export type StructChoice =
   | { kind: 'preset'; preset: 'flush' | 'standard' | 'walkunder' | 'ground_pile' | 'ground_ballast' }
+  /**
+   * Structure & BOM's type cards. Like the rooftop presets, but they keep the
+   * table's TILT: tilt moves the modules, so it is a layout decision and lives
+   * in the editor. Only a flush table, which has no tilt to keep, takes the
+   * standard 10° when it is lifted.
+   */
+  | { kind: 'height'; height: 'flush' | 'elevated' | 'walkunder' }
   | { kind: 'profile'; key: string }
   | { kind: 'tilt'; tiltDeg: number }
   | { kind: 'clearance'; clearanceM: number }
@@ -117,23 +124,25 @@ export function applyStructChoice(
       // standard clears it back to the lazy default chain
       const r1 = setSegmentRacking(roof, spec, seg, project.panels, 'fixed_tilt');
       const r2 = setSegmentTilt(spec, r1.segment, r1.panels, 10);
-      const seg3 = setSegmentStructureFields(
-        r2.segment,
-        choice.preset === 'walkunder' ? { clearanceM: 2.2 } : { clearanceM: undefined },
-      );
-      // remember the intent ON THE ROOF: refills derive their bridging
-      // clearance from this even after the segment is cleared
-      const override = { ...roof.structureOverride };
-      if (choice.preset === 'walkunder') override.clearanceM = 2.2;
-      else delete override.clearanceM;
-      const roofs = project.roofs.map((rf) =>
-        rf.id === roof.id
-          ? Object.keys(override).length > 0
-            ? { ...rf, structureOverride: override }
-            : (({ structureOverride: _o, ...rest }) => rest)(rf) as Roof
-          : rf,
-      );
-      return { ...replace(project, seg3, r2.panels), roofs };
+      const walk = choice.preset === 'walkunder';
+      const seg3 = setSegmentStructureFields(r2.segment, { clearanceM: walk ? WALK_UNDER_M : undefined });
+      return { ...replace(project, seg3, r2.panels), roofs: withWalkUnderIntent(project, roof, walk) };
+    }
+    case 'height': {
+      if (choice.height === 'flush') {
+        if (seg.racking.kind === 'flush') return null;
+        const r = setSegmentRacking(roof, spec, seg, project.panels, 'flush');
+        return replace(project, r.segment, r.panels);
+      }
+      const walk = choice.height === 'walkunder';
+      // a flush table has no tilt to keep — lift it exactly as the preset does
+      let lifted: { segment: ArraySegment; panels: PlacedPanel[] } = { segment: seg, panels: project.panels };
+      if (seg.racking.kind === 'flush') {
+        const r1 = setSegmentRacking(roof, spec, seg, project.panels, 'fixed_tilt');
+        lifted = setSegmentTilt(spec, r1.segment, r1.panels, 10);
+      }
+      const seg3 = setSegmentStructureFields(lifted.segment, { clearanceM: walk ? WALK_UNDER_M : undefined });
+      return { ...replace(project, seg3, lifted.panels), roofs: withWalkUnderIntent(project, roof, walk) };
     }
     case 'profile': {
       if (seg.racking.kind === 'flush') return null;
@@ -177,6 +186,26 @@ export function applyStructChoice(
     }
     }
   }
+}
+
+/** Walk-under clearance — a person standing under the low edge. */
+export const WALK_UNDER_M = 2.2;
+
+/**
+ * Remember walk-under ON THE ROOF: a refill derives its bridging clearance
+ * from this even after the segment is cleared, so the next fill bridges again.
+ */
+function withWalkUnderIntent(project: Project, roof: Roof, walk: boolean): Roof[] {
+  const override = { ...roof.structureOverride };
+  if (walk) override.clearanceM = WALK_UNDER_M;
+  else delete override.clearanceM;
+  return project.roofs.map((rf) =>
+    rf.id === roof.id
+      ? Object.keys(override).length > 0
+        ? { ...rf, structureOverride: override }
+        : ((({ structureOverride: _o, ...rest }) => rest)(rf) as Roof)
+      : rf,
+  );
 }
 
 function replace(project: Project, segment: ArraySegment, panels: PlacedPanel[]): StructPatch {

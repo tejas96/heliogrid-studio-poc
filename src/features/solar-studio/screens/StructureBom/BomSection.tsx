@@ -7,6 +7,7 @@ import type { BomCategory, BomLine, Project } from '../../types';
 import { BomRow } from './BomRow';
 import { SectionInputs } from './SectionInputs';
 import { StaleBanner } from './StaleBanner';
+import { CutList } from './CutList';
 
 // Eleven columns do not fit a laptop viewport. Without a floor the browser
 // steals the width from the two flexible columns first, wrapping "AESOLAR
@@ -139,6 +140,7 @@ export function BomSection({
           ))}
         </DataTable>
       </div>
+      {category === 'Mechanical BOS' && <CutList project={project} />}
     </section>
   );
 }

@@ -62,6 +62,10 @@
   /* Canvas stays dark in BOTH themes — satellite imagery and 3D need it. */
   --surface-canvas: #141310;
   --surface-canvas-panel: #1a1916;
+  /* Lines and secondary text ON the canvas — same in both themes, like it. */
+  --border-canvas: #3a352e;        /* 1.45:1 on canvas-panel — dividers only, never a control edge */
+  --border-canvas-strong: #837a6e; /* 4.16:1 on canvas-panel — control boundaries (N4 ≥ 3:1) */
+  --text-on-canvas-muted: #a8a096; /* 6.81:1 on canvas-panel · 7.2:1 on canvas */
 
   --text: var(--c-neutral-900); /* 17.6:1 on surface */
   --text-muted: var(--c-neutral-600); /*  7.1:1 on surface  ·  5.5:1 on sunken */

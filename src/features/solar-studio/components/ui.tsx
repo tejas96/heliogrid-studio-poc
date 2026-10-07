@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { X, Check } from 'lucide-react';
 import { commitNumber } from '../lib/bom/view';
 
-function useEscape(onClose?: () => void) {
+export function useEscape(onClose?: () => void) {
   useEffect(() => {
     if (!onClose) return;
     const h = (e: KeyboardEvent) => {
@@ -30,7 +30,7 @@ const FOCUSABLE =
  * it is the half that matters most — it is what makes closing a dialog feel
  * like returning rather than being teleported.
  */
-function useFocusTrap(active: boolean) {
+export function useFocusTrap(active: boolean) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!active) return;

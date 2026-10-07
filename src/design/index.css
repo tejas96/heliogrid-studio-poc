@@ -53,6 +53,9 @@
   --color-subtle: var(--text-subtle);
   --color-on-accent: var(--text-on-accent);
   --color-on-canvas: var(--text-on-canvas);
+  --color-on-canvas-muted: var(--text-on-canvas-muted);
+  --color-border-canvas: var(--border-canvas);
+  --color-border-canvas-strong: var(--border-canvas-strong);
 
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);

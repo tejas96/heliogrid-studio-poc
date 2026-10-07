@@ -19,6 +19,9 @@ import { nextSegmentLabel } from '../layout';
 import { movePanels } from '../panel-move';
 import { isTrackerKind } from '../energy/tracker';
 import { applyStructChoice, reconcileBridgedPanels, type StructChoice } from '../structure-edit';
+import { clearMms, configureMms } from '../mms/configure';
+import { MOUNT_CATALOGUE } from '../mms/catalogue';
+import type { MmsConfig, MmsEngineeringInputs, MountStrategy } from '../mms/types';
 import {
   duplicateSegment,
   groupIntoTable,
@@ -282,7 +285,7 @@ export const segmentSetAzimuth = defineOp<{ segmentId: string; azimuthDeg: numbe
   },
 });
 
-export const segmentSetProfile = defineOp<{ segmentId: string; profileKey: string }>({
+const segmentSetProfile = defineOp<{ segmentId: string; profileKey: string }>({
   id: 'segment.setProfile',
   layer: 'layout',
   label: (a) => `Section: ${STRUCTURE_PROFILES.find((x) => x.key === a.profileKey)?.label ?? a.profileKey}`,
@@ -315,6 +318,8 @@ const CHOICE_LABEL = (c: StructChoice): string => {
   switch (c.kind) {
     case 'preset':
       return `Structure preset: ${c.preset.replace('_', ' ')}`;
+    case 'height':
+      return c.height === 'flush' ? 'Structure: flush' : c.height === 'walkunder' ? 'Structure: walk-under' : 'Structure: elevated';
     case 'profile':
       return `Section: ${c.key}`;
     case 'tilt':
@@ -338,6 +343,67 @@ export const segmentChoice = defineOp<{ segmentId: string; choice: StructChoice 
   validate: (p, a) =>
     needTable(p, a) ?? (applyStructChoice(p, a.segmentId, a.choice) ? null : { reason: 'Not applicable to this table' }),
   apply: (p, a) => applyStructChoice(p, a.segmentId, a.choice) ?? {},
+});
+
+// ─── Mounting system, legs and site loads ───────────────────────────────────
+// These used to be raw store patches from the 3D card. Through the kernel they
+// get a real undo label, and `syncElectrical` re-derives strings and routes in
+// the SAME patch — Generate MMS re-lays the table, so a raw patch could leave
+// strings pointing at the old poses until something else re-synced them.
+
+export const segmentConfigureMms = defineOp<{
+  segmentId: string;
+  strategy?: MountStrategy;
+  edit?: Partial<MmsConfig>;
+}>({
+  id: 'segment.configureMms',
+  layer: 'layout',
+  label: (a) =>
+    a.strategy
+      ? `Mounting system: ${MOUNT_CATALOGUE.find((m) => m.id === a.strategy)?.label ?? a.strategy}`
+      : 'Mounting system settings',
+  validate: (p, a) => {
+    const gate = needTable(p, a);
+    if (gate) return gate;
+    return Object.keys(configureMms(p, a.segmentId, a.strategy, a.edit)).length > 0
+      ? null
+      : { reason: 'That mounting system does not fit this surface' };
+  },
+  apply: (p, a) => configureMms(p, a.segmentId, a.strategy, a.edit),
+});
+
+export const segmentClearMms = defineOp<{ segmentId: string }>({
+  id: 'segment.clearMms',
+  layer: 'layout',
+  label: () => 'Remove mounting system',
+  validate: (p, a) =>
+    needTable(p, a) ??
+    (p.segments.find((s) => s.id === a.segmentId)?.mms ? null : { reason: 'No mounting system on that table' }),
+  apply: (p, a) => clearMms(p, a.segmentId),
+});
+
+/** A whole leg plan, as lib/leg-plan-edit produced it; `undefined` = automatic legs. */
+export const segmentSetLegPlan = defineOp<{ segmentId: string; legPlan: ArraySegment['legPlan']; label?: string }>({
+  id: 'segment.setLegPlan',
+  layer: 'layout',
+  label: (a) => a.label ?? (a.legPlan ? 'Edit legs' : 'Legs back to automatic'),
+  validate: needTable,
+  apply: (p, a) => ({
+    segments: p.segments.map((s) => {
+      if (s.id !== a.segmentId) return s;
+      if (a.legPlan) return { ...s, legPlan: a.legPlan };
+      // lazy field: absent means AUTO, so drop the key rather than store undefined
+      const { legPlan: _auto, ...rest } = s;
+      return rest;
+    }),
+  }),
+});
+
+export const projectSetMmsEngineering = defineOp<{ inputs: MmsEngineeringInputs }>({
+  id: 'project.setMmsEngineering',
+  layer: 'layout',
+  label: () => 'Site loads',
+  apply: (_p, a) => ({ mmsEngineering: a.inputs }),
 });
 
 export const segmentRespace = defineOp<{ segmentId: string; rowPitchM: number }>({

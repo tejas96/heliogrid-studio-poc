@@ -303,30 +303,6 @@ export function resolveRacking(
 }
 
 /**
- * The parametric half of a ResolvedRacking at its defaults (22g).
- *
- * Exported so the handful of places that construct a racking by hand — preview
- * thumbnails, tests — get the same defaults `resolveRacking` applies instead of
- * each pasting its own copy. A second copy is a second thing to forget to
- * update, and these defaults are load-bearing: they are what makes an untouched
- * segment build a byte-identical graph.
- */
-export function defaultStructureParams(
-  profile: StructureProfile,
-): Pick<
-  ResolvedRacking,
-  'profileFor' | 'rafterMultiplier' | 'purlinCount' | 'endBufferM' | 'bracing'
-> {
-  return {
-    profileFor: () => profile,
-    rafterMultiplier: 1,
-    purlinCount: 2,
-    endBufferM: 0,
-    bracing: true,
-  };
-}
-
-/**
  * The shape of a built table now lives in `./structure-model`, a leaf.
  *
  * This file calls `mms/generate`, and the generator needs these types to

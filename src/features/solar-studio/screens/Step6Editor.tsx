@@ -100,13 +100,11 @@ import {
   segmentLines,
   selectedSegmentIds,
   setSegmentTilt,
-  STRUCTURE_PROFILES,
   type GrowAxis,
   type GrowSide,
   type GrowSpan,
   type SelectionShape,
 } from '../lib/segment-ops';
-import { resolveRules } from '../data/rules/india';
 import { pickRoofAt } from '../lib/roof-topology';
 import { estimateDcCableM, stringSizing, vocAtTemp } from '../lib/stringing';
 import {
@@ -124,16 +122,11 @@ import {
 import { dcCableFromRoutes } from '../lib/routing';
 import { resolveDesignTemps } from '../lib/electrical/temps';
 import { designIssues } from '../lib/derive';
-import { type StructChoice } from '../lib/structure-edit';
-import {
-  buildStructure,
-  resolveRacking,
-  STRUCTURE_DISCLAIMER,
-  validateStructure,
-} from '../lib/structure';
 import { deriveStructures } from '../lib/derive/structures';
-import { StructurePreview } from '../components/StructurePreview';
-import { MmsConfiguration } from '../components/mms/MmsConfiguration';
+import { structureSummary } from '../lib/structure-step';
+import { STEP, stepPath } from '../lib/steps';
+import { navigate } from '../router';
+import { useUnits } from '../store/useUnits';
 import { AccessScale } from '../components/AccessScale';
 import { ModuleCard } from '../components/ModuleCard';
 import { registerAllAnalyzers } from '../lib/insights/analyzers';
@@ -167,16 +160,13 @@ import {
   panelsNudge,
   panelsRotate,
   panelsSetEnabled,
-  segmentChoice,
   segmentDelete,
   segmentDuplicate,
   segmentRespace,
   segmentSetAzimuth,
   segmentSetLayout,
-  segmentSetProfile,
   segmentSetRacking,
   segmentSetTrackerLimit,
-  segmentSetStructureFields,
   segmentSetTilt,
 } from '../lib/ops/layout-ops';
 import {
@@ -327,6 +317,7 @@ export function Step6Editor() {
   const project = useActiveProject()!;
   const patch = useProjectPatch();
   const ops = useOps();
+  const { fmtLen } = useUnits();
   /** same ground the other two editors show — see lib/site-cover */
   const coverM = useMemo(() => siteCoverM(project), [project]);
   /** One place decides what an op's outcome looks like: a refusal, or the impact line. */
@@ -890,45 +881,6 @@ export function Step6Editor() {
       azimuthDeg: typeof az === 'function' ? az(seg) : az,
     }));
     reportMany(ops.runMany(segmentSetAzimuth, argsList, { label: tableCountLabel(label) }), ids.length);
-  }
-  function applyProfile(key: string) {
-    const ids = targetSegIds();
-    if (!ids) return;
-    reportMany(
-      ops.runMany(
-        segmentSetProfile,
-        ids.map((segmentId) => ({ segmentId, profileKey: key })),
-        { label: tableCountLabel('Set structure profile') },
-      ),
-      ids.length,
-    );
-  }
-  function applyStructureFields(
-    fields: Partial<{ legSpacingM: number; foundation: 'anchor' | 'ballast'; clearanceM: number }>,
-  ) {
-    const ids = targetSegIds();
-    if (!ids) return;
-    reportMany(
-      ops.runMany(
-        segmentSetStructureFields,
-        ids.map((segmentId) => ({ segmentId, fields })),
-        { label: tableCountLabel('Set structure') },
-      ),
-      ids.length,
-    );
-  }
-  /** Presets write the fields they OWN; anything else the user set survives. */
-  function applyPreset(preset: Extract<StructChoice, { kind: 'preset' }>['preset']) {
-    const ids = targetSegIds();
-    if (!ids) return;
-    reportMany(
-      ops.runMany(
-        segmentChoice,
-        ids.map((segmentId) => ({ segmentId, choice: { kind: 'preset' as const, preset } })),
-        { label: tableCountLabel(`Set to ${preset}`) },
-      ),
-      ids.length,
-    );
   }
   function applyRespace(pitch: number) {
     const ids = targetSegIds();
@@ -2584,11 +2536,6 @@ export function Step6Editor() {
         const sharedTilt = oneOf(
           selectedSegments.map((s) => (s.racking.kind !== 'flush' ? s.racking.tiltDeg : 0)),
         );
-        // profile lives on the racking and only exists off-flush; '' stands for
-        // "flush, so no profile", which correctly reads as mixed beside a tilted one
-        const sharedProfile = oneOf(
-          selectedSegments.map((s) => (s.racking.kind !== 'flush' ? s.racking.profile.key : '')),
-        );
         const az = sharedAz ?? seg.azimuthDeg;
         const dir = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(az / 45) % 8];
         // a torque tube is a LINE, so it is named by the axis it lies on, not
@@ -2597,7 +2544,6 @@ export function Step6Editor() {
           const n = ['north–south', 'northeast–southwest', 'east–west', 'southeast–northwest'];
           return n[Math.round((((bearing % 180) + 180) % 180) / 45) % 4];
         };
-        const seg2 = seg.racking;
         const rowStyle = { display: 'flex', gap: 6, marginBottom: 12 } as const;
         const lbl = { fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--editor-ink-2)', margin: '2px 0 6px' } as const;
         const seg3btn = (active: boolean) => ({
@@ -2626,141 +2572,27 @@ export function Step6Editor() {
               </div>
             )}
 
-            {(() => {
-              const roofFor = project.roofs.find((r) => r.id === seg.roofId);
-              const resolved = roofFor ? resolveRacking(project, roofFor, seg, spec) : null;
-              // preset MATCH is DERIVED from resolved state — never stored
-              const isStd =
-                resolved != null && resolved.tiltDeg === 10 && resolved.frontLegM < 1;
-              const isWalk = resolved != null && resolved.frontLegM >= 2.2;
-              const isFlushP = seg.racking.kind === 'flush';
-              const isCustom = !isFlushP && !isStd && !isWalk;
-              const presetBtn = (
-                active: boolean,
-                onClick: () => void,
-                label: string,
-                preview: React.ReactNode,
-              ) => (
-                <button
-                  key={label}
-                  onClick={onClick}
-                  style={{
-                    ...(seg3btn(active) as React.CSSProperties),
-                    flex: 1,
-                    height: 'auto',
-                    padding: 8,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 4,
-                    alignItems: 'center',
-                  }}
-                >
-                  {preview}
-                  <span style={{ fontSize: 11, fontWeight: 700 }}>{label}</span>
-                </button>
-              );
-              const stdRacking =
-                resolved != null
-                  ? { ...resolved, tiltDeg: 10, frontLegM: 0.3, backLegM: 0.3 + 0.396 }
-                  : null;
-              const walkRacking =
-                resolved != null
-                  ? { ...resolved, tiltDeg: 10, frontLegM: 2.2, backLegM: 2.2 + 0.396 }
-                  : null;
-              const fallback = resolveRacking(
-                project,
-                roofFor ?? project.roofs[0],
-                { ...seg, racking: { kind: 'fixed_tilt', tiltDeg: 10, rowPitchM: 0, frontLegM: 0.3, backLegM: 0.7, profile: STRUCTURE_PROFILES[0] } },
-                spec,
-              );
-              // A ground table is founded in earth, not clamped to a slab, so
-              // the rooftop presets (flush / walk-under) do not apply to it —
-              // and the ground presets do not apply to a roof. Show one set.
-              const isGround = roofFor?.roofType === 'ground';
-              // A FACADE takes none of the three rooftop presets below. Flush,
-              // Standard 10° and Walk-under 2.2 m all describe a table standing
-              // on a deck, and there is no deck — the modules hang off a wall.
-              // Saying so beats three buttons that each do the wrong thing.
-              if (roofFor?.roofType === 'facade')
-                return (
-                  <>
-                    <div style={lbl as React.CSSProperties}>Facade mounting</div>
-                    <div className="hint">
-                      Modules hang on wall brackets, coplanar with the wall — there is no
-                      table and no footing, so the rooftop presets do not apply. Choose
-                      between rails on brackets and curtain-wall spandrel infill in the
-                      mounting-system panel. Courses and columns come from re-filling the
-                      wall; a module cannot be dragged in plan, because a course is a
-                      height.
-                    </div>
-                  </>
-                );
-              const groundTilt = resolveRules().defaults.groundTiltDeg;
-              const groundRacking =
-                resolved != null ? { ...resolved, tiltDeg: groundTilt } : null;
-              const foundation = resolved?.foundation;
-              // A DUAL-AXIS mast has ONE foundation and the picker must not
-              // pretend otherwise: `allowedFoundations` returns ['concrete']
-              // alone, so offering "Driven pile" and "Ballasted" here is two
-              // buttons whose answer would be corrected back at the next read —
-              // and the pier the BOM buys would stop matching what is drawn.
-              if (isGround && seg.racking.kind === 'tracker_azel')
-                return (
-                  <>
-                    <div style={lbl as React.CSSProperties}>Foundation · cast pier</div>
-                    <div className="hint">
-                      One pier per mast, and no choice about it: a pointed frame delivers its entire
-                      wind moment to a single point, which is a deep cast pier with a cage and a bolt
-                      template. Depth, diameter and hold-down are an engineer&apos;s design against
-                      the site&apos;s soil and IS 875 Part 3.
-                    </div>
-                  </>
-                );
-              if (isGround)
-                return (
-                  <>
-                    <div style={lbl as React.CSSProperties}>
-                      Foundation{isCustom ? ' · custom' : ''}
-                    </div>
-                    <div style={{ ...rowStyle, alignItems: 'stretch' }}>
-                      {presetBtn(
-                        foundation === 'pile',
-                        () => applyPreset('ground_pile'),
-                        'Driven pile',
-                        <StructurePreview racking={groundRacking ?? fallback} spec={spec} width={96} height={56} />,
-                      )}
-                      {presetBtn(
-                        foundation === 'ballast',
-                        () => applyPreset('ground_ballast'),
-                        'Ballasted',
-                        <StructurePreview racking={groundRacking ?? fallback} spec={spec} width={96} height={56} />,
-                      )}
-                    </div>
-                    <div className="hint" style={{ marginTop: 6 }}>
-                      Embedment depth and pull-out capacity depend on the soil —
-                      a site survey and engineer sign-off are required.
-                    </div>
-                  </>
-                );
-              return (
-                <>
-                  <div style={lbl as React.CSSProperties}>
-                    Structure preset{isCustom ? ' · custom' : ''}
-                  </div>
-                  <div style={{ ...rowStyle, alignItems: 'stretch' }}>
-                    {presetBtn(isFlushP, () => applyPreset('flush'), 'Flush', (
-                      <StructurePreview racking={null} spec={spec} flush width={96} height={56} />
-                    ))}
-                    {presetBtn(isStd, () => applyPreset('standard'), 'Standard 10°', (
-                      <StructurePreview racking={stdRacking ?? fallback} spec={spec} width={96} height={56} />
-                    ))}
-                    {presetBtn(isWalk, () => applyPreset('walkunder'), 'Walk-under 2.2 m', (
-                      <StructurePreview racking={walkRacking ?? fallback} spec={spec} width={96} height={56} />
-                    ))}
-                  </div>
-                </>
-              );
-            })()}
+            {/* What HOLDS these tables up — type and height, profile,
+                foundation, frame, legs and the mounting system — is edited in
+                Structure & BOM. This sheet keeps the layout: racking, tilt,
+                spacing, facing and the table's shape. */}
+            <div style={{ ...rowStyle, alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+              <div style={{ minWidth: 0, fontSize: 12, color: 'var(--editor-ink-2)' }}>
+                <div style={lbl as React.CSSProperties}>Structure</div>
+                {multi
+                  ? `${selectedSegments.length} tables — open them together in Step ${STEP.structureBom}`
+                  : structureSummary(project, seg, deriveStructures(project), fmtLen)}
+              </div>
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 'none' }}
+                onClick={() =>
+                  navigate(`${stepPath(STEP.structureBom)}?tables=${segIds.map(encodeURIComponent).join(',')}`)
+                }
+              >
+                Edit in Step {STEP.structureBom}
+              </button>
+            </div>
 
             <div style={lbl as React.CSSProperties}>Racking</div>
             <div style={rowStyle}>
@@ -3081,142 +2913,6 @@ export function Step6Editor() {
             </div>
             )}
 
-            {!isFlush && seg2.kind !== 'flush' && (
-              <>
-                {/* The profile picker is for a table whose members all share
-                    one section. A dual-axis unit does not: its mast is a pipe
-                    chosen to take a moment and its frame is box section, and
-                    neither is the user's to swap from this list. The member
-                    model below it still shows, because that is the real graph. */}
-                {seg.racking.kind !== 'tracker_azel' && (
-                <>
-                <div style={lbl as React.CSSProperties}>Structure profile</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {STRUCTURE_PROFILES.map((p) => (
-                    <button
-                      key={p.key}
-                      style={{ ...seg3btn(sharedProfile === p.key), flex: 'none', padding: '0 12px' } as React.CSSProperties}
-                      onClick={() => applyProfile(p.key)}
-                    >
-                      {p.label} <span style={{ opacity: 0.6, fontSize: 10 }}>{p.kgPerM} kg/m</span>
-                    </button>
-                  ))}
-                </div>
-                </>
-                )}
-
-                {(() => {
-                  const roofFor = project.roofs.find((r) => r.id === seg.roofId);
-                  const resolved = roofFor ? resolveRacking(project, roofFor, seg, spec) : null;
-                  if (!resolved || !roofFor) return null;
-                  // THE SAME graph the BOM and the 3D read, not a second one
-                  // built here. Calling `buildStructure` directly skipped
-                  // `topologyOf`, so a dual-axis table — which builds one mast
-                  // per unit — was reported as an elevated table with 76 legs,
-                  // 38 rafters and 38 braces it will never have (caught in the
-                  // browser). The fallback is only for segments the derived set
-                  // leaves out, where this is the model that would be built.
-                  const azel = seg.racking.kind === 'tracker_azel';
-                  const struct =
-                    deriveStructures(project).find((s) => s.segmentId === seg.id) ??
-                    buildStructure(seg, spec, roofFor, resolved, project.panels);
-                  const drc = validateStructure(struct);
-                  const ms = struct.memberSummary;
-                  const rows: [string, number, number][] = azel
-                    ? [
-                        ['Masts', ms.front_leg.count, ms.front_leg.totalM],
-                        ['Frame beams', ms.beam?.count ?? 0, ms.beam?.totalM ?? 0],
-                        ['Purlins', ms.purlin.count, ms.purlin.totalM],
-                      ]
-                    : [
-                        ['Legs (front+back)', ms.front_leg.count + ms.back_leg.count, ms.front_leg.totalM + ms.back_leg.totalM],
-                        ['Rafters', ms.rafter.count, ms.rafter.totalM],
-                        ['Purlins', ms.purlin.count, ms.purlin.totalM],
-                        ['Braces', ms.brace.count, ms.brace.totalM],
-                      ];
-                  return (
-                    <>
-                      <div style={lbl as React.CSSProperties}>Structure (member model)</div>
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                        {/* the glyph draws a tilted TABLE on legs; a mast is
-                            neither, so it is left out rather than drawn wrong */}
-                        {!azel && <StructurePreview racking={resolved} spec={spec} width={120} height={80} />}
-                        <div style={{ flex: 1, fontSize: 11.5, color: 'var(--editor-ink-2)' }}>
-                          {rows.map(([label, count, m]) => (
-                            <div key={label} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span>{label}</span>
-                              <span>{count} · {Math.round(m * 10) / 10} m</span>
-                            </div>
-                          ))}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, marginTop: 4, borderTop: '1px solid var(--editor-line)', paddingTop: 4 }}>
-                            {/* A dual-axis unit's steel is a CHS mast and an
-                                RHS frame, so naming the segment's stored
-                                `racking.profile` here says "C-Channel" over a
-                                mass that contains none. The BOM already splits
-                                it by the section each member carries; this just
-                                stops claiming one. */}
-                            <span>{azel ? 'Steel (mast + frame)' : `Steel (${resolved.profile.label})`}</span>
-                            <span>{struct.steelKg} kg</span>
-                          </div>
-                        </div>
-                      </div>
-                      {/* Leg spacing, clearance and a foundation pair are all
-                          settings of a TABLE. A dual-axis unit has one mast
-                          under the middle of its frame — there is no spacing
-                          between legs it does not have, its height is DERIVED
-                          from the frame and the lift (see buildAzel), and its
-                          footing is the cast pier above, with no alternative. */}
-                      {!azel && (
-                      <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-                        <label style={{ fontSize: 11, color: 'var(--editor-ink-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          Leg spacing
-                          <input
-                            type="number" min={0.5} max={4} step={0.1}
-                            value={resolved.legSpacingM}
-                            aria-label="Leg spacing in meters"
-                            style={{ width: 62, padding: '4px 6px' }}
-                            onChange={(e) => applyStructureFields({ legSpacingM: Math.max(0.5, Math.min(4, Number(e.target.value) || 2)) })}
-                          /> m
-                        </label>
-                        <label style={{ fontSize: 11, color: 'var(--editor-ink-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          Clearance
-                          <input
-                            type="number" min={0} max={3} step={0.1}
-                            value={Math.round(resolved.frontLegM * 10) / 10}
-                            aria-label="Under-structure clearance in meters"
-                            style={{ width: 62, padding: '4px 6px' }}
-                            onChange={(e) => applyStructureFields({ clearanceM: Math.max(0, Math.min(3, Number(e.target.value) || 0)) })}
-                          /> m
-                        </label>
-                        {(['anchor', 'ballast'] as const).map((f) => (
-                          <button
-                            key={f}
-                            style={{ ...seg3btn(resolved.foundation === f), flex: 'none', padding: '0 10px' } as React.CSSProperties}
-                            onClick={() => applyStructureFields({ foundation: f })}
-                          >
-                            {f === 'anchor' ? 'Anchored' : 'Ballasted'}
-                          </button>
-                        ))}
-                      </div>
-                      )}
-                      {drc.length > 0 && (
-                        <div style={{ fontSize: 11, color: 'var(--bad, #ef4444)', marginTop: 6 }}>
-                          {drc[0]} {drc.length > 1 ? `(+${drc.length - 1} more)` : ''}
-                        </div>
-                      )}
-                      {struct.warnings.map((w) => (
-                        <div key={w} style={{ fontSize: 10.5, color: 'var(--warn, #f59e0b)', marginTop: 4 }}>{w}</div>
-                      ))}
-                      <div style={{ fontSize: 10, color: 'var(--editor-ink-3, #888)', marginTop: 6 }}>
-                        {STRUCTURE_DISCLAIMER}
-                      </div>
-                    </>
-                  );
-                })()}
-              </>
-            )}
-
-            {!multi && <MmsConfiguration project={project} segmentId={seg.id} prefix="table-mms" onPatch={p => patch(p, true)} />}
             {/* Row/column delete. Single-table only: marking spans one table's
                 lattice, and "row 3" means nothing across two of them. */}
             {!multi && (

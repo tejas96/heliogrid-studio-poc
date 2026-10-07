@@ -82,6 +82,26 @@ export function partitionPanels<T extends { segmentId?: string }>(
   return out;
 }
 
+/**
+ * Structure & BOM's split: every SELECTED table's modules follow the
+ * visibility, the rest stay normal. Nothing selected ⇒ nothing changes, for
+ * the same reason as above.
+ */
+export function partitionPanelsForTables<T extends { segmentId?: string }>(
+  panels: T[],
+  selected: ReadonlySet<string>,
+  panelVis: PanelVisibility,
+): PanelPartition<T> {
+  const out: PanelPartition<T> = { normal: [], ghost: [], hidden: [] };
+  for (const p of panels) {
+    const mine = p.segmentId !== undefined && selected.has(p.segmentId);
+    if (!mine || panelVis === 'show') out.normal.push(p);
+    else if (panelVis === 'ghost') out.ghost.push(p);
+    else out.hidden.push(p);
+  }
+  return out;
+}
+
 /** Structures to draw — isolate drops every table but the selected one. */
 export function visibleStructureIds(
   segmentIds: string[],
