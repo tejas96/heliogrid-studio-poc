@@ -17,6 +17,7 @@ import { mmsEngineering } from '../../lib/mms/engineering';
 import { fastenerTotals, resolveRacking } from '../../lib/structure';
 import { sectionState } from '../../lib/bom/view';
 import {
+  choiceSteelDeltaKg,
   describePart,
   partGroups,
   steelTakeoff,
@@ -62,7 +63,9 @@ export function StructureView({ project }: { project: Project }) {
   const [panelVis, setPanelVis] = useState<PanelVis>('ghost');
   const [part, setPart] = useState<PartKey | null>(null);
   const [issueIds, setIssueIds] = useState<string[] | null>(null);
-  const [hover, setHover] = useState<PartReadout | null>(null);
+  // the hover readout renders on its own: a pointer crossing the steel must
+  // not re-render the whole step (and re-run the steel previews) per member
+  const hoverSink = useRef<((r: PartReadout | null) => void) | null>(null);
   const [dialog, setDialog] = useState<DetailDialog | null>(null);
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'info' } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,9 +103,17 @@ export function StructureView({ project }: { project: Project }) {
   }, []);
   const onPartHover = useCallback(
     (segId: string | null, partId: string | null) =>
-      setHover(segId && partId ? describePart(project, structures, segId, partId) : null),
+      hoverSink.current?.(segId && partId ? describePart(project, structures, segId, partId) : null),
     [project, structures],
   );
+  // what each type card would do to the steel, before it is picked
+  const heightDeltas = useMemo(() => {
+    const base = structures.reduce((a, s) => a + s.steelKg, 0);
+    const ids = selectedRows.filter((r) => r.type === 'flush' || r.type === 'elevated' || r.type === 'walkunder').map((r) => r.segId);
+    const of = (height: 'flush' | 'elevated' | 'walkunder') =>
+      ids.length ? choiceSteelDeltaKg(project, ids, { kind: 'height', height }, base) : null;
+    return { flush: of('flush'), elevated: of('elevated'), walkunder: of('walkunder') };
+  }, [project, structures, selectedRows]);
   const structureMode = useMemo<StructureSceneMode>(
     () => ({ selectedSegIds: selectedSet, panelVis, litIds, onTableClick, onPartClick, onPartHover }),
     [selectedSet, panelVis, litIds, onTableClick, onPartClick, onPartHover],
@@ -157,23 +168,7 @@ export function StructureView({ project }: { project: Project }) {
             <Scene3D selectedIds={scenePanelIds} structureMode={structureMode} />
           </div>
           {/* what the pointer is on — a part's name, section, length and weight */}
-          <div
-            aria-live="polite"
-            className="pointer-events-none absolute top-4 left-16 z-20 flex max-w-md flex-col rounded-md bg-surface-canvas-panel px-3 py-2 text-on-canvas shadow-2"
-          >
-            {hover ? (
-              <>
-                <span className="text-sm font-semibold">{hover.title}</span>
-                <span className="text-xs text-on-canvas-muted tabular-nums">
-                  {hover.detail} · {hover.tier}
-                </span>
-              </>
-            ) : (
-              <span className="text-xs text-on-canvas-muted">
-                Click a table to select it · Shift-click adds · Hover a part for its size
-              </span>
-            )}
-          </div>
+          <HoverReadout sink={hoverSink} />
           {pinned && (
             <section
               aria-label="Selected part"
@@ -221,6 +216,7 @@ export function StructureView({ project }: { project: Project }) {
         selected={selectedRows}
         structures={selectedStructures}
         allStructures={structures}
+        heightDeltas={heightDeltas}
         actions={{ choice: actions.choice, choiceEach: actions.choiceEach, setLegSpacing: actions.mms.setLegSpacing }}
         fmtLen={fmtLen}
         onOpen={setDialog}
@@ -277,6 +273,36 @@ export function StructureView({ project }: { project: Project }) {
         >
           <MmsEngineeringPanel project={project} prefix="step-loads" onEngineering={actions.mms.setEngineering} />
         </StepDialog>
+      )}
+    </div>
+  );
+}
+
+/** What the pointer is on — a part's name, section, length and weight. */
+function HoverReadout({ sink }: { sink: React.MutableRefObject<((r: PartReadout | null) => void) | null> }) {
+  const [hover, setHover] = useState<PartReadout | null>(null);
+  useEffect(() => {
+    sink.current = setHover;
+    return () => {
+      sink.current = null;
+    };
+  }, [sink]);
+  return (
+    <div
+      aria-live="polite"
+      className="pointer-events-none absolute top-4 left-16 z-20 flex max-w-md flex-col rounded-md bg-surface-canvas-panel px-3 py-2 text-on-canvas shadow-2"
+    >
+      {hover ? (
+        <>
+          <span className="text-sm font-semibold">{hover.title}</span>
+          <span className="text-xs text-on-canvas-muted tabular-nums">
+            {hover.detail} · {hover.tier}
+          </span>
+        </>
+      ) : (
+        <span className="text-xs text-on-canvas-muted">
+          Click a table to select it · Shift-click adds · Hover a part for its size
+        </span>
       )}
     </div>
   );

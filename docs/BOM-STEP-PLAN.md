@@ -1,6 +1,22 @@
 # New step after Step 6: "Structure & BOM"
 
-Date: 2026-10-07. Status: plan, not built.
+Date: 2026-10-07. Status: **built** (parts 1–4), verified in the browser on a copy of the project.
+
+## Status — what shipped and what changed from this plan
+
+- Parts 1–4 are in `main`. Step numbers live in `lib/steps.ts`; saved projects carry
+  `stepsVersion` and an older save's 7/8/9 is moved on load.
+- **Not done, on purpose:** the per-line unit list stays the full list. The BOM row
+  tests encode that a line may change unit family (cable by metre or by coil), so
+  narrowing it would remove a valid choice, not a mistake.
+- **Moved out of Step 6 and not repeated there:** module show / ghost / hide. It only
+  served structure inspection, which is now Step 7's.
+- **Part 5 (ResLink new BOM lines) is not built** — the owner asked for no new features
+  in this change.
+- The BOM view keeps the table full width (a side column would make its eleven
+  columns scroll sideways): a sticky section bar with filters, one quote strip, one
+  attention card, and the steel cut list under Mechanical BOS.
+- Design canvas: https://claude.ai/artifact/7s6BqPSremEF1rnqFWYuN3
 
 ## 1. What is wrong today (seen live on `/wizard/6` and `/wizard/9`)
 

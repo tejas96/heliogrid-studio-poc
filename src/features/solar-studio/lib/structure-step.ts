@@ -7,13 +7,13 @@
 // which part is lit are view state.
 import type { ArraySegment, FoundationKind, Project, Roof } from '../types';
 import type { MemberKind, NodeKind, SegmentStructure } from './structure-model';
-import { allowedFoundations, resolveRacking, topologyOf, validateStructure } from './structure';
+import { allowedFoundations, projectStructures, resolveRacking, topologyOf, validateStructure } from './structure';
 import { foundationOptionsFor } from './structure-view';
 import { foundationTooTall } from './foundation';
 import { isTrackerKind } from './energy/tracker';
 import { profileByKey } from '../data/profiles';
 import { wastePctFor } from './bom/registry';
-import { WALK_UNDER_M } from './structure-edit';
+import { applyStructChoice, WALK_UNDER_M, type StructChoice } from './structure-edit';
 import type { MmsFinding } from './mms/types';
 
 /** What a table stands on, in the installer's words. */
@@ -309,6 +309,29 @@ export function describePart(
     .map(([k, q]) => `${q} ${k}`)
     .join(' · ');
   return { title: `${NODE_LABEL[n.kind]} · table ${label}`, detail: hw || 'No loose hardware', tier: 'derived' };
+}
+
+/**
+ * What a choice would do to the steel, BEFORE it is made: the same pure
+ * `applyStructChoice` the click commits, run on a copy over every selected
+ * table, then weighed. Null when the choice changes no selected table.
+ */
+export function choiceSteelDeltaKg(
+  project: Project,
+  segIds: string[],
+  choice: StructChoice,
+  baseSteelKg: number,
+): number | null {
+  let next = project;
+  let changed = false;
+  for (const id of segIds) {
+    const r = applyStructChoice(next, id, choice);
+    if (!r) continue;
+    next = { ...next, ...r };
+    changed = true;
+  }
+  if (!changed) return null;
+  return projectStructures(next).reduce((a, s) => a + s.steelKg, 0) - baseSteelKg;
 }
 
 export interface SteelTakeoff {

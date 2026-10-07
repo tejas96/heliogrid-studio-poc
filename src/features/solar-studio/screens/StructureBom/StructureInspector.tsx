@@ -40,6 +40,7 @@ export function StructureInspector({
   selected,
   structures,
   allStructures,
+  heightDeltas,
   actions,
   fmtLen,
   onOpen,
@@ -54,6 +55,8 @@ export function StructureInspector({
   structures: SegmentStructure[];
   /** every table's — a roof's load is all of them */
   allStructures: SegmentStructure[];
+  /** steel kg each type card would add (+) or remove (−); null = no change */
+  heightDeltas: Record<'flush' | 'elevated' | 'walkunder', number | null>;
   actions: Actions;
   fmtLen: (m: number, dp?: number) => string;
   onOpen: (d: DetailDialog) => void;
@@ -206,6 +209,9 @@ export function StructureInspector({
                     <span className="text-sm font-semibold">{STRUCTURE_TYPE_LABEL[h]}</span>
                     <span className="text-xs text-muted tabular-nums">
                       {h === 'flush' ? 'on the roof' : fmtLen(h === 'walkunder' ? 2.2 : 0.3, 2)}
+                    </span>
+                    <span className="text-2xs text-muted tabular-nums">
+                      {on ? 'current' : steelDelta(heightDeltas[h])}
                     </span>
                   </button>
                 );
@@ -518,6 +524,14 @@ export function StructureInspector({
       </Section>
     </Shell>
   );
+}
+
+/** "+192 kg steel" — what a card would do before it is picked; derived. */
+function steelDelta(kg: number | null): string {
+  if (kg === null) return 'no change';
+  const r = Math.round(kg);
+  if (r === 0) return 'same steel';
+  return `${r > 0 ? '+' : '−'}${Math.abs(r).toLocaleString('en-IN')} kg steel`;
 }
 
 function Shell({ children }: { children: ReactNode }) {
